@@ -217,3 +217,22 @@ fn the_example_still_carries_the_plain_crane_pages_it_is_drawn_from() {
         .count();
     assert_eq!(pages, 6);
 }
+
+#[test]
+fn the_hook_stays_where_it_stopped_while_the_bridge_travels() {
+    let mut r = rig();
+    r.start();
+    r.set("hoist", "up2");
+    r.run(2.0);
+    r.set("hoist", "off");
+    r.run(4.0);
+    let at_rest = r.hoist.height_m(0);
+    r.set("bridge", "forward2");
+    r.run(20.0);
+    assert!(r.drive.axis_position_m(0) > 1.0);
+    assert!(
+        (r.hoist.height_m(0) - at_rest).abs() < 0.02,
+        "{at_rest} -> {}",
+        r.hoist.height_m(0)
+    );
+}

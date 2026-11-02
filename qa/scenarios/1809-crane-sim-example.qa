@@ -1,0 +1,111 @@
+@title Crane simulation example: opens from Templates and examples, the radio moves hoist, bridge and crab through the drawn circuit
+@area Simulate
+@sizes 1366x768
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text crane
+wait 8
+shot centre-search-crane
+expect "Open crane sim example"
+click_text "Open crane sim example"
+wait 6
+shot tile-picked
+expect "A crane you can run"
+click_text "Open"
+wait 60
+shot example-open
+expect "Overhead cran"
+key shift+l
+wait 20
+click_text "Controller…"
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+drag 1000 82 480 82
+wait 10
+click_text "Start"
+wait 20
+expect "Hoists in this project: =CRN+FLD-M11"
+shot controller-bound
+# Main on, then hold hoist up step 1 (fine winding) and step 2 (coarse winding).
+click 1037 369
+wait 10
+expect "Signals (2 of 15 high)"
+mouse_down 1065 506
+wait 150
+expect "fine"
+expect "brake open"
+shot hoist-fine-rising
+mouse_up 1065 506
+wait 10
+mouse_down 1065 536
+wait 150
+expect "coarse"
+shot hoist-coarse-rising
+mouse_up 1065 536
+wait 150
+expect "0 rpm"
+shot hoist-stopped
+# Drive run for the bridge and the crab.
+click 856 82
+wait 6
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+drag 1070 82 480 82
+wait 10
+click_text "Start"
+wait 20
+expect "=CRN+FLD-M21, =CRN+FLD-M22"
+shot drive-run-started
+mouse_down 1065 618
+wait 200
+shot bridge-forward-slow
+mouse_up 1065 618
+wait 10
+mouse_down 1065 648
+wait 200
+expect "Hz"
+shot bridge-forward-fast
+mouse_up 1065 648
+wait 200
+# The crab (trolley) rockers are below: scroll the Controller card.
+scroll 1150 500 -400
+wait 10
+shot controller-scrolled
+mouse_down 1185 360
+wait 200
+expect "Hz"
+shot crab-right-fast
+mouse_up 1185 360
+wait 100
+# Hoist in 3D, set to the bridge and the crab axes of the project.
+click 743 82
+wait 6
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 40
+expect "Hoist in 3D"
+drag 800 101 300 101
+wait 10
+shot hoist-in-3d-before
+mouse_down 1065 218
+wait 200
+shot hoist-in-3d-bridge-moving
+mouse_up 1065 218
+wait 10
+check_layout
