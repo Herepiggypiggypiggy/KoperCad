@@ -14,7 +14,7 @@ text emc view on the plate
 wait 8
 key Enter
 wait 30
-click 887 195
+click 887 213
 wait 10
 key Delete
 wait 30
