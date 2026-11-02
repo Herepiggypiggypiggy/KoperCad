@@ -2,7 +2,7 @@
 @area Cabinet
 @sizes 1920x1080
 # Where it lives: Arrange card of the Cabinet left rail (first row), Ctrl K "auto-reconfigure", plate right-click.
-# K1 is dragged off its rail first so the chain has something to do.
+# K1 is dragged off its rail first so the chain has something to do. At 1920x1080 only K1 moves (Autogroup has nothing to change), so the Autogroup warning is only expected at 1366x768 where it moves 16 devices.
 open qa/fixtures/cabinet-cooler-layout.novo
 wait 20
 click_text Cabinet #1
@@ -20,7 +20,6 @@ key Enter
 wait 10
 expect "Preview (Auto-reconfigure)"
 expect "not a clearance check or a heat calculation"
-expect "can shift by a few mm"
 expect "already has a duct"
 shot reconfigure-preview
 key Escape
