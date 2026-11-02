@@ -1428,13 +1428,16 @@ impl NovoApp {
                 .preview
                 .as_ref()
                 .map_or((0, 0), |p| (p.placements.len(), p.unplaced.len()));
+            // An arrange tool says nothing about heat: the last Place all
+            // explanation does not belong to its preview.
             let heat = self
                 .cabinet
                 .rules
                 .explain
                 .as_ref()
                 .and_then(|e| e.heat.as_ref())
-                .map(|h| h.message());
+                .map(|h| h.message())
+                .filter(|_| arranging.is_none());
             let mut text = arranging.unwrap_or_else(|| {
                 format!(
                     "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",

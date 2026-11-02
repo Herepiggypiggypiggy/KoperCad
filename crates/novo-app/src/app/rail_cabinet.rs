@@ -45,7 +45,7 @@ pub(super) fn local(id: &str) -> Option<(Glyph, &'static str, &'static str)> {
             "Arrange",
             "Autoplace on rail, auto rails and ducts, autogroup and autodistance for the \
              selected devices (all of them when none is selected), previewed before anything \
-             is stored",
+             is stored. Simple rules: a planning aid, not a clearance check or a heat calculation",
         )),
         _ => None,
     }
@@ -75,6 +75,12 @@ impl NovoApp {
                 let reason = novo_workflow::commands::get(id)
                     .and_then(|info| self.command_unavailable(info));
                 let mut tip = sentence;
+                if id.ends_with("tight") || id.ends_with("even") {
+                    tip.push_str(
+                        "\nKeeps the gaps the parts ask for; not a clearance check or a heat \
+                         calculation.",
+                    );
+                }
                 if let Some(reason) = reason {
                     tip.push_str(&format!("\n{reason}"));
                 }

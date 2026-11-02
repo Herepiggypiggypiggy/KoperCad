@@ -71,7 +71,8 @@ pub(super) fn banner(plan: &Plan) -> Option<String> {
         parts.push(format!("{} duct(s) would be added", plan.ducts.len()));
     }
     let mut text = format!(
-        "Preview ({title}): {}. Nothing is stored until you accept; Undo takes it back in one step.",
+        "Preview ({title}): {}. Nothing is stored until you accept; Undo takes it back in one step. \
+         A planning aid by simple rules, not a clearance check or a heat calculation.",
         parts.join(", ")
     );
     for note in &plan.notes {
