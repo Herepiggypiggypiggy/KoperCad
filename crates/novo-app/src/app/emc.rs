@@ -146,7 +146,7 @@ fn field_section(
         .id_salt("emc_field_section")
         .default_open(false)
         .show(ui, |ui| {
-    super::dialog_ui::explained(ui, "Model", "A model: the currents below, on the routed wires, add up by Biot-Savart (go and return and the three phases cancel as drawn). Differential current only: no common-mode current, no door or cabinet screening. Order of magnitude, never a measurement.");
+    super::dialog_ui::explained(ui, "Model, never a measurement", "A model: the currents below, on the routed wires, add up by Biot-Savart (go and return and the three phases cancel as drawn). Differential current only: no common-mode current, no door or cabinet screening. Order of magnitude, never a measurement.");
     ui.horizontal_wrapped(|ui| {
         ui.label("Frequency");
         if let Some(hz) = number(ui, "emc_field_hz", cached.params.hz, 1.0, 1.0..=30.0e6, " Hz", "Frequency of the currents. From 1 kHz up the plate counts as a conducting plane") {
@@ -334,7 +334,7 @@ pub(super) fn preview_card(
                 for (_, name, before, after) in &v.scores {
                     ui.weak(format!("Risk of {name}: {before} of 100 to {after} of 100"));
                 }
-                super::dialog_ui::explained(ui, "Model run", "A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.");
+                super::dialog_ui::explained(ui, "Model run, never compliance", "A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.");
             }
         }
     });
@@ -499,7 +499,7 @@ impl NovoApp {
                     ui.add_space(6.0);
                     novo_theme::widgets::section_label(ui, &format!("Findings ({})", report.findings.len()));
                     if report.findings.is_empty() {
-                        super::dialog_ui::explained(ui, "No finding", "No finding. That is not a statement that the design is fine: see Not checked below.");
+                        super::dialog_ui::explained(ui, "No finding: not a statement the design is fine", "No finding. That is not a statement that the design is fine: see Not checked below.");
                     }
                     for f in &report.findings {
                         let colour = match f.severity {

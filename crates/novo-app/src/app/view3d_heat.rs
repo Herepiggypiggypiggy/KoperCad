@@ -359,7 +359,7 @@ fn about(ui: &mut egui::Ui, state: &HeatState) {
     ui.add_space(4.0);
     super::dialog_ui::explained(
         ui,
-        "Quick estimate",
+        "Quick estimate, not a simulation",
         "Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.",
     );
     ui.add_space(4.0);

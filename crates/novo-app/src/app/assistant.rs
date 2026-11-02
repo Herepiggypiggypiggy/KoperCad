@@ -1166,7 +1166,7 @@ impl NovoApp {
         );
         super::dialog_ui::explained(
             ui,
-            "Attached picture",
+            "An attached picture shows the whole screen",
             "A picture you attach shows everything on screen at that moment, whatever you chose here.",
         );
         let current = self.settings.ai.consent.effective();

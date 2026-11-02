@@ -1264,7 +1264,7 @@ fn label_tab(
                     .suffix(" mm down"),
             );
         });
-        super::dialog_ui::explained(ui, "Printing", "Print at 100% (actual size), not fit to page. Test on plain paper and hold it against the sheet to the light.");
+        super::dialog_ui::explained(ui, "Print at 100%, not fit to page", "Print at 100% (actual size), not fit to page. Test on plain paper and hold it against the sheet to the light.");
     });
     let valid = state.labels.is_valid();
     if !valid {

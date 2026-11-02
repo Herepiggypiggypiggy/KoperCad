@@ -337,8 +337,8 @@ impl NovoApp {
                     widgets::section_label(ui, "Calculation inputs");
                     text_row(ui, &mut edits, "Length m", "wire_length", &mut length, &shown.length, "20", WireEdit::Length);
                     text_row(ui, &mut edits, "Load current A", "wire_load", &mut load, &shown.load, "14", WireEdit::Load);
-                    super::dialog_ui::explained(ui, "Calculation inputs", "Voltage drop, cable rating and disconnection time are calculated from these (Check > Calculations). Blank means unknown, never guessed.");
-                    super::dialog_ui::explained(ui, "Standards inputs", "The standards check reads these. A wire with no installation method is not rated, never guessed; set a default for the project in Standards check.");
+                    super::dialog_ui::explained(ui, "Blank means unknown, never guessed", "Voltage drop, cable rating and disconnection time are calculated from these (Check > Calculations). Blank means unknown, never guessed.");
+                    super::dialog_ui::explained(ui, "No installation method: not rated, never guessed", "The standards check reads these. A wire with no installation method is not rated, never guessed; set a default for the project in Standards check.");
 
 
             });

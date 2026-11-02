@@ -479,7 +479,7 @@ fn starters(ui: &mut egui::Ui, sheet: &CalcSheet, choice: &mut StarterChoice) {
     });
     super::dialog_ui::explained(
         ui,
-        "Sizing basis",
+        "Sizing basis: generic ratings, maker tables not loaded",
         "Sized from the motor's nameplate current with generic ratings (IEC 60947-4-1). Maker coordination tables are not loaded, so those points stay open.",
     );
     if sheet.starters.is_empty() {

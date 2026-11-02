@@ -207,7 +207,7 @@ impl NovoApp {
         super::panel::dialog(ctx, "Electrical inputs", [560.0, 560.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
-                super::dialog_ui::explained(ui, "Numbers the rules read", "The numbers the standards rules and the calculations read. A blank box is unknown: the rule says so and the calculation stays silent, nothing is guessed.");
+                super::dialog_ui::explained(ui, "Blank means unknown, never guessed", "The numbers the standards rules and the calculations read. A blank box is unknown: the rule says so and the calculation stays silent, nothing is guessed.");
                 ui.add_space(4.0);
                 let supplied = project
                     .info()
