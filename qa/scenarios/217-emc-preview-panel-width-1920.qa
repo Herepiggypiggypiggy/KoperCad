@@ -8,10 +8,10 @@ text open emc example
 wait 8
 key Enter
 wait 30
-click 141 271
-wait 10
-key Enter
-wait 20
+key PageDown
+wait 8
+key PageDown
+wait 12
 shot page-three
 key ctrl+k
 wait 6
@@ -20,7 +20,7 @@ wait 8
 key Enter
 wait 20
 shot page
-click 513 560
+click 561 520
 wait 12
 expect "Cable =A1+CAB-W2"
 shot before-preview
