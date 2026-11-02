@@ -34,3 +34,7 @@ click_text "Undo"
 wait 10
 expect "Devices with letter Q, F, G go to the top of the plate"
 shot undone
+scroll 1150 450 -1750
+wait_s 1
+shot kind-cards-end
+expect "+ Add a kind of device"

@@ -11,7 +11,7 @@ wait 6
 key Enter
 wait 30
 shot a-cabinet
-click 1262 70
+click 1221 86
 wait 6
 shot b-more-menu
 expect "Drill plan (hand, PDF)"

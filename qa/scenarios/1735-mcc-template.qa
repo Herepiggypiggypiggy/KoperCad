@@ -4,7 +4,7 @@
 wait 20
 key ctrl+k
 wait 6
-text new from template motor control centre
+text new motor control centre
 wait 8
 shot palette-mcc
 key Return
