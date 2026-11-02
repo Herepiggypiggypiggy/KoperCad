@@ -56,6 +56,7 @@ fn one(p: &Project, s: &novo_core::Structure) -> Value {
                 "rotated": pl.rotated,
                 "rail_id": pl.rail,
                 "size_is_a_guess": pl.size.guessed,
+                "depth_mm": layout.depths.get(&pl.id),
                 "surface": layout.off_plate.get(&pl.id).cloned().unwrap_or_else(|| "plate".into()),
             })
         })
@@ -111,6 +112,34 @@ fn one(p: &Project, s: &novo_core::Structure) -> Value {
     }
     let door = layout.door_report().map(|d| d.problems());
     let _ = on_plate;
+    let interior = layout.enclosure.map(|e| {
+        json!({
+            "width_mm": e.width, "height_mm": e.height, "depth_mm": e.depth,
+            "plate_setback_mm": e.plate_setback,
+            "usable_depth_mm": mm(e.usable_depth()),
+            "door": e.door.map(|d| json!({
+                "hinge": d.hinge.as_str(), "max_angle_deg": d.max_angle,
+                "inner_depth_mm": d.inner_depth})),
+            "front_clearance_mm": e.front_clearance,
+            "hinge_side_clearance_mm": e.hinge_side_clearance,
+        })
+    });
+    let door_check = layout.door_report().map(|d| {
+        json!({
+            "too_deep_so_the_door_cannot_close": d.too_deep.iter().map(|(id, by)| format!("{} by {:.0} mm", tag_of(p, *id), by)).collect::<Vec<_>>(),
+            "tight": d.tight.iter().map(|(id, gap)| format!("{} leaves {:.0} mm", tag_of(p, *id), gap)).collect::<Vec<_>>(),
+            "depth_unknown": d.unknown_depth.iter().map(|id| tag_of(p, *id)).collect::<Vec<_>>(),
+            "plate_bigger_than_interior": d.plate_too_big,
+            "front_room_short_mm": d.front_short, "hinge_side_room_short_mm": d.hinge_side_short,
+        })
+    });
+    let swing = layout.swing_report().map(|s| {
+        json!({
+            "door_devices_swept": s.swept,
+            "hits": s.hits.len(),
+            "not_checked_no_depth": s.unchecked_plate.iter().chain(s.unknown_depth.iter()).map(|id| tag_of(p, *id)).collect::<Vec<_>>(),
+        })
+    });
     json!({
         "enclosure": name,
         "description": s.description,
@@ -126,6 +155,10 @@ fn one(p: &Project, s: &novo_core::Structure) -> Value {
         "not_placed_yet": unplaced,
         "layout_problems": problems,
         "door_problems": door,
+        "interior": interior,
+        "door_check": door_check,
+        "door_swing": swing,
+        "what_3d_shows": "the 3D view draws exactly this data (plate, rails, ducts, devices with depth, door); change it with the cabinet actions, camera and display settings are not mine",
         "axes": "millimetres from the plate's top left, x right, y down; x/y are a device's top left",
     })
 }
@@ -178,7 +211,7 @@ pub fn search_catalog(
 
 // ----------------------------------------------------------------- edits
 
-fn enclosure_arg(p: &Project, args: &Value) -> Result<StructureId, String> {
+pub(super) fn enclosure_arg(p: &Project, args: &Value) -> Result<StructureId, String> {
     let list = enclosures(p);
     let names = || {
         list.iter()
@@ -307,6 +340,137 @@ pub fn add_cabinet_rail(tx: &mut Tx<'_>, args: &Value) -> Result<String, String>
     Ok(format!("Add a {length} mm DIN rail at ({x}, {y})"))
 }
 
+pub fn add_cabinet_duct(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
+    let id = enclosure_arg(tx.project(), args)?;
+    if tx
+        .project()
+        .get::<novo_core::Structure>(id)
+        .and_then(|s| s.plate)
+        .is_none()
+    {
+        return Err("the enclosure has no mounting plate yet; call set_cabinet_plate first".into());
+    }
+    let x = plate_number(args, "x", 0.0)?;
+    let y = plate_number(args, "y", 0.0)?;
+    let length = plate_number(args, "length", 20.0)?;
+    let width = if args["width"].is_null() {
+        40.0
+    } else {
+        plate_number(args, "width", 5.0)?
+    };
+    let height = if args["height"].is_null() {
+        60.0
+    } else {
+        plate_number(args, "height", 5.0)?
+    };
+    let class = match args["class"].as_str().unwrap_or("mixed") {
+        c @ ("power" | "signal" | "mixed") => c,
+        other => {
+            return Err(format!(
+                "class must be power, signal or mixed, not {other:?}"
+            ));
+        }
+    };
+    let created = tx
+        .execute(novo_core::Command::AddRail {
+            structure: id,
+            x,
+            y,
+            length,
+            kind: RailKind::Duct,
+            vertical: args["vertical"].as_bool() == Some(true),
+            width,
+            height,
+        })
+        .map_err(|e| e.to_string())?;
+    if let Some(novo_core::AnyId::Rail(rail)) = created.first() {
+        tx.set_property(
+            *rail,
+            novo_layout::model::DUCT_CLASS_KEY,
+            Some(novo_core::Value::Text(class.to_owned())),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(format!(
+        "Add a {length} mm {class} duct ({width} x {height} mm) at ({x}, {y})"
+    ))
+}
+
+pub fn set_cabinet_interior(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let id = enclosure_arg(tx.project(), args)?;
+    let old = model::enclosure_of(tx.project(), id);
+    let pick = |key: &str, now: Option<f64>, min: f64| -> Result<f64, String> {
+        if args[key].is_null() {
+            now.ok_or_else(|| {
+                format!("{key} is missing (width, height and depth are needed the first time)")
+            })
+        } else {
+            plate_number(args, key, min)
+        }
+    };
+    let width = pick("width", old.map(|e| e.width), 100.0)?;
+    let height = pick("height", old.map(|e| e.height), 100.0)?;
+    let depth = pick("depth", old.map(|e| e.depth), 50.0)?;
+    let setback = if args["plate_setback"].is_null() {
+        old.map_or(0.0, |e| e.plate_setback)
+    } else {
+        plate_number(args, "plate_setback", 0.0)?
+    };
+    let mut door = old.and_then(|e| e.door);
+    match args["door_hinge"].as_str() {
+        None => {}
+        Some("none") => door = None,
+        Some(h) => {
+            let hinge = Hinge::parse(h).ok_or("door_hinge must be left, right or none")?;
+            let mut d = door.unwrap_or_default();
+            d.hinge = hinge;
+            door = Some(d);
+        }
+    }
+    if let Some(d) = door.as_mut() {
+        if !args["door_angle"].is_null() {
+            d.max_angle = plate_number(args, "door_angle", 0.0)?.min(180.0);
+        }
+        if !args["door_inner"].is_null() {
+            d.inner_depth = plate_number(args, "door_inner", 0.0)?;
+        }
+    }
+    let _: Option<Door> = door;
+    let keep = |key: &str, now: Option<f64>| -> Result<Option<f64>, String> {
+        if args[key].is_null() {
+            Ok(now)
+        } else {
+            plate_number(args, key, 0.0).map(Some)
+        }
+    };
+    let e = Enclosure {
+        width,
+        height,
+        depth,
+        plate_setback: setback,
+        door,
+        front_clearance: keep("front_clearance", old.and_then(|e| e.front_clearance))?,
+        hinge_side_clearance: keep(
+            "hinge_side_clearance",
+            old.and_then(|e| e.hinge_side_clearance),
+        )?,
+    };
+    model::set_enclosure(tx, id, &e).map_err(|e| e.to_string())?;
+    let tag = tx
+        .project()
+        .get::<novo_core::Structure>(id)
+        .map(|s| s.tag.to_string())
+        .unwrap_or_default();
+    Ok(format!(
+        "Interior of {tag}: {width} x {height} x {depth} mm{}",
+        match door {
+            Some(d) => format!(", door hinged {}", d.hinge.as_str()),
+            None => ", no door".into(),
+        }
+    ))
+}
+
 pub fn place_in_cabinet(tx: &mut Tx<'_>, args: &Value) -> Result<String, String> {
     let id = enclosure_arg(tx.project(), args)?;
     let device = resolve::device_arg(tx.project(), args)?;
@@ -334,9 +498,33 @@ pub fn place_in_cabinet(tx: &mut Tx<'_>, args: &Value) -> Result<String, String>
     let x = plate_number(args, "x", 0.0)?;
     let y = plate_number(args, "y", 0.0)?;
     let rotated = args["rotated"].as_bool().unwrap_or(false);
+    let surface = text_of(&args["surface"]).filter(|s| !s.eq_ignore_ascii_case("plate"));
+    if let Some(name) = &surface {
+        let kind = novo_layout::surfaces::SurfaceKind::from_name(name).ok_or_else(|| {
+            format!("surface {name:?} is not one of plate, door, left, right, roof, floor")
+        })?;
+        if kind == novo_layout::surfaces::SurfaceKind::Door
+            && !model::enclosure_of(tx.project(), id).is_some_and(|e| e.door.is_some())
+        {
+            return Err(
+                "the enclosure has no door; call set_cabinet_interior with door_hinge first".into(),
+            );
+        }
+    }
     model::place_device(tx, id, device.raw(), x, y, rotated).map_err(|e| e.to_string())?;
+    let placement = tx
+        .project()
+        .all::<novo_core::CabinetPlacement>()
+        .find(|p| p.device == device)
+        .map(|p| p.id);
+    if let Some(placement) = placement {
+        let value = surface.clone().map(novo_core::Value::Text);
+        tx.set_property(placement, novo_layout::surfaces::SURFACE_PROPERTY, value)
+            .map_err(|e| e.to_string())?;
+    }
+    let on = surface.map_or("the plate".to_owned(), |s| format!("the {s}"));
     Ok(format!(
-        "Place {tag} on the plate at ({x}, {y}) mm{}",
+        "Place {tag} on {on} at ({x}, {y}) mm{}",
         if rotated { ", turned" } else { "" }
     ))
 }
@@ -649,6 +837,77 @@ mod tests {
         assert!(
             outline.project.is_null(),
             "no cabinet data below the project scope"
+        );
+    }
+
+    #[test]
+    fn ducts_interior_door_and_surfaces() {
+        let (mut p, res) = starter();
+        run(
+            &mut p,
+            &res,
+            "add_cabinet",
+            json!({"tag": "+CAB1", "width": 600, "height": 800}),
+        )
+        .unwrap();
+        run(
+            &mut p,
+            &res,
+            "add_cabinet_duct",
+            json!({"x": 20, "y": 200, "length": 500, "class": "power"}),
+        )
+        .unwrap();
+        let d = &section(&p)[0]["ducts"][0];
+        assert_eq!(d["length_mm"], 500.0);
+        assert!(
+            run(
+                &mut p,
+                &res,
+                "add_cabinet_duct",
+                json!({"x": 1, "y": 1, "length": 50, "class": "loud"})
+            )
+            .is_err()
+        );
+        // The door must exist before a device can go on it.
+        let why = run(
+            &mut p,
+            &res,
+            "place_in_cabinet",
+            json!({"device": "-S1", "x": 50, "y": 50, "surface": "door"}),
+        )
+        .unwrap_err();
+        assert!(why.contains("set_cabinet_interior"), "{why}");
+        let why = run(&mut p, &res, "set_cabinet_interior", json!({"width": 800})).unwrap_err();
+        assert!(why.contains("height"), "{why}");
+        run(&mut p, &res, "set_cabinet_interior", json!({"width": 800, "height": 1000, "depth": 300, "door_hinge": "right", "door_angle": 120})).unwrap();
+        let i = &section(&p)[0]["interior"];
+        assert_eq!(i["door"]["hinge"], "right");
+        assert_eq!(i["door"]["max_angle_deg"], 120.0);
+        run(
+            &mut p,
+            &res,
+            "place_in_cabinet",
+            json!({"device": "-S1", "x": 50, "y": 50, "surface": "door"}),
+        )
+        .unwrap();
+        let placed = section(&p)[0]["placed"].clone();
+        assert_eq!(placed[0]["surface"], "door", "{placed}");
+        run(
+            &mut p,
+            &res,
+            "place_in_cabinet",
+            json!({"device": "-S1", "x": 50, "y": 50}),
+        )
+        .unwrap();
+        assert_eq!(section(&p)[0]["placed"][0]["surface"], "plate");
+        assert!(
+            run(
+                &mut p,
+                &res,
+                "place_in_cabinet",
+                json!({"device": "-S1", "x": 5, "y": 5, "surface": "ceiling"})
+            )
+            .is_err()
         );
     }
 

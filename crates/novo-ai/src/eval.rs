@@ -781,6 +781,10 @@ const SOURCES: &[(&str, &str)] = &[
         include_str!("../eval/edit-cabinet-and-part-picker.json"),
     ),
     (
+        "edit-cabinet-heat-sim-autopilot",
+        include_str!("../eval/edit-cabinet-heat-sim-autopilot.json"),
+    ),
+    (
         "create-dol-starter",
         include_str!("../eval/create-dol-starter.json"),
     ),

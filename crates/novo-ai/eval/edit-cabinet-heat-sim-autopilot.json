@@ -1,0 +1,250 @@
+{
+  "id": "edit-cabinet-heat-sim-autopilot",
+  "category": "complete",
+  "title": "Build the cabinet with duct and door, check heat, test the start circuit and run Autopilot",
+  "setup": [
+    {
+      "action": "add_page",
+      "args": {
+        "name": "1",
+        "title": "Motor"
+      }
+    },
+    {
+      "action": "place_macro",
+      "args": {
+        "macro": "Motor starter DOL",
+        "page": "1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:3",
+        "potential": "L2"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F1:5",
+        "potential": "L3"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": {
+          "symbol_id": 14,
+          "pin": "1"
+        },
+        "potential": "PE"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-F3:1",
+        "potential": "L1"
+      }
+    },
+    {
+      "action": "terminate_pin",
+      "args": {
+        "pin": "-K1:A2",
+        "potential": "N"
+      }
+    },
+    {
+      "action": "number_wires",
+      "args": {}
+    }
+  ],
+  "turns": [
+    {
+      "prompt": "Put the starter in a 600 x 800 plate cabinet +CAB1 (interior 800 x 1000 x 300, door hinged left) with a power duct, check the heat, prove the start button holds the contactor in, and let Autopilot complete the wires.",
+      "script": [
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "autopilot_plan",
+              "input": {}
+            },
+            {
+              "tool": "read_project",
+              "input": {
+                "section": "cabinet"
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "set_plan",
+              "input": {
+                "steps": [
+                  {
+                    "title": "Cabinet, interior, door, duct",
+                    "status": "doing"
+                  },
+                  {
+                    "title": "Place devices",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Heat estimate",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Simulate start and stop",
+                    "status": "todo"
+                  },
+                  {
+                    "title": "Autopilot",
+                    "status": "todo"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "add_cabinet",
+                "args": {
+                  "tag": "+CAB1",
+                  "description": "Motor cabinet",
+                  "width": 600,
+                  "height": 800
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "set_cabinet_interior",
+                "args": {
+                  "width": 800,
+                  "height": 1000,
+                  "depth": 300,
+                  "door_hinge": "left"
+                }
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "place_all_in_cabinet",
+                "args": {}
+              }
+            },
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "add_cabinet_duct",
+                "args": {
+                  "x": 20,
+                  "y": 600,
+                  "length": 560,
+                  "class": "power"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "heat_estimate",
+              "input": {
+                "ambient_c": 40
+              }
+            },
+            {
+              "tool": "simulate_circuit",
+              "input": {
+                "steps": [
+                  {
+                    "operate": [
+                      "-S2"
+                    ]
+                  },
+                  {
+                    "release": [
+                      "-S2"
+                    ]
+                  }
+                ],
+                "explain": [
+                  "-K1"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "propose_edit",
+              "input": {
+                "action": "run_autopilot",
+                "args": {}
+              }
+            }
+          ]
+        },
+        {
+          "text": "",
+          "calls": [
+            {
+              "tool": "autopilot_plan",
+              "input": {}
+            },
+            {
+              "tool": "run_checks",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "text": "The cabinet +CAB1 is in the draft: a 600 x 800 mm plate in an 800 x 1000 x 300 mm interior with a left-hinged door, all devices placed on a rail and a power duct below them. The heat estimate is a reduced-order model with a band, not CFD, and devices without a loss value count as 0 W, so its temperatures are lower bounds until losses are entered; check it against the maker limits. In the circuit simulation the contactor -K1 pulls in when the start button is pressed and stays in after release through its seal-in contact, and the motor runs. Autopilot filled in the wire colours and the sizes it could calculate from the planning tables: those are planning values to verify, and the assumed rows were left for you to decide. Apply the change set to keep it; it is one undo step.",
+          "calls": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "devices_include": [
+      "-K1"
+    ],
+    "errors_max": 0,
+    "verified": true,
+    "keep_existing": true,
+    "cabinet_placed": [
+      "-K1",
+      "-F1"
+    ],
+    "plan_shown": true,
+    "steps_max": 9,
+    "text_contains": [
+      "not CFD",
+      "planning values"
+    ]
+  }
+}
