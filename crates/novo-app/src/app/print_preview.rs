@@ -1166,11 +1166,15 @@ fn workshop_tab(ui: &mut egui::Ui, plates: &[WorkshopPlate], paper: &mut Paper, 
         if ui.button("Write the workshop pack").clicked() {
             wants.workshop = true;
         }
-        ui.weak("Also writes the cut list, ferrules, labels and assembly checklist (Bench output settings).");
+        super::dialog_ui::explained(ui, "Also writes", "Also writes the cut list, ferrules, labels and assembly checklist (Bench output settings).");
     });
     ui.separator();
     if plates.is_empty() {
-        ui.weak("No cabinet has a mounting plate yet. Set one in the Cabinet workspace and the drilling template appears here.");
+        super::dialog_ui::explained(
+            ui,
+            "No mounting plate yet",
+            "No cabinet has a mounting plate yet. Set one in the Cabinet workspace and the drilling template appears here.",
+        );
         return;
     }
     egui::ScrollArea::vertical().show(ui, |ui| {

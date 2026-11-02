@@ -2162,6 +2162,7 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-layout",
  "novo-numbering",
  "novo-parts",
  "novo-py",

@@ -187,7 +187,11 @@ pub(super) fn kit_tab(
         };
         let plan = &cache.plan;
         if plan.is_empty() {
-            ui.weak("Nothing to kit yet: give a cabinet a mounting plate, place rails and devices, and assign parts.");
+            super::dialog_ui::explained(
+                ui,
+                "Nothing to kit yet",
+                "Nothing to kit yet: give a cabinet a mounting plate, place rails and devices, and assign parts.",
+            );
             break 'plan;
         }
         ui.label(format!(
@@ -200,7 +204,11 @@ pub(super) fn kit_tab(
             ui.colored_label(crate::theme::ui_palette().warning, p);
         }
         ui.add_space(4.0);
-        ui.weak("Pick lists keep the step numbers of the assembly checklist: step 2, Drill, has no pick list.");
+        super::dialog_ui::explained(
+            ui,
+            "Pick list steps",
+            "Pick lists keep the step numbers of the assembly checklist: step 2, Drill, has no pick list.",
+        );
         for phase in Phase::ALL {
             let picks: Vec<_> = plan.picks_in(phase).collect();
             if picks.is_empty() {
@@ -284,7 +292,7 @@ pub(super) fn kit_tab(
         .id_salt("kit_settings_open")
         .default_open(false)
         .show(ui, |ui| {
-    ui.weak("Planning values: edit them to match your supplier. Counts of rails, devices, wires and holes come from the drawing.");
+    super::dialog_ui::explained(ui, "Planning values", "Planning values: edit them to match your supplier. Counts of rails, devices, wires and holes come from the drawing.");
     {
         let rail_ok = read_lengths(&draft.rail_text).is_some();
         let duct_ok = read_lengths(&draft.duct_text).is_some();

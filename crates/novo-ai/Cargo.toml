@@ -19,6 +19,7 @@ novo-checks.workspace = true
 novo-reports.workspace = true
 novo-numbering.workspace = true
 novo-cables.workspace = true
+novo-layout.workspace = true
 novo-py.workspace = true
 novo-storage.workspace = true
 

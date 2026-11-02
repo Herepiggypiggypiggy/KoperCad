@@ -76,7 +76,7 @@ impl NovoApp {
                         }
                     }
                 });
-                ui.weak("Each standard you tick adds its findings to the Issues list and to the count in the top bar.");
+                super::dialog_ui::explained(ui, "Ticked standards", "Each standard you tick adds its findings to the Issues list and to the count in the top bar.");
                 ui.add_space(6.0);
                 novo_theme::widgets::section_label(ui, "Assumptions");
                 ui.horizontal(|ui| {
@@ -120,7 +120,7 @@ impl NovoApp {
                     }
                 });
                 if report.sets.is_empty() {
-                    ui.label("Choose a standard to add its clause rules. The saved report lists the design checks (wire sizing, protection, colours, safety functions, heat) either way.");
+                    super::dialog_ui::explained(ui, "Choose a standard", "Choose a standard to add its clause rules. The saved report lists the design checks (wire sizing, protection, colours, safety functions, heat) either way.");
                 }
                 ui.horizontal(|ui| {
                     let pdf = novo_theme::widgets::primary_button(ui, "Save report as PDF");

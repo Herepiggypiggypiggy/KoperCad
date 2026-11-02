@@ -223,13 +223,6 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
 
 /// Commands that are a key or a pointer gesture and have no menu row.
 const PALETTE_ONLY: &[(&str, &str)] = &[
-    ("view.3d_door_layer", "a switch of the 3D toolbar"),
-    ("view.3d_device_shapes", "a switch of the 3D toolbar"),
-    ("view.3d_surfaces", "a switch of the 3D toolbar"),
-    ("view.3d_duct_fill", "a switch of the 3D toolbar"),
-    ("view.3d_pins", "a switch of the 3D toolbar"),
-    ("view.3d_missing_data", "a switch of the 3D toolbar"),
-    ("view.3d_trackpad_pans", "a switch of the 3D toolbar"),
     ("tool.repeat", "the key that repeats the last tool"),
     (
         "project.variant",
@@ -268,6 +261,13 @@ const PALETTE_ONLY: &[(&str, &str)] = &[
 pub const MOVED: &[&str] = &[
     // The 3D rail and its flyouts.
     "view.3d_assembly",
+    "view.3d_door_layer",
+    "view.3d_device_shapes",
+    "view.3d_surfaces",
+    "view.3d_duct_fill",
+    "view.3d_pins",
+    "view.3d_missing_data",
+    "view.3d_trackpad_pans",
     "view.3d_measure",
     "view.3d_align_left",
     "view.3d_align_hcentre",
