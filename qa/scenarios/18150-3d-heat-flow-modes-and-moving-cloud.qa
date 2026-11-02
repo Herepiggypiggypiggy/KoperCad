@@ -1,0 +1,29 @@
+@title 3D Heat: Heat flow modes, device paths and the cloud that moves with the air
+@area 3D
+@sizes 1366x768 1920x1080
+# Tadjiro: heat flow was hard to evaluate. Heat flow now has modes like Flow (Carried by air, Through solids, Air and solids, Flux map), Paths pins each device's split into air, plate and radiation, and Cloud > Moves plays the cloud with the solved air flow from cold air. Pictures are the evidence.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+click_text Paths
+wait 20
+shot paths
+click_text Cloud
+wait 20
+click_text Moves
+wait_s 3
+shot moving-early
+wait_s 8
+shot moving-later
+expect "Moving cloud:"
+check_layout

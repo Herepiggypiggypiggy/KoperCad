@@ -43,7 +43,7 @@ use super::view3d_stats::{Build, Stats};
 use super::view3d_views::{self, ViewsAction};
 use super::view3d_wire_it;
 use super::view3d_wires::{self, WireFacts};
-use super::{heat_carry, heat_cloud};
+use super::{heat_carry, heat_cloud, heat_modes};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -129,6 +129,12 @@ pub(crate) struct View3dMode {
     flow_scale: Option<(u64, f32)>,
     /// The heat-flow layer: lines the heat follows and conduction arrows.
     heat_carry: super::heat_carry::Carry,
+    /// The cloud playing with the air flow, for the result it was made for.
+    cloud_move: Option<heat_modes::MovingCloud>,
+    /// Play, speed, restart and the status line of the moving cloud.
+    move_controls: heat_modes::MoveControls,
+    /// The cloud mesh last drawn from the moving model, and the cut it had.
+    moving_mesh: Option<(heat_cloud::CloudView, novo_view3d::Overlay)>,
     /// Scene with devices coloured by temperature, for the key (scene
     /// revision, result id).
     heat_scene: Option<(HeatSceneKey, Arc<novo_view3d::Scene>)>,
@@ -241,6 +247,9 @@ impl Default for View3dMode {
             heat_flow: heat_3d::Flow::default(),
             flow_scale: None,
             heat_carry: super::heat_carry::Carry::default(),
+            cloud_move: None,
+            move_controls: heat_modes::MoveControls::default(),
+            moving_mesh: None,
             heat_scene: None,
             built_layers: Layers::default(),
             built_assembly: None,
@@ -665,6 +674,7 @@ impl NovoApp {
                 sol,
                 (scale_top, mode.heat_carry.top_air),
                 through.as_ref(),
+                &mut mode.move_controls,
                 &tag_of,
             ) {
                 // Jump to the device: select it and bring it into view.
@@ -963,8 +973,26 @@ impl NovoApp {
             )
         };
         let tracing = solution.is_some()
-            && (mode.heat.lines || mode.heat.carry)
+            && (mode.heat.lines || mode.heat.heat_flow.draws_air())
             && !self.settings.reduce_motion;
+        // The cloud plays with the solved air flow (not with reduced motion).
+        let moving_on = solution.is_some()
+            && mode.heat.cloud
+            && mode.heat.cloud_moves
+            && !self.settings.reduce_motion;
+        match (&solution, moving_on) {
+            (Some(sol), true) => {
+                if mode.cloud_move.as_ref().is_none_or(|m| m.result != sol.id) {
+                    mode.cloud_move =
+                        heat_modes::MovingCloud::new(sol.id, &sol.snapshot, sol.ambient);
+                    mode.moving_mesh = None;
+                }
+            }
+            _ => {
+                mode.cloud_move = None;
+                mode.moving_mesh = None;
+            }
+        }
         // Fans turn and air crosses the openings while the view is open.
         let spin_time = if heat_openings::moves(&mode.vent_markers) {
             super::motion::clock(ui.ctx(), self.settings.reduce_motion)
@@ -986,7 +1014,7 @@ impl NovoApp {
             mode.drill_shown = cue_running;
             ghost_changed = true;
         }
-        let animating = tracing || spin_time.is_some() || cue_running;
+        let animating = tracing || spin_time.is_some() || cue_running || moving_on;
         if spin_time.is_some() {
             mode.vent_marks = heat_openings::overlays_at(&mode.vent_markers, spin_time);
         } else if mode.vent_spun {
@@ -1020,17 +1048,34 @@ impl NovoApp {
             let flow_top = solution
                 .as_ref()
                 .map_or(0.1, |sol| flow_scale_cached(&mut mode.flow_scale, sol));
+            // A moving cloud is drawn every frame from its model, not here.
+            let mut shown = mode.heat;
+            shown.cloud = shown.cloud && !moving_on;
             mode.heat_base = solution.as_ref().map_or_else(Vec::new, |sol| {
                 heat_3d::overlays(
                     &sol.snapshot,
                     sol.ambient,
                     place(sol),
-                    &mode.heat,
+                    &shown,
                     &mode.heat_flow,
                     flow_top,
                 )
             });
-            if mode.heat.carry {
+            if let Some(sol) = &solution
+                && mode.heat.heat_flow.draws_map()
+                && let Some(m) = heat_modes::flux_map(
+                    &sol.snapshot,
+                    &mode.heat_carry.field,
+                    place(sol),
+                    mode.heat.axis,
+                    mode.heat.slice_at,
+                    mode.heat_carry.top_air,
+                    190,
+                )
+            {
+                mode.heat_base.push(novo_view3d::Overlay::Mesh(m));
+            }
+            if mode.heat.heat_flow.draws_air() {
                 let carried = heat_flow::thinned(
                     &mode.heat_carry.flow,
                     mode.heat.flow.strength,
@@ -1040,11 +1085,13 @@ impl NovoApp {
                 if !lines.positions.is_empty() {
                     mode.heat_base.push(novo_view3d::Overlay::Lines(lines));
                 }
-                if !mode.heat_carry.conduction.positions.is_empty() {
-                    mode.heat_base.push(novo_view3d::Overlay::Lines(
-                        mode.heat_carry.conduction.clone(),
-                    ));
-                }
+            }
+            if mode.heat.heat_flow.draws_solids()
+                && !mode.heat_carry.conduction.positions.is_empty()
+            {
+                mode.heat_base.push(novo_view3d::Overlay::Lines(
+                    mode.heat_carry.conduction.clone(),
+                ));
             }
             mode.heat_shown = wanted;
             heat_changed = true;
@@ -1091,7 +1138,7 @@ impl NovoApp {
                 if !t.positions.is_empty() {
                     all.push(novo_view3d::Overlay::Lines(t));
                 }
-                if mode.heat.carry {
+                if mode.heat.heat_flow.draws_air() {
                     let carried = heat_flow::thinned(
                         &mode.heat_carry.flow,
                         strength,
@@ -1103,8 +1150,37 @@ impl NovoApp {
                     }
                 }
             }
+            if let (Some(mc), Some(sol)) = (mode.cloud_move.as_mut(), &solution) {
+                let now = ui.input(|i| i.time);
+                let changed = mc.tick(now, &mut mode.move_controls);
+                let cut = mode.heat.cloud_view;
+                if changed || mode.moving_mesh.as_ref().is_none_or(|(c, _)| *c != cut) {
+                    let range = heat_3d::range_for(&sol.snapshot, sol.ambient, mode.heat.scale);
+                    let hot_end = heat_cloud::air_hot_end(&sol.snapshot, range.lo);
+                    let peak = heat_cloud::air_peak(&sol.snapshot, hot_end);
+                    let at = Place {
+                        plate_x: sol.plate[0],
+                        plate_y: sol.plate[1],
+                        frame: scene.frame,
+                    };
+                    mode.moving_mesh = heat_cloud::mesh_scaled(
+                        mc.snapshot(),
+                        at,
+                        range,
+                        cut,
+                        mode.heat.cloud_opacity,
+                        usize::from(mode.heat.cloud_layers),
+                        mode.heat.cloud_contrast,
+                        Some((hot_end, peak)),
+                    )
+                    .map(|m| (cut, novo_view3d::Overlay::Mesh(m)));
+                }
+                if let Some((_, o)) = &mode.moving_mesh {
+                    all.push(o.clone());
+                }
+            }
             mode.view.set_overlays(all);
-            if tracing {
+            if tracing || (moving_on && mode.move_controls.playing) {
                 ui.ctx().request_repaint();
             } else {
                 ui.ctx().request_repaint_after(super::motion::FRAME);
@@ -1529,6 +1605,26 @@ impl NovoApp {
                 out.rect,
                 scene,
                 &labels,
+                stale || self.cabinet.heat.running(),
+            );
+        }
+        if mode.heat.paths
+            && let Some(sol) = &solution
+        {
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            let rows = heat_modes::path_rows(&sol.snapshot);
+            heat_modes::paint_paths(
+                ui,
+                &mode.view,
+                out.rect,
+                scene,
+                &rows,
+                &tag_of,
                 stale || self.cabinet.heat.running(),
             );
         }
@@ -2149,6 +2245,7 @@ fn heat_strip_placeholder(ui: &mut egui::Ui) {
 
 /// The Heat strip above the 3D view: slice, shell and airflow of the last
 /// simulation result (Cabinet > Heat > Simulate makes one).
+#[allow(clippy::too_many_arguments)]
 fn heat_controls(
     ui: &mut egui::Ui,
     h: &mut Heat3d,
@@ -2156,6 +2253,7 @@ fn heat_controls(
     sol: &super::heat_run::Solution,
     (top_speed, top_flux): (f32, f32),
     through: Option<&heat_flow::Through>,
+    moving: &mut heat_modes::MoveControls,
     tag_of: &dyn Fn(u64) -> String,
 ) -> Option<u64> {
     use novo_heatview::cfd::Axis;
@@ -2210,9 +2308,50 @@ fn heat_controls(
             .on_hover_text(
                 "Slices through the cabinet: fewer is lighter on a slow graphics card, more is smoother",
             );
+            ui.checkbox(&mut h.cloud_moves, "Moves").on_hover_text(
+                "Play the cloud with the solved air flow: from cold air the heat is carried off the hot parts and drifts with the air. A transport model on the solved flow, not a second solve and not a measurement; the flow does not react to the warming",
+            );
+            if h.cloud_moves {
+                let label = if moving.playing { "Pause" } else { "Play" };
+                if ui.small_button(label).clicked() {
+                    moving.playing = !moving.playing;
+                }
+                if ui
+                    .small_button("Restart")
+                    .on_hover_text("Back to cold air")
+                    .clicked()
+                {
+                    moving.restart = true;
+                    moving.playing = true;
+                }
+                ui.add(
+                    egui::DragValue::new(&mut moving.speed)
+                        .range(heat_modes::SPEED_RANGE)
+                        .speed(0.2)
+                        .prefix("×")
+                        .max_decimals(0),
+                )
+                .on_hover_text("Model seconds per second you watch");
+            }
         }
-        ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
-            "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
+        ui.label("Heat flow");
+        let mut hf = h.heat_flow;
+        egui::ComboBox::from_id_salt("heat_flow_modes")
+            .selected_text(hf.label())
+            .show_ui(ui, |ui| {
+                for m in heat_modes::HeatFlowMode::ALL {
+                    ui.selectable_value(&mut hf, m, m.label()).on_hover_text(m.hint());
+                }
+            })
+            .response
+            .on_hover_text(
+                "Where the heat goes. Carried by air: lines and dashes follow the heat the air takes away. Through solids: arrows inside plate, rails and devices. Flux map: the slice coloured by heat carried. Derived from the solved temperature and air speed; surface radiation is not included. A model, not a measurement. Air colder than ambient takes heat in, so its lines point against the air",
+            );
+        if hf != h.heat_flow {
+            h.set_heat_flow(hf);
+        }
+        ui.checkbox(&mut h.paths, "Paths").on_hover_text(
+            "Pin each hot device's split of its heat into air, mounting plate and radiation (the whole list is in the Heat panel). The solver's own split; a model, not a measurement",
         );
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
@@ -2239,6 +2378,11 @@ fn heat_controls(
         if let Some(t) = through {
             ui.end_row();
             heat_flow::through_row(ui, t);
+        }
+        if h.cloud && h.cloud_moves && !moving.status.is_empty() {
+            ui.end_row();
+            ui.label(egui::RichText::new(moving.status.as_str()).small())
+                .on_hover_text(heat_modes::MOVING_NOTE);
         }
         let cloud_range = novo_heatview::range::Range {
             lo: range.lo,
