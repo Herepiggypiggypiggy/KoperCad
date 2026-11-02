@@ -896,6 +896,11 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("cabinet.rails", d(&drawn::DIN_RAIL), "Rails and ducts"),
     row(
+        "cabinet.arrange_all",
+        p(icons::MAGIC_WAND),
+        "Auto-reconfigure",
+    ),
+    row(
         "cabinet.arrange_onto_rail",
         p(icons::MAGNET),
         "Autoplace on rail",

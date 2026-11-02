@@ -1487,6 +1487,11 @@ pub const DUTCH: &[Aliases] = &[
         &["zaaglijst", "lengtes", "knippen"],
     ),
     nl(
+        "cabinet.arrange_all",
+        &["automatisch herindelen", "ruim de kast op"],
+        &["herindelen", "opruimen", "indeling"],
+    ),
+    nl(
         "cabinet.arrange_onto_rail",
         &["plaats op rail", "zet op de rail"],
         &["autoplaats", "rail"],

@@ -21,6 +21,7 @@ pub(super) fn tool_id(id: &str) -> Option<&'static str> {
 
 /// The arrange commands, in the order the flyout lists them.
 pub(super) const TOOLS: &[&str] = &[
+    "cabinet.arrange_all",
     "cabinet.arrange_onto_rail",
     "cabinet.arrange_rails",
     "cabinet.arrange_ducts",
@@ -38,6 +39,7 @@ pub(super) fn plan_for(
 ) -> Option<Plan> {
     let keys = cands.iter().map(|c| (c.id, c.sort_key.clone())).collect();
     Some(match tool {
+        "cabinet.arrange_all" => arrange::reconfigure(layout, ids, cands, &keys),
         "cabinet.arrange_onto_rail" => arrange::onto_rails(layout, ids, cands),
         "cabinet.arrange_rails" => arrange::make_rails(layout, ids),
         "cabinet.arrange_ducts" => arrange::add_ducts(layout),
