@@ -1,0 +1,17 @@
+@title Help popups open: the ? in Standards check opens its text and it fits the window
+@area Windows
+@sizes 1920x1080
+click_text "Open example"
+wait 20
+key ctrl+k
+text Standards check
+key enter
+wait 10
+# Standards check opens docked at the right edge; float it, then the ? is where it was.
+click 1875 54
+wait 30
+click 169 140
+wait 5
+shot standards-popup-open
+expect "Each standard you tick adds its findings"
+check_layout

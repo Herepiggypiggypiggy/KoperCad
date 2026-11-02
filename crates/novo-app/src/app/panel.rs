@@ -745,7 +745,12 @@ impl<'a> Dialog<'a> {
                 },
                 add,
             );
-            if take_closed(ctx, &name)
+            // Escape closes the window docked last, like it closes the
+            // floating one on top (not while a text field has the keyboard).
+            let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape))
+                && !ctx.egui_wants_keyboard_input()
+                && super::panel_dock::last_window(ctx).as_deref() == Some(name.as_str());
+            if (take_closed(ctx, &name) || escape)
                 && let Some(open) = open
             {
                 *open = false;
@@ -1181,7 +1186,11 @@ fn modal_impl<R: Default>(
             ctx: ctx.clone(),
             // The close button of the pane answers like a click outside.
             clicked_outside: closed,
-            escape_ok: false,
+            // Escape closes the form docked last (no popup open, no text
+            // field holding the keyboard).
+            escape_ok: super::panel_dock::last_window(ctx).as_deref() == Some(dock_name.as_str())
+                && !egui::Popup::is_any_open(ctx)
+                && !ctx.egui_wants_keyboard_input(),
         };
     }
     let layer = egui::LayerId::new(egui::Order::Foreground, id);

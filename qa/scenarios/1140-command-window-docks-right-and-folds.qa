@@ -1,4 +1,4 @@
-@title A command window opens docked in the right strip, folds up to its title, unfolds, and Escape leaves it docked (1366x768)
+@title A command window opens docked in the right strip, folds up to its title, unfolds, and Escape closes it (1366x768)
 @area Windows
 @sizes 1366x768
 click_text "Open example"
@@ -22,8 +22,8 @@ click 1063 54
 wait 30
 expect "Check against"
 shot unfolded
-# Escape does not close a docked pane.
+# Escape closes the window docked last, like a floating one.
 key Escape
 wait 20
-expect "Check against"
+expect_not "Check against"
 shot after-escape

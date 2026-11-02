@@ -134,6 +134,15 @@ pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
 /// The most dock entries and floated names remembered.
 const MAX_ENTRIES: usize = 64;
 
+/// The window (command window or form) docked last: the one Escape closes.
+pub(super) fn last_window(ctx: &egui::Context) -> Option<String> {
+    list(ctx)
+        .into_iter()
+        .map(|(n, _)| n)
+        .rev()
+        .find(|n| n.starts_with("window:") || n.starts_with("modal:"))
+}
+
 fn floated_id() -> egui::Id {
     egui::Id::new("dock_floated")
 }
@@ -1399,5 +1408,28 @@ mod tests {
             dialog_frame(&mut h, &mut open, vec![]);
         }
         assert_eq!(slot_of(&h.ctx, "modal:page_form"), Some(Slot::Right));
+    }
+
+    #[test]
+    fn escape_closes_the_window_docked_last() {
+        let mut h = Harness::new();
+        set_dialogs_dock_by_default(&h.ctx, true);
+        // The form of the test frame stays out of the way: the dialog is the
+        // window docked last.
+        set(&h.ctx, "modal:page_form", None);
+        let mut open = true;
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        assert!(open);
+        let esc = |pressed| egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        dialog_frame(&mut h, &mut open, vec![esc(true), esc(false)]);
+        assert!(!open, "Escape closes the docked dialog");
     }
 }
