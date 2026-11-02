@@ -1,0 +1,33 @@
+@title Cabinet: Shift-click two devices, drag one, both move; undo puts both back
+@area Cabinet
+@sizes 1366x768
+# Click F1, Shift-click F2: two selected. A drag on F2 carries F1 as well (one undo step). The greyed
+# Spread buttons say in their hover text why they are off.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+click 628 185
+wait 10
+click 670 185 shift
+wait 10
+move 736 733
+wait 40
+shot spread-disabled-reason
+move 300 600
+wait 5
+expect "2 selected"
+expect "55, 10 mm"
+drag 670 185 770 470
+wait 20
+move 300 600
+wait 5
+expect_not "55, 10 mm"
+shot both-moved
+check_layout
+click 497 19
+wait 15
+move 300 600
+wait 5
+expect "55, 10 mm"
+shot undone-both

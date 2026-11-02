@@ -1,0 +1,33 @@
+@title Defect warning and Fast keys progress are status bar chips under Live
+@sizes 1366x768 1920x1080
+@area Live
+open qa/fixtures/radio-hoist.novo
+wait 20
+click_text Simulate
+wait 5
+click_text "Defects and walk-throughs"
+wait 20
+click_text "Contact welded closed"
+wait 5
+click_text "Coil open (never operates)"
+wait 5
+click_text "choose..."
+wait 5
+click_text -K1
+wait 5
+click_text "Inject defect"
+wait 20
+expect "DEFECT INJECTED (1)"
+shot defect-chip
+check_layout
+key ctrl+k
+text Fast keys card on this project
+wait 5
+key Enter
+wait 20
+shot fast-keys
+expect "Fast keys"
+check_layout
+click_text "DEFECT INJECTED (1)"
+wait 10
+shot defect-chip-click-toggles-card

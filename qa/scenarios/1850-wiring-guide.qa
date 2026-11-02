@@ -1,0 +1,41 @@
+@title Wiring guide: three steps in words on the canvas, rings on free pins
+@area Schematic
+@sizes 1366x768 1920x1080
+# The wire tool says where you are (start, turn, finish) at the bottom of the drawing, marks the current step with
+# an arrow, says how many pins are free (ringed), and rings every pin that can still take a wire. The guide is
+# deliberate: a quiet strip over the drawing that is only there while the wire tool is on (Esc removes it).
+click_text "New project"
+wait 20
+key q
+text mcb
+key Return
+click 600 150
+wait 10
+key q
+text contactor
+key Return
+click 600 300
+wait 10
+key Escape
+key w
+wait 3
+move 800 450
+wait 3
+shot step-1-start
+expect_scene "wire"
+click 800 450
+wait 3
+shot refused-start-not-doubled
+key Escape
+key w
+wait 3
+click 596 160
+move 700 420
+wait 3
+shot step-2-turn
+move 596 338
+wait 3
+shot step-3-finish-on-a-pin
+key Escape
+wait 3
+shot guide-gone-after-escape

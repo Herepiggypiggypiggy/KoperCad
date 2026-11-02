@@ -1,25 +1,16 @@
-//! The simulation status chip: one row, in the top left corner of the Cabinet
-//! (a card of its own) and as the first row of the 3D toolbar, that says
-//! whether the heat simulation was run, how far it is, whether the result
-//! still fits the cabinet, and offers the one action that fits (Run, Cancel,
-//! Show heat). It reads
-//! [`HeatState::sim_status`], the same value as the Cabinet strip and the 3D
-//! Heat panel, so it is there with every section folded and the panel closed,
-//! and the person never has to go back to the Cabinet to find out
-//! (docs/design/visual-redesign-3d.md section 4).
+//! The simulation status chip, docked in the status bar: one small button,
+//! in the Cabinet and 3D workspaces, that says whether the heat simulation
+//! was run, how far it is, whether the result still fits the cabinet, and
+//! carries the one action that fits (Run, Cancel, Show heat) on click. It
+//! reads [`HeatState::sim_status`], the same value as the Cabinet strip and
+//! the 3D Heat panel. It used to float over the Cabinet canvas and sit as the
+//! first row of the 3D toolbar; nothing floats any more
+//! (docs/design/visual-redesign-3d.md section 4, dock/chip-inventory.md).
 
 use eframe::egui;
 
 use super::heat::HeatState;
 use super::heat_status::SimStatus;
-use super::panel::{MARGIN, Panel, Side};
-
-/// Room the Cabinet's chip card takes at the top left, gap included: panels
-/// that start at the top of the Cabinet canvas on that side start below it.
-pub(super) const TOP_ROOM: f32 = MARGIN + 48.0 + 6.0;
-
-/// Below this canvas width the detail line moves into the tooltip.
-const NARROW: f32 = 560.0;
 
 /// What a chip's button asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +34,8 @@ pub(super) enum Tone {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Chip {
     pub marker: &'static str,
+    /// The label on the status bar: marker and a few words.
+    pub short: String,
     pub words: String,
     pub detail: String,
     pub tone: Tone,
@@ -58,6 +51,7 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
     match status {
         SimStatus::NotRun => Chip {
             marker: "▶",
+            short: "Heat not run".into(),
             words: "Heat has not been run".into(),
             detail: "Shows temperatures and the hottest device".into(),
             tone: Tone::Quiet,
@@ -70,6 +64,11 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
             stopping,
         } => Chip {
             marker: "●",
+            short: match (stopping, fraction) {
+                (true, _) => "Heat stopping".into(),
+                (false, Some(f)) => format!("Heat {:.0}%", f * 100.0),
+                (false, None) => "Heat starting".into(),
+            },
             words: if *stopping {
                 "Heat is stopping".into()
             } else {
@@ -86,6 +85,7 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
         },
         SimStatus::Done { label, converged } => Chip {
             marker: "✔",
+            short: "Heat done".into(),
             words: "Heat is done".into(),
             detail: if *converged {
                 label.clone()
@@ -98,6 +98,7 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
         },
         SimStatus::OutOfDate => Chip {
             marker: "!",
+            short: "Heat out of date".into(),
             words: "Heat is out of date".into(),
             detail: "The cabinet changed since the last run".into(),
             tone: Tone::Warn,
@@ -106,6 +107,7 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
         },
         SimStatus::Failed(why) => Chip {
             marker: "×",
+            short: "Heat failed".into(),
             words: "Heat failed".into(),
             detail: why.clone(),
             tone: Tone::Bad,
@@ -115,93 +117,41 @@ pub(super) fn describe(status: &SimStatus, heat_visible: bool) -> Chip {
     }
 }
 
-/// One row of the chip: the marker, the words, the bar of a run, the detail
-/// and the one button. It is the first row of the 3D toolbar and the content
-/// of the Cabinet's chip. The action is applied to `state`; what was asked is
-/// returned for a caller with more to do (only `ShowHeat`: showing the result
-/// is the view's business, the state just switches heat on).
-pub(super) fn row(
-    ui: &mut egui::Ui,
-    state: &mut HeatState,
-    heat_visible: bool,
-    reduce_motion: bool,
-) -> Option<Ask> {
-    let status = state.sim_status();
-    let chip = describe(&status, heat_visible);
-    let narrow = ui.max_rect().width() < NARROW;
+/// The chip as one small button in the status bar, for the status as it is
+/// now. What was clicked is returned; [`apply`] does it.
+pub(super) fn bar_slot(ui: &mut egui::Ui, status: &SimStatus, heat_visible: bool) -> Option<Ask> {
+    let chip = describe(status, heat_visible);
     let pal = crate::theme::ui_palette();
     let colour = match chip.tone {
-        Tone::Quiet | Tone::Busy => pal.text_secondary,
+        Tone::Quiet | Tone::Busy => pal.text_primary,
         Tone::Good => pal.success,
         Tone::Warn => pal.warning,
         Tone::Bad => pal.error,
     };
-    let mut asked = None;
-    let whole = ui
-        .horizontal(|ui| {
-            ui.label(egui::RichText::new(chip.marker).strong().color(colour));
-            ui.label(egui::RichText::new(&chip.words).strong());
-            if let Some(fraction) = chip.progress {
-                let bar = egui::ProgressBar::new(fraction.unwrap_or(0.0)).desired_width(90.0);
-                ui.add(
-                    if fraction.is_none() || fraction.is_some_and(|f| f < 0.01) {
-                        bar.animate(!reduce_motion)
-                    } else {
-                        bar.show_percentage()
-                    },
-                );
-            }
-            if !narrow {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(&chip.detail)
-                            .small()
-                            .color(pal.text_secondary),
-                    )
-                    .truncate(),
-                );
-            }
-            if let Some((label, ask)) = chip.action
-                && ui.button(label).clicked()
-            {
-                asked = Some(ask);
-            }
-        })
-        .response;
-    // The whole chip says it in full on hover, also on a narrow canvas.
-    whole.on_hover_text(format!("{}\n{}", chip.words, chip.detail));
-    match asked {
-        Some(Ask::Run) => state.request_run(),
-        Some(Ask::Cancel) => state.cancel(),
-        Some(Ask::ShowHeat) => state.on = true,
-        None => {}
+    let mut hover = format!("{}\n{}", chip.words, chip.detail);
+    if let Some((label, _)) = chip.action {
+        hover.push_str(&format!("\nClick: {label}"));
     }
-    asked
+    let button = egui::Button::new(
+        egui::RichText::new(format!("{} {}", chip.marker, chip.short)).color(colour),
+    )
+    .fill(pal.control)
+    .small();
+    let response = ui.add(button).on_hover_text(hover);
+    chip.action.filter(|_| response.clicked()).map(|(_, a)| a)
 }
 
-/// The chip as a card of its own over `view` (the Cabinet canvas): the 3D
-/// view has it as the first row of its toolbar instead, so it takes no room
-/// from the panels under it.
-pub(super) fn show(
-    ctx: &egui::Context,
-    view: egui::Rect,
-    state: &mut HeatState,
-    heat_visible: bool,
-    reduce_motion: bool,
-) -> Option<Ask> {
-    let mut asked = None;
-    Panel::new(
-        "sim_status_chip",
-        "Simulation status",
-        view,
-        Side::Left,
-        520.0,
-    )
-    .bare()
-    .fit()
-    .top(MARGIN)
-    .show(ctx, |ui| {
-        asked = row(ui, state, heat_visible, reduce_motion);
-    });
-    asked
+/// Does what a click on the chip asked for.
+pub(super) fn apply(state: &mut HeatState, ask: Ask) {
+    match ask {
+        Ask::Run => state.request_run(),
+        Ask::Cancel => state.cancel(),
+        Ask::ShowHeat => state.on = true,
+    }
+}
+
+/// The label the slot shows, for the status bar's room count.
+pub(super) fn slot_label(status: &SimStatus, heat_visible: bool) -> String {
+    let chip = describe(status, heat_visible);
+    format!("{} {}", chip.marker, chip.short)
 }

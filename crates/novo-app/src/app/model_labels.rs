@@ -137,7 +137,7 @@ pub(crate) fn badge(ui: &mut egui::Ui, model: Model) -> egui::Response {
 
 /// The full sentence as a quiet wrapping line under a block of numbers.
 pub(crate) fn note(ui: &mut egui::Ui, model: Model) {
-    super::dialog_ui::hint(ui, model.text());
+    super::dialog_ui::explained(ui, "Model, not a measurement", model.text());
 }
 
 /// The page as plain text, for "Copy" and for tests.

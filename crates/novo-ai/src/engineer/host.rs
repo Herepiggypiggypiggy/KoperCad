@@ -43,6 +43,8 @@ pub struct Question {
 pub struct Resources {
     pub library: &'static Library,
     pub macros: Vec<MacroFile>,
+    /// The part picker's catalog (starter parts plus the person's own).
+    pub catalog: novo_parts::Catalog,
 }
 
 fn library() -> &'static Library {
@@ -73,16 +75,26 @@ impl Resources {
                 macros.push(m);
             }
         }
+        let catalog =
+            novo_parts::Catalog::load_default().unwrap_or_else(|_| novo_parts::Catalog::starter());
         Resources {
             library: library(),
             macros,
+            catalog,
         }
+    }
+
+    /// Uses `catalog` instead of the default one (the app's open catalog, tests).
+    pub fn with_catalog(mut self, catalog: novo_parts::Catalog) -> Self {
+        self.catalog = catalog;
+        self
     }
 
     pub fn env(&self) -> Env<'_> {
         Env {
             library: self.library,
             macros: &self.macros,
+            catalog: &self.catalog,
         }
     }
 }
@@ -415,6 +427,44 @@ impl EngineerHost {
         }
     }
 
+    fn search_catalog(&self, input: &Value) -> ToolReply {
+        // The catalog holds the person's own added parts, so it is project data.
+        if !self.scope.allows(DataScope::Project) {
+            return self.denied(DataScope::Project);
+        }
+        match super::cabinet::search_catalog(&self.resources.catalog, &self.draft, input) {
+            Ok(v) => ToolReply {
+                text: super::super::tools::clip_for_tools(&v.to_string()),
+                is_error: false,
+            },
+            Err(why) => ToolReply {
+                text: why,
+                is_error: true,
+            },
+        }
+    }
+
+    /// A calculation on the draft: needs the whole project, answers with the model's own text.
+    fn study(
+        &self,
+        input: &Value,
+        run: impl Fn(&Project, &Value) -> Result<Value, String>,
+    ) -> ToolReply {
+        if !self.scope.allows(DataScope::Project) {
+            return self.denied(DataScope::Project);
+        }
+        match run(&self.draft, input) {
+            Ok(v) => ToolReply {
+                text: super::super::tools::clip_for_tools(&v.to_string()),
+                is_error: false,
+            },
+            Err(why) => ToolReply {
+                text: why,
+                is_error: true,
+            },
+        }
+    }
+
     fn set_plan(&mut self, input: &Value) -> ToolReply {
         let Some(items) = input["steps"].as_array() else {
             return ToolReply {
@@ -527,6 +577,50 @@ impl ToolHost for EngineerHost {
                 "query": {"type": "string"}, "limit": {"type": "integer"}}},
         }));
         specs.push(json!({
+            "name": "search_catalog",
+            "description": "The part picker: searches the part catalog by words or order number \
+                            and returns manufacturer, order number, size and the device letters \
+                            each part suits. Give device (a tag) to get parts that suit it \
+                            first. Use it before assign_catalog_part; never invent a part.",
+            "input_schema": {"type": "object", "properties": {
+                "query": {"type": "string"}, "device": {"type": "string"},
+                "limit": {"type": "integer"}}},
+        }));
+        specs.push(json!({
+            "name": "heat_estimate",
+            "description": "Steady-state heat estimate of a cabinet on your draft (the Heat \
+                            view's model): device surface and air temperatures with bands, \
+                            margins to the maker's limits, hot spots, advice, and which data is \
+                            missing (devices with no loss value count as 0 W). Needs plate, \
+                            interior and placed devices. An estimate, not CFD.",
+            "input_schema": {"type": "object", "properties": {
+                "enclosure": {"type": "string"}, "ambient_c": {"type": "number"},
+                "advice": {"type": "boolean", "description": "also try moves, fans and vents (slower)"}}},
+        }));
+        specs.push(json!({
+            "name": "simulate_circuit",
+            "description": "Runs the live circuit simulation on your draft without storing \
+                            anything: operate or release hand devices (push buttons, switches, \
+                            breakers) in order, optionally wait for timers, and read which coils \
+                            pull in, which lamps light and how motors run. explain lists device \
+                            tags to ask why they are on or off. A logic simulation, not a \
+                            current or fault study.",
+            "input_schema": {"type": "object", "properties": {
+                "steps": {"type": "array", "items": {"type": "object", "properties": {
+                    "operate": {"type": "array", "items": {"type": "string"}},
+                    "release": {"type": "array", "items": {"type": "string"}},
+                    "wait_s": {"type": "number"}}}},
+                "explain": {"type": "array", "items": {"type": "string"}}}},
+        }));
+        specs.push(json!({
+            "name": "autopilot_plan",
+            "description": "What Autopilot would fill in on your draft: wire sizes and colours \
+                            with the reason and how far to trust each (rule, calculated, \
+                            planning value, assumed), wire numbers, cables, entry points, and \
+                            what it cannot do. Apply with propose_edit run_autopilot.",
+            "input_schema": {"type": "object", "properties": {}, "additionalProperties": false},
+        }));
+        specs.push(json!({
             "name": "set_plan",
             "description": "Shows the person your plan as a checklist and keeps it current. Call \
                             it first for any job of more than two edits, and again as steps \
@@ -586,6 +680,10 @@ impl EngineerHost {
             "standards_report" => self.standards(),
             "list_macros" => self.list_macros(),
             "list_symbols" => self.list_symbols(input),
+            "search_catalog" => self.search_catalog(input),
+            "heat_estimate" => self.study(input, super::studies::thermal),
+            "simulate_circuit" => self.study(input, super::studies::simulate),
+            "autopilot_plan" => self.study(input, |p, _| Ok(super::studies::autopilot_json(p))),
             "set_plan" => self.set_plan(input),
             "ask_user" => self.ask(input),
             other => self.reads.call(other, input),

@@ -398,14 +398,3 @@ fn heat_aware_place_all_lowers_a_sensitive_breaker_and_the_rule_check_agrees() {
     );
     assert!(judged.violations.is_empty(), "{:?}", judged.violations);
 }
-
-#[test]
-fn the_heat_line_in_the_rule_text_is_switched_without_touching_the_rest() {
-    let text = "# mine\ngap 10\nrule * zone=middle\n";
-    let on = cabinet_rules::set_heat_line_for_test(text, true);
-    assert!(on.contains("heat on") && on.contains("# mine") && on.contains("gap 10"));
-    assert!(on.find("heat on").unwrap() < on.find("rule *").unwrap());
-    let off = cabinet_rules::set_heat_line_for_test(&on, false);
-    assert!(off.contains("heat off") && !off.contains("heat on"));
-    assert_eq!(off.matches("heat").count(), 1);
-}

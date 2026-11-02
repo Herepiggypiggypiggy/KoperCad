@@ -1,0 +1,53 @@
+@title Cabinet: Shift-click, the Align row (2 and 3 devices), Ctrl+A and the arrow keys
+@area Cabinet
+@sizes 1366x768
+# Shift-click F1 and F2: the Align row says "2 selected" and Spread across and Spread down are greyed.
+# Shift-click F3: all eight buttons work. Bottom lines the three up on one bottom edge (one undo step).
+# Ctrl+A selects every device; Right moves them one grid step along their rails, Down moves only the
+# ones that are not on a rail.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+click 628 185
+wait 10
+click 670 185 shift
+wait 10
+move 300 600
+wait 5
+expect "2 selected"
+expect_enabled "Left"
+expect_disabled "Spread across"
+expect_disabled "Spread down"
+shot two-selected
+click 700 185 shift
+wait 10
+move 300 600
+wait 5
+expect "3 selected"
+expect_enabled "Spread across"
+shot three-selected
+click_text "Bottom"
+wait 15
+move 300 600
+wait 5
+expect "119, 25 mm"
+shot aligned-bottom
+click 497 19
+wait 15
+move 300 600
+wait 5
+expect "119, 18 mm"
+shot align-undone
+key ctrl+a
+wait 15
+shot select-all
+key Right
+wait 10
+move 300 600
+wait 5
+expect "60, 10 mm"
+shot nudged-right
+key Down
+wait 10
+shot nudged-down

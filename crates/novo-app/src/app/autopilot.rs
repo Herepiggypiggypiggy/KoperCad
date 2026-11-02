@@ -436,7 +436,7 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules, edits: &mut Vec<(String, 
         .id_salt("autopilot-wire-rules")
         .default_open(false)
         .show(ui, |ui| {
-            ui.label("Colours and smallest sections the Autopilot proposes. IEC 60204-1 is the default; House rules let this project use its own. Rules only change what the Autopilot proposes from now on; wires that already have a colour or size are not touched, and the ones that break the house rules are listed in Issues. Under either setting a neutral or 0 V wire that is not blue is listed too. A wire's class (power, control, neutral, ...) is worked out from its circuit; a wire whose class is a guess is not reported, and protective earth and PEN colours are not checked. Ampacity sizing stays on planning values either way.");
+            super::dialog_ui::explained(ui, "Wire colours and sections", "Colours and smallest sections the Autopilot proposes. IEC 60204-1 is the default; House rules let this project use its own. Rules only change what the Autopilot proposes from now on; wires that already have a colour or size are not touched, and the ones that break the house rules are listed in Issues. Under either setting a neutral or 0 V wire that is not blue is listed too. A wire's class (power, control, neutral, ...) is worked out from its circuit; a wire whose class is a guess is not reported, and protective earth and PEN colours are not checked. Ampacity sizing stays on planning values either way.");
             ui.horizontal(|ui| {
                 for preset in [Preset::Iec60204, Preset::House] {
                     if ui
@@ -455,7 +455,7 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules, edits: &mut Vec<(String, 
             if rules.preset != Preset::House {
                 return;
             }
-            ui.weak("A class left on \"IEC 60204-1\" keeps the colour of the standard. Protective earth and PEN are always green-yellow (IEC 60204-1, IEC 60445): a house rule cannot change them.");
+            super::dialog_ui::explained(ui, "Rule classes", "A class left on \"IEC 60204-1\" keeps the colour of the standard. Protective earth and PEN are always green-yellow (IEC 60204-1, IEC 60445): a house rule cannot change them.");
             egui::Grid::new("autopilot-house-colours")
                 .num_columns(4)
                 .show(ui, |ui| {

@@ -494,7 +494,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
     super::panel::dialog(ctx, "Enclosures", [620.0, 0.0])
         .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
-            ui.weak("Your own list of enclosure sizes, in mm. Outside size sets the cooling surface; the plate is the mounting plate inside.");
+            super::dialog_ui::explained(ui, "Enclosure sizes", "Your own list of enclosure sizes, in mm. Outside size sets the cooling surface; the plate is the mounting plate inside.");
             ui.add_space(4.0);
             egui::Grid::new("enclosure_list")
                 .num_columns(9)

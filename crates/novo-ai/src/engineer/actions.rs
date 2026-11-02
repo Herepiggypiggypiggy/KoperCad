@@ -20,6 +20,8 @@ use serde_json::{Value, json};
 pub struct Env<'a> {
     pub library: &'a Library,
     pub macros: &'a [MacroFile],
+    /// The part picker's catalog, for `assign_catalog_part`.
+    pub catalog: &'a novo_parts::Catalog,
 }
 
 fn reason(action: &str, e: impl std::fmt::Display) -> ModelError {
@@ -49,6 +51,17 @@ pub fn run(tx: &mut Tx<'_>, env: &Env<'_>, action: &str, args: &Value) -> Result
         "number_wires" => number_wires(tx),
         "remove_device" => remove_device(tx, args),
         "move_device" => move_device(tx, args),
+        "add_cabinet" => super::cabinet::add_cabinet(tx, args),
+        "set_cabinet_plate" => super::cabinet::set_cabinet_plate(tx, args),
+        "add_cabinet_rail" => super::cabinet::add_cabinet_rail(tx, args),
+        "add_cabinet_duct" => super::cabinet::add_cabinet_duct(tx, args),
+        "set_cabinet_interior" => super::cabinet::set_cabinet_interior(tx, args),
+        "run_autopilot" => super::studies::run_autopilot(tx, args),
+        "place_in_cabinet" => super::cabinet::place_in_cabinet(tx, args),
+        "turn_in_cabinet" => super::cabinet::turn_in_cabinet(tx, args),
+        "unplace_from_cabinet" => super::cabinet::unplace_from_cabinet(tx, args),
+        "place_all_in_cabinet" => super::cabinet::place_all_in_cabinet(tx, args),
+        "assign_catalog_part" => super::cabinet::assign_catalog_part(tx, env.catalog, args),
         other => Err(format!("unknown action {other:?}")),
     }
 }
@@ -94,6 +107,8 @@ pub fn catalogue() -> Vec<EditAction> {
     let pin = json!({"type": ["string", "object"], "description":
         "tag:pin such as -K1:A1; add #2 when the device has two symbols with that pin name; \
          terminals are -X1:3.1 (upper pin) or -X1:3.2 (lower pin)"});
+    let enclosure = json!({"type": "string", "description":
+        "enclosure tag such as +CAB1; may be left out when the project has only one"});
     vec![
         EditAction {
             name: "add_page",
@@ -236,6 +251,114 @@ pub fn catalogue() -> Vec<EditAction> {
             schema: json!({"type": "object", "properties": {
                 "device": device, "dx": {"type": "number"}, "dy": {"type": "number"}},
                 "required": ["device", "dx", "dy"]}),
+        },
+        EditAction {
+            name: "add_cabinet",
+            description: "Creates an enclosure (cabinet) with a tag such as +CAB1 and, with \
+                          width and height, its mounting plate. Devices belong to it by the \
+                          location in their tag.",
+            schema: json!({"type": "object", "properties": {
+                "tag": {"type": "string", "description": "location tag, e.g. +CAB1"},
+                "description": {"type": "string"},
+                "width": {"type": "number"}, "height": {"type": "number"},
+                "margin": {"type": "number"}}, "required": ["tag"]}),
+        },
+        EditAction {
+            name: "set_cabinet_plate",
+            description: "Sets the mounting plate of an enclosure (cabinet) in millimetres. \
+                          Needed before rails and devices can be placed. See section cabinet.",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "width": {"type": "number"},
+                "height": {"type": "number"}, "margin": {"type": "number", "description": "free border, default 10"}},
+                "required": ["width", "height"]}),
+        },
+        EditAction {
+            name: "add_cabinet_rail",
+            description: "Adds a DIN rail on the plate: x, y is its start in mm from the plate's \
+                          top left, running right for length, or down when vertical.",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "x": {"type": "number"}, "y": {"type": "number"},
+                "length": {"type": "number"}, "vertical": {"type": "boolean"}},
+                "required": ["x", "y", "length"]}),
+        },
+        EditAction {
+            name: "place_in_cabinet",
+            description: "Places a device on the plate with its top left at x, y mm (or moves it \
+                          there). It snaps onto a DIN rail whose line runs through its centre. \
+                          Read section cabinet first; check layout_problems afterwards.",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "device": device,
+                "x": {"type": "number"}, "y": {"type": "number"}, "rotated": {"type": "boolean"},
+                "surface": {"type": "string", "description":
+                    "plate (default), door, left, right, roof or floor; x, y are then on that surface"}},
+                "required": ["device", "x", "y"]}),
+        },
+        EditAction {
+            name: "add_cabinet_duct",
+            description: "Adds a wiring duct on the plate (centre line starts at x, y, runs right \
+                          for length, or down when vertical). class keeps power and signal \
+                          wiring apart: power, signal or mixed. Ducts matter for wire lengths, \
+                          fill and the heat picture.",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "x": {"type": "number"}, "y": {"type": "number"},
+                "length": {"type": "number"}, "width": {"type": "number", "description": "default 40"},
+                "height": {"type": "number", "description": "default 60"},
+                "vertical": {"type": "boolean"}, "class": {"type": "string"}},
+                "required": ["x", "y", "length"]}),
+        },
+        EditAction {
+            name: "set_cabinet_interior",
+            description: "Sets the interior of an enclosure in mm (what the 3D view draws and \
+                          the door and heat checks use): width, height, depth (needed the first \
+                          time), plate_setback, door_hinge left/right/none, door_angle, \
+                          door_inner (depth of door-mounted parts), front_clearance and \
+                          hinge_side_clearance (free room outside).",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "width": {"type": "number"}, "height": {"type": "number"},
+                "depth": {"type": "number"}, "plate_setback": {"type": "number"},
+                "door_hinge": {"type": "string"}, "door_angle": {"type": "number"},
+                "door_inner": {"type": "number"}, "front_clearance": {"type": "number"},
+                "hinge_side_clearance": {"type": "number"}}}),
+        },
+        EditAction {
+            name: "run_autopilot",
+            description: "Fills in what Autopilot proposes (wire sizes and colours from the \
+                          calculations, wire numbers, cable types, cabinet entry points). Read \
+                          autopilot_plan first. Assumed rows are skipped unless \
+                          include_assumed is true; kinds narrows it to Size, Colour, Number, \
+                          Cable or \"Entry point\". Sizes from planning tables are planning \
+                          values, not a verified cable selection.",
+            schema: json!({"type": "object", "properties": {
+                "include_assumed": {"type": "boolean"},
+                "kinds": {"type": "array", "items": {"type": "string"}}}}),
+        },
+        EditAction {
+            name: "turn_in_cabinet",
+            description: "Turns a placed device by 90 degrees.",
+            schema: json!({"type": "object", "properties": {"device": device}, "required": ["device"]}),
+        },
+        EditAction {
+            name: "unplace_from_cabinet",
+            description: "Takes a device off the plate (the device itself stays in the project).",
+            schema: json!({"type": "object", "properties": {"device": device}, "required": ["device"]}),
+        },
+        EditAction {
+            name: "place_all_in_cabinet",
+            description: "Places every device that is not on the plate yet, on new rails below \
+                          what is there (the Cabinet's Place all). Assign parts first: a device without a part has a \
+                          guessed size. Devices without room are named in the answer.",
+            schema: json!({"type": "object", "properties": {"enclosure": enclosure}}),
+        },
+        EditAction {
+            name: "assign_catalog_part",
+            description: "Assigns a part from the part catalog (search_catalog) to a device and \
+                          copies it into the project with its size and data. Copy manufacturer \
+                          and order number exactly from search_catalog; add=true keeps the \
+                          device's other parts (an auxiliary contact block).",
+            schema: json!({"type": "object", "properties": {
+                "device": device, "manufacturer": {"type": "string"},
+                "order_number": {"type": "string"}, "add": {"type": "boolean"}},
+                "required": ["device", "order_number"]}),
         },
     ]
 }

@@ -125,3 +125,32 @@ fn the_walkthrough_starts_on_the_canvas_at_1366_by_768() {
         "{card:?}"
     );
 }
+
+/// Under Live the list is a slot of the status bar, not a floating pill.
+#[test]
+fn under_live_the_walkthrough_is_a_status_bar_slot() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::TryFastKeys);
+    assert_eq!(d.app.walkthrough_progress(), None);
+    d.app.wb.live.on = true;
+    let label = d
+        .app
+        .walkthrough_progress()
+        .expect("a slot while Live runs");
+    assert!(label.starts_with("Fast keys "), "{label}");
+    assert!(d.app.mode_chips().iter().any(|c| c.label == label));
+    for _ in 0..6 {
+        d.frame_sized(eframe::egui::vec2(1366.0, 768.0), Vec::new());
+    }
+    assert!(
+        ctx.memory(|m| m.area_rect(super::panel::id("walkthrough")))
+            .is_none_or(|r| !ctx.memory(|m| {
+                m.areas().visible_last_frame(&eframe::egui::LayerId::new(
+                    eframe::egui::Order::Middle,
+                    super::panel::id("walkthrough"),
+                )) && r.width() > 0.0
+            })),
+        "no floating pill"
+    );
+}

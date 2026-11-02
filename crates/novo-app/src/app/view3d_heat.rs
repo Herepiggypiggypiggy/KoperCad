@@ -175,6 +175,14 @@ pub(super) fn show(
                     }
                 });
         }
+        if let Some(sol) = state.solution() {
+            egui::CollapsingHeader::new("Where each device's heat goes")
+                .id_salt("view3d_heat_paths")
+                .show(ui, |ui| {
+                    let rows = super::heat_modes::path_rows(&sol.snapshot);
+                    super::heat_modes::paths_table(ui, &rows, tag_of);
+                });
+        }
         // Closed while a run goes: the form below the fold only hid the Cancel
         // row and could not be used anyway.
         let mut settings_header = egui::CollapsingHeader::new("Settings for the next run")
@@ -357,7 +365,11 @@ fn about(ui: &mut egui::Ui, state: &HeatState) {
          a rough picture appears first and sharpens; Cancel keeps the latest one.",
     );
     ui.add_space(4.0);
-    ui.label("Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.");
+    super::dialog_ui::explained(
+        ui,
+        "Quick estimate, not a simulation",
+        "Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.",
+    );
     ui.add_space(4.0);
     match state.solution() {
         Some(sol) => {

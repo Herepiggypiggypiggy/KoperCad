@@ -100,6 +100,18 @@ pub struct Expect {
     pub numbering_conflicts_max: Option<usize>,
     /// Devices that must have a non-empty description.
     pub described: Vec<String>,
+    /// Devices that must be placed on a cabinet plate afterwards.
+    pub cabinet_placed: Vec<String>,
+    /// Layout problems allowed in the cabinets (overlaps, outside, too close, rails too short).
+    pub cabinet_problems_max: Option<usize>,
+    /// Devices that must carry a part with this order number.
+    pub assigned: Vec<AssignedIs>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct AssignedIs {
+    pub device: String,
+    pub order_number: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -280,6 +292,7 @@ pub fn base_document(setup: &[Setup], resources: &Resources) -> Result<Document,
         let env = actions::Env {
             library: resources.library,
             macros: &resources.macros,
+            catalog: &resources.catalog,
         };
         doc.transact("Setup", |tx| {
             actions::run(tx, &env, &s.action, &s.args).map_err(|why| {
@@ -688,6 +701,57 @@ fn check_expect(
             .is_some_and(|d| !d.description.trim().is_empty());
         push(&mut r.checks, &format!("{t} has a description"), ok, "");
     }
+    for t in &e.cabinet_placed {
+        let ok = after
+            .devices()
+            .find(|d| d.tag.to_string() == *t)
+            .is_some_and(|d| {
+                after
+                    .all::<novo_core::CabinetPlacement>()
+                    .any(|p| p.device == d.id)
+            });
+        push(
+            &mut r.checks,
+            &format!("{t} is placed in a cabinet"),
+            ok,
+            "",
+        );
+    }
+    if let Some(n) = e.cabinet_problems_max {
+        let count: usize = crate::engineer::cabinet::section(after)
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|c| c["layout_problems"].as_array())
+                    .flatten()
+                    .filter(|p| !p.as_str().is_some_and(|s| s.contains("default guess")))
+                    .count()
+            })
+            .unwrap_or(0);
+        push(
+            &mut r.checks,
+            &format!("cabinet layout problems <= {n}"),
+            count <= n,
+            format!("{count}"),
+        );
+    }
+    for a in &e.assigned {
+        let ok = after
+            .devices()
+            .find(|d| d.tag.to_string() == a.device)
+            .is_some_and(|d| {
+                d.parts
+                    .iter()
+                    .filter_map(|id| after.part(*id))
+                    .any(|p| p.order_number == a.order_number)
+            });
+        push(
+            &mut r.checks,
+            &format!("{} has part {}", a.device, a.order_number),
+            ok,
+            "",
+        );
+    }
     if e.keep_existing {
         let gone: Vec<String> = base
             .devices()
@@ -712,6 +776,14 @@ pub fn builtin() -> Vec<Scenario> {
 }
 
 const SOURCES: &[(&str, &str)] = &[
+    (
+        "edit-cabinet-and-part-picker",
+        include_str!("../eval/edit-cabinet-and-part-picker.json"),
+    ),
+    (
+        "edit-cabinet-heat-sim-autopilot",
+        include_str!("../eval/edit-cabinet-heat-sim-autopilot.json"),
+    ),
     (
         "create-dol-starter",
         include_str!("../eval/create-dol-starter.json"),

@@ -711,7 +711,7 @@ pub(super) fn panel(
                 ui.separator();
             }
             if pic.hotspots.is_empty() {
-                ui.label("No finding: no noisy run lies beside a sensitive one and no noisy part stands close to a sensitive one. This is a design aid, not a test result.");
+                super::dialog_ui::explained(ui, "No finding: a design aid, not a test result", "No finding: no noisy run lies beside a sensitive one and no noisy part stands close to a sensitive one. This is a design aid, not a test result.");
             } else {
                 let worst = pic.worst();
                 ui.label(

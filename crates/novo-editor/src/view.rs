@@ -211,6 +211,8 @@ pub struct SchematicView {
     refusal: Option<RefusalMark>,
     /// The snap target of the wire tool and what it is, for its label.
     snap_label: Option<(Point, String)>,
+    /// Pins that can still take a wire, for the wire guide's words.
+    free_pin_count: usize,
     /// Reduce motion: the refusal mark then appears and goes without fading.
     pub reduce_motion: bool,
 }
@@ -378,6 +380,7 @@ impl SchematicView {
             where_shown: None,
             refusal: None,
             snap_label: None,
+            free_pin_count: 0,
             reduce_motion: false,
         }
     }
@@ -774,6 +777,7 @@ impl SchematicView {
             scene.scene_mut().remove(id);
         }
         let preview = self.editor.preview(document, page);
+        self.free_pin_count = preview.free_pins.len();
         self.snap_label = match (&preview.target, &preview.target_label) {
             (Some(at), Some(text)) if matches!(self.editor.tool(), crate::tool::Tool::Wire(_)) => {
                 Some((*at, text.clone()))
@@ -899,6 +903,13 @@ impl SchematicView {
                 self.canvas.style.proposal,
             ));
         }
+        for at in &preview.free_pins {
+            // A ring on every pin that can still take a wire.
+            items.push(Item::new(layer).unselectable().with(Primitive::stroked(
+                Shape::circle(model::vec(*at), 0.9),
+                Stroke::screen(1.5, opacity(self.canvas.style.hover.color, 140)),
+            )));
+        }
         if let Some(t) = preview.target {
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::circle(model::vec(t), 1.2),
@@ -947,6 +958,75 @@ impl SchematicView {
             egui::StrokeKind::Inside,
         );
         painter.galley(frame.min + pad, galley, visuals.text_color());
+    }
+
+    /// The three steps of a wire in words, over the top of the drawing while
+    /// the wire tool is on, with the step the person is at lit. The keys
+    /// stay in the status bar; this says what to do.
+    fn paint_wire_guide(&self, ui: &egui::Ui) {
+        let Some(step) = self.editor.wire_step() else {
+            return;
+        };
+        let pins = match self.free_pin_count {
+            0 => "no free pins".to_owned(),
+            1 => "1 free pin (ringed)".to_owned(),
+            n => format!("{n} free pins (ringed)"),
+        };
+        let steps = [
+            "1  Click a pin to start".to_owned(),
+            "2  Click empty space to turn".to_owned(),
+            "3  Click a pin to finish".to_owned(),
+            pins,
+        ];
+        let painter = ui.painter_at(self.rect);
+        let visuals = ui.visuals();
+        let [r, g, b, _] = self.canvas.style.hover.color.0;
+        let accent = egui::Color32::from_rgb(r, g, b);
+        let font = egui::FontId::proportional(13.0);
+        let galleys: Vec<_> = steps
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let color = if i == step {
+                    accent
+                } else {
+                    visuals.weak_text_color()
+                };
+                // The step you are at is marked with an arrow, not only lit.
+                let text = if i == step {
+                    format!("→ {t}")
+                } else {
+                    t.clone()
+                };
+                painter.layout_no_wrap(text, font.clone(), color)
+            })
+            .collect();
+        let gap = 18.0;
+        let pad = egui::vec2(12.0, 6.0);
+        let width: f32 =
+            galleys.iter().map(|g| g.size().x).sum::<f32>() + gap * (galleys.len() as f32 - 1.0);
+        let height = galleys.iter().map(|g| g.size().y).fold(0.0, f32::max);
+        let size = egui::vec2(width, height) + pad * 2.0;
+        let frame = egui::Rect::from_min_size(
+            egui::pos2(
+                self.rect.center().x - size.x / 2.0,
+                self.rect.bottom() - size.y - 12.0,
+            ),
+            size,
+        );
+        painter.rect(
+            frame,
+            6.0,
+            visuals.window_fill,
+            egui::Stroke::new(1.0, visuals.window_stroke.color),
+            egui::StrokeKind::Inside,
+        );
+        let mut x = frame.left() + pad.x;
+        for g in galleys {
+            let w = g.size().x;
+            painter.galley(egui::pos2(x, frame.top() + pad.y), g, visuals.text_color());
+            x += w + gap;
+        }
     }
 
     /// A thin cross where the last click was refused and the reason beside
@@ -1288,6 +1368,7 @@ impl SchematicView {
         }
         self.paint_refusal(ui);
         self.paint_snap_label(ui);
+        self.paint_wire_guide(ui);
         // Pin under the pointer: the connect cursor.
         if !self.editor.tool_active() && self.editor.pin_hovered() && response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);

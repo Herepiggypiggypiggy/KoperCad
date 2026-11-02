@@ -6,7 +6,7 @@
 //! project. Illustrative: ratings and articles without a maker are planning
 //! values, not a verified design.
 
-use novo_core::{Document, PotentialKind, Result as ModelResult, Tx};
+use novo_core::{Document, PotentialId, PotentialKind, Result as ModelResult, SymbolId, Tx};
 
 use super::example_kit::{Article, End, Finish, Kit, Parts, add_page, enclosure, style_strip, tag};
 
@@ -18,8 +18,8 @@ const DESCRIPTION: &str = "Overhead crane control cabinet: 2-speed hoist with sp
     steps per motion, over six pages and a laid-out cabinet. Ratings, parts without a maker and \
     the 400 V / 10 kA supply are planning values to replace with your own.";
 
-const CAB: &str = "=CRN+CAB";
-const FLD: &str = "=CRN+FLD";
+pub(super) const CAB: &str = "=CRN+CAB";
+pub(super) const FLD: &str = "=CRN+FLD";
 
 const SWITCH: Article = Article {
     order: "SD-3P-32A",
@@ -202,7 +202,7 @@ pub(crate) fn build_crane_example(doc: &mut Document) -> ModelResult<novo_core::
         for page in empty {
             tx.delete_page(page)?;
         }
-        draw(tx)?;
+        draw(tx, false)?;
         super::example_kit::fill_sections(tx, 0.75)?;
         let (plate, enclosure) = enclosure((960.0, 1360.0), (1000.0, 1400.0, 300.0));
         super::example_kit::finish(
@@ -221,7 +221,40 @@ pub(crate) fn build_crane_example(doc: &mut Document) -> ModelResult<novo_core::
     Ok(changes)
 }
 
-fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
+/// A feed of a bus potential, pin at `at` + 8 mm down: a potential feed in the plain example, an
+/// interruption point of the bus's name in the simulation project.
+fn bus_feed(
+    kit: &mut Kit<'_, '_>,
+    sim: bool,
+    buses: &[PotentialId],
+    pot: PotentialId,
+    at: (f64, f64),
+) -> SymbolId {
+    if sim && buses.contains(&pot) {
+        let name = kit.tx.project().potential(pot).map(|p| p.name.clone());
+        return kit.ip(&name.unwrap_or_default(), (at.0, at.1 + 8.0), true);
+    }
+    kit.feed(pot, at)
+}
+
+/// [`bus_feed`] drawn upside down: the pin at `pin_at`, the wire arriving from above.
+fn bus_feed_down(
+    kit: &mut Kit<'_, '_>,
+    sim: bool,
+    buses: &[PotentialId],
+    pot: PotentialId,
+    pin_at: (f64, f64),
+) -> SymbolId {
+    if sim && buses.contains(&pot) {
+        let name = kit.tx.project().potential(pot).map(|p| p.name.clone());
+        return kit.ip(&name.unwrap_or_default(), pin_at, false);
+    }
+    kit.feed_down(pot, pin_at)
+}
+
+/// The pages of the crane. With `sim` the control pages are drawn with receiver blocks that a
+/// radio can drive (`example_crane_sim`), and the end limits of the travel axes are added.
+pub(super) fn draw(tx: &mut Tx<'_>, sim: bool) -> ModelResult<()> {
     let mut parts = Parts::default();
     let line = |tx: &mut Tx<'_>, name: &str| tx.add_potential(name, PotentialKind::Line);
     let (l1, l2, l3) = (line(tx, "L1")?, line(tx, "L2")?, line(tx, "L3")?);
@@ -231,7 +264,11 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     let p48 = tx.add_potential("48V", PotentialKind::Line)?;
     let p0 = tx.add_potential("0V48", PotentialKind::Neutral)?;
     // 48 V behind the main contactor.
-    let p48e = tx.add_potential("48V.E", PotentialKind::Line)?;
+    // The enabled rail: a potential in the plain example; in the simulation project it is an
+    // interruption point named "E48" behind K0, so it is live only while K0 is closed.
+    let p48e = (!sim)
+        .then(|| tx.add_potential("48V.E", PotentialKind::Line))
+        .transpose()?;
     // The hoist's motor supply after the reversing pair, and the slow-speed
     // winding feed for the star-point contactor.
     let sig = |tx: &mut Tx<'_>, name: &str| tx.add_potential(name, PotentialKind::Signal);
@@ -239,6 +276,10 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     let (mu, mv, mw) = (sig(tx, "M1U")?, sig(tx, "M1V")?, sig(tx, "M1W")?);
     let d1 = tx.add_potential("24V.U21", PotentialKind::DcPositive)?;
     let d2 = tx.add_potential("24V.U22", PotentialKind::DcPositive)?;
+
+    // Behind the main contactor and between the contactors of the hoist: in the simulation
+    // project these are nodes that closed contacts feed, not sources.
+    let buses = [s1, s2, s3, hu, hv, hw, mu, mv, mw];
 
     let p_supply = add_page(tx, "1", "Supply, main contactor and 48 V", CAB)?;
     let p_hoist = add_page(tx, "2", "Hoist: two-speed motor and brake", CAB)?;
@@ -298,7 +339,7 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     kit.describe(&format!("{CAB}-K0"), "Main contactor");
     kit.wire3((q0, ["2", "4", "6"]), (k0, ["1", "3", "5"]), 6.0);
     for (i, pot) in [s1, s2, s3].into_iter().enumerate() {
-        let f = kit.feed_down(pot, (40.0 + 8.0 * i as f64, 134.0));
+        let f = bus_feed_down(&mut kit, sim, &buses, pot, (40.0 + 8.0 * i as f64, 134.0));
         kit.wire_mm2((k0, ["2", "4", "6"][i]), (f, "1"), 6.0);
     }
     // Control transformer from L1 and L2 ahead of the main contactor.
@@ -343,7 +384,7 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     let feeds: Vec<_> = [s1, s2, s3]
         .into_iter()
         .enumerate()
-        .map(|(i, p)| kit.feed(p, (hx + 8.0 * i as f64, 24.0)))
+        .map(|(i, p)| bus_feed(&mut kit, sim, &buses, p, (hx + 8.0 * i as f64, 24.0)))
         .collect();
     let q11 = kit.put(
         "iec/protection/motor_protection_breaker",
@@ -373,11 +414,11 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
             .update::<novo_core::Wire>(w, |w| w.cross_section_mm2 = Some(2.5))?;
     }
     for (i, pot) in [hu, hv, hw].into_iter().enumerate() {
-        let up = kit.feed_down(pot, (hx + 8.0 * i as f64, 108.0));
+        let up = bus_feed_down(&mut kit, sim, &buses, pot, (hx + 8.0 * i as f64, 108.0));
         kit.wire_mm2((k11, ["2", "4", "6"][i]), (up, "1"), 2.5);
     }
     for (i, (pot, pin)) in [(hu, "2"), (hv, "4"), (hw, "6")].into_iter().enumerate() {
-        let down = kit.feed_down(pot, (100.0 + 8.0 * i as f64, 108.0));
+        let down = bus_feed_down(&mut kit, sim, &buses, pot, (100.0 + 8.0 * i as f64, 108.0));
         kit.wire_mm2((k12, pin), (down, "1"), 2.5);
     }
     // Speed contactors: slow (K13) and fast (K14, two phases swapped).
@@ -390,11 +431,11 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     kit.describe(&format!("{CAB}-K13"), "Hoist slow speed (many poles)");
     kit.describe(&format!("{CAB}-K14"), "Hoist fast speed (few poles)");
     for (i, pot) in [hu, hv, hw].into_iter().enumerate() {
-        let f = kit.feed(pot, (hx + 8.0 * i as f64, 124.0));
+        let f = bus_feed(&mut kit, sim, &buses, pot, (hx + 8.0 * i as f64, 124.0));
         kit.wire_mm2((f, "1"), (k13, ["1", "3", "5"][i]), 2.5);
     }
     for (i, pot) in [hw, hv, hu].into_iter().enumerate() {
-        let f = kit.feed(pot, (110.0 + 8.0 * i as f64, 124.0));
+        let f = bus_feed(&mut kit, sim, &buses, pot, (110.0 + 8.0 * i as f64, 124.0));
         kit.wire_mm2((f, "1"), (k14, ["1", "3", "5"][i]), 2.5);
     }
     // Terminals of the hoist motor on X11.
@@ -420,9 +461,9 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
         let j = kit.junction((jx, 164.0));
         kit.link(End::Pin((k13, ["2", "4", "6"][i])), End::Junction(j), &[]);
         kit.link(End::Junction(j), End::Pin((t1x[i], "1")), &[]);
-        let f = kit.feed_down(pot, (jx + 4.0, 164.0));
+        let f = bus_feed_down(&mut kit, sim, &buses, pot, (jx + 4.0, 164.0));
         kit.link(End::Junction(j), End::Pin((f, "1")), &[]);
-        let up = kit.feed(pot, (170.0 + 8.0 * i as f64, 124.0));
+        let up = bus_feed(&mut kit, sim, &buses, pot, (170.0 + 8.0 * i as f64, 124.0));
         kit.wire_mm2((up, "1"), (k15, ["1", "3", "5"][i]), 2.5);
     }
     for (i, pin) in ["2", "4", "6"].into_iter().enumerate() {
@@ -470,8 +511,8 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
         "Hoist motor cable 7G2.5",
     )?;
     // Brake: breaker, brake contactor, rectifier, terminals, coil.
-    let fa = kit.feed(s1, (210.0, 24.0));
-    let fb = kit.feed(s2, (218.0, 24.0));
+    let fa = bus_feed(&mut kit, sim, &buses, s1, (210.0, 24.0));
+    let fb = bus_feed(&mut kit, sim, &buses, s2, (218.0, 24.0));
     let q12 = kit.put(
         "iec/protection/mcb_2p",
         (210.0, 48.0),
@@ -520,7 +561,7 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
         let ft: Vec<_> = [s1, s2, s3]
             .into_iter()
             .enumerate()
-            .map(|(i, p)| kit.feed(p, (x + 8.0 * i as f64, 24.0)))
+            .map(|(i, p)| bus_feed(&mut kit, sim, &buses, p, (x + 8.0 * i as f64, 24.0)))
             .collect();
         let q = kit.put(
             "iec/protection/motor_protection_breaker",
@@ -615,108 +656,116 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
         })?;
     }
 
-    // ----- page 4: hoist control, 48 V AC ----------------------------------
-    kit.on(p_c_hoist);
-    let a1 = format!("{CAB}-A1");
-    let a2 = format!("{CAB}-A2");
-    let a3 = format!("{CAB}-A3");
-    let no = "iec/contacts/no";
-    let nc = "iec/contacts/nc";
-    let coil = "iec/coils/contactor";
-    let k = |n_: &str| format!("{CAB}-K{n_}");
-    // Receiver supply.
-    let mut c = kit.rung(p48, 30.0);
-    kit.series(&mut c, "iec/coils/relay", &a1);
-    kit.close(&c, p0);
-    kit.describe(&a1, "Radio receiver: enable and hoist outputs");
-    // Main contactor: the stop chain and the receiver's enable output.
-    let mut c = kit.rung(p48, 70.0);
-    kit.series(&mut c, "iec/operators/emergency_stop", &format!("{CAB}-S0"));
-    kit.series(&mut c, no, &a1);
-    kit.series(&mut c, coil, &k("0"));
-    kit.close(&c, p0);
-    kit.describe(&format!("{CAB}-S0"), "Emergency stop (cabinet)");
-    // The enabled 48 V rail: everything below runs only with K0 closed.
-    let mut c = kit.rung(p48, 110.0);
-    kit.series(&mut c, no, &k("0"));
-    let fe = kit.feed_down(p48e, (c.x, c.y));
-    kit.link(c.last, End::Pin((fe, "1")), &[]);
-    // K11 up: receiver step 1, trip contact, upper limit, K12 locked out.
-    let mut c = kit.rung(p48e, 150.0);
-    kit.series(&mut c, no, &a1);
-    kit.series(&mut c, nc, &format!("{CAB}-Q11"));
-    kit.series(&mut c, "iec/sensors/proximity_nc", &format!("{CAB}-S11"));
-    kit.series(&mut c, nc, &k("12"));
-    kit.series(&mut c, coil, &k("11"));
-    kit.close(&c, p0);
-    kit.describe(&format!("{CAB}-S11"), "Hoist upper limit");
-    // K12 down.
-    let mut c = kit.rung(p48e, 190.0);
-    kit.series(&mut c, no, &a1);
-    kit.series(&mut c, nc, &format!("{CAB}-Q11"));
-    kit.series(&mut c, "iec/sensors/proximity_nc", &format!("{CAB}-S12"));
-    kit.series(&mut c, nc, &k("11"));
-    kit.series(&mut c, coil, &k("12"));
-    kit.close(&c, p0);
-    kit.describe(&format!("{CAB}-S12"), "Hoist lower limit");
-    // K13 slow: while moving and not fast.
-    let mut c = kit.rung(p48e, 230.0);
-    kit.either(&mut c, no, &k("11"), no, &k("12"));
-    kit.series(&mut c, nc, &k("14"));
-    kit.series(&mut c, coil, &k("13"));
-    kit.close(&c, p0);
-    // K14 fast: step 2 up or down, while moving.
-    let mut c = kit.rung(p48e, 270.0);
-    kit.either(&mut c, no, &a1, no, &a1);
-    kit.either(&mut c, no, &k("11"), no, &k("12"));
-    kit.series(&mut c, nc, &k("13"));
-    kit.series(&mut c, coil, &k("14"));
-    kit.close(&c, p0);
-    // K15 star point with K14.
-    let mut c = kit.rung(p48e, 310.0);
-    kit.series(&mut c, no, &k("14"));
-    kit.series(&mut c, coil, &k("15"));
-    kit.close(&c, p0);
-    // K16 brake: while either speed runs.
-    let mut c = kit.rung(p48e, 350.0);
-    kit.either(&mut c, no, &k("13"), no, &k("14"));
-    kit.series(&mut c, coil, &k("16"));
-    kit.close(&c, p0);
+    if sim {
+        let rails = super::example_crane_sim::Rails { p48, p0 };
+        super::example_crane_sim::control_pages(&mut kit, p_c_hoist, p_c_travel, &rails)?;
+    } else {
+        let p48e = p48e.expect("the plain example has the enabled rail");
+        // ----- page 4: hoist control, 48 V AC ----------------------------------
+        kit.on(p_c_hoist);
+        let a1 = format!("{CAB}-A1");
+        let a2 = format!("{CAB}-A2");
+        let a3 = format!("{CAB}-A3");
+        let no = "iec/contacts/no";
+        let nc = "iec/contacts/nc";
+        let coil = "iec/coils/contactor";
+        let k = |n_: &str| format!("{CAB}-K{n_}");
+        // Receiver supply.
+        let mut c = kit.rung(p48, 30.0);
+        kit.series(&mut c, "iec/coils/relay", &a1);
+        kit.close(&c, p0);
+        kit.describe(&a1, "Radio receiver: enable and hoist outputs");
+        // Main contactor: the stop chain and the receiver's enable output.
+        let mut c = kit.rung(p48, 70.0);
+        kit.series(&mut c, "iec/operators/emergency_stop", &format!("{CAB}-S0"));
+        kit.series(&mut c, no, &a1);
+        kit.series(&mut c, coil, &k("0"));
+        kit.close(&c, p0);
+        kit.describe(&format!("{CAB}-S0"), "Emergency stop (cabinet)");
+        // The enabled 48 V rail: everything below runs only with K0 closed.
+        let mut c = kit.rung(p48, 110.0);
+        kit.series(&mut c, no, &k("0"));
+        let fe = kit.feed_down(p48e, (c.x, c.y));
+        kit.link(c.last, End::Pin((fe, "1")), &[]);
+        // K11 up: receiver step 1, trip contact, upper limit, K12 locked out.
+        let mut c = kit.rung(p48e, 150.0);
+        kit.series(&mut c, no, &a1);
+        kit.series(&mut c, nc, &format!("{CAB}-Q11"));
+        kit.series(&mut c, "iec/sensors/proximity_nc", &format!("{CAB}-S11"));
+        kit.series(&mut c, nc, &k("12"));
+        kit.series(&mut c, coil, &k("11"));
+        kit.close(&c, p0);
+        kit.describe(&format!("{CAB}-S11"), "Hoist upper limit");
+        // K12 down.
+        let mut c = kit.rung(p48e, 190.0);
+        kit.series(&mut c, no, &a1);
+        kit.series(&mut c, nc, &format!("{CAB}-Q11"));
+        kit.series(&mut c, "iec/sensors/proximity_nc", &format!("{CAB}-S12"));
+        kit.series(&mut c, nc, &k("11"));
+        kit.series(&mut c, coil, &k("12"));
+        kit.close(&c, p0);
+        kit.describe(&format!("{CAB}-S12"), "Hoist lower limit");
+        // K13 slow: while moving and not fast.
+        let mut c = kit.rung(p48e, 230.0);
+        kit.either(&mut c, no, &k("11"), no, &k("12"));
+        kit.series(&mut c, nc, &k("14"));
+        kit.series(&mut c, coil, &k("13"));
+        kit.close(&c, p0);
+        // K14 fast: step 2 up or down, while moving.
+        let mut c = kit.rung(p48e, 270.0);
+        kit.either(&mut c, no, &a1, no, &a1);
+        kit.either(&mut c, no, &k("11"), no, &k("12"));
+        kit.series(&mut c, nc, &k("13"));
+        kit.series(&mut c, coil, &k("14"));
+        kit.close(&c, p0);
+        // K15 star point with K14.
+        let mut c = kit.rung(p48e, 310.0);
+        kit.series(&mut c, no, &k("14"));
+        kit.series(&mut c, coil, &k("15"));
+        kit.close(&c, p0);
+        // K16 brake: while either speed runs.
+        let mut c = kit.rung(p48e, 350.0);
+        kit.either(&mut c, no, &k("13"), no, &k("14"));
+        kit.series(&mut c, coil, &k("16"));
+        kit.close(&c, p0);
 
-    // ----- page 5: travel relays and line contactors -----------------------
-    kit.on(p_c_travel);
-    for (i, (dev, what)) in [(&a2, "bridge"), (&a3, "crab")].into_iter().enumerate() {
-        let mut c = kit.rung(p48, 20.0 + 38.0 * i as f64);
-        kit.series(&mut c, "iec/coils/relay", dev);
-        kit.close(&c, p0);
-        kit.describe(dev, &format!("Radio receiver output module: {what} travel"));
-    }
-    let relays = [
-        ("23", "Bridge forward", &a2),
-        ("24", "Bridge back", &a2),
-        ("25", "Bridge fast", &a2),
-        ("26", "Crab forward", &a3),
-        ("27", "Crab back", &a3),
-        ("28", "Crab fast", &a3),
-    ];
-    for (i, (n_, what, module)) in relays.into_iter().enumerate() {
-        let mut c = kit.rung(p48e, 96.0 + 38.0 * i as f64);
-        kit.either(&mut c, no, module, no, module);
-        kit.series(&mut c, "iec/coils/relay", &k(n_));
-        kit.close(&c, p0);
-        kit.describe(&k(n_), what);
-    }
-    for (i, (n_, a, b)) in [("21", "23", "24"), ("22", "26", "27")]
-        .into_iter()
-        .enumerate()
-    {
-        let mut c = kit.rung(p48e, 332.0 + 38.0 * i as f64);
-        kit.either(&mut c, no, &k(a), no, &k(b));
-        kit.series(&mut c, coil, &k(n_));
-        kit.close(&c, p0);
+        // ----- page 5: travel relays and line contactors -----------------------
+        kit.on(p_c_travel);
+        for (i, (dev, what)) in [(&a2, "bridge"), (&a3, "crab")].into_iter().enumerate() {
+            let mut c = kit.rung(p48, 20.0 + 38.0 * i as f64);
+            kit.series(&mut c, "iec/coils/relay", dev);
+            kit.close(&c, p0);
+            kit.describe(dev, &format!("Radio receiver output module: {what} travel"));
+        }
+        let relays = [
+            ("23", "Bridge forward", &a2),
+            ("24", "Bridge back", &a2),
+            ("25", "Bridge fast", &a2),
+            ("26", "Crab forward", &a3),
+            ("27", "Crab back", &a3),
+            ("28", "Crab fast", &a3),
+        ];
+        for (i, (n_, what, module)) in relays.into_iter().enumerate() {
+            let mut c = kit.rung(p48e, 96.0 + 38.0 * i as f64);
+            kit.either(&mut c, no, module, no, module);
+            kit.series(&mut c, "iec/coils/relay", &k(n_));
+            kit.close(&c, p0);
+            kit.describe(&k(n_), what);
+        }
+        for (i, (n_, a, b)) in [("21", "23", "24"), ("22", "26", "27")]
+            .into_iter()
+            .enumerate()
+        {
+            let mut c = kit.rung(p48e, 332.0 + 38.0 * i as f64);
+            kit.either(&mut c, no, &k(a), no, &k(b));
+            kit.series(&mut c, coil, &k(n_));
+            kit.close(&c, p0);
+        }
     }
 
     // ----- page 6: drive commands to X3 ------------------------------------
+    let no = "iec/contacts/no";
+    let k = |n_: &str| format!("{CAB}-K{n_}");
     kit.on(p_c_drive);
     for (j, (pot, relays)) in [(d1, ["23", "24", "25"]), (d2, ["26", "27", "28"])]
         .into_iter()
@@ -773,6 +822,11 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     }
     for n_ in ["23", "24", "25", "26", "27", "28"] {
         generic.push((format!("{CAB}-K{n_}"), &RELAY));
+    }
+    if sim {
+        for n_ in ["21", "22", "23", "24"] {
+            generic.push((format!("{FLD}-S{n_}"), &LIMIT));
+        }
     }
     for (t, a) in generic {
         let d = dev(&kit, &t);

@@ -32,6 +32,12 @@ pub(crate) const GALLERY: &[Entry] = &[
         build: super::example_crane::build_crane_example,
     },
     Entry {
+        action: Action::OpenCraneSimExample,
+        name: super::example_crane_sim::CRANE_SIM_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_crane_sim::build_crane_sim_example,
+    },
+    Entry {
         action: Action::OpenPlcExample,
         name: super::example_plc::PLC_EXAMPLE_NAME,
         cabinet: "+CAB",

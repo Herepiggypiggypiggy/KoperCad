@@ -14,6 +14,7 @@ pub enum Action {
     OpenEmcExample,
     OpenMccExample,
     OpenCraneExample,
+    OpenCraneSimExample,
     OpenPlcExample,
     OpenPumpExample,
     OpenDoorExample,
@@ -57,6 +58,7 @@ impl Action {
         Action::OpenEmcExample,
         Action::OpenMccExample,
         Action::OpenCraneExample,
+        Action::OpenCraneSimExample,
         Action::OpenPlcExample,
         Action::OpenPumpExample,
         Action::OpenDoorExample,
@@ -102,6 +104,7 @@ impl Action {
             Action::OpenEmcExample => "file.example_emc",
             Action::OpenMccExample => "file.example_mcc",
             Action::OpenCraneExample => "file.example_crane",
+            Action::OpenCraneSimExample => "file.example_crane_sim",
             Action::OpenPlcExample => "file.example_plc",
             Action::OpenPumpExample => "file.example_pump",
             Action::OpenDoorExample => "file.example_door",
@@ -150,6 +153,9 @@ impl Action {
             Action::OpenEmcExample => "Open EMC example",
             Action::OpenMccExample => "Open example: motor control centre",
             Action::OpenCraneExample => "Open example: overhead crane cabinet",
+            Action::OpenCraneSimExample => {
+                "Open example: crane simulation (hoist, bridge and crab run from the circuit)"
+            }
             Action::OpenPlcExample => "Open example: PLC cabinet",
             Action::OpenPumpExample => "Open example: pump station",
             Action::OpenDoorExample => "Open example: roller door (small)",
@@ -196,6 +202,7 @@ impl Action {
             | Action::OpenEmcExample
             | Action::OpenMccExample
             | Action::OpenCraneExample
+            | Action::OpenCraneSimExample
             | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::OpenDoorExample
@@ -255,6 +262,7 @@ impl Action {
             | Action::OpenEmcExample
             | Action::OpenMccExample
             | Action::OpenCraneExample
+            | Action::OpenCraneSimExample
             | Action::OpenPlcExample
             | Action::OpenPumpExample
             | Action::OpenDoorExample

@@ -337,7 +337,7 @@ impl NovoApp {
         self.wb.rail_rect = Some(shown.rect);
         // A row whose menu row moved here keeps the anchor `cmd.<id>`.
         for &(id, rect, clicked) in &shown.spots {
-            if id.starts_with("cmd.") {
+            if id.starts_with("cmd.") || id == "view3d.heat" {
                 let label = super::learn_labels::any_anchor_label(id).unwrap_or_default();
                 self.anchor(id, rect, &label);
                 if clicked {

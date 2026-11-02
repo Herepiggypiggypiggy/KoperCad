@@ -1,0 +1,36 @@
+@title Simulation status is a status bar slot in Cabinet and 3D, no floating chip
+@sizes 1366x768 1920x1080
+@area Heat
+# PR chip-docking. The chip text is in words; a click does what the hover says.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+expect "Heat not run"
+shot cabinet-not-run
+check_blank cabinet-not-run
+check_layout
+click_text Schematic #1
+wait 20
+expect_not "Heat not run"
+shot schematic-no-slot
+click_text 3D #1
+wait 30
+expect "Heat not run"
+shot 3d-not-run
+check_layout
+click_text "Heat not run"
+wait 40
+expect "Heat "
+shot 3d-heat-running
+check_layout
+click_text Cancel
+wait_s 10
+expect "Heat done"
+shot 3d-done
+check_layout
+click_text Cabinet #1
+wait 20
+expect "Heat done"
+shot cabinet-done
+check_layout

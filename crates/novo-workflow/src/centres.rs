@@ -155,6 +155,7 @@ pub const START_SECTIONS: &[Section] = &[
         ids: &[
             "file.example",
             "file.example_crane",
+            "file.example_crane_sim",
             "file.example_mcc",
             "file.example_plc",
             "file.example_pump",
@@ -437,6 +438,7 @@ pub fn describe(id: &str) -> &'static str {
         "file.new_pump" => "A pump station with its motor starters and control.",
         "file.example" => "A small motor starter, to try the program on.",
         "file.example_crane" => "An overhead crane cabinet: 2-speed hoist, drives, 48 V control.",
+        "file.example_crane_sim" => "A crane you can run: the radio drives hoist, bridge and crab.",
         "file.example_mcc" => "A motor control centre: 4 feeders, 24 V control, full cabinet.",
         "file.example_plc" => "A PLC cabinet: CPU, I/O cards and a 24 V supply.",
         "file.example_pump" => "A pump system with its starter and control.",
@@ -538,7 +540,7 @@ mod tests {
             assert!(seen.insert(id), "{id} is in two sections");
             assert_eq!(Centre::of(id), Some(Centre::Start), "{id}");
         }
-        assert_eq!(seen.len(), 12);
+        assert_eq!(seen.len(), 13);
         // Only the small example keeps its row (the Open submenu); the rest live here.
         assert!(replaces_menu_row("file.new_crane") && replaces_menu_row("file.example_emc"));
         assert!(!replaces_menu_row("file.example"));

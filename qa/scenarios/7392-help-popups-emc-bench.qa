@@ -1,0 +1,28 @@
+@title Help popups: EMC check, Bench output and Ask Claude windows
+@area Windows
+open qa/fixtures/emc-cabinet.novo
+wait 20
+key ctrl+k
+text EMC check
+key enter
+wait 10
+shot emc
+click 141 258
+wait 5
+shot emc-popup-open
+key Escape
+wait 3
+key Escape
+key ctrl+k
+text Bench output
+key enter
+wait 10
+shot bench
+tree Help
+key Escape
+key ctrl+k
+text Ask Claude
+key enter
+wait 10
+shot ask-claude
+tree Help
