@@ -116,10 +116,27 @@ pub(crate) fn mesh(
     layers: usize,
     contrast: f32,
 ) -> Option<OverlayMesh> {
+    mesh_scaled(snap, place, range, view, opacity, layers, contrast, None)
+}
+
+/// [`mesh`] with the hot end of the cloud's scale given instead of read from
+/// `snap`: the moving cloud draws a warming field on the scale of the solved
+/// one, so the colours mean the same from the first frame to the last.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mesh_scaled(
+    snap: &CfdSnapshot,
+    place: Place,
+    range: Range,
+    view: CloudView,
+    opacity: f32,
+    layers: usize,
+    contrast: f32,
+    hot_end: Option<f64>,
+) -> Option<OverlayMesh> {
     if !snap.is_consistent() || layers == 0 || opacity <= 0.0 {
         return None;
     }
-    let hot_end = air_hot_end(snap, range.lo);
+    let hot_end = hot_end.map_or_else(|| air_hot_end(snap, range.lo), |h| h.max(range.lo + 1.0));
     let gamma = GAMMA_FLAT + (GAMMA_STRONG - GAMMA_FLAT) * contrast.clamp(0.0, 1.0);
     let axis = view.axis;
     let edges = match axis {
