@@ -1,15 +1,38 @@
-@title Cabinet: the Arrange tools preview first, Cancel stores nothing, Accept is one undo step
+@title Cabinet: the Arrange card, previews with their notes, Cancel stores nothing, Accept is one undo step
 @area Cabinet
 @sizes 1366x768 1920x1080
-# Run on the exact head of the PR at both sizes; see the evidence in the PR.
-# On the plan qa/fixtures/cabinet-cooler-layout.novo the Arrange entry of the Cabinet left rail (also Ctrl K:
-# "autodistance", "autogroup", "auto rails", "auto ducts") shows a preview banner naming the tool;
-# Esc cancels it; Accept stores it; Ctrl+Z takes it back in one step.
+# Where it lives: the Arrange entry of the Cabinet left rail (second tool), Ctrl K, and the right-click
+# menu of the plate. Plan: qa/fixtures/cabinet-cooler-layout.novo (22 devices, all on rails).
+# Pictures: the card, the right-click menu, Ctrl K "autoplace", the Autogroup and close-up previews
+# (banner with "planning aid" wording), cancel, accept, undo back to the first state, and the notes a
+# tool gives when there is nothing to do (Auto rails: every device is on a rail already).
 open qa/fixtures/cabinet-cooler-layout.novo
 wait 20
 click_text Cabinet #1
 wait 30
 shot before
+click 24 101
+wait 6
+expect "Autoplace on rail"
+expect "Auto ducts"
+shot arrange-card
+key Escape
+wait 4
+click 880 470 right
+wait 6
+expect "Autoplace on rail"
+expect "Close up gaps"
+shot plate-menu
+key Escape
+wait 4
+key ctrl+k
+wait 3
+text autoplace
+wait 4
+shot palette-autoplace
+key Enter
+wait 8
+shot autoplace-result
 key ctrl+k
 wait 3
 text autogroup
@@ -17,6 +40,8 @@ wait 4
 key Enter
 wait 10
 expect "Preview (Autogroup)"
+expect "not a clearance check or a heat calculation"
+expect_not "heat-aware"
 shot group-preview
 key Escape
 wait 5
@@ -36,3 +61,17 @@ check_layout
 key ctrl+z
 wait 10
 shot tight-undone
+key ctrl+k
+wait 3
+text auto rails
+wait 4
+key Enter
+wait 10
+shot rails-nothing-to-do
+key ctrl+k
+wait 3
+text auto ducts
+wait 4
+key Enter
+wait 10
+shot ducts-result
