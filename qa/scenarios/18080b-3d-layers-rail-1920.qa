@@ -1,0 +1,34 @@
+@title 3D rail: Layers and Hide flyouts, slim strip, Section controls
+@area Layout
+@sizes 1920x1080
+# PR 1808: the 3D toolbar's Layers, Select and hide moved onto the rail.
+click_text "Open example"
+wait 20
+click_text 3D
+wait 30
+shot rail-collapsed
+check_layout
+click 23 1034
+wait 8
+click_text Layers
+wait 8
+shot layers-flyout
+expect "Enclosure in 3D"
+check_layout
+key Escape
+wait 6
+click_text Hide
+wait 8
+shot hide-flyout
+expect "Select all devices"
+check_layout
+key Escape
+wait 6
+click_text "Section plane"
+wait 10
+shot section-on
+click_text "✔ Section"
+wait 8
+shot section-controls
+expect "Cut the picture"
+check_layout
