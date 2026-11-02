@@ -1,0 +1,38 @@
+@title Cabinet: the Arrange tools preview first, Cancel stores nothing, Accept is one undo step
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Written without a run (no display on the authoring box): check the pictures on the first run.
+# On the plan qa/fixtures/door-cutouts.novo the Arrange entry of the Cabinet left rail (also Ctrl K:
+# "autodistance", "autogroup", "auto rails", "auto ducts") shows a preview banner naming the tool;
+# Esc cancels it; Accept stores it; Ctrl+Z takes it back in one step.
+open qa/fixtures/door-cutouts.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+key ctrl+k
+wait 3
+text autogroup
+wait 4
+key Enter
+wait 10
+expect "Preview (Autogroup)"
+shot group-preview
+key Escape
+wait 5
+shot group-cancelled
+key ctrl+k
+wait 3
+text close up gaps
+wait 4
+key Enter
+wait 10
+expect "Preview (Autodistance"
+shot tight-preview
+key Enter
+wait 10
+shot tight-accepted
+check_layout
+key ctrl+z
+wait 10
+shot tight-undone
