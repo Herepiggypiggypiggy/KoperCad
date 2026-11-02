@@ -331,7 +331,11 @@ fn circuits(
     go: &mut Option<Vec<AnyId>>,
 ) {
     if sheet.circuits.is_empty() {
-        ui.label("No fuse, breaker or motor protection device is drawn yet. A circuit is a protective device with the wires behind it.");
+        super::dialog_ui::explained(
+            ui,
+            "No protection device drawn",
+            "No fuse, breaker or motor protection device is drawn yet. A circuit is a protective device with the wires behind it.",
+        );
         return;
     }
     ui.horizontal(|ui| {
@@ -473,7 +477,11 @@ fn starters(ui: &mut egui::Ui, sheet: &CalcSheet, choice: &mut StarterChoice) {
         ui.selectable_value(&mut choice.coordination, Coordination::Type1, "Type 1");
         ui.selectable_value(&mut choice.coordination, Coordination::Type2, "Type 2");
     });
-    ui.weak("Sized from the motor's nameplate current with generic ratings (IEC 60947-4-1). Maker coordination tables are not loaded, so those points stay open.");
+    super::dialog_ui::explained(
+        ui,
+        "Sizing basis",
+        "Sized from the motor's nameplate current with generic ratings (IEC 60947-4-1). Maker coordination tables are not loaded, so those points stay open.",
+    );
     if sheet.starters.is_empty() {
         ui.label("No motor is drawn yet.");
     }

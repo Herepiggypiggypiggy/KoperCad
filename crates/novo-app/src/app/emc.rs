@@ -146,7 +146,7 @@ fn field_section(
         .id_salt("emc_field_section")
         .default_open(false)
         .show(ui, |ui| {
-    ui.weak("A model: the currents below, on the routed wires, add up by Biot-Savart (go and return and the three phases cancel as drawn). Differential current only: no common-mode current, no door or cabinet screening. Order of magnitude, never a measurement.");
+    super::dialog_ui::explained(ui, "Model", "A model: the currents below, on the routed wires, add up by Biot-Savart (go and return and the three phases cancel as drawn). Differential current only: no common-mode current, no door or cabinet screening. Order of magnitude, never a measurement.");
     ui.horizontal_wrapped(|ui| {
         ui.label("Frequency");
         if let Some(hz) = number(ui, "emc_field_hz", cached.params.hz, 1.0, 1.0..=30.0e6, " Hz", "Frequency of the currents. From 1 kHz up the plate counts as a conducting plane") {
@@ -166,7 +166,10 @@ fn field_section(
         }
     });
     if field.currents.is_empty() {
-        ui.colored_label(p.warning, "No wire has a current yet, so the field is not evaluated. Give a wire its current in the list that appears here, or give the devices at its ends a rated current (Inspector, Rated current).");
+        ui.horizontal(|ui| {
+        ui.colored_label(p.warning, "No wire current yet");
+        novo_theme::widgets::help_mark(ui, "No wire has a current yet, so the field is not evaluated. Give a wire its current in the list that appears here, or give the devices at its ends a rated current (Inspector, Rated current).");
+    });
     }
     for row in &field.currents {
         ui.horizontal_wrapped(|ui| {
@@ -331,7 +334,7 @@ pub(super) fn preview_card(
                 for (_, name, before, after) in &v.scores {
                     ui.weak(format!("Risk of {name}: {before} of 100 to {after} of 100"));
                 }
-                ui.weak("A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.");
+                super::dialog_ui::explained(ui, "Model run", "A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.");
             }
         }
     });
@@ -489,14 +492,14 @@ impl NovoApp {
                                 ui.label(format!("{} {n}", class.label()));
                             }
                         });
-                        ui.weak("Each class is read from the drawing (drive outputs, safety and analog devices, potentials); set `emc.class` on a wire or cable to override it.");
+                        super::dialog_ui::explained(ui, "Wire classes", "Each class is read from the drawing (drive outputs, safety and analog devices, potentials); set `emc.class` on a wire or cable to override it.");
                     }
                     ui.add_space(6.0);
                     field_section(ui, cached, &mut set_current, &mut set_setting);
                     ui.add_space(6.0);
                     novo_theme::widgets::section_label(ui, &format!("Findings ({})", report.findings.len()));
                     if report.findings.is_empty() {
-                        ui.label("No finding. That is not a statement that the design is fine: see Not checked below.");
+                        super::dialog_ui::explained(ui, "No finding", "No finding. That is not a statement that the design is fine: see Not checked below.");
                     }
                     for f in &report.findings {
                         let colour = match f.severity {
@@ -574,7 +577,7 @@ impl NovoApp {
                         egui::CollapsingHeader::new(egui::RichText::new(format!("{name}: {} of 100, {}", s.points, s.band.label().to_lowercase())).color(band))
                             .id_salt(("emc_run", s.points, &name))
                             .show(ui, |ui| {
-                                ui.weak("The score is the sum of these reasons, capped at 100. It orders wires for attention; it is not a measurement.");
+                                super::dialog_ui::explained(ui, "Score", "The score is the sum of these reasons, capped at 100. It orders wires for attention; it is not a measurement.");
                                 for r in &s.reasons {
                                     ui.label(format!("+{}  {}  {}", r.points, r.rule, r.text));
                                 }

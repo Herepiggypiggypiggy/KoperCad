@@ -1164,7 +1164,11 @@ impl NovoApp {
         ui.weak(
             "Buttons that say “with Claude” send the text shown on screen, whatever you chose here.",
         );
-        ui.weak("A picture you attach shows everything on screen at that moment, whatever you chose here.");
+        super::dialog_ui::explained(
+            ui,
+            "Attached picture",
+            "A picture you attach shows everything on screen at that moment, whatever you chose here.",
+        );
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
             if enabled && scope > current {

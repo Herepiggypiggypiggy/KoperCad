@@ -357,7 +357,11 @@ fn about(ui: &mut egui::Ui, state: &HeatState) {
          a rough picture appears first and sharpens; Cancel keeps the latest one.",
     );
     ui.add_space(4.0);
-    ui.label("Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.");
+    super::dialog_ui::explained(
+        ui,
+        "Quick estimate",
+        "Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.",
+    );
     ui.add_space(4.0);
     match state.solution() {
         Some(sol) => {
