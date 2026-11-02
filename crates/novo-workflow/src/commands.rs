@@ -207,14 +207,13 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "file.example_crane_sim",
-        "Open example: crane simulation (radio, hoist, bridge, crab move from the circuit)",
+        "Open example: crane simulation (hoist, bridge and crab run from the circuit)",
         "Project",
         &[
             "crane",
             "simulation",
             "simulate",
             "run",
-            "radio",
             "hoist",
             "bridge",
             "crab",

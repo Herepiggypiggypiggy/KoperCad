@@ -145,7 +145,7 @@ impl Action {
             Action::OpenMccExample => "Open example: motor control centre",
             Action::OpenCraneExample => "Open example: overhead crane cabinet",
             Action::OpenCraneSimExample => {
-                "Open example: crane simulation (radio, hoist, bridge, crab)"
+                "Open example: crane simulation (hoist, bridge and crab run from the circuit)"
             }
             Action::OpenPlcExample => "Open example: PLC cabinet",
             Action::OpenPumpExample => "Open example: pump station",
