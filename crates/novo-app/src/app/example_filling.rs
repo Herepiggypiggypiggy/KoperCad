@@ -23,8 +23,9 @@ const DESCRIPTION: &str = "Bottle filling line, the large example: infeed and ou
     capper and a labeller on direct-on-line starters, the filler pump on a frequency drive with a \
     screened motor cable, an emergency stop relay, a PLC with CPU, 32 digital inputs, 8 digital \
     outputs and 4 analog inputs, field wiring on terminal strips, a laid-out cabinet with heat, \
-    drilling and parts list. Ratings, parts without a maker and the 400 V / 10 kA supply are \
-    planning values to replace with your own.";
+    drilling and parts list. Illustration only: sizes and ratings (and the 400 V / 10 kA supply) are planning values, \
+    not a verified design and not a safety design (the emergency stop relay is drawn as an \
+    example, not assessed).";
 
 const CAB: &str = "=FIL+CAB";
 const FLD: &str = "=FIL+FLD";

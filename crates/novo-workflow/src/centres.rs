@@ -441,10 +441,10 @@ pub fn describe(id: &str) -> &'static str {
         "file.example_plc" => "A PLC cabinet: CPU, I/O cards and a 24 V supply.",
         "file.example_pump" => "A pump system with its starter and control.",
         "file.example_door" => {
-            "Small: a roller door on a reversing starter, complete with cabinet."
+            "Small: a roller door on a reversing starter, complete with cabinet. Illustration only: planning values, not a safety design."
         }
-        "file.example_conveyor" => "Medium: three belts in sequence, sensors and a full cabinet.",
-        "file.example_filling" => "Large: a filling line with PLC, drive and safety, full cabinet.",
+        "file.example_conveyor" => "Medium: three belts in sequence, sensors and a full cabinet. Illustration only: planning values, not a verified design.",
+        "file.example_filling" => "Large: a filling line with PLC, drive and emergency stop relay, full cabinet. Illustration only: planning values, not a safety design.",
         "file.example_emc" => "A drive with a motor cable and signal wires, for the EMC checks.",
         "project.standard" => "The drawing standard: sheet, title block, tag and wire style.",
         "project.rules" => "The rules for wire numbers, tags and numbering of this project.",

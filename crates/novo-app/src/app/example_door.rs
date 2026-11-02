@@ -14,8 +14,9 @@ pub(crate) const DOOR_EXAMPLE_NAME: &str = "Roller door (example)";
 
 const DESCRIPTION: &str = "Roller door, the small example: a 0.75 kW door motor on a reversing \
     starter with mutual interlock, top and bottom position switches and a safety edge in the field, \
-    24 V DC control, a laid-out cabinet with heat, drilling and parts list. Ratings and parts without \
-    a maker are planning values to replace with your own.";
+    24 V DC control, a laid-out cabinet with heat, drilling and parts list. Illustration only: sizes \
+    and ratings are planning values, not a verified design and not a safety design (the safety edge \
+    is drawn as an example, not assessed).";
 
 const CAB: &str = "=DOR+CAB";
 const FLD: &str = "=DOR+FLD";

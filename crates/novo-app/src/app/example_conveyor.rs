@@ -17,7 +17,7 @@ const DESCRIPTION: &str = "Conveyor line, the medium example: three belts (1.1, 
     direct-on-line starters that start one after the other from the discharge end, an emergency \
     stop, a collective motor-protection relay, three photoelectric sensors, indication and a signal \
     to a master controller, 24 V DC control, a laid-out cabinet with heat, drilling and parts list. \
-    Ratings and parts without a maker are planning values to replace with your own.";
+    Illustration only: sizes and ratings are planning values, not a verified design.";
 
 const CAB: &str = "=CNV+CAB";
 const FLD: &str = "=CNV+FLD";

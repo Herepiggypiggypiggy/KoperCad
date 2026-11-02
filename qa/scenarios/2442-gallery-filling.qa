@@ -1,8 +1,22 @@
 @title Example gallery: bottle filling line (large)
 @area Examples
-# File > Examples > Open example: bottle filling line. First page, two more pages, then the cabinet and 3D.
+# File > Templates and examples... > Examples shows the row and its text; then the example opens (Ctrl+K), two pages, the cabinet, 3D and the live view.
 fresh
 wait 10
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text filling
+wait 8
+shot filling-gallery-row
+expect "Illustration only"
+expect "Large: a filling line"
+check_layout
+key Escape
+wait 6
 key ctrl+k
 wait 6
 text Open example: bottle filling line
@@ -36,3 +50,9 @@ check_blank filling-cabinet
 click_text "3D"
 wait 30
 shot filling-3d
+click_text "Schematic"
+wait 15
+key shift+l
+wait 20
+shot filling-live
+check_layout

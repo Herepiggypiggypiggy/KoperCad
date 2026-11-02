@@ -1,8 +1,22 @@
 @title Example gallery: conveyor line (medium)
 @area Examples
-# File > Examples > Open example: conveyor line. First page, two more pages, then the cabinet and 3D.
+# File > Templates and examples... > Examples shows the row and its text; then the example opens (Ctrl+K), two pages, the cabinet, 3D and the live view.
 fresh
 wait 10
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text conveyor
+wait 8
+shot conveyor-gallery-row
+expect "Illustration only"
+expect "Medium: three belts"
+check_layout
+key Escape
+wait 6
 key ctrl+k
 wait 6
 text Open example: conveyor line
@@ -36,3 +50,9 @@ check_blank conveyor-cabinet
 click_text "3D"
 wait 30
 shot conveyor-3d
+click_text "Schematic"
+wait 15
+key shift+l
+wait 20
+shot conveyor-live
+check_layout
