@@ -398,3 +398,32 @@ fn heat_aware_place_all_lowers_a_sensitive_breaker_and_the_rule_check_agrees() {
     );
     assert!(judged.violations.is_empty(), "{:?}", judged.violations);
 }
+
+#[test]
+fn surface_rules_set_from_the_panel_are_stored_on_the_cabinet_and_undo_in_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    let depth = d.app.backend.document().unwrap().undo_depth();
+    d.app.cabinet_ask(
+        Ask::SetSurfaceRules(cab, Some("door: H S P K\n".into())),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    let (rules, problems) = novo_layout::rules::model::surface_rules(project(&d), cab);
+    assert!(problems.is_empty() && !rules.standard);
+    assert_eq!(rules.surface_for("K"), Some("door"));
+    assert_eq!(d.app.backend.document().unwrap().undo_depth(), depth + 1);
+    // Back to KoperCAD's default clears the property.
+    d.app
+        .cabinet_ask(Ask::SetSurfaceRules(cab, None), Some(cab), None, &[]);
+    d.frame();
+    let (rules, _) = novo_layout::rules::model::surface_rules(project(&d), cab);
+    assert!(rules.standard);
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    let (rules, _) = novo_layout::rules::model::surface_rules(project(&d), cab);
+    assert!(rules.standard);
+}

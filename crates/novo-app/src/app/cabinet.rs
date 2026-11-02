@@ -249,6 +249,8 @@ pub(super) enum Ask {
         String,
         Option<novo_layout::surfaces::SurfaceSize>,
     ),
+    /// The surface rules of a cabinet as text (`None`: back to the default).
+    SetSurfaceRules(StructureId, Option<String>),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
     /// Put a pair of openings from the cooling advice in the project's Vents and fans.
@@ -2675,7 +2677,16 @@ impl NovoApp {
             .cabinet
             .plate_rect
             .unwrap_or_else(|| ui.ctx().content_rect());
-        cabinet_rules::show_rules_window(ui.ctx(), &mut self.cabinet.rules, rules_canvas);
+        let surface_rules =
+            structure.map(|s| (s, novo_layout::rules::model::surface_rules(project, s).0));
+        if let Some(a) = cabinet_rules::show_rules_window(
+            ui.ctx(),
+            &mut self.cabinet.rules,
+            rules_canvas,
+            surface_rules.as_ref().map(|(s, r)| (*s, r)),
+        ) {
+            ask = Some(a);
+        }
         let lists = if self.cabinet.rules.cut_open {
             structure.and_then(|s| cabinet_rules::cut_lists(project, s))
         } else {
@@ -3196,6 +3207,17 @@ impl NovoApp {
                 };
                 self.cabinet_edit("Set surface", move |tx| {
                     super::cabinet_surface_move::set(tx, structure, device, &surface)
+                });
+            }
+            Ask::SetSurfaceRules(s, text) => {
+                self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
+                self.cabinet_edit("Set surface rules", move |tx| {
+                    tx.set_property(
+                        novo_core::AnyId::Structure(s),
+                        novo_layout::surface_rules::SURFACE_RULES_KEY,
+                        text.map(novo_core::Value::Text),
+                    )
                 });
             }
             Ask::SetSurfaceSize(s, name, size) => {

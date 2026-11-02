@@ -1,0 +1,25 @@
+@title Place rules: door and other surfaces as cards
+@area Cabinet
+@sizes 1366x768
+# The Rules panel ends with the surface rules of this cabinet in words: pilot devices go on the door by default.
+open qa/fixtures/cabinet-unplaced-plate.novo
+wait 20
+click_text Cabinet #1
+wait 30
+click_text "Rules"
+wait 10
+wait 10
+scroll 1150 450 -1750
+wait_s 1
+shot surfaces-default
+expect "Door and other surfaces"
+expect "KoperCAD's default"
+click_text "Add a surface rule"
+wait 10
+scroll 1150 450 -150
+wait_s 1
+shot surface-rule-added
+expect "Back to KoperCAD's default"
+click_text "Back to KoperCAD's default"
+wait 10
+shot back-to-default

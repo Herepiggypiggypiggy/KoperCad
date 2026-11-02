@@ -333,10 +333,16 @@ pub(super) fn annotate(
 /// The Place rules panel: the rules as cards in plain words, dockable at the
 /// right. Changes apply to Place all at once and can be undone; "Save" keeps
 /// them as the person's defaults. The file as text is under "Edit as text".
-pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, canvas: egui::Rect) {
+pub(super) fn show_rules_window(
+    ctx: &egui::Context,
+    state: &mut RulesState,
+    canvas: egui::Rect,
+    surface: Option<(StructureId, &novo_layout::surface_rules::SurfaceRules)>,
+) -> Option<super::cabinet::Ask> {
     if !state.editor_open {
-        return;
+        return None;
     }
+    let mut ask = None;
     state.ensure_loaded();
     let now = ctx.input(|i| i.time);
     let before = state.rules.clone();
@@ -352,6 +358,7 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, can
     .dockable()
     .fixed_open()
     .scrolls()
+    .height(canvas.height())
     .show(ctx, |ui| {
         ui.set_max_width(356.0);
         if let Some(n) = &state.notice {
@@ -410,9 +417,13 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, can
             "Saved as your default."
         });
         ui.separator();
-        let changed = super::cabinet_rules_panel::show(ui, &mut state.rules);
+        let (changed, surface_edit) =
+            super::cabinet_rules_panel::show(ui, &mut state.rules, surface.map(|(_, r)| r));
         if changed {
             state.text = state.rules.to_text();
+        }
+        if let (Some((s, _)), Some(text)) = (surface, surface_edit) {
+            ask = Some(super::cabinet::Ask::SetSurfaceRules(s, text));
         }
         egui::CollapsingHeader::new("Edit as text")
             .default_open(false)
@@ -453,6 +464,7 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState, can
     if super::panel::take_closed(ctx, "place_rules") {
         state.editor_open = false;
     }
+    ask
 }
 
 fn dialog_ui_hint(ui: &mut egui::Ui) {

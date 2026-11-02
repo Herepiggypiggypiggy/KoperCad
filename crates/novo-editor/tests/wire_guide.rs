@@ -60,3 +60,14 @@ fn every_pin_without_a_wire_gets_a_ring_while_wiring() {
     editor.begin_wire();
     assert_eq!(editor.preview(&doc, page).free_pins.len(), 2);
 }
+
+#[test]
+fn the_wire_mode_toggle_the_guide_switch_asks_for_flips_the_shape() {
+    use novo_editor::tool::WiringMode;
+    let (_doc, _page, mut editor) = setup();
+    assert_eq!(editor.wire_mode(), WiringMode::Corners);
+    editor.toggle_wire_mode();
+    assert_eq!(editor.wire_mode(), WiringMode::Lines);
+    editor.toggle_wire_mode();
+    assert_eq!(editor.wire_mode(), WiringMode::Corners);
+}
