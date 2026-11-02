@@ -45,3 +45,12 @@ check_layout
 key ctrl+z
 wait 10
 shot both-undone
+# Refused case: the made-up cabinet has no wires, so Group by wiring says why in words and shows no preview.
+key ctrl+k
+wait 4
+text group by wiring
+wait 6
+key Enter
+wait 20
+expect "No wiring between these devices"
+shot wiring-refused
