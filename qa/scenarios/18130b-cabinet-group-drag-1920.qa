@@ -10,7 +10,7 @@ wait 30
 move 700 700
 shot before
 check_layout
-drag 1090 160 905 262
+drag 1090 178 905 280
 wait 15
 move 700 700
 wait 5
@@ -18,20 +18,20 @@ expect "Align"
 expect "3 selected"
 expect "55, 10 mm"
 shot box-selected
-drag 1009 207 1250 590
+drag 1009 225 1250 608
 wait 20
 move 700 700
 wait 5
 expect_not "55, 10 mm"
 shot group-dragged
 check_layout
-click 497 19
+click 511 29
 wait 15
 move 700 700
 wait 5
 expect "55, 10 mm"
 shot undone-whole-group
-click 522 19
+click 563 29
 wait 15
 move 700 700
 wait 5

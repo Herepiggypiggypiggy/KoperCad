@@ -29,33 +29,33 @@ text Simulate hoist run
 wait 4
 key Enter
 wait 20
-drag 1554 82 480 82
+drag 1554 100 480 100
 wait 10
 click_text "Start"
 wait 20
 expect "Hoists in this project: =CRN+FLD-M11"
 shot controller-bound
 # Main on, then hold hoist up step 1 (fine winding) and step 2 (coarse winding).
-click 1591 369
+click 1591 387
 wait 10
 expect "Signals (2 of 15 high)"
-mouse_down 1619 506
+mouse_down 1619 524
 wait 150
 expect "fine"
 expect "brake open"
 shot hoist-fine-rising
-mouse_up 1619 506
+mouse_up 1619 524
 wait 10
-mouse_down 1619 536
+mouse_down 1619 554
 wait 150
 expect "coarse"
 shot hoist-coarse-rising
-mouse_up 1619 536
+mouse_up 1619 554
 wait 150
 expect "0 rpm"
 shot hoist-stopped
 # Drive run for the bridge and the crab.
-click 1410 82
+click 1410 100
 wait 6
 key ctrl+k
 wait 3
@@ -63,35 +63,35 @@ text Simulate drive run
 wait 4
 key Enter
 wait 20
-drag 1624 82 480 82
+drag 1624 100 480 100
 wait 10
 click_text "Start"
 wait 20
 expect "=CRN+FLD-M21, =CRN+FLD-M22"
 shot drive-run-started
-mouse_down 1619 618
+mouse_down 1619 636
 wait 200
 shot bridge-forward-slow
-mouse_up 1619 618
+mouse_up 1619 636
 wait 10
-mouse_down 1619 648
+mouse_down 1619 666
 wait 200
 expect "Hz"
 shot bridge-forward-fast
-mouse_up 1619 648
+mouse_up 1619 666
 wait 200
 # The crab (trolley) rockers are below: scroll the Controller card.
 scroll 1704 500 -400
 wait 10
 shot controller-scrolled
-mouse_down 1739 360
+mouse_down 1739 378
 wait 200
 expect "Hz"
 shot crab-right-fast
-mouse_up 1739 360
+mouse_up 1739 378
 wait 100
 # Hoist in 3D, set to the bridge and the crab axes of the project.
-click 767 82
+click 767 100
 wait 6
 key ctrl+k
 wait 3
@@ -100,12 +100,12 @@ wait 4
 key Enter
 wait 40
 expect "Hoist in 3D"
-drag 1354 101 300 101
+drag 1354 119 300 119
 wait 10
 shot hoist-in-3d-before
-mouse_down 1619 218
+mouse_down 1619 236
 wait 200
 shot hoist-in-3d-bridge-moving
-mouse_up 1619 218
+mouse_up 1619 236
 wait 10
 check_layout
