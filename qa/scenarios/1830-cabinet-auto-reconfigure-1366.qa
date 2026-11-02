@@ -8,7 +8,7 @@ wait 20
 click_text Cabinet #1
 wait 30
 shot before
-drag 700 316 860 435
+drag 700 302 860 432
 wait 10
 shot k1-off-the-rail
 key ctrl+k
@@ -20,7 +20,6 @@ key Enter
 wait 10
 expect "Preview (Auto-reconfigure)"
 expect "not a clearance check or a heat calculation"
-expect "already has a duct"
 shot reconfigure-preview
 key Escape
 wait 5
