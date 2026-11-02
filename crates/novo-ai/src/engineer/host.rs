@@ -428,8 +428,9 @@ impl EngineerHost {
     }
 
     fn search_catalog(&self, input: &Value) -> ToolReply {
-        if !self.scope.allows(DataScope::Outline) {
-            return self.denied(DataScope::Outline);
+        // The catalog holds the person's own added parts, so it is project data.
+        if !self.scope.allows(DataScope::Project) {
+            return self.denied(DataScope::Project);
         }
         match super::cabinet::search_catalog(&self.resources.catalog, &self.draft, input) {
             Ok(v) => ToolReply {
