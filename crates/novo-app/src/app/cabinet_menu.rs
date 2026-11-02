@@ -116,7 +116,13 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
         ],
         Target::Plate => vec![
             Some(("Place all", "cabinet.place-all")),
+            Some(("Autoplace on rail", "cabinet.arrange_onto_rail")),
+            Some(("Autogroup", "cabinet.arrange_group")),
+            Some(("Close up gaps", "cabinet.arrange_tight")),
+            Some(("Even gaps", "cabinet.arrange_even")),
             Some(("Rails and ducts…   Ctrl+Shift+R", "cabinet.rails")),
+            Some(("Auto rails", "cabinet.arrange_rails")),
+            Some(("Auto ducts", "cabinet.arrange_ducts")),
             Some(("Route all wires", "cabinet.routes")),
             Some(("Size the enclosure…", "cabinet.size-enclosure")),
             None,

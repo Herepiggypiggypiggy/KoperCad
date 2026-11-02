@@ -28,6 +28,7 @@ mod build_mode;
 #[cfg(test)]
 mod build_mode_tests;
 mod cabinet;
+mod cabinet_arrange;
 mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_group;
@@ -392,6 +393,8 @@ mod assembly_pack_tests;
 mod assembly_tests;
 #[cfg(test)]
 mod bench_tests;
+#[cfg(test)]
+mod cabinet_arrange_tests;
 #[cfg(test)]
 mod cabinet_group_tests;
 #[cfg(test)]
@@ -1835,6 +1838,7 @@ impl NovoApp {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
                     || *id == "cabinet.place-all"
+                    || id.starts_with("cabinet.arrange_")
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
                     || *id == "cabinet.surface"

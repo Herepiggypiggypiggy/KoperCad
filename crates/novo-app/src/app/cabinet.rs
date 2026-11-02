@@ -205,6 +205,8 @@ pub(super) enum Ask {
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
+    /// An arrange tool (`cabinet.arrange_*`) on these devices (none: all).
+    AutoArrange(&'static str, Vec<u64>),
     /// Set a plate where a panel has none or too small a one, and place every
     /// device of every panel, as one undo step.
     PlaceEveryPanel,
@@ -1431,23 +1433,37 @@ impl NovoApp {
             });
         }
         if has_plan {
+            let arranging = self
+                .cabinet
+                .preview
+                .as_ref()
+                .and_then(super::cabinet_arrange::banner);
             let (n, left) = self
                 .cabinet
                 .preview
                 .as_ref()
                 .map_or((0, 0), |p| (p.placements.len(), p.unplaced.len()));
+            // An arrange tool says nothing about heat: the last Place all
+            // explanation does not belong to its preview.
             let heat = self
                 .cabinet
                 .rules
                 .explain
                 .as_ref()
                 .and_then(|e| e.heat.as_ref())
-                .map(|h| h.message());
-            let mut text = format!(
-                "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
-                if heat.is_some() { " (heat-aware)" } else { "" },
-                if n == 1 { "device" } else { "devices" }
-            );
+                .map(|h| h.message())
+                .filter(|_| arranging.is_none());
+            let mut text = arranging.unwrap_or_else(|| {
+                format!(
+                    "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
+                    if heat.is_some() {
+                        " (heat-aware: hot devices are kept apart using their power loss)"
+                    } else {
+                        ""
+                    },
+                    if n == 1 { "device" } else { "devices" }
+                )
+            });
             if let Some(heat) = heat {
                 text.push(' ');
                 text.push_str(&heat);
@@ -2658,6 +2674,11 @@ impl NovoApp {
                             "cabinet.plate" => {
                                 ask = Some(Ask::TogglePlateCard);
                             }
+                            id if id.starts_with("cabinet.arrange_") && !has_plan => {
+                                if let Some(tool) = super::cabinet_arrange::tool_id(id) {
+                                    ask = Some(Ask::AutoArrange(tool, selected.clone()));
+                                }
+                            }
                             "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
                                 ask = Some(Ask::PlaceAll);
                                 place_all_keyed = true;
@@ -3018,6 +3039,7 @@ impl NovoApp {
                 || matches!(
                     ask,
                     Ask::PlaceAll
+                        | Ask::AutoArrange(..)
                         | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
                         | Ask::CoolerLayout(..)
@@ -3124,6 +3146,11 @@ impl NovoApp {
                 );
             }
             Ask::PlaceEveryPanel => self.place_every_panel(),
+            Ask::AutoArrange(tool, ids) => {
+                if let Some(layout) = layout {
+                    self.arrange_preview(tool, &ids, &layout, cands);
+                }
+            }
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     self.cabinet.rules.ensure_loaded();
@@ -3186,7 +3213,8 @@ impl NovoApp {
                     return;
                 };
                 let others = std::mem::take(&mut self.cabinet.surface_preview);
-                if self.cabinet_edit("Place all", move |tx| {
+                let label = plan.title.clone().unwrap_or_else(|| "Place all".into());
+                if self.cabinet_edit(&label, move |tx| {
                     apply_plan(tx, structure, &plan)?;
                     for (surface, plan) in &others {
                         apply_plan(tx, structure, plan)?;
