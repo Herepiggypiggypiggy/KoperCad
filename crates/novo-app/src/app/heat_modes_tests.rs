@@ -253,3 +253,17 @@ fn the_speed_range_is_sensible() {
     assert!(*SPEED_RANGE.start() >= 1.0 && *SPEED_RANGE.end() <= 60.0);
     assert!(SPEED_RANGE.contains(&MoveControls::default().speed));
 }
+
+#[test]
+fn a_device_that_takes_more_through_the_plate_than_it_makes_stays_within_100_percent() {
+    let mut s = snapshot();
+    s.heat_paths = vec![DeviceHeatPaths {
+        id: 9,
+        total_w: 4.0,
+        conduction_w: 8.0,
+        radiation_w: 0.0,
+    }];
+    let r = path_rows(&s)[0];
+    assert_eq!((r.plate_w, r.air_w), (4.0, 0.0));
+    assert!(r.shares().iter().all(|x| (0.0..=1.0).contains(x)));
+}

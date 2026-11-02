@@ -244,13 +244,20 @@ pub(crate) fn path_rows(snap: &CfdSnapshot) -> Vec<PathRow> {
         snap.heat_paths
             .iter()
             .filter(|p| p.total_w >= MIN_LOSS_W)
-            .map(|p| PathRow {
-                id: p.id,
-                total_w: p.total_w,
-                air_w: p.convection_w().max(0.0),
-                plate_w: p.conduction_w.max(0.0),
-                radiation_w: p.radiation_w.max(0.0),
-                radiation_split: snap.radiation_on,
+            .map(|p| {
+                // A device that takes heat from the plate (a terminal on a hot
+                // rail) can show more than its own loss through it: keep the
+                // shares inside 0 to 100 %.
+                let plate = p.conduction_w.clamp(0.0, p.total_w);
+                let rad = p.radiation_w.clamp(0.0, p.total_w - plate);
+                PathRow {
+                    id: p.id,
+                    total_w: p.total_w,
+                    air_w: p.total_w - plate - rad,
+                    plate_w: plate,
+                    radiation_w: rad,
+                    radiation_split: snap.radiation_on,
+                }
             })
             .collect()
     };
