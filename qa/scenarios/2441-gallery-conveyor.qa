@@ -14,7 +14,7 @@ wait 8
 click_text "Open conveyor line example"
 wait 6
 shot conveyor-gallery-row
-expect "Illustration only"
+expect "Illustration"
 expect "Medium: three belts"
 check_layout
 key Escape

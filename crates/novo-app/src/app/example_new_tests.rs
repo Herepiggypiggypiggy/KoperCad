@@ -150,3 +150,108 @@ fn the_new_examples_have_heat_inside_limits_drilling_and_a_parts_list_without_ga
         );
     }
 }
+
+/// Union-find over wire ends: the net of every pin, junction and potential.
+struct Nets {
+    parent: std::collections::HashMap<(u8, u64, u16), (u8, u64, u16)>,
+}
+
+type Node = (u8, u64, u16);
+
+impl Nets {
+    fn find(&mut self, n: Node) -> Node {
+        let p = *self.parent.entry(n).or_insert(n);
+        if p == n {
+            return n;
+        }
+        let r = self.find(p);
+        self.parent.insert(n, r);
+        r
+    }
+    fn union(&mut self, a: Node, b: Node) {
+        let (a, b) = (self.find(a), self.find(b));
+        self.parent.insert(a, b);
+    }
+    fn of(p: &novo_core::Project) -> Nets {
+        use novo_core::{Endpoint, SymbolRole};
+        let node = |e: &Endpoint| -> Node {
+            match e {
+                Endpoint::Pin { symbol, pin } => (0, symbol.raw(), *pin),
+                Endpoint::Junction { junction } => (1, junction.raw(), 0),
+                _ => (9, 0, 0),
+            }
+        };
+        let mut nets = Nets {
+            parent: Default::default(),
+        };
+        for w in p.wires() {
+            nets.union(node(&w.from), node(&w.to));
+        }
+        for s in p.symbols() {
+            if let SymbolRole::PotentialFeed { potential } = s.role {
+                nets.union((0, s.id.raw(), 0), (2, potential.raw(), 0));
+            }
+        }
+        nets
+    }
+}
+
+/// For each phase (the net feeding a pole of `contactor`), the net its pole
+/// leaves on. Poles are pin pairs (0,1), (2,3), (4,5).
+fn pole_map(
+    p: &novo_core::Project,
+    nets: &mut Nets,
+    tag: &str,
+) -> std::collections::BTreeMap<Node, Node> {
+    let device = p.devices_by_tag(&DeviceTag::parse(tag).unwrap())[0];
+    let main = p
+        .symbols_of_device(device)
+        .into_iter()
+        .find(|s| s.pins.len() == 6)
+        .expect("the main contacts");
+    (0..3)
+        .map(|i| {
+            let a = nets.find((0, main.id.raw(), 2 * i));
+            let b = nets.find((0, main.id.raw(), 2 * i + 1));
+            (a, b)
+        })
+        .collect()
+}
+
+/// Two contactors reverse a motor when the same three phases reach the same
+/// three output nets with exactly two of them exchanged.
+fn assert_reverses(p: &novo_core::Project, forward: &str, backward: &str) {
+    let mut nets = Nets::of(p);
+    let f = pole_map(p, &mut nets, forward);
+    let b = pole_map(p, &mut nets, backward);
+    assert_eq!(f.len(), 3, "{forward}: three phases");
+    assert_eq!(
+        f.keys().collect::<Vec<_>>(),
+        b.keys().collect::<Vec<_>>(),
+        "same three phases"
+    );
+    let outs = |m: &std::collections::BTreeMap<Node, Node>| {
+        m.values()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(outs(&f), outs(&b), "both reach the same three output nets");
+    assert_eq!(outs(&f).len(), 3, "three separate output nets");
+    let same = f.iter().filter(|(k, v)| b[*k] == **v).count();
+    assert_eq!(
+        same, 1,
+        "exactly one phase keeps its output, two are swapped"
+    );
+}
+
+#[test]
+fn the_door_contactors_reverse_the_motor() {
+    let doc = built(super::example_door::build_door_example as Build);
+    assert_reverses(doc.project(), "=DOR+CAB-K1", "=DOR+CAB-K2");
+}
+
+#[test]
+fn the_crane_hoist_contactors_reverse_the_motor() {
+    let doc = built(super::example_crane::build_crane_example as Build);
+    assert_reverses(doc.project(), "=CRN+CAB-K11", "=CRN+CAB-K12");
+}

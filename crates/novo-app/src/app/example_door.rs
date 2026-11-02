@@ -111,20 +111,21 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
     {
         ts.push(kit.term(x1, &format!("1{nm}"), key, (40.0 + 8.0 * i as f64, 124.0)));
     }
-    // K1 and K2 outputs meet at a junction above each motor terminal.
+    // K1 and K2 outputs meet at the same junction above each motor terminal
+    // (pole 1 to U, pole 2 to V, pole 3 to W): the swap is only on the inputs.
     let jy = 112.0;
-    for (i, (p1, p2, ty, jx2)) in [
-        ("2", "6", 110.0, 116.0),
-        ("4", "4", 107.0, 108.0),
-        ("6", "2", 104.0, 100.0),
+    for (i, (pin, ty, kx)) in [
+        ("2", 104.0, 100.0),
+        ("4", 107.0, 108.0),
+        ("6", 110.0, 116.0),
     ]
     .into_iter()
     .enumerate()
     {
         let jx = 40.0 + 8.0 * i as f64;
         let j = kit.junction((jx, jy));
-        kit.link(End::Pin((k1, p1)), End::Junction(j), &[]);
-        kit.link(End::Pin((k2, p2)), End::Junction(j), &[(jx2, ty), (jx, ty)]);
+        kit.link(End::Pin((k1, pin)), End::Junction(j), &[]);
+        kit.link(End::Pin((k2, pin)), End::Junction(j), &[(kx, ty), (jx, ty)]);
         let w = kit.link(End::Junction(j), End::Pin((ts[i], "1")), &[]);
         kit.set_mm2(w, 1.5);
     }

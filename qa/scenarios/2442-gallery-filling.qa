@@ -14,8 +14,8 @@ wait 8
 click_text "Open filling line example"
 wait 6
 shot filling-gallery-row
-expect "Illustration only"
-expect "Large: a filling line"
+expect "Illustration"
+expect "Large: filling line"
 check_layout
 key Escape
 wait 6

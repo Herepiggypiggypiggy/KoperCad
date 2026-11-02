@@ -376,7 +376,7 @@ fn draw(tx: &mut Tx<'_>) -> ModelResult<()> {
         let up = kit.feed_down(pot, (hx + 8.0 * i as f64, 108.0));
         kit.wire_mm2((k11, ["2", "4", "6"][i]), (up, "1"), 2.5);
     }
-    for (i, (pot, pin)) in [(hw, "2"), (hv, "4"), (hu, "6")].into_iter().enumerate() {
+    for (i, (pot, pin)) in [(hu, "2"), (hv, "4"), (hw, "6")].into_iter().enumerate() {
         let down = kit.feed_down(pot, (100.0 + 8.0 * i as f64, 108.0));
         kit.wire_mm2((k12, pin), (down, "1"), 2.5);
     }
