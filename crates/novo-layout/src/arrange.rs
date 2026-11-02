@@ -58,6 +58,13 @@ fn need_between(a: &Placement, b: &Placement, vertical: bool) -> f64 {
     }
 }
 
+/// Top left of `p` moved along its rail to `at`, keeping where it stands
+/// across the rail (an older plan may have its rails off the middle of the
+/// devices; Centre rails does that, not these tools).
+fn slid(p: &Placement, rail: &Rail, at: f64) -> (f64, f64) {
+    if rail.vertical { (p.x, at) } else { (at, p.y) }
+}
+
 /// Top left of `p` standing on `rail` with its start `at` along the run.
 fn standing(p: &Placement, rail: &Rail, at: f64) -> (f64, f64) {
     let f = p.footprint();
@@ -102,16 +109,30 @@ impl<'a> World<'a> {
     /// True when `rect` stands on the plate, clear of every other device and
     /// of the ducts. `me` is left out of the comparison.
     fn free(&self, me: u64, rect: &Rect) -> bool {
-        self.layout.plate.usable().contains(rect)
+        // Where the device stands in the stored layout: a duct it already
+        // overlaps there is not a reason to refuse the move (an older plan
+        // may have one), and a device that does not move is always fine.
+        let old = self
+            .layout
+            .placements
+            .iter()
+            .find(|p| p.id == me)
+            .map(|p| p.footprint());
+        if old.is_some_and(|o| (o.x - rect.x).abs() < 0.01 && (o.y - rect.y).abs() < 0.01) {
+            return true;
+        }
+        let usable = self.layout.plate.usable();
+        let was = |r: &Rect| old.is_some_and(|o| o.overlaps(r));
+        (usable.contains(rect) || old.is_some_and(|o| !usable.contains(&o)))
             && !self
                 .now
                 .iter()
-                .any(|(id, other)| *id != me && other.overlaps(rect))
+                .any(|(id, other)| *id != me && other.overlaps(rect) && !was(other))
             && !self
                 .layout
                 .ducts
                 .iter()
-                .any(|d| d.footprint().overlaps(rect))
+                .any(|d| d.footprint().overlaps(rect) && !was(&d.footprint()))
     }
 
     fn set(&mut self, id: u64, rect: Rect) {
@@ -244,7 +265,7 @@ pub fn distribute(layout: &CabinetLayout, ids: &[u64], spacing: Spacing) -> Plan
         let mut moves = Vec::new();
         let mut ok = true;
         for (p, &pos) in on.iter().zip(&at) {
-            let (x, y) = standing(p, rail, pos);
+            let (x, y) = slid(p, rail, pos);
             let r = rect_at(p, x, y);
             if end_of(&r, v) > run_end + 0.01 || !trial.free(p.id, &r) {
                 ok = false;
@@ -314,7 +335,7 @@ pub fn group(layout: &CabinetLayout, ids: &[u64], keys: &BTreeMap<u64, String>) 
                 }
                 pos = (pos + gap).ceil();
             }
-            let (x, y) = standing(p, rail, pos);
+            let (x, y) = slid(p, rail, pos);
             let r = rect_at(p, x, y);
             if end_of(&r, v) > run_end + 0.01 || !trial.free(p.id, &r) {
                 ok = false;
