@@ -19,16 +19,25 @@ click_text Cloud
 wait 20
 shot cloud-default-view
 expect "white-hot"
-click_text "Top"
+key ctrl+k
+wait 10
+text Top view
+wait 10
+key Enter
 wait 30
 shot cloud-top
-click_text "Right"
-wait 30
-shot cloud-right
-click_text "Front"
+key ctrl+k
+wait 10
+text Front view
+wait 10
+key Enter
 wait 30
 shot cloud-front
-click_text "Isometric"
+key ctrl+k
+wait 10
+text Isometric view
+wait 10
+key Enter
 wait 30
 shot cloud-isometric
 check_layout
