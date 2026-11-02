@@ -1,0 +1,34 @@
+@title Wiring guide: three steps in words on the canvas, rings on free pins
+@area Schematic
+@sizes 1366x768
+# The wire tool says where you are (start, turn, finish) at the bottom of the
+# drawing and rings every pin that can still take a wire.
+click_text "New project"
+wait 20
+key q
+text mcb
+key Return
+click 600 150
+wait 10
+key q
+text contactor
+key Return
+click 600 300
+wait 10
+key Escape
+key w
+wait 3
+move 800 450
+wait 3
+shot guide-start
+expect_scene "wire"
+click 800 450
+wait 3
+shot refused-start-not-doubled
+key Escape
+key w
+wait 3
+click 596 160
+move 700 420
+wait 3
+shot guide-turn

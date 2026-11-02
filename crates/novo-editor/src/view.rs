@@ -899,6 +899,13 @@ impl SchematicView {
                 self.canvas.style.proposal,
             ));
         }
+        for at in &preview.free_pins {
+            // A ring on every pin that can still take a wire.
+            items.push(Item::new(layer).unselectable().with(Primitive::stroked(
+                Shape::circle(model::vec(*at), 0.9),
+                Stroke::screen(1.5, opacity(self.canvas.style.hover.color, 140)),
+            )));
+        }
         if let Some(t) = preview.target {
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::circle(model::vec(t), 1.2),
@@ -947,6 +954,63 @@ impl SchematicView {
             egui::StrokeKind::Inside,
         );
         painter.galley(frame.min + pad, galley, visuals.text_color());
+    }
+
+    /// The three steps of a wire in words, over the top of the drawing while
+    /// the wire tool is on, with the step the person is at lit. The keys
+    /// stay in the status bar; this says what to do.
+    fn paint_wire_guide(&self, ui: &egui::Ui) {
+        let Some(step) = self.editor.wire_step() else {
+            return;
+        };
+        let steps = [
+            "1  Click a pin to start",
+            "2  Click empty space to turn",
+            "3  Click a pin to finish",
+        ];
+        let painter = ui.painter_at(self.rect);
+        let visuals = ui.visuals();
+        let [r, g, b, _] = self.canvas.style.hover.color.0;
+        let accent = egui::Color32::from_rgb(r, g, b);
+        let font = egui::FontId::proportional(13.0);
+        let galleys: Vec<_> = steps
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let color = if i == step {
+                    accent
+                } else {
+                    visuals.weak_text_color()
+                };
+                painter.layout_no_wrap((*t).to_owned(), font.clone(), color)
+            })
+            .collect();
+        let gap = 18.0;
+        let pad = egui::vec2(12.0, 6.0);
+        let width: f32 =
+            galleys.iter().map(|g| g.size().x).sum::<f32>() + gap * (galleys.len() as f32 - 1.0);
+        let height = galleys.iter().map(|g| g.size().y).fold(0.0, f32::max);
+        let size = egui::vec2(width, height) + pad * 2.0;
+        let frame = egui::Rect::from_min_size(
+            egui::pos2(
+                self.rect.center().x - size.x / 2.0,
+                self.rect.bottom() - size.y - 12.0,
+            ),
+            size,
+        );
+        painter.rect(
+            frame,
+            6.0,
+            visuals.window_fill,
+            egui::Stroke::new(1.0, visuals.window_stroke.color),
+            egui::StrokeKind::Inside,
+        );
+        let mut x = frame.left() + pad.x;
+        for g in galleys {
+            let w = g.size().x;
+            painter.galley(egui::pos2(x, frame.top() + pad.y), g, visuals.text_color());
+            x += w + gap;
+        }
     }
 
     /// A thin cross where the last click was refused and the reason beside
@@ -1288,6 +1352,7 @@ impl SchematicView {
         }
         self.paint_refusal(ui);
         self.paint_snap_label(ui);
+        self.paint_wire_guide(ui);
         // Pin under the pointer: the connect cursor.
         if !self.editor.tool_active() && self.editor.pin_hovered() && response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
