@@ -394,4 +394,31 @@ mod tests {
         );
         assert!(thermal(&p, &json!({"ambient_c": 500})).is_err());
     }
+
+    #[test]
+    fn the_catalog_and_the_calculations_need_the_whole_project() {
+        use crate::consent::DataScope;
+        use crate::tools::ToolHost;
+        let (p, res) = starter();
+        let catalog = res.catalog.clone();
+        for (scope, allowed) in [(DataScope::Outline, false), (DataScope::Project, true)] {
+            let mut host = crate::engineer::EngineerHost::new(
+                p.clone(),
+                Vec::new(),
+                scope,
+                Resources::new(Vec::new()).with_catalog(catalog.clone()),
+                Box::new(move |p| crate::engineer::snapshot::snapshot_of(p, &[], scope)),
+            );
+            for (tool, input) in [
+                ("search_catalog", json!({"query": "contactor"})),
+                ("heat_estimate", json!({})),
+                ("simulate_circuit", json!({})),
+                ("autopilot_plan", json!({})),
+            ] {
+                let reply = host.call(tool, &input);
+                let denied = reply.is_error && reply.text.contains("Not allowed");
+                assert_eq!(denied, !allowed, "{tool} at {scope:?}: {}", reply.text);
+            }
+        }
+    }
 }
