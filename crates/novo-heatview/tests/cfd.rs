@@ -59,6 +59,7 @@ fn snapshot() -> CfdSnapshot {
         accuracy: AccuracyStatement::default(),
         heat_paths: Vec::new(),
         radiation_on: false,
+        opening_flows: Vec::new(),
     }
 }
 
