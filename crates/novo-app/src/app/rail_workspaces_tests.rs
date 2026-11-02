@@ -52,7 +52,11 @@ fn every_row_is_real_and_a_zone_holds_at_most_six() {
             }
         }
     }
-    for &id in ALIGN_FLYOUT.iter().chain(HIDE_FLYOUT) {
+    for &id in ALIGN_FLYOUT
+        .iter()
+        .chain(HIDE_FLYOUT)
+        .chain(rail_3d::LAYERS_FLYOUT)
+    {
         assert!(look(id).is_some(), "{id} has no look");
         assert!(novo_workflow::commands::is_known(id), "{id}");
     }
@@ -226,6 +230,7 @@ fn the_relocated_table_matches_what_the_rails_draw() {
         rail_3d::PANELS,
         rail_3d::ALIGN_FLYOUT,
         rail_3d::HIDE_FLYOUT,
+        rail_3d::LAYERS_FLYOUT,
         rail_cabinet::TOOLS,
         rail_cabinet::ASSISTS,
         rail_cabinet::PANELS,

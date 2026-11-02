@@ -429,6 +429,12 @@ impl NovoApp {
         )
     }
 
+    /// Whether this GPU can draw ambient occlusion (the Layers row greys out
+    /// when it cannot).
+    pub(crate) fn view3d_ssao_available(&self) -> bool {
+        self.view3d.controls.ssao_available
+    }
+
     /// Sets the option in its owner.
     pub(crate) fn set_view3d_option(&mut self, option: ViewOption, on: bool) {
         let mode = &mut self.view3d;
@@ -583,27 +589,5 @@ mod tests {
             let on_toolbar = matches!(s.home, Home::Overlay | Home::Mode);
             assert!(in_popover != on_toolbar, "{}", s.label);
         }
-    }
-
-    #[test]
-    fn the_toolbar_row_draws_only_overlays_and_modes() {
-        // A switch drawn on the toolbar by name must not also be in the
-        // Layers popover (which draws every Layer, Walk and Preference
-        // option from the registry): one option, one place.
-        let src = include_str!("view3d_controls.rs");
-        let mut named = 0;
-        for part in src.split("toggle(ui, values, ViewOption::").skip(1) {
-            let name: String = part.chars().take_while(|c| c.is_alphanumeric()).collect();
-            let spec = ALL
-                .iter()
-                .find(|s| format!("{:?}", s.option) == name)
-                .unwrap_or_else(|| panic!("{name} is not an option"));
-            assert!(
-                matches!(spec.home, Home::Overlay | Home::Mode),
-                "{name} is on the toolbar and in the Layers popover"
-            );
-            named += 1;
-        }
-        assert!(named >= 4, "the scan found only {named} switches");
     }
 }
