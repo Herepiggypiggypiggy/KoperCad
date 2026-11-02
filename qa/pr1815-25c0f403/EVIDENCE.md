@@ -31,3 +31,16 @@ Not run: the full suite; other scenarios with hard-coded y coordinates below the
 
 The other 22 scenarios passed (07, 173, 331, 17103, 17104, 16172, 1700, 110, 1599, 701, 742, 1136, 7400, 1102, 18080, 730, 55, 59, 1135, 1101, 1105, 1602 earlier). The three shift-only ones are fixed in this PR (clicks moved +18, in 1120 the docked pane header +18 and the bottom-docked pane's anchor stays at the window foot) and pass at head 7a91cdd0e5d84f4bc72744e6c083bec341964bca (shifted/). Six were already red on main, so not caused by the bar. 154: the 2 S3 findings (`Set the class`, `Back to automatic`) are identical on main: its click at 800 310 no longer hits a wire there either, so that is old and not caused by the bar. The 5 extra findings were S4 layout-maybe, one per shot, all the same pair: on the page "3 Drive and signals" the breadcrumb text ended flush against the Search (Ctrl+K) button in the new bar (shot sweep/154-.../shots/...-02-finding-1.png). That was caused by this PR; fixed by leaving 10 pt more room before Search. After the fix 154 shows only the 2 findings main has (after-breadcrumb/). Content centred on the page moves 9 pt, not 18, and windows anchored at the foot do not move, so a mechanical +18 on every file would be wrong; I fixed by evidence instead.
 Not run: the other ~235 coordinate scenarios; the lead runs the full suite from the merged result.
+
+## Scenarios added to main after the first sweep (Main B request), from the merged head
+
+Run: new-scenarios/ (this PR, before the fix), new-scenarios-main/ (main), fix2/ (after). 13 scenario files, both sizes.
+
+| Scenario | Before fix | Main | Reason |
+|---|---|---|---|
+| 1850, 1851, 18131/b, 18132/b | pass | n/a | none |
+| 1809, 1809b (crane sim) | red | pass | clicks and drags 18 pt too high: fixed (+18 on y from 60 down), pass now |
+| 18130, 18130b (cabinet group drag) | red | pass | box-select drags +18, and the Undo/Redo clicks moved from the old bar (497,19 and 522,19) to the new tiles (509,29 and 557,29; at 1920 511 and 563): fixed, pass now |
+| 1814, 1815, 18150 | red | red | step "click_text Quick" fails: the heat run is already going and the quality choice is disabled, the same on main; not caused by the bar |
+
+Remaining S4 layout-maybe findings: 18130 and 18130b show the floating Inspector over the plate (also on main at 1920); 1809b shows 3 stacked floating panels (main 1). Not blocking. Head with the fixes: bf579ef7c737455aabc5d45cad48b71acfb5a8c9.
