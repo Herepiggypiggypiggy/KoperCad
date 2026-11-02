@@ -7,7 +7,7 @@ Only HEAD.txt, report.md, report-18132.md and this file are committed in the rep
 
 Result: all 6 new scenario files pass at 1366x768 and 1920x1080, 0 failed. Existing Cabinet scenarios 770, 13-journey-cabinet,
 1640, 1711, 15, 58 pass at both sizes; 1700 passes at 1920. `79-cabinet-rail-snap` and `1700-cabinet-sites` at 1366x768 fail
-the same way on current main (baseline-main-79-1700-summary.md: same `55, 210 mm` / `Mounted` misses, they click a pixel that
+the same way on current main (baseline-main-report.md, a run of both scenarios on main `49396165ab`, header "source at git 49396165ab", built in a clean checkout of origin/main: the same `55, 210 mm` / `Mounted` misses, they click a pixel that
 now lands on a rail grip), so they are not caused by this PR. S4 at 1920 in report.md is the Inspector overlay over the
 Unplaced list, present before.
 
