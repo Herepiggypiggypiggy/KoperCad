@@ -11,7 +11,7 @@ wait 30
 click_text "Rails and ducts"
 wait 10
 shot list
-click 713 493
+click 762 491
 wait 10
 expect "A duct cannot lie over"
 shot refused

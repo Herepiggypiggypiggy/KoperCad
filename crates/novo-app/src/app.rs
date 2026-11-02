@@ -38,6 +38,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_rules_panel;
 mod cabinet_surface_move;
 mod cabinet_surface_size;
 mod cabinet_surfaces;
