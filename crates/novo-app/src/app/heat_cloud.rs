@@ -6,6 +6,13 @@
 //! graphics: only warm cells make quads, and the stack is rebuilt only when
 //! the main viewing direction changes, not per frame).
 //!
+//! Each slice takes its opacity from its thickness (Beer-Lambert, a fixed
+//! absorption per millimetre of air), and the in-plane resolution is the same
+//! for every axis, so the cloud is the same physical object from any side:
+//! turning the camera changes only the perspective, not the density. Air
+//! hotter than the top of the cloud's scale turns white-hot and keeps gaining
+//! opacity up to the hottest air, so 100 C+ spots stand out.
+//!
 //! It shows the solver's air temperature as it is on the slices; between
 //! slices nothing is interpolated, so a thin plume narrower than the slice
 //! gap can be under-drawn. More layers cost more quads.
@@ -27,9 +34,13 @@ const CELLS: f64 = 48.0;
 /// Air whose share of the air's own span (ambient to the hot end of the air)
 /// is below this is not drawn.
 const FLOOR: f32 = 0.04;
-/// Most opaque a single layer gets at full opacity and full heat. The
-/// stack of layers adds up, so the full setting has to be plainly visible.
+/// Opacity of a layer that is one `LAYERS`th of the cabinet's longest side
+/// thick, at full opacity and full heat. It fixes the absorption per
+/// millimetre, the same on every axis and for any layer count.
 const LAYER_ALPHA: f32 = 0.55;
+/// Extra absorption at the very hottest air, as a multiple of the absorption
+/// at the top of the scale (hot spots become solid and bright).
+const HOT_GAIN: f32 = 2.5;
 /// The hot end of the cloud's opacity is this share of the air cells (by
 /// temperature): a plume in a few cells does not wash the rest out.
 const HOT_END_SHARE: f64 = 0.97;
@@ -59,6 +70,28 @@ pub(crate) fn air_hot_end(snap: &CfdSnapshot, lo: f64) -> f64 {
     air.sort_by(f32::total_cmp);
     let at = ((air.len() - 1) as f64 * HOT_END_SHARE).round() as usize;
     f64::from(air[at]).max(lo + 1.0)
+}
+
+/// The hottest air in the snapshot, at least `hot_end`.
+pub(crate) fn air_peak(snap: &CfdSnapshot, hot_end: f64) -> f64 {
+    snap.material
+        .iter()
+        .zip(&snap.temperature_c)
+        .filter(|(m, _)| **m == 0)
+        .map(|(_, t)| f64::from(*t))
+        .filter(|t| t.is_finite())
+        .fold(hot_end, f64::max)
+}
+
+/// Colour of air at `temp`: the ramp up to the top of the cloud's scale, then
+/// a blend to white over the extension up to `peak`.
+fn cloud_rgb(share: f32, hot: f32) -> [u8; 3] {
+    let base = heat::ramp(share.clamp(0.0, 1.0));
+    if hot <= 0.0 {
+        return base;
+    }
+    let h = hot.clamp(0.0, 1.0);
+    base.map(|c| (f32::from(c) + (255.0 - f32::from(c)) * h).round() as u8)
 }
 
 /// The way the camera looks, reduced to the axis the stack is cut across and
@@ -120,6 +153,7 @@ pub(crate) fn mesh(
         return None;
     }
     let hot_end = air_hot_end(snap, range.lo);
+    let peak = air_peak(snap, hot_end);
     let gamma = GAMMA_FLAT + (GAMMA_STRONG - GAMMA_FLAT) * contrast.clamp(0.0, 1.0);
     let axis = view.axis;
     let edges = match axis {
@@ -129,15 +163,25 @@ pub(crate) fn mesh(
     };
     let (lo, hi) = (edges[0], edges[edges.len() - 1]);
     let window = cfd::whole_window(snap, axis);
-    let cell = (window.w.max(window.h) / CELLS).max(2.0);
+    // Same in-plane resolution and absorption on every axis.
+    let longest = [Axis::X, Axis::Y, Axis::Z]
+        .into_iter()
+        .map(|a| {
+            let w = cfd::whole_window(snap, a);
+            w.w.max(w.h)
+        })
+        .fold(0.0_f64, f64::max);
+    let cell = (longest / CELLS).max(2.0);
+    let sigma = -(1.0 - f64::from(LAYER_ALPHA)).ln() / (longest / LAYERS as f64);
+    let thickness = (hi - lo) / layers as f64;
     let mut m = OverlayMesh {
         translucent: true,
         order: -1,
         ..Default::default()
     };
-    // Each layer stands for 1/layers of the depth; fewer layers need more
-    // opacity each to keep the total the same.
-    let per_layer = LAYER_ALPHA * (LAYERS as f32 / layers as f32).min(2.0);
+    // Absorption of one layer: a fixed amount per millimetre of air times the
+    // layer's thickness, so fewer or thicker layers absorb the same in total.
+    let per_layer = (sigma * thickness) as f32;
     for n in 0..layers {
         // Far to near: the camera on the high side sees low offsets last.
         let n = if view.high_side { n } else { layers - 1 - n };
@@ -173,9 +217,15 @@ pub(crate) fn mesh(
                 }
                 // Eases in from the floor so the cloud has no hard edge.
                 let k = ((share - FLOOR) / (1.0 - FLOOR)).clamp(0.0, 1.0);
-                let a = (opacity.clamp(0.0, 1.0) * per_layer * k.powf(gamma) * 255.0)
-                    .round()
-                    .clamp(0.0, 255.0) as u8;
+                // Past the top of the scale: 0 to 1 up to the hottest air.
+                let hot = if temp > hot_end && peak > hot_end {
+                    ((temp - hot_end) / (peak - hot_end)) as f32
+                } else {
+                    0.0
+                };
+                let tau =
+                    opacity.clamp(0.0, 1.0) * per_layer * k.powf(gamma) * (1.0 + HOT_GAIN * hot);
+                let a = ((1.0 - (-tau).exp()) * 255.0).round().clamp(0.0, 255.0) as u8;
                 if a == 0 {
                     continue;
                 }
@@ -183,7 +233,7 @@ pub(crate) fn mesh(
                 // (its key sits in the Heat strip): on the shared scale, which
                 // runs up to the devices, ordinary warm air is a dark purple on
                 // a dark background and cannot be told apart.
-                let rgb = heat::ramp(share.clamp(0.0, 1.0));
+                let rgb = cloud_rgb(share, hot);
                 let colour = [rgb[0], rgb[1], rgb[2], a];
                 let (u0, v0) = (
                     window.u0 + c as f64 * g.cell_w,
@@ -303,6 +353,117 @@ mod tests {
         let s = snapshot();
         let hot = air_hot_end(&s, 20.0);
         assert!(hot >= 21.0 && hot <= f64::from(s.max_temperature_c()));
+    }
+
+    /// Every air cell at `t`, apart from one cell at `peak` (if any).
+    fn uniform(t: f32, peak: Option<f32>) -> CfdSnapshot {
+        let mut s = snapshot();
+        for (i, v) in s.temperature_c.iter_mut().enumerate() {
+            *v = t;
+            if i == 0 {
+                continue;
+            }
+        }
+        if let Some(p) = peak {
+            // A few cells in the middle of the box.
+            let n = s.temperature_c.len();
+            for i in (n / 2)..(n / 2 + 40) {
+                if s.material[i] == 0 {
+                    s.temperature_c[i] = p;
+                }
+            }
+        }
+        s
+    }
+
+    /// Absorption per millimetre of depth recovered from the alpha of the
+    /// first quad of the mesh.
+    fn absorption(s: &CfdSnapshot, axis: Axis, layers: usize) -> f64 {
+        let m = mesh(s, place(), RANGE, view(axis, true), 1.0, layers, 1.0).unwrap();
+        let a = f64::from(m.colors[0][3]) / 255.0;
+        let depth = match axis {
+            Axis::X => 100.0,
+            Axis::Y => 80.0,
+            Axis::Z => 60.0,
+        };
+        -(1.0 - a).ln() * layers as f64 / depth
+    }
+
+    #[test]
+    fn the_cloud_has_the_same_density_from_every_side_and_layer_count() {
+        // Hot everywhere: the colour scale is saturated on all axes.
+        let s = uniform(30.0, None);
+        let r = absorption(&s, Axis::Z, 16);
+        for axis in [Axis::X, Axis::Y, Axis::Z] {
+            for layers in [8, 16, 32] {
+                let k = absorption(&s, axis, layers);
+                assert!((k / r - 1.0).abs() < 0.04, "{axis:?} {layers}: {k} vs {r}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_same_cell_count_per_side_on_every_axis() {
+        let s = uniform(30.0, None);
+        let quads = |axis| {
+            let m = mesh(&s, place(), RANGE, view(axis, true), 1.0, 8, 1.0).unwrap();
+            // Quad edge in mm in the slice plane.
+            let e = m.positions[1] - m.positions[0];
+            e.length().max((m.positions[3] - m.positions[0]).length())
+        };
+        let (a, b) = (quads(Axis::X), quads(Axis::Z));
+        // Cells snap to the solver grid, so allow a few percent.
+        assert!((a / b - 1.0).abs() < 0.05, "{a} vs {b}");
+    }
+
+    #[test]
+    fn extreme_hot_spots_are_brighter_and_more_solid_than_the_top_of_the_scale() {
+        // Air at 30 C with a few cells at 120 C.
+        let s = uniform(30.0, Some(120.0));
+        let m = mesh(&s, place(), RANGE, view(Axis::Z, true), 1.0, 16, CONTRAST).unwrap();
+        let top_of_scale = heat::ramp(1.0);
+        let lum = |c: [u8; 4]| u32::from(c[0]) + u32::from(c[1]) + u32::from(c[2]);
+        let brightest = m.colors.iter().max_by_key(|c| lum(**c)).unwrap();
+        let ordinary = m.colors.iter().min_by_key(|c| lum(**c)).unwrap();
+        assert!(lum(*brightest) > lum([top_of_scale[0], top_of_scale[1], top_of_scale[2], 0]));
+        assert!(brightest[2] > top_of_scale[2] + 40, "{brightest:?}");
+        let alpha = |c: &[u8; 4]| c[3];
+        assert!(alpha(brightest) > alpha(ordinary));
+        // Without a hot spot nothing is white.
+        let plain = mesh(
+            &uniform(30.0, None),
+            place(),
+            RANGE,
+            view(Axis::Z, true),
+            1.0,
+            16,
+            CONTRAST,
+        )
+        .unwrap();
+        assert!(plain.colors.iter().all(|c| c[..3] != [255, 255, 255]));
+    }
+
+    #[test]
+    fn hotter_extreme_air_gets_whiter_and_never_dimmer() {
+        let at = |t| {
+            let m = mesh(
+                &uniform(30.0, Some(t)),
+                place(),
+                RANGE,
+                view(Axis::Z, true),
+                1.0,
+                16,
+                CONTRAST,
+            )
+            .unwrap();
+            m.colors
+                .iter()
+                .map(|c| (u32::from(c[0]) + u32::from(c[1]) + u32::from(c[2]), c[3]))
+                .max()
+                .unwrap()
+        };
+        assert_eq!(at(30.0).0, at(30.0).0);
+        assert!(at(120.0).1 >= at(60.0).1);
     }
 
     #[test]
