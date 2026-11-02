@@ -8,6 +8,7 @@
 use eframe::egui;
 use novo_layout::heat::HeatPlace;
 use novo_layout::rules::{Class, HotRule, KindRule, RailUse, RuleSet, Zone};
+use novo_layout::surface_rules::{SurfaceRule, SurfaceRules};
 
 use super::dialog_ui;
 
@@ -361,8 +362,13 @@ fn add_rule(rules: &mut RuleSet) {
 }
 
 /// Draws the rules. True when the rule set changed.
-pub(super) fn show(ui: &mut egui::Ui, rules: &mut RuleSet) -> bool {
+pub(super) fn show(
+    ui: &mut egui::Ui,
+    rules: &mut RuleSet,
+    surfaces: Option<&SurfaceRules>,
+) -> (bool, Option<Option<String>>) {
     let mut changed = false;
+    let mut surface_edit = None;
     dialog_ui::hint(
         ui,
         "Place all builds the plate from the top down, one row of devices per rail. \
@@ -397,6 +403,10 @@ pub(super) fn show(ui: &mut egui::Ui, rules: &mut RuleSet) -> bool {
     if novo_theme::widgets::ghost_button(ui, "Add a kind of device").clicked() {
         add_rule(rules);
         changed = true;
+    }
+
+    if let Some(surfaces) = surfaces {
+        surface_edit = show_surfaces(ui, surfaces);
     }
 
     dialog_ui::section(ui, "Spacing", false);
@@ -534,7 +544,114 @@ pub(super) fn show(ui: &mut egui::Ui, rules: &mut RuleSet) -> bool {
             0.0..=500.0,
         );
     }
-    changed
+    (changed, surface_edit)
+}
+
+/// The surface rules as the property text (`door: H S P`).
+pub(super) fn surface_text(rules: &SurfaceRules) -> String {
+    let mut out = String::new();
+    for r in &rules.rules {
+        out.push_str(&format!("{}: {}\n", r.surface, r.codes.join(" ")));
+    }
+    out
+}
+
+/// One sentence for a surface rule.
+pub(super) fn surface_sentence(rule: &SurfaceRule) -> String {
+    let kinds: Vec<&str> = rule.codes.iter().map(|c| code_name(c)).collect();
+    format!(
+        "Devices that are {} go to the {} instead of the mounting plate.",
+        kinds.join(", "),
+        rule.surface
+    )
+}
+
+/// The "Door and other surfaces" cards. Returns the new property text when
+/// the person changed something (`Some(None)`: back to KoperCAD's default).
+pub(super) fn show_surfaces(ui: &mut egui::Ui, rules: &SurfaceRules) -> Option<Option<String>> {
+    let mut edited = rules.clone();
+    let mut changed = false;
+    let mut reset = false;
+    dialog_ui::section(ui, "Door and other surfaces", false);
+    dialog_ui::hint(
+        ui,
+        if rules.standard {
+            "This cabinet uses KoperCAD's default: pilot devices (push buttons, lamps, meters) go on the door, everything else on the plate. Change a card to make your own rules for this cabinet."
+        } else {
+            "These rules are saved with this cabinet. A device can also name its own surface, which wins."
+        },
+    );
+    let mut delete = None;
+    for (i, rule) in edited.rules.iter_mut().enumerate() {
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            dialog_ui::hint(ui, &surface_sentence(rule));
+            ui.horizontal(|ui| {
+                ui.label("Goes to");
+                let id = ui.id().with(("surface", i));
+                let mut name: String = ui.data(|d| d.get_temp(id)).unwrap_or_else(|| rule.surface.clone());
+                let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(90.0));
+                if r.has_focus() {
+                    ui.data_mut(|d| d.insert_temp(id, name.clone()));
+                } else {
+                    ui.data_mut(|d| d.remove_temp::<String>(id));
+                }
+                if r.lost_focus() && !name.trim().is_empty() && name.trim().to_ascii_lowercase() != rule.surface {
+                    rule.surface = name.trim().to_ascii_lowercase();
+                    changed = true;
+                }
+                dialog_ui::help(ui, "The name of a surface of this cabinet: door, side, roof... Press Enter to keep it. A name the cabinet does not have leaves its devices on the plate and says so.");
+            });
+            ui.horizontal(|ui| {
+                ui.label("Letters");
+                let id = ui.id().with(("surface_codes", i));
+                let mut text: String = ui.data(|d| d.get_temp(id)).unwrap_or_else(|| rule.codes.join(", "));
+                let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(120.0));
+                if r.has_focus() {
+                    ui.data_mut(|d| d.insert_temp(id, text.clone()));
+                } else {
+                    ui.data_mut(|d| d.remove_temp::<String>(id));
+                }
+                if r.lost_focus() {
+                    let codes: Vec<String> = text
+                        .split([',', ' ', ';'])
+                        .map(|c| c.trim().to_ascii_uppercase())
+                        .filter(|c| !c.is_empty())
+                        .collect();
+                    if !codes.is_empty() && codes != rule.codes {
+                        rule.codes = codes;
+                        changed = true;
+                    }
+                }
+                dialog_ui::help(ui, "The first letters of the device tags, e.g. H for lamps, S for switches and buttons, P for meters. Press Enter to keep them.");
+                if ui.small_button("Delete").on_hover_text("Remove this rule").clicked() {
+                    delete = Some(i);
+                }
+            });
+        });
+    }
+    if let Some(i) = delete {
+        edited.rules.remove(i);
+        changed = true;
+    }
+    ui.horizontal(|ui| {
+        if novo_theme::widgets::ghost_button(ui, "Add a surface rule").clicked() {
+            edited.rules.push(SurfaceRule {
+                surface: "door".to_owned(),
+                codes: vec!["Z".to_owned()],
+            });
+            changed = true;
+        }
+        if !rules.standard
+            && novo_theme::widgets::ghost_button(ui, "Back to KoperCAD's default").clicked()
+        {
+            reset = true;
+        }
+    });
+    if reset {
+        return Some(None);
+    }
+    changed.then(|| Some(surface_text(&edited)))
 }
 
 #[cfg(test)]
@@ -569,6 +686,21 @@ mod tests {
     }
 
     #[test]
+    fn surface_rules_read_back_from_their_text() {
+        let standard = SurfaceRules::standard();
+        let text = surface_text(&standard);
+        assert_eq!(text, "door: H S P\n");
+        let (back, problems) = SurfaceRules::parse(&text);
+        assert!(problems.is_empty());
+        assert_eq!(back.rules, standard.rules);
+        let said = surface_sentence(&standard.rules[0]);
+        assert!(
+            said.contains("lamps and signals") && said.contains("door"),
+            "{said}"
+        );
+    }
+
+    #[test]
     fn a_new_rule_goes_before_the_everything_else_rule() {
         let mut rules = RuleSet::standard();
         let n = rules.rules.len();
@@ -592,7 +724,7 @@ mod tests {
         let before = rules.clone();
         let mut changed = true;
         ctx.run_ui(egui::RawInput::default(), |ui| {
-            changed = show(ui, &mut rules);
+            changed = show(ui, &mut rules, None).0;
         })
         .textures_delta
         .clear();

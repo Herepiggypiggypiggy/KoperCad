@@ -174,6 +174,10 @@ pub struct SchematicView {
     pub yield_escape: bool,
     /// The press that closed a popup, until its release.
     swallow: bool,
+    /// The Corners/Lines switch on the wire guide, as drawn last frame, and
+    /// whether a press began on it.
+    guide_pill: Option<egui::Rect>,
+    guide_pill_down: bool,
     /// The move in progress was picked up by dragging a selected object (no
     /// M key); releasing drops it.
     drag_move: bool,
@@ -363,6 +367,8 @@ impl SchematicView {
             move_carries: true,
             yield_escape: false,
             swallow: false,
+            guide_pill: None,
+            guide_pill_down: false,
             drag_move: false,
             wire_part: None,
             part_drag: None,
@@ -963,9 +969,14 @@ impl SchematicView {
     /// The three steps of a wire in words, over the top of the drawing while
     /// the wire tool is on, with the step the person is at lit. The keys
     /// stay in the status bar; this says what to do.
-    fn paint_wire_guide(&self, ui: &egui::Ui) {
+    fn paint_wire_guide(&mut self, ui: &egui::Ui) {
         let Some(step) = self.editor.wire_step() else {
+            self.guide_pill = None;
             return;
+        };
+        let (current, other) = match self.editor.wire_mode() {
+            crate::tool::WiringMode::Corners => ("Corners", "Lines"),
+            crate::tool::WiringMode::Lines => ("Lines", "Corners"),
         };
         let pins = match self.free_pin_count {
             0 => "no free pins".to_owned(),
@@ -977,6 +988,7 @@ impl SchematicView {
             "2  Click empty space to turn".to_owned(),
             "3  Click a pin to finish".to_owned(),
             pins,
+            format!("Shape: {current} · click for {other}"),
         ];
         let painter = ui.painter_at(self.rect);
         let visuals = ui.visuals();
@@ -1022,8 +1034,36 @@ impl SchematicView {
             egui::StrokeKind::Inside,
         );
         let mut x = frame.left() + pad.x;
-        for g in galleys {
+        let last = galleys.len() - 1;
+        for (i, g) in galleys.into_iter().enumerate() {
             let w = g.size().x;
+            if i == last {
+                // The switch: a framed word, so it reads as a button.
+                let pill = egui::Rect::from_min_size(
+                    egui::pos2(x - 6.0, frame.top() + 3.0),
+                    egui::vec2(w + 12.0, frame.height() - 6.0),
+                );
+                let over = ui
+                    .input(|i| i.pointer.hover_pos())
+                    .is_some_and(|p| pill.contains(p));
+                painter.rect(
+                    pill,
+                    4.0,
+                    if over {
+                        visuals.widgets.hovered.weak_bg_fill
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    },
+                    egui::Stroke::new(1.0, accent),
+                    egui::StrokeKind::Inside,
+                );
+                if over {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                self.guide_pill = Some(pill);
+                painter.galley(egui::pos2(x, frame.top() + pad.y), g, visuals.text_color());
+                break;
+            }
             painter.galley(egui::pos2(x, frame.top() + pad.y), g, visuals.text_color());
             x += w + gap;
         }
@@ -1119,6 +1159,22 @@ impl SchematicView {
         let popup_before = self.popup_open();
         if popup_before && ui.input(|i| i.pointer.any_pressed()) {
             self.swallow = true;
+        }
+        // The Corners/Lines switch on the wire guide takes its own click: the
+        // press must not start or end a wire under it.
+        if let Some(pill) = self.guide_pill {
+            let over = ui.input(|i| i.pointer.interact_pos().is_some_and(|p| pill.contains(p)));
+            if over && ui.input(|i| i.pointer.any_pressed()) {
+                self.swallow = true;
+                self.guide_pill_down = true;
+            }
+            if self.guide_pill_down && ui.input(|i| i.pointer.any_released()) {
+                self.guide_pill_down = false;
+                if over {
+                    // The shell keeps the person's wiring mode in its settings.
+                    self.commands.push("wire.mode");
+                }
+            }
         }
         self.canvas.interaction.select =
             !self.editor.tool_active() && !popup_before && !self.swallow;

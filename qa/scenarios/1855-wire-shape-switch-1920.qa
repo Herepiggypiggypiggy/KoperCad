@@ -1,0 +1,23 @@
+@title Wiring guide: click the Shape switch to change between Corners and Lines (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# The strip at the bottom of the drawing ends in a framed switch that names the current wire shape and the other one;
+# clicking it switches without starting or ending a wire (nothing is drawn).
+click_text "New project"
+wait 20
+key w
+wait 3
+move 800 450
+wait 3
+shot shape-corners
+expect_scene "wire"
+click 1402 1032
+wait 5
+move 800 450
+wait 3
+shot shape-lines
+click 1402 1032
+wait 5
+move 800 450
+wait 3
+shot shape-corners-again
