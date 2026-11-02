@@ -1,0 +1,24 @@
+@title The Defects and walk-throughs card docks at the right edge, folds and unfolds (1366x768)
+@area Windows
+@sizes 1366x768
+open qa/fixtures/closed-winch-walk.novo
+wait 20
+click_text Simulate
+wait 5
+click_text "Defects and walk-throughs"
+wait 30
+shot defects-floating
+# The card's title bar has a dock-left and a dock-right button.
+click 1339 72
+wait 40
+expect "Inject a defect"
+shot defects-docked
+check_layout
+click 1063 54
+wait 30
+expect_not "Inject a defect"
+shot defects-folded
+click 1063 54
+wait 30
+expect "Inject a defect"
+shot defects-unfolded

@@ -1,0 +1,25 @@
+@title Save changes? is a question: it stays modal with no dock buttons (1366x768)
+@area Windows
+@sizes 1366x768
+fresh
+key ctrl+n
+wait 20
+key q
+wait 4
+text circuit breaker
+wait 6
+click_text "Miniature circuit breaker, 3-pole" Button
+wait 6
+click 450 200
+wait 6
+key Escape
+wait 10
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+expect "Save changes?"
+shot save-changes-modal
+check_layout

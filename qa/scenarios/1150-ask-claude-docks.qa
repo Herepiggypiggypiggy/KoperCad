@@ -1,0 +1,22 @@
+@title Ask Claude opens docked in the right strip (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 40
+expect "Claude is off"
+shot ask-claude-docked
+check_layout
+click 1063 54
+wait 30
+expect_not "Claude is off"
+shot ask-claude-folded
+click 1063 54
+wait 30
+expect "Claude is off"
+shot ask-claude-unfolded

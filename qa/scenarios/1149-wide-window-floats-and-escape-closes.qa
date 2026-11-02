@@ -1,0 +1,18 @@
+@title Print preview (a wide window) stays floating, and Escape closes it (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 5
+text print
+wait 10
+key enter
+wait 40
+expect "Print preview and plot sets"
+shot print-preview-floating
+check_layout
+key Escape
+wait 20
+expect_not "Print preview and plot sets"
+shot closed-with-escape
