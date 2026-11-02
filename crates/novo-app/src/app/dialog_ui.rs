@@ -23,12 +23,19 @@ pub(super) fn hint(ui: &mut egui::Ui, text: &str) {
     );
 }
 
-/// A setting's name and its help line.
+/// A "?" that opens the explanation in a popup: long help stays out of the window body.
+pub(super) fn help(ui: &mut egui::Ui, text: &str) {
+    widgets::help_mark(ui, text);
+}
+
+/// A short label with its explanation behind a "?" on the same row.
+pub(super) fn explained(ui: &mut egui::Ui, label: &str, text: &str) {
+    widgets::labeled_help(ui, label, text);
+}
+
+/// A setting's name with its help behind a "?".
 pub(super) fn setting(ui: &mut egui::Ui, label: &str, help: &str) {
-    ui.label(label);
-    if !help.is_empty() {
-        hint(ui, help);
-    }
+    widgets::labeled_help(ui, label, help);
     ui.add_space(4.0);
 }
 

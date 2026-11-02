@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use novo_view3d::{ItemId, Layers, Section, SectionAxis};
 
-use super::view3d_options::{ALL, Home, Values, ViewOption};
+use super::view3d_options::{Values, ViewOption};
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
@@ -192,13 +192,11 @@ pub(super) fn toolbar(
     values: &mut Values,
     limit: Option<f64>,
     views: &[crate::settings::CameraBookmark],
-    selected: bool,
     section: &mut Option<Section>,
     bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
     status: &mut dyn FnMut(&mut egui::Ui),
-) -> (Changed, Option<&'static str>) {
+) -> Changed {
     let mut changed = Changed::default();
-    let mut command = None;
     // Leave the view cube (top right) uncovered.
     let width = TOOLBAR_WIDTH
         .min(
@@ -225,91 +223,14 @@ pub(super) fn toolbar(
     panel.show(ctx, |ui| {
         status(ui);
         ui.horizontal_wrapped(|ui| {
-            // Layers: things that are drawn or not, in one popover.
-            let n_on = ALL
-                .iter()
-                .filter(|s| matches!(s.home, Home::Layer))
-                .filter(|s| values.get(s.option))
-                .filter(|s| s.option != ViewOption::Occlusion || controls.ssao_available)
-                .count();
-            let config = egui::containers::menu::MenuConfig::new()
-                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
-            egui::containers::menu::MenuButton::new(format!("Layers ({n_on})"))
-                .config(config)
-                .ui(ui, |ui| {
-                    for spec in ALL.iter().filter(|s| matches!(s.home, Home::Layer)) {
-                        match spec.option {
-                            ViewOption::Surfaces => {
-                                if let Some(text) = &controls.models_text {
-                                    ui.label(
-                                        egui::RichText::new(text)
-                                            .small()
-                                            .color(crate::theme::ui_palette().text_secondary),
-                                    );
-                                }
-                            }
-                            ViewOption::Occlusion if !controls.ssao_available => {
-                                ui.add_enabled_ui(false, |ui| {
-                                    novo_theme::widgets::filter_toggle(ui, spec.label, false)
-                                        .on_disabled_hover_text(
-                                            "Needs a discrete GPU; this one cannot draw ambient occlusion",
-                                        );
-                                });
-                                continue;
-                            }
-                            _ => {}
-                        }
-                        let before = values.get(spec.option);
-                        toggle(ui, values, spec.option);
-                        // These five rebuild the scene; the rest are drawn.
-                        if before != values.get(spec.option)
-                            && matches!(
-                                spec.option,
-                                ViewOption::Enclosure
-                                    | ViewOption::Door
-                                    | ViewOption::Wires
-                                    | ViewOption::DeviceShapes
-                                    | ViewOption::SlottedDucts
-                            )
-                        {
-                            changed.layers = true;
-                        }
-                    }
-                    ui.separator();
-                    ui.label(
-                        egui::RichText::new("Walk through")
-                            .small()
-                            .color(crate::theme::ui_palette().text_secondary),
-                    );
-                    for spec in ALL.iter().filter(|s| matches!(s.home, Home::Walk)) {
-                        toggle(ui, values, spec.option);
-                    }
-                    ui.separator();
-                    for spec in ALL.iter().filter(|s| matches!(s.home, Home::Preference)) {
-                        toggle(ui, values, spec.option);
-                    }
-                });
-            ui.separator();
-            // Modes and overlays: what the pointer does, what sits at the side.
-            // A mode, not a layer: keeps the copper wash of a tool.
-            let moving = values.get(ViewOption::Move);
-            let mode = if moving { "✔ Move" } else { "Move" };
-            if ui
-                .selectable_label(moving, mode)
-                .on_hover_text(ViewOption::Move.spec().hint)
-                .clicked()
-            {
-                values.set(ViewOption::Move, !moving);
-            }
-            let heat = toggle(ui, values, ViewOption::Heat);
-            super::cabinet_bar::note_ctx(ui.ctx(), "view3d.heat", "Heat button", &heat);
-            toggle(ui, values, ViewOption::Emc);
+            // Layers, Move, Heat, EMC, Measure, Dimensions and Select and
+            // hide live on the 3D rail; this strip keeps only what the rail
+            // cannot hold: the simulation status, saved views, the section
+            // plane while it is on, the door and the quality warning.
             changed.views = super::view3d_views::menu(ui, views);
-            command = selection_menu(ui, selected, controls.hidden.len());
-            section_menu(ui, values, section, bounds);
-            toggle(ui, values, ViewOption::Dimensions);
-            // A tool, not a layer: next to the other measuring control.
-            toggle(ui, values, ViewOption::Measure);
+            if values.get(ViewOption::Section) {
+                section_menu(ui, values, section, bounds);
+            }
             if controls.reduced {
                 ui.label(
                     egui::RichText::new("Reduced quality")
@@ -368,44 +289,7 @@ pub(super) fn toolbar(
             }
         });
     });
-    (changed, command)
-}
-
-/// The Select and Hide menu: pick every device, rail or duct, hide or isolate
-/// the selection, bring everything back. Returns the command asked for.
-fn selection_menu(ui: &mut egui::Ui, selected: bool, hidden: usize) -> Option<&'static str> {
-    let mut command = None;
-    let title = if hidden > 0 {
-        format!("Select and hide ({hidden} hidden)")
-    } else {
-        "Select and hide".to_owned()
-    };
-    ui.menu_button(title, |ui| {
-        let mut row = |ui: &mut egui::Ui, label: &str, id: &'static str, enabled: bool| {
-            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
-                command = Some(id);
-                ui.close();
-            }
-        };
-        row(ui, "Select all devices", "view.3d_select_devices", true);
-        row(ui, "Select all rails", "view.3d_select_rails", true);
-        row(ui, "Select all ducts", "view.3d_select_ducts", true);
-        ui.separator();
-        row(ui, "Hide selection   Ctrl+H", "view.3d_hide", selected);
-        row(
-            ui,
-            "Isolate selection   Ctrl+I",
-            "view.3d_isolate",
-            selected,
-        );
-        row(
-            ui,
-            "Show all   Ctrl+Shift+H",
-            "view.3d_show_all",
-            hidden > 0,
-        );
-    });
-    command
+    changed
 }
 
 /// The Section menu: a plane through the enclosure that cuts the front of
@@ -472,30 +356,6 @@ fn section_menu(
             }
         }
     });
-}
-
-/// A switch of the registry: neutral, with a tick when on, so it never relies
-/// on colour alone and never reads as copper. It edits the snapshot; the
-/// host writes the change to the option's owner.
-fn toggle(ui: &mut egui::Ui, values: &mut Values, option: ViewOption) -> egui::Response {
-    let on = values.get(option);
-    let spec = option.spec();
-    let mut response =
-        novo_theme::widgets::filter_toggle(ui, spec.label, on).on_hover_text(format!(
-            "{}: {}. {}",
-            if on { "On" } else { "Off" },
-            spec.hint,
-            if on {
-                "Click to turn it off."
-            } else {
-                "Click to turn it on."
-            }
-        ));
-    if response.clicked() {
-        values.set(option, !on);
-        response.mark_changed();
-    }
-    response
 }
 
 #[cfg(test)]

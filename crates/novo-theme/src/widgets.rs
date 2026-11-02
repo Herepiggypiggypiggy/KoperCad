@@ -257,6 +257,41 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str) -> Response {
     .on_hover_text(tooltip)
 }
 
+/// A small "?" that opens a popup with `text` when clicked. Explanation that would otherwise sit in the
+/// window body goes here, so the window keeps short labels only.
+pub fn help_mark(ui: &mut Ui, text: &str) -> Response {
+    let p = Palette::of(ui);
+    let response = ui
+        .add(
+            Button::new(
+                RichText::new(crate::icons::QUESTION)
+                    .size(icon_size::BUTTON * 0.8)
+                    .color(p.text_secondary),
+            )
+            .frame_when_inactive(false)
+            .small(),
+        )
+        .on_hover_text("Help");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Help"));
+    egui::Popup::from_toggle_button_response(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .width(320.0)
+        .show(|ui| {
+            ui.add(Label::new(text).wrap());
+        });
+    response
+}
+
+/// A caption with its "?" help beside it on one row.
+pub fn labeled_help(ui: &mut Ui, label: &str, help: &str) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        if !help.is_empty() {
+            help_mark(ui, help);
+        }
+    });
+}
+
 /// An icon button that can be on: the icon turns copper on a copper wash.
 pub fn icon_toggle(ui: &mut Ui, icon: &str, on: bool, tooltip: &str) -> Response {
     let p = Palette::of(ui);

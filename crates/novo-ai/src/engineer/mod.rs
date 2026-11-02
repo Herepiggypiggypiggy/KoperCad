@@ -13,6 +13,7 @@
 //! - [`host`]: the tool host for a turn, and committing a change set.
 
 pub mod actions;
+pub mod cabinet;
 pub mod host;
 pub mod resolve;
 pub mod snapshot;
