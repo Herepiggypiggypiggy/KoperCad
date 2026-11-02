@@ -1,0 +1,32 @@
+@title Cabinet: Auto ducts puts a duct back between two rows that lost theirs (1366x768)
+@area Cabinet
+@sizes 1366x768
+# Plan qa/fixtures/cabinet-cooler-layout.novo has a duct between each pair of rows. The duct under the first
+# row is deleted, then Auto ducts previews a new one there, Accept stores it, Ctrl+Z takes it back.
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+click 780 241
+wait 6
+shot duct-selected
+key Delete
+wait 10
+shot duct-deleted
+key ctrl+k
+wait 3
+text auto ducts
+wait 4
+key Enter
+wait 10
+expect "Preview (Auto ducts)"
+expect "1 duct(s) would be added"
+shot ducts-preview
+key Enter
+wait 10
+shot ducts-accepted
+check_layout
+key ctrl+z
+wait 10
+shot ducts-undone
