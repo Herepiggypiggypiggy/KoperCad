@@ -1,0 +1,92 @@
+@title Cabinet: the Arrange card, previews with their notes, Cancel stores nothing, Accept is one undo step (1920x1080)
+@area Cabinet
+@sizes 1920x1080
+# Where it lives: the Arrange entry of the Cabinet left rail (second tool), Ctrl K, and the right-click
+# menu of the plate. Plan: qa/fixtures/cabinet-cooler-layout.novo (22 devices, all on rails). K1 is dragged
+# off its rail first, so Autoplace on rail and Auto rails have something to do. Coordinates are for 1920x1080.
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+click 24 101
+wait 6
+expect "Autoplace on rail"
+expect "Auto ducts"
+expect "Auto rails"
+shot arrange-card
+key Escape
+wait 4
+click 1350 640 right
+wait 6
+expect "Autoplace on rail"
+expect "Close up gaps"
+shot plate-menu
+key Escape
+wait 4
+key ctrl+k
+wait 3
+text autoplace
+wait 4
+shot palette-autoplace
+key Escape
+wait 4
+drag 1098 337 1300 520
+wait 10
+shot k1-off-the-rail
+key ctrl+k
+wait 3
+text auto rails
+wait 4
+key Enter
+wait 10
+shot auto-rails
+key Escape
+wait 5
+key ctrl+k
+wait 3
+text autoplace
+wait 4
+key Enter
+wait 10
+expect "Preview (Autoplace on rail)"
+expect "not a clearance check or a heat calculation"
+expect_not "heat-aware"
+shot autoplace-preview
+key Enter
+wait 10
+shot autoplace-accepted
+key ctrl+z
+wait 10
+shot autoplace-undone
+key ctrl+k
+wait 3
+text autogroup
+wait 4
+key Enter
+wait 10
+shot group-preview
+key Escape
+wait 5
+shot group-cancelled
+key ctrl+k
+wait 3
+text close up gaps
+wait 4
+key Enter
+wait 10
+shot tight-preview
+key Enter
+wait 10
+shot tight-accepted
+check_layout
+key ctrl+z
+wait 10
+shot tight-undone
+key ctrl+k
+wait 3
+text auto ducts
+wait 4
+key Enter
+wait 10
+shot ducts-note

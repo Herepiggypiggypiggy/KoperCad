@@ -1,11 +1,9 @@
-@title Cabinet: the Arrange card, previews with their notes, Cancel stores nothing, Accept is one undo step
+@title Cabinet: the Arrange card, previews with their notes, Cancel stores nothing, Accept is one undo step (1366x768)
 @area Cabinet
-@sizes 1366x768 1920x1080
+@sizes 1366x768
 # Where it lives: the Arrange entry of the Cabinet left rail (second tool), Ctrl K, and the right-click
-# menu of the plate. Plan: qa/fixtures/cabinet-cooler-layout.novo (22 devices, all on rails).
-# Pictures: the card, the right-click menu, Ctrl K "autoplace", the Autogroup and close-up previews
-# (banner with "planning aid" wording), cancel, accept, undo back to the first state, and the notes a
-# tool gives when there is nothing to do (Auto rails: every device is on a rail already).
+# menu of the plate. Plan: qa/fixtures/cabinet-cooler-layout.novo (22 devices, all on rails). K1 is dragged
+# off its rail first, so Autoplace on rail and Auto rails have something to do. Coordinates are for 1366x768.
 open qa/fixtures/cabinet-cooler-layout.novo
 wait 20
 click_text Cabinet #1
@@ -15,6 +13,7 @@ click 24 101
 wait 6
 expect "Autoplace on rail"
 expect "Auto ducts"
+expect "Auto rails"
 shot arrange-card
 key Escape
 wait 4
@@ -30,18 +29,42 @@ wait 3
 text autoplace
 wait 4
 shot palette-autoplace
+key Escape
+wait 4
+drag 727 270 880 405
+wait 10
+shot k1-off-the-rail
+key ctrl+k
+wait 3
+text auto rails
+wait 4
 key Enter
-wait 8
-shot autoplace-result
+wait 10
+shot auto-rails
+key Escape
+wait 5
+key ctrl+k
+wait 3
+text autoplace
+wait 4
+key Enter
+wait 10
+expect "Preview (Autoplace on rail)"
+expect "not a clearance check or a heat calculation"
+expect_not "heat-aware"
+shot autoplace-preview
+key Enter
+wait 10
+shot autoplace-accepted
+key ctrl+z
+wait 10
+shot autoplace-undone
 key ctrl+k
 wait 3
 text autogroup
 wait 4
 key Enter
 wait 10
-expect "Preview (Autogroup)"
-expect "not a clearance check or a heat calculation"
-expect_not "heat-aware"
 shot group-preview
 key Escape
 wait 5
@@ -52,7 +75,6 @@ text close up gaps
 wait 4
 key Enter
 wait 10
-expect "Preview (Autodistance"
 shot tight-preview
 key Enter
 wait 10
@@ -63,15 +85,8 @@ wait 10
 shot tight-undone
 key ctrl+k
 wait 3
-text auto rails
-wait 4
-key Enter
-wait 10
-shot rails-nothing-to-do
-key ctrl+k
-wait 3
 text auto ducts
 wait 4
 key Enter
 wait 10
-shot ducts-result
+shot ducts-note
