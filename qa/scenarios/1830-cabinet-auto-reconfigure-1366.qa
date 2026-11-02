@@ -8,7 +8,7 @@ wait 20
 click_text Cabinet #1
 wait 30
 shot before
-drag 727 270 880 405
+drag 700 316 860 435
 wait 10
 shot k1-off-the-rail
 key ctrl+k
