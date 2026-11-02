@@ -106,6 +106,7 @@ pub(super) fn legend(ctx: &egui::Context, rect: Rect, d: &Diff, tag_of: &dyn Fn(
     .top(12.0)
     .fixed_open()
     .fit()
+    .dockable()
     .show(ctx, |ui| {
         ui.scope(|ui| {
             ui.set_width(160.0);

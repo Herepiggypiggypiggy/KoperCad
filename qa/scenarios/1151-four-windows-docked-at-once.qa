@@ -1,0 +1,31 @@
+@title Four command windows open at once stack in the right strip and each pane keeps a usable height (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 30
+key ctrl+k
+wait 4
+text standards check
+wait 6
+key Enter
+wait 30
+key ctrl+k
+wait 4
+text electrical inputs
+wait 6
+key Enter
+wait 30
+key ctrl+k
+wait 4
+text wire numbering
+wait 6
+key Enter
+wait 30
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 40
+shot four-windows
+check_layout

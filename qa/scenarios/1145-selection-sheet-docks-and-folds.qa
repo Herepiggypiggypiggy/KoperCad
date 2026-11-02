@@ -1,0 +1,22 @@
+@title Properties of the selection opens docked right, folds and unfolds (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 30
+click 353 228
+wait 20
+click_text Edit
+wait 6
+click_text "Properties of the selection"
+wait 30
+expect "Choose a part for all"
+shot sheet-docked
+check_layout
+click 1063 54
+wait 30
+expect_not "Choose a part for all"
+shot sheet-folded
+click 1063 54
+wait 30
+expect "Choose a part for all"
+shot sheet-unfolded

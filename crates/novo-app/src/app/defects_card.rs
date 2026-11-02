@@ -404,6 +404,7 @@ impl NovoApp {
         .top(offset)
         .fixed_open()
         .fit()
+        .dockable()
         .scrolls()
         .show(ctx, |ui| {
             draw_card(ui, defects, project, &poles, running, &mut actions);
