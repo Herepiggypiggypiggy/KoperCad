@@ -655,6 +655,9 @@ pub(super) struct Dialog<'a> {
 impl<'a> Dialog<'a> {
     pub(super) fn id(mut self, id: egui::Id) -> Self {
         self.id = id;
+        // A window with an id of its own keeps its dock place when its title
+        // changes (counts, names); one without is known by its title.
+        self.name = format!("window:{id:?}");
         self.window = self.window.id(id);
         self
     }
@@ -1165,7 +1168,10 @@ fn modal_impl<R: Default>(
             super::panel_dock::PaneOptions {
                 closable: true,
                 float_tip: "Float this window",
-                scrolls: own_scroll,
+                // The pane scrolls the whole form, footer buttons included:
+                // a form that lays itself out to fill a window would push
+                // its footer out of a narrow strip.
+                scrolls: true,
             },
             add,
         );

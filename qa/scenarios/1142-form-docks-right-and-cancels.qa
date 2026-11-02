@@ -1,0 +1,23 @@
+@title A settings form (Preferences) opens docked in the right strip, folds, and its close button cancels (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 30
+key ctrl+k
+wait 4
+text preferences
+wait 6
+key Enter
+wait 40
+expect "Appearance"
+shot form-docked
+check_layout
+click 1063 54
+wait 30
+expect_not "Appearance"
+shot form-folded
+check_layout
+click 1063 54
+wait 30
+expect "Appearance"
+shot form-unfolded

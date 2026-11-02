@@ -111,6 +111,14 @@ pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
     all.retain(|(n, _)| n != name);
     let mut floated = floated_list(ctx);
     floated.retain(|n| n != name);
+    // A window known by a changing title leaves entries behind: the lists
+    // keep the newest ones only.
+    if all.len() > MAX_ENTRIES {
+        all.remove(0);
+    }
+    if floated.len() > MAX_ENTRIES {
+        floated.remove(0);
+    }
     match slot {
         Some(slot) => all.push((name.to_owned(), slot.code())),
         // The person floated it: a window that docks by default stays out.
@@ -122,6 +130,9 @@ pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
     });
     ctx.request_repaint();
 }
+
+/// The most dock entries and floated names remembered.
+const MAX_ENTRIES: usize = 64;
 
 fn floated_id() -> egui::Id {
     egui::Id::new("dock_floated")

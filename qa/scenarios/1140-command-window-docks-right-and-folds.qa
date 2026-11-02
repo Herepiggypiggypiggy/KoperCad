@@ -1,0 +1,29 @@
+@title A command window opens docked in the right strip, folds up to its title, unfolds, and Escape leaves it docked (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 30
+key ctrl+k
+wait 4
+text standards check
+wait 6
+key Enter
+wait 40
+expect "Check against"
+shot docked-open
+check_layout
+# The fold arrow is the first button in the pane header.
+click 1063 54
+wait 30
+expect_not "Check against"
+shot folded
+check_layout
+click 1063 54
+wait 30
+expect "Check against"
+shot unfolded
+# Escape does not close a docked pane.
+key Escape
+wait 20
+expect "Check against"
+shot after-escape

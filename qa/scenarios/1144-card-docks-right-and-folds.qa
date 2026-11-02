@@ -1,0 +1,20 @@
+@title A card (Inspector) docked right folds up to its title and unfolds (1366x768)
+@area Windows
+@sizes 1366x768
+click_text "Open example"
+wait 30
+click 353 228
+wait 40
+# Dock the Inspector at the right edge (the same button as scenario 1132).
+click 1309 112
+wait 30
+shot card-docked
+check_layout
+click 1063 54
+wait 30
+shot card-folded
+check_layout
+click 1063 54
+wait 30
+shot card-unfolded
+check_layout
