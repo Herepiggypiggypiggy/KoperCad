@@ -241,7 +241,7 @@ impl NovoApp {
         if self.menu_names_shown() || !self.is_open() {
             return;
         }
-        let response = ui.add(egui::Button::new(icons::QUESTION).frame(false));
+        let response = super::top_bar::tile(ui, icons::QUESTION, Some("Help"), true);
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Help"));
         self.anchor_response("help.button", &response, "Help");
         if response.on_hover_text("Help and lessons").clicked() {
