@@ -61,6 +61,8 @@ fn machine_chip_label(summary: &str) -> String {
 
 /// A mode that is on, with the command that turns it off.
 pub(super) struct ModeChip {
+    /// Drawn in the error colour: something is injected or wrong.
+    pub(super) alert: bool,
     pub(super) label: String,
     pub(super) command: &'static str,
     hover: String,
@@ -96,6 +98,11 @@ impl NovoApp {
             }
         });
         let chips = self.mode_chips();
+        // The simulation status: a slot of the bar in the two cabinet views.
+        let sim = matches!(self.workspace(), Workspace::Cabinet | Workspace::View3d)
+            .then(|| self.cabinet.heat.sim_status());
+        let heat_visible = self.cabinet.heat.on;
+        let mut sim_ask = None;
         let saved = self.saved_state();
         let path = self.project_path.clone();
         let recent = self.recent_messages();
@@ -128,6 +135,12 @@ impl NovoApp {
                     }
                     for chip in &chips {
                         right += measure(&chip.label, small.clone()) + 24.0;
+                    }
+                    if let Some(status) = &sim {
+                        right += measure(
+                            &super::sim_chip::slot_label(status, heat_visible),
+                            small.clone(),
+                        ) + 24.0;
                     }
                     let room = (ui.available_width() - right)
                         .min(ui.available_width() * 0.5)
@@ -215,21 +228,30 @@ impl NovoApp {
                             ui.label(egui::RichText::new(values).monospace());
                         }
                         for chip in &chips {
-                            let button = egui::Button::new(
-                                egui::RichText::new(&chip.label)
-                                    .color(crate::theme::ui_palette().text_primary),
-                            )
+                            let button = egui::Button::new(egui::RichText::new(&chip.label).color(
+                                if chip.alert {
+                                    crate::theme::ui_palette().error
+                                } else {
+                                    crate::theme::ui_palette().text_primary
+                                },
+                            ))
                             .fill(crate::theme::ui_palette().control)
                             .small();
                             if ui.add(button).on_hover_text(&chip.hover).clicked() {
                                 run = Some(chip.command);
                             }
                         }
+                        if let Some(status) = &sim {
+                            sim_ask = super::sim_chip::bar_slot(ui, status, heat_visible);
+                        }
                     });
                 });
             });
         for (id, rect, label) in spots {
             self.anchor(id, rect, label);
+        }
+        if let Some(ask) = sim_ask {
+            super::sim_chip::apply(&mut self.cabinet.heat, ask);
         }
         if tool.refused
             && tool.text.chars().count() > REFUSAL_CARD_FROM
@@ -327,6 +349,7 @@ impl NovoApp {
         // The machine's choice is shown wherever the documents come from.
         if let Some(info) = self.machine_info() {
             chips.push(ModeChip {
+                alert: false,
                 label: machine_chip_label(&info.summary),
                 command: "project.options",
                 hover: format!(
@@ -341,6 +364,7 @@ impl NovoApp {
         }
         if !self.wb.marks {
             chips.push(ModeChip {
+                alert: false,
                 label: "Marks hidden".into(),
                 command: "view.toggle_marks",
                 hover: "Show the marks again".into(),
@@ -349,6 +373,7 @@ impl NovoApp {
         match self.settings.xref_view() {
             XrefView::Full => {}
             view => chips.push(ModeChip {
+                alert: false,
                 label: match view {
                     XrefView::Overlap => "References fade on overlap",
                     XrefView::Faded => "References faded",
@@ -362,6 +387,7 @@ impl NovoApp {
         }
         if self.page_hides_references() {
             chips.push(ModeChip {
+                alert: false,
                 label: "Page references hidden".into(),
                 command: "view.hide_references_page",
                 hover: "Show this page's cross references again. They always print".into(),
@@ -369,13 +395,45 @@ impl NovoApp {
         }
         if let Some(tag) = self.selected_device_hiding_references() {
             chips.push(ModeChip {
+                alert: false,
                 label: format!("{tag} references hidden"),
                 command: "view.hide_references_device",
                 hover: format!("Show the cross references of {tag} again. They always print"),
             });
         }
+        // A defect injected into the plant: the strip over the sheet moved here.
+        if self.wb.live.on
+            && let Some((count, first)) = self.wb.live.defects.summary()
+        {
+            let mut label = format!(
+                "{} DEFECT INJECTED ({count})",
+                novo_theme::icons::status::WARNING
+            );
+            if count > 1 {
+                label.push_str(&format!(": {first}"));
+            }
+            let mut hover = format!("The plant is faulted: {first}\nOpen the Defects card");
+            if self.wb.live.plc.is_running() {
+                hover.push_str("\nNot applied while a PLC program runs");
+            }
+            chips.push(ModeChip {
+                alert: true,
+                label,
+                command: "sim.defects",
+                hover,
+            });
+        }
+        if let Some(label) = self.walkthrough_progress() {
+            chips.push(ModeChip {
+                alert: false,
+                label,
+                command: "sim.live",
+                hover: "The Fast keys walk-through. Click to leave Live and see the list".into(),
+            });
+        }
         if self.wb.live.on {
             chips.push(ModeChip {
+                alert: false,
                 label: "Live".into(),
                 command: "sim.live",
                 hover: "Switch live potentials off".into(),
@@ -386,6 +444,7 @@ impl NovoApp {
             .and_then(|p| self.backend.document()?.project().page(p)?.locked.clone())
         {
             chips.push(ModeChip {
+                alert: false,
                 label: format!("{} Page locked ({locked})", novo_theme::icons::LOCK_SIMPLE),
                 command: "revision.unlock_page",
                 hover: "This page is locked with the issued revision. Click to unlock it".into(),
@@ -394,6 +453,7 @@ impl NovoApp {
         let open_notes = self.wb.notes.open_count();
         if open_notes > 0 {
             chips.push(ModeChip {
+                alert: false,
                 label: format!(
                     "{} {open_notes} open note{}",
                     novo_theme::icons::CHAT_TEXT,
@@ -405,6 +465,7 @@ impl NovoApp {
         }
         if self.wb.changes.is_some() {
             chips.push(ModeChip {
+                alert: false,
                 label: "Changes".into(),
                 command: "view.changes",
                 hover: "Leave Changes mode".into(),

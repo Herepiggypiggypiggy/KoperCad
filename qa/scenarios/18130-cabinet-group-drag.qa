@@ -1,0 +1,39 @@
+@title Cabinet: box select three devices, drag them together, undo and redo restore the whole group
+@area Cabinet
+@sizes 1366x768
+# Box select (drag on empty plate) takes F1, F2 and F3 of the lesson cabinet. A drag on one of them
+# carries all three. One undo puts all three back, one redo moves all three again.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+move 300 600
+shot before
+check_layout
+drag 735 140 600 225
+wait 15
+move 300 600
+wait 5
+expect "Align"
+expect "3 selected"
+expect "55, 10 mm"
+shot box-selected
+drag 670 190 770 470
+wait 20
+move 300 600
+wait 5
+expect_not "55, 10 mm"
+shot group-dragged
+check_layout
+click 497 19
+wait 15
+move 300 600
+wait 5
+expect "55, 10 mm"
+shot undone-whole-group
+click 522 19
+wait 15
+move 300 600
+wait 5
+expect_not "55, 10 mm"
+shot redone-whole-group

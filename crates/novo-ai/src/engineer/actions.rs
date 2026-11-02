@@ -54,6 +54,9 @@ pub fn run(tx: &mut Tx<'_>, env: &Env<'_>, action: &str, args: &Value) -> Result
         "add_cabinet" => super::cabinet::add_cabinet(tx, args),
         "set_cabinet_plate" => super::cabinet::set_cabinet_plate(tx, args),
         "add_cabinet_rail" => super::cabinet::add_cabinet_rail(tx, args),
+        "add_cabinet_duct" => super::cabinet::add_cabinet_duct(tx, args),
+        "set_cabinet_interior" => super::cabinet::set_cabinet_interior(tx, args),
+        "run_autopilot" => super::studies::run_autopilot(tx, args),
         "place_in_cabinet" => super::cabinet::place_in_cabinet(tx, args),
         "turn_in_cabinet" => super::cabinet::turn_in_cabinet(tx, args),
         "unplace_from_cabinet" => super::cabinet::unplace_from_cabinet(tx, args),
@@ -285,8 +288,49 @@ pub fn catalogue() -> Vec<EditAction> {
                           Read section cabinet first; check layout_problems afterwards.",
             schema: json!({"type": "object", "properties": {
                 "enclosure": enclosure.clone(), "device": device,
-                "x": {"type": "number"}, "y": {"type": "number"}, "rotated": {"type": "boolean"}},
+                "x": {"type": "number"}, "y": {"type": "number"}, "rotated": {"type": "boolean"},
+                "surface": {"type": "string", "description":
+                    "plate (default), door, left, right, roof or floor; x, y are then on that surface"}},
                 "required": ["device", "x", "y"]}),
+        },
+        EditAction {
+            name: "add_cabinet_duct",
+            description: "Adds a wiring duct on the plate (centre line starts at x, y, runs right \
+                          for length, or down when vertical). class keeps power and signal \
+                          wiring apart: power, signal or mixed. Ducts matter for wire lengths, \
+                          fill and the heat picture.",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "x": {"type": "number"}, "y": {"type": "number"},
+                "length": {"type": "number"}, "width": {"type": "number", "description": "default 40"},
+                "height": {"type": "number", "description": "default 60"},
+                "vertical": {"type": "boolean"}, "class": {"type": "string"}},
+                "required": ["x", "y", "length"]}),
+        },
+        EditAction {
+            name: "set_cabinet_interior",
+            description: "Sets the interior of an enclosure in mm (what the 3D view draws and \
+                          the door and heat checks use): width, height, depth (needed the first \
+                          time), plate_setback, door_hinge left/right/none, door_angle, \
+                          door_inner (depth of door-mounted parts), front_clearance and \
+                          hinge_side_clearance (free room outside).",
+            schema: json!({"type": "object", "properties": {
+                "enclosure": enclosure.clone(), "width": {"type": "number"}, "height": {"type": "number"},
+                "depth": {"type": "number"}, "plate_setback": {"type": "number"},
+                "door_hinge": {"type": "string"}, "door_angle": {"type": "number"},
+                "door_inner": {"type": "number"}, "front_clearance": {"type": "number"},
+                "hinge_side_clearance": {"type": "number"}}}),
+        },
+        EditAction {
+            name: "run_autopilot",
+            description: "Fills in what Autopilot proposes (wire sizes and colours from the \
+                          calculations, wire numbers, cable types, cabinet entry points). Read \
+                          autopilot_plan first. Assumed rows are skipped unless \
+                          include_assumed is true; kinds narrows it to Size, Colour, Number, \
+                          Cable or \"Entry point\". Sizes from planning tables are planning \
+                          values, not a verified cable selection.",
+            schema: json!({"type": "object", "properties": {
+                "include_assumed": {"type": "boolean"},
+                "kinds": {"type": "array", "items": {"type": "string"}}}}),
         },
         EditAction {
             name: "turn_in_cabinet",

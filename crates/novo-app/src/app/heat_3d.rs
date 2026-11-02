@@ -37,8 +37,16 @@ pub(crate) struct Heat3d {
     pub cloud_layers: u8,
     /// Which way the cloud is cut, following the camera (not a user choice).
     pub cloud_view: super::heat_cloud::CloudView,
-    /// Lines and dashes along the flow of heat (see `heat_carry`).
+    /// The heat flow data is wanted (any Heat flow mode but Off; set with
+    /// [`Heat3d::set_heat_flow`], see `heat_carry`).
     pub carry: bool,
+    /// What the Heat flow control draws (see `heat_modes`).
+    pub heat_flow: super::heat_modes::HeatFlowMode,
+    /// Each device's split of heat into air, plate and radiation, pinned on
+    /// the devices.
+    pub paths: bool,
+    /// The cloud plays with the solved air flow instead of standing still.
+    pub cloud_moves: bool,
     /// The temperature scale the person set, °C (from, to); `None` is the
     /// automatic scale, ambient to the hottest cell.
     pub scale: Option<(f64, f64)>,
@@ -48,6 +56,12 @@ pub(crate) struct Heat3d {
 }
 
 impl Heat3d {
+    /// Sets the Heat flow mode and the switch that asks for its data.
+    pub(crate) fn set_heat_flow(&mut self, mode: super::heat_modes::HeatFlowMode) {
+        self.heat_flow = mode;
+        self.carry = mode.needs_flux();
+    }
+
     /// Sets the Flow mode and the switches that draw it.
     pub(crate) fn set_flow(&mut self, mode: super::heat_flow::FlowMode) {
         use super::heat_flow::FlowMode;
@@ -75,6 +89,9 @@ impl Default for Heat3d {
             cloud_layers: super::heat_cloud::LAYERS as u8,
             cloud_view: super::heat_cloud::CloudView::default(),
             carry: false,
+            heat_flow: super::heat_modes::HeatFlowMode::Off,
+            paths: false,
+            cloud_moves: false,
             scale: None,
             flow: super::heat_flow::FlowView::default(),
         }
@@ -211,6 +228,7 @@ pub(crate) fn overlays(
     }
     if settings.slice
         && !speed_map
+        && !settings.heat_flow.draws_map()
         && let Some(m) = slice_mesh_with(
             snap,
             place,

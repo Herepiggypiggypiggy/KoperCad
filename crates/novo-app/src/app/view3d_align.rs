@@ -83,7 +83,7 @@ impl Op {
         OPS.iter().find(|o| o.0 == id).map(|o| o.3)
     }
 
-    fn needs(self) -> usize {
+    pub(super) fn needs(self) -> usize {
         match self {
             Op::SpreadAcross | Op::SpreadDown => 3,
             _ => 2,
@@ -97,14 +97,23 @@ pub(super) fn arrange(
     selection: &BTreeSet<ItemId>,
     op: Op,
 ) -> Option<Edit> {
-    let mut boxes: Vec<(u64, Rect)> = selection
+    let ids: Vec<u64> = selection
         .iter()
         .filter(|i| i.kind == ItemKind::Device)
-        .filter_map(|i| {
+        .map(|i| i.raw)
+        .collect();
+    arrange_devices(layout, &ids, op)
+}
+
+/// [`arrange`] for a list of device ids (the Cabinet's selection).
+pub(super) fn arrange_devices(layout: &CabinetLayout, ids: &[u64], op: Op) -> Option<Edit> {
+    let mut boxes: Vec<(u64, Rect)> = ids
+        .iter()
+        .filter_map(|id| {
             layout
                 .placements
                 .iter()
-                .find(|p| p.id == i.raw)
+                .find(|p| p.id == *id)
                 .map(|p| (p.id, p.footprint()))
         })
         .collect();

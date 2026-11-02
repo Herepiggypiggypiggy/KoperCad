@@ -220,6 +220,32 @@ pub struct CfdSnapshot {
     /// Surface-to-surface radiation is part of this result (the Simulate
     /// dialog's Radiation toggle was on and the level supports it).
     pub radiation_on: bool,
+    /// The air through each opening, from the solver's own face fluxes
+    /// (empty when the run has no openings or the solver does not report
+    /// them). Their sum is the continuity error of the run.
+    pub opening_flows: Vec<OpeningFlow>,
+}
+
+/// The air through one opening patch, summed over its open faces. Exact
+/// face fluxes of the solved state, not a reading of the speed beside it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OpeningFlow {
+    /// Domain face: 0..6 in the order XMin, XMax, YMin, YMax, ZMin, ZMax.
+    pub face: u8,
+    /// The patch rectangle on that face, metres along the two tangential
+    /// axes in ascending axis order.
+    pub lo: [f64; 2],
+    pub hi: [f64; 2],
+    /// m3/h, positive into the cabinet.
+    pub m3h: f64,
+}
+
+impl CfdSnapshot {
+    /// Net air through all openings, m3/h (in minus out): zero for a
+    /// converged closed cabinet, because the air cannot pile up.
+    pub fn opening_imbalance_m3h(&self) -> f64 {
+        self.opening_flows.iter().map(|o| o.m3h).sum()
+    }
 }
 
 impl CfdSnapshot {

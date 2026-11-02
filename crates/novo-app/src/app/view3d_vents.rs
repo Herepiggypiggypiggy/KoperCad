@@ -353,8 +353,9 @@ fn balance_line(flows: &[Option<f64>], settings: &HeatSettings, running: bool) -
         "The run is still preliminary: the speeds beside the openings are still settling, so in and out \
          do not match yet."
     } else {
-        "Each opening's flow is read from the solved air speed next to it, so in and out differ by that \
-         reading; the solver itself conserves the air."
+        "Each opening's flow is the solver's own face flux where the result has it (older results read it \
+         from the air speed next to the opening, which can differ by some percent); the solver \
+         conserves the air, so a closed cabinet balances."
     };
     Some(format!(
         "Air in {inflow:.0}, out {outflow:.0} m³/h (model); {gap:.0} m³/h ({:.0} %) apart. {why}",

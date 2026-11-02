@@ -273,6 +273,14 @@ impl NovoApp {
         );
     }
 
+    /// The crane simulation example: the crane cabinet with a radio and a machine to run.
+    pub(super) fn open_crane_sim_example(&mut self) {
+        self.open_built_example(
+            super::example_crane_sim::CRANE_SIM_EXAMPLE_NAME,
+            super::example_crane_sim::build_crane_sim_example,
+        );
+    }
+
     /// The PLC cabinet example: CPU, I/O cards and a full cabinet.
     pub(super) fn open_plc_example(&mut self) {
         self.open_built_example(
