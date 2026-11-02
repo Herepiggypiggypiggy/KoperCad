@@ -11,6 +11,8 @@ click_text "Templates and examples..."
 wait 10
 text roller door
 wait 8
+click_text "Open roller door example"
+wait 6
 shot door-gallery-row
 expect "Illustration only"
 expect "Small: a roller door"

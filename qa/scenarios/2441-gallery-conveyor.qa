@@ -11,6 +11,8 @@ click_text "Templates and examples..."
 wait 10
 text conveyor
 wait 8
+click_text "Open conveyor line example"
+wait 6
 shot conveyor-gallery-row
 expect "Illustration only"
 expect "Medium: three belts"
