@@ -175,6 +175,14 @@ pub(super) fn show(
                     }
                 });
         }
+        if let Some(sol) = state.solution() {
+            egui::CollapsingHeader::new("Where each device's heat goes")
+                .id_salt("view3d_heat_paths")
+                .show(ui, |ui| {
+                    let rows = super::heat_modes::path_rows(&sol.snapshot);
+                    super::heat_modes::paths_table(ui, &rows, tag_of);
+                });
+        }
         // Closed while a run goes: the form below the fold only hid the Cancel
         // row and could not be used anyway.
         let mut settings_header = egui::CollapsingHeader::new("Settings for the next run")

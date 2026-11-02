@@ -405,6 +405,8 @@ const NO_FLOW_M3H: f64 = 5.0;
 /// Air warms by `FAN_FACTOR * loss / flow` K (flow in m3/h, loss in W): the
 /// sizing rule the rest of the program uses.
 const FAN_FACTOR: f64 = novo_layout::sizing::FAN_FACTOR;
+/// Air in and out differing by more than this share of their mean is said.
+const IMBALANCE_NOTE: f64 = 0.15;
 /// Verdict limits for the warming of the air passing through, K.
 const ADEQUATE_UP_TO_K: f64 = 5.0;
 const LOW_UP_TO_K: f64 = 10.0;
@@ -515,8 +517,31 @@ impl Through {
         0.5 * (self.inflow_m3h + self.outflow_m3h)
     }
 
+    /// How far air in and air out are from each other, as a share of their
+    /// mean. In a cabinet with no other leak they are equal, so a large value
+    /// is a rough reading, not a fact about the air.
+    pub(crate) fn imbalance(&self) -> f64 {
+        let mean = self.total_m3h();
+        if mean < NO_FLOW_M3H {
+            0.0
+        } else {
+            (self.inflow_m3h - self.outflow_m3h).abs() / mean
+        }
+    }
+
     /// The one-line summary with the verdict.
     pub(crate) fn text(&self) -> String {
+        let mut line = self.text_core();
+        if self.imbalance() > IMBALANCE_NOTE {
+            line.push_str(&format!(
+                ". Air in and out differ by {:.0} %: they are equal in a closed cabinet, so the readings beside the openings are rough here",
+                self.imbalance() * 100.0
+            ));
+        }
+        line
+    }
+
+    fn text_core(&self) -> String {
         let total = self.total_m3h();
         let head = format!(
             "Through-flow {total:.0} m³/h (air in {:.0}, out {:.0})",

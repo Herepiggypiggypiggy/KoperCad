@@ -117,9 +117,12 @@ pub(super) struct CabinetState {
 }
 
 /// A placed device being dragged across the plate.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Drag {
     id: u64,
+    /// The selected devices carried along, with where each started (empty:
+    /// only this one moves).
+    group: Vec<(u64, f64, f64)>,
     /// The cursor's offset from the footprint's top left, in mm.
     grab: Vec2,
     /// The snapped top left it would land on.
@@ -175,7 +178,7 @@ impl CabinetState {
 /// when its centre is near the rail's line (the rail runs through the middle
 /// of the device) and it is over the rail's run, lined up with a neighbour or
 /// the end of the rail; else where it is.
-fn rail_landing(
+pub(super) fn rail_landing(
     layout: &CabinetLayout,
     device: u64,
     size: (f64, f64),
@@ -234,6 +237,10 @@ pub(super) enum Ask {
     Select(u64),
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
+    /// Move several devices together to these top lefts: one undo step.
+    MoveGroup(Vec<(u64, f64, f64)>),
+    /// Align or spread the selected devices.
+    Arrange(super::view3d_align::Op),
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
     SetEnclosure(novo_layout::enclosure::Enclosure),
@@ -753,8 +760,14 @@ impl NovoApp {
                 _ => l.clone(),
             });
         let shown = shown.map(|mut s| {
-            if let (Some(d), None) = (self.cabinet.drag, &self.cabinet.preview) {
-                s.move_to(d.id, d.at.0, d.at.1);
+            if let (Some(d), None) = (&self.cabinet.drag, &self.cabinet.preview) {
+                if d.group.len() > 1 {
+                    for (id, x, y) in super::cabinet_group::landings(&s, &d.group, d.id, d.at) {
+                        s.move_to(id, x, y);
+                    }
+                } else {
+                    s.move_to(d.id, d.at.0, d.at.1);
+                }
             }
             if let (Some((id, x, y)), None) = (self.cabinet.ghost, &self.cabinet.preview)
                 && let Some(c) = cands.iter().find(|c| c.id == id)
@@ -1893,7 +1906,25 @@ impl NovoApp {
                 }
                 self.cabinet.view.glide_secs =
                     super::motion::glide_secs(self.settings.reduce_motion);
-                let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                // The Align row docks under the plate while two or more
+                // devices are selected.
+                if layout.is_some()
+                    && !has_plan
+                    && !on_surface
+                    && let n = self.cabinet_selected().len()
+                    && n >= 2
+                    && let Some(op) = super::cabinet_group::align_bar(ui, n)
+                {
+                    ask = Some(Ask::Arrange(op));
+                }
+                // A fixed id: the Align row above comes and goes with the
+                // selection and must not renumber the canvas (a drag in
+                // progress would be lost).
+                let out = ui
+                    .push_id("cabinet_plate_canvas", |ui| {
+                        self.cabinet.view.show(ui, self.cabinet.scene.scene())
+                    })
+                    .inner;
                 cabinet_bar::note_rect_in(ui, "cabinet.canvas", "Plate", out.response.rect, false);
                 self.cabinet.heat.layout.paint(
                     &ui.painter_at(out.response.rect),
@@ -2155,10 +2186,14 @@ impl NovoApp {
                         wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
                     });
                     let target = if let Some(p) = device {
-                        self.cabinet.view.selection.apply(
-                            [novo_canvas::cabinet::box_item(p.id)],
-                            novo_canvas::selection::SelectOp::Replace,
-                        );
+                        // Right-click inside a selection keeps it, so the
+                        // menu acts on the whole group.
+                        if !self.cabinet_selected().contains(&p.id) {
+                            self.cabinet.view.selection.apply(
+                                [novo_canvas::cabinet::box_item(p.id)],
+                                novo_canvas::selection::SelectOp::Replace,
+                            );
+                        }
                         self.cabinet.rails.selected = None;
                         Target::Device(p.id)
                     } else if let Some(rail) = structure
@@ -2289,8 +2324,27 @@ impl NovoApp {
                             })
                         {
                             let f = p.footprint();
+                            // A device in a selection of several carries the
+                            // selection; any other device is picked first.
+                            let mut group = Vec::new();
+                            if self.cabinet_selected().contains(&p.id) {
+                                let picked = self.cabinet_selected();
+                                group = on_plate
+                                    .placements
+                                    .iter()
+                                    .filter(|q| picked.contains(&q.id))
+                                    .map(|q| (q.id, q.x, q.y))
+                                    .collect();
+                            } else {
+                                self.cabinet.view.selection.apply(
+                                    [novo_canvas::cabinet::box_item(p.id)],
+                                    novo_canvas::selection::SelectOp::Replace,
+                                );
+                                self.cabinet.rails.selected = None;
+                            }
                             self.cabinet.drag = Some(Drag {
                                 id: p.id,
+                                group,
                                 grab: vec2(world.x - f.x as f32, world.y - f.y as f32),
                                 at: (f.x, f.y),
                             });
@@ -2491,7 +2545,13 @@ impl NovoApp {
                     if out.response.drag_stopped()
                         && let Some(d) = self.cabinet.drag.take()
                     {
-                        ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
+                        ask = Some(if d.group.len() > 1 {
+                            Ask::MoveGroup(super::cabinet_group::landings(
+                                layout, &d.group, d.id, d.at,
+                            ))
+                        } else {
+                            Ask::Drop(d.id, d.at.0, d.at.1)
+                        });
                     }
                     // Arrow keys nudge the selected rail or duct by a grid
                     // step (1 mm with Shift) when no device is selected and
@@ -2546,8 +2606,49 @@ impl NovoApp {
                     // Rotate and delete act on the selected devices, and
                     // Delete on the selected rail when no device is.
                     let selected = self.cabinet_selected();
+                    // Arrow keys nudge the selected devices by a grid step
+                    // (1 mm with Shift).
+                    if !selected.is_empty()
+                        && self.cabinet.drag.is_none()
+                        && !ui.ctx().egui_wants_keyboard_input()
+                    {
+                        let (dx, dy, fine) = ui.input(|i| {
+                            let key = |k| f64::from(i32::from(i.key_pressed(k)));
+                            (
+                                key(egui::Key::ArrowRight) - key(egui::Key::ArrowLeft),
+                                key(egui::Key::ArrowDown) - key(egui::Key::ArrowUp),
+                                i.modifiers.shift,
+                            )
+                        });
+                        if dx != 0.0 || dy != 0.0 {
+                            let step = if fine || layout.grid <= 0.0 {
+                                1.0
+                            } else {
+                                layout.grid
+                            };
+                            let moves = super::cabinet_group::nudged(
+                                layout,
+                                &selected,
+                                dx * step,
+                                dy * step,
+                            );
+                            if !moves.is_empty() {
+                                ask = Some(Ask::MoveGroup(moves));
+                            }
+                        }
+                    }
                     for key in std::mem::take(&mut self.cabinet.keys) {
                         match key.as_str() {
+                            "edit.select_all" => {
+                                self.cabinet.view.selection.apply(
+                                    on_plate
+                                        .placements
+                                        .iter()
+                                        .map(|p| novo_canvas::cabinet::box_item(p.id)),
+                                    novo_canvas::selection::SelectOp::Replace,
+                                );
+                                self.cabinet.rails.selected = None;
+                            }
                             "edit.rotate" if !selected.is_empty() => {
                                 ask = Some(Ask::Rotate(selected.clone()));
                             }
@@ -2935,7 +3036,14 @@ impl NovoApp {
         // preview first (one undo step), so a drag, turn or take-off never
         // acts on a layout that is not stored yet.
         if self.cabinet.preview.is_some()
-            && matches!(ask, Ask::Drop(..) | Ask::Rotate(_) | Ask::Remove(_))
+            && matches!(
+                ask,
+                Ask::Drop(..)
+                    | Ask::MoveGroup(_)
+                    | Ask::Arrange(_)
+                    | Ask::Rotate(_)
+                    | Ask::Remove(_)
+            )
         {
             self.cabinet_ask(Ask::Accept, structure, None, cands);
         }
@@ -3103,6 +3211,29 @@ impl NovoApp {
                     place_device(tx, structure, device, x, y, rotated)
                 }) {
                     self.learn_signal("cabinet_dropped");
+                }
+            }
+            Ask::MoveGroup(devices) => {
+                if let Some(structure) = structure {
+                    self.view3d_move_group(structure, devices, Vec::new());
+                }
+            }
+            Ask::Arrange(op) => {
+                let Some(structure) = structure else {
+                    return;
+                };
+                let picked = self.cabinet_selected();
+                let edit = layout
+                    .as_ref()
+                    .and_then(|l| super::view3d_align::arrange_devices(l, &picked, op));
+                match edit {
+                    Some(super::view3d_move::Edit::Group { devices, .. }) => {
+                        self.view3d_move_group(structure, devices, Vec::new());
+                    }
+                    _ => self.message(
+                        Level::Info,
+                        "Select two or more devices that are not lined up yet (three to spread).",
+                    ),
                 }
             }
             Ask::CoolingPair(c) => {

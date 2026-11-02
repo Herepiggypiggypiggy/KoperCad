@@ -333,3 +333,46 @@ fn stack_effect_follows_the_chimney_law() {
     assert!((q1 / ideal(20.0) - 1.0).abs() < 0.15);
     assert!((q8 / ideal(160.0) - 1.0).abs() < 0.15);
 }
+
+#[test]
+fn air_in_equals_air_out_in_a_closed_cabinet() {
+    // Intake fan on x min, two grilles on x max and on the top: all the air a
+    // fan pushes in must leave through the grilles (no other opening).
+    let side = 0.4;
+    let mesh = Mesh::uniform([12, 12, 12], [side; 3]);
+    let patches = vec![
+        patch(
+            Face::XMin,
+            [0.1, 0.1],
+            [0.3, 0.3],
+            OpenKind::Fan {
+                intake: true,
+                free_flow_m3s: 0.15,
+                max_pressure_pa: 50.0,
+            },
+        ),
+        patch(
+            Face::XMax,
+            [0.05, 0.05],
+            [0.15, 0.15],
+            OpenKind::vent(0.5, 0.6),
+        ),
+        patch(
+            Face::YMin,
+            [0.2, 0.2],
+            [0.35, 0.35],
+            OpenKind::vent(0.5, 0.6),
+        ),
+    ];
+    let mut cfg = cfg_open(patches, 25.0);
+    cfg.gravity = [0.0; 3];
+    let mut s = FlowSolver::new(mesh, cfg, 25.0);
+    settle(&mut s, 0.01, 4000, 1e-5);
+    let q_in = -s.patch_flow_m3s(0);
+    let q_out = s.patch_flow_m3s(1) + s.patch_flow_m3s(2);
+    println!("OPENINGS | continuity | in {q_in:.5} out {q_out:.5} m3/s");
+    assert!(q_in > 0.0);
+    assert!(((q_in - q_out) / q_in).abs() < 1e-4, "{q_in} vs {q_out}");
+    // The fan moves less than its free-air flow: the cabinet resists.
+    assert!(q_in < 0.15);
+}

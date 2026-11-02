@@ -120,6 +120,7 @@ impl<'a> View<'a> {
             },
             heat_paths: Vec::new(),
             radiation_on: setup.cfg.radiation.is_some(),
+            opening_flows: Vec::new(),
         };
         View {
             setup,
@@ -135,6 +136,7 @@ impl<'a> View<'a> {
         let mut s = self.base.clone();
         s.temperature_c = flow.t.iter().map(|t| *t as f32).collect();
         s.velocity = cell_velocity(&flow.mesh, &flow.vel);
+        s.opening_flows = opening_flows(flow);
         let rho = flow.cfg.rho;
         s.pressure_pa = flow.p.iter().map(|p| (p * rho) as f32).collect();
         let medium = self.setup.cfg.medium.as_ref();
@@ -506,6 +508,23 @@ fn grading_note(grid: &crate::result::Grid3) -> Option<String> {
          keeps to {limit:.1}); a very large cell sits next to a tiny one that the planner could \
          not grade between. Flow and temperatures near that spot are less exact."
     ))
+}
+
+/// The air through each opening patch from the face velocities of the solved
+/// state (m3/h, positive into the cabinet). The projection makes these sum
+/// to zero in a closed cabinet, so in and out balance by construction.
+fn opening_flows(flow: &FlowSolver) -> Vec<crate::result::OpeningFlow> {
+    flow.open
+        .patches
+        .iter()
+        .enumerate()
+        .map(|(i, p)| crate::result::OpeningFlow {
+            face: p.face as u8,
+            lo: p.lo,
+            hi: p.hi,
+            m3h: -flow.patch_flow_m3s(i) * 3600.0,
+        })
+        .collect()
 }
 
 #[cfg(test)]
