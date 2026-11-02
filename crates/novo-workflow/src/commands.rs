@@ -239,6 +239,39 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.example_door",
+        "Open example: roller door (small, complete with cabinet)",
+        "Project",
+        &[
+            "door",
+            "gate",
+            "reversing",
+            "cabinet",
+            "demo",
+            "example",
+            "small",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
+        "file.example_conveyor",
+        "Open example: conveyor line (medium, complete with cabinet)",
+        "Project",
+        &[
+            "conveyor", "belt", "sequence", "cabinet", "demo", "example", "medium",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
+        "file.example_filling",
+        "Open example: bottle filling line (large, PLC, drive, safety)",
+        "Project",
+        &[
+            "filling", "bottle", "plc", "drive", "cabinet", "demo", "example", "large",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.new_crane",
         "New from template: overhead crane (structure tree, cover pages)",
         "Project",

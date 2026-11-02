@@ -93,6 +93,21 @@ pub const DUTCH: &[Aliases] = &[
         &["pomp voorbeeld", "pompen voorbeeld"],
     ),
     nl(
+        "file.example_door",
+        &[],
+        &["deur voorbeeld", "rolpoort voorbeeld"],
+    ),
+    nl(
+        "file.example_conveyor",
+        &[],
+        &["transportband voorbeeld", "band voorbeeld"],
+    ),
+    nl(
+        "file.example_filling",
+        &[],
+        &["vullijn voorbeeld", "bottelarij voorbeeld"],
+    ),
+    nl(
         "file.new_crane",
         &[],
         &["nieuw kraan", "kraan sjabloon", "kraanproject"],

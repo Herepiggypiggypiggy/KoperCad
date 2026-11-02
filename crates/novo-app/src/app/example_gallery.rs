@@ -49,4 +49,22 @@ pub(crate) const GALLERY: &[Entry] = &[
         cabinet: "+CAB",
         build: super::example_pump::build_pump_example,
     },
+    Entry {
+        action: Action::OpenDoorExample,
+        name: super::example_door::DOOR_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_door::build_door_example,
+    },
+    Entry {
+        action: Action::OpenConveyorExample,
+        name: super::example_conveyor::CONVEYOR_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_conveyor::build_conveyor_example,
+    },
+    Entry {
+        action: Action::OpenFillingExample,
+        name: super::example_filling::FILLING_EXAMPLE_NAME,
+        cabinet: "+CAB",
+        build: super::example_filling::build_filling_example,
+    },
 ];

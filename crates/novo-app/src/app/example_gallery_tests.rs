@@ -49,7 +49,8 @@ fn every_example_has_pages_cross_references_and_terminals() {
             .filter(|p| !matches!(p.kind, PageKind::Generated { .. }))
             .count();
         assert!(drawn >= 4, "{}: {drawn} pages", entry.name);
-        assert!(p.devices().count() >= 25, "{}", entry.name);
+        // The small roller door is the smallest complete example.
+        assert!(p.devices().count() >= 15, "{}", entry.name);
         assert!(p.terminals().count() >= 12, "{}", entry.name);
         assert!(p.cables().count() >= 3, "{}", entry.name);
     }

@@ -1,0 +1,60 @@
+@title Example gallery: roller door (small)
+@area Examples
+# File > Templates and examples... > Examples shows the row and its text; then the example opens (Ctrl+K), two pages, the cabinet, 3D and the live view.
+fresh
+wait 10
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text roller door
+wait 8
+click_text "Open roller door example"
+wait 6
+shot door-gallery-row
+expect "Illustration"
+expect "Small: roller door"
+check_layout
+key Escape
+wait 6
+key ctrl+k
+wait 6
+text Open example: roller door
+wait 8
+key Enter
+wait 40
+expect "Incoming supply and 24 V"
+shot door-first-view
+check_blank door-first-view
+check_layout
+key ctrl+k
+wait 6
+text Door motor, reversing starter
+wait 8
+key Enter
+wait 15
+expect "Door motor, reversing starter"
+shot door-page-2
+key ctrl+k
+wait 6
+text Control: up, down, stop
+wait 8
+key Enter
+wait 15
+expect "Control: up, down, stop"
+shot door-page-3
+click_text "Cabinet"
+wait 20
+shot door-cabinet
+check_blank door-cabinet
+click_text "3D"
+wait 30
+shot door-3d
+click_text "Schematic"
+wait 15
+key shift+l
+wait 20
+shot door-live
+check_layout

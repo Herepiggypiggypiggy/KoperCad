@@ -417,7 +417,7 @@ pub(super) fn draw(tx: &mut Tx<'_>, sim: bool) -> ModelResult<()> {
         let up = bus_feed_down(&mut kit, sim, &buses, pot, (hx + 8.0 * i as f64, 108.0));
         kit.wire_mm2((k11, ["2", "4", "6"][i]), (up, "1"), 2.5);
     }
-    for (i, (pot, pin)) in [(hw, "2"), (hv, "4"), (hu, "6")].into_iter().enumerate() {
+    for (i, (pot, pin)) in [(hu, "2"), (hv, "4"), (hw, "6")].into_iter().enumerate() {
         let down = bus_feed_down(&mut kit, sim, &buses, pot, (100.0 + 8.0 * i as f64, 108.0));
         kit.wire_mm2((k12, pin), (down, "1"), 2.5);
     }
