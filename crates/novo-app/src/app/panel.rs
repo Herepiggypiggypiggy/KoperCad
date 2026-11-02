@@ -444,7 +444,7 @@ impl Panel {
             let stopped = ctx
                 .read_response(id.with("__title_click"))
                 .is_some_and(|r| r.drag_stopped());
-            let slot = super::panel_dock::title_buttons(ctx, id)
+            let slot = super::panel_dock::title_buttons(ctx, id, egui::Order::Middle)
                 .or_else(|| super::panel_dock::snap_zones(ctx, self.canvas, pulled, stopped));
             if let Some(slot) = slot {
                 super::panel_dock::set(ctx, self.id, Some(slot));
@@ -592,8 +592,205 @@ pub(super) fn dialog<'a>(
     ctx: &egui::Context,
     title: impl Into<egui::WidgetText>,
     size: [f32; 2],
-) -> egui::Window<'a> {
+) -> Dialog<'a> {
     let title = title.into();
+    let name = format!("window:{}", title.text());
+    let plain_title = title.text().to_owned();
+    let default_id = egui::Id::new(Some(title.text()));
+    let wide = size[0] > WIDE_DIALOG;
+    let window = dialog_window(ctx, title, size);
+    Dialog {
+        window,
+        name,
+        title: plain_title,
+        id: default_id,
+        open: None,
+        scrolls: true,
+        floats: wide,
+    }
+}
+
+/// The windows that ask something and must be answered before anything else
+/// happens: they stay modal and have no dock buttons.
+const MODAL_QUESTIONS: &[&str] = &[
+    "save_changes",
+    "outline_confirm",
+    "restore_ask",
+    "handover_ask",
+    "issue_revision",
+    "recovery",
+    "crash_report",
+    "pin_offer",
+    "company_pin_offer",
+    "addon_install_prompt",
+    "about",
+    "about_numbers",
+];
+
+#[cfg(test)]
+pub(super) const MODAL_QUESTIONS_FOR_TEST: &[&str] = MODAL_QUESTIONS;
+
+/// Dialogs wider than this open as floating windows; narrower ones dock at
+/// the right edge when they open (the strip is at most 520 points wide).
+const WIDE_DIALOG: f32 = 640.0;
+
+/// A window the person opens from a command (see [`dialog`]): it docks as a
+/// pane at the right edge when it opens (unless it is a wide one), folds up,
+/// and can be floated or sent to the left or bottom edge with the buttons in
+/// its title bar. Built like an `egui::Window`: the same calls, in the same
+/// order, then `show`.
+pub(super) struct Dialog<'a> {
+    window: egui::Window<'a>,
+    /// The name the dock list and the fold state know it by.
+    name: String,
+    title: String,
+    /// The window's id (egui's, from the title unless `id` set another).
+    id: egui::Id,
+    open: Option<&'a mut bool>,
+    scrolls: bool,
+    /// A window that opens floating (wide ones, or `floating`).
+    floats: bool,
+}
+
+impl<'a> Dialog<'a> {
+    pub(super) fn id(mut self, id: egui::Id) -> Self {
+        self.id = id;
+        self.window = self.window.id(id);
+        self
+    }
+
+    pub(super) fn open(mut self, open: &'a mut bool) -> Self {
+        self.open = Some(open);
+        self
+    }
+
+    pub(super) fn default_pos(mut self, pos: impl Into<egui::Pos2>) -> Self {
+        self.window = self.window.default_pos(pos);
+        self
+    }
+
+    pub(super) fn scroll(mut self, scroll: impl Into<egui::Vec2b>) -> Self {
+        let scroll = scroll.into();
+        self.scrolls = scroll.y;
+        self.window = self.window.scroll(scroll);
+        self
+    }
+
+    pub(super) fn collapsible(mut self, on: bool) -> Self {
+        self.window = self.window.collapsible(on);
+        self
+    }
+
+    /// Which layer it floats on; a window drawn above the live view's marks
+    /// stays a floating one (a pane cannot be above the canvas marks).
+    pub(super) fn order(mut self, order: egui::Order) -> Self {
+        self.window = self.window.order(order);
+        self.floats = true;
+        self
+    }
+
+    pub(super) fn fixed_size(mut self, size: impl Into<egui::Vec2>) -> Self {
+        self.window = self.window.fixed_size(size);
+        self
+    }
+
+    pub(super) fn pivot(mut self, pivot: egui::Align2) -> Self {
+        self.window = self.window.pivot(pivot);
+        self
+    }
+
+    /// Opens floating, not docked; the buttons in the title bar still dock it.
+    #[allow(dead_code)]
+    pub(super) fn floating(mut self) -> Self {
+        self.floats = true;
+        self
+    }
+
+    pub(super) fn show<R>(
+        self,
+        ctx: &egui::Context,
+        add: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> Option<egui::InnerResponse<Option<R>>> {
+        let Dialog {
+            window,
+            name,
+            title,
+            id,
+            open,
+            scrolls,
+            floats,
+        } = self;
+        let pane_id = self::id(&name);
+        if !floats
+            && super::panel_dock::dialogs_dock_by_default(ctx)
+            && super::panel_dock::slot_of(ctx, &name).is_none()
+            && !super::panel_dock::was_floated(ctx, &name)
+        {
+            super::panel_dock::set(ctx, &name, Some(super::panel_dock::Slot::Right));
+        }
+        if let Some(slot) = super::panel_dock::slot_of(ctx, &name) {
+            let shown = super::panel_dock::show_docked(
+                ctx,
+                pane_id,
+                &name,
+                &title,
+                slot,
+                super::panel_dock::PaneOptions {
+                    closable: open.is_some(),
+                    float_tip: "Float this window",
+                    scrolls,
+                },
+                add,
+            );
+            if take_closed(ctx, &name)
+                && let Some(open) = open
+            {
+                *open = false;
+            }
+            return shown;
+        }
+        let window = match open {
+            Some(open) => window.open(open),
+            None => window,
+        };
+        let shown = window.show(ctx, add);
+        if shown.is_some() {
+            dock_controls(ctx, id, &name, egui::Order::Middle);
+        }
+        shown
+    }
+}
+
+/// The dock buttons in the title bar of a floating window and the snap zones
+/// that light up while it is dragged; docks the window `name` (whose egui id
+/// is `id`, on the layer `order`) where the person sends it.
+fn dock_controls(ctx: &egui::Context, id: egui::Id, name: &str, order: egui::Order) {
+    let title_click = ctx.read_response(id.with("__title_click"));
+    let pulled = title_click.as_ref().is_some_and(|r| r.dragged())
+        && ctx.input(|i| {
+            i.pointer
+                .press_origin()
+                .zip(i.pointer.latest_pos())
+                .is_some_and(|(from, to)| from.distance(to) > 1.0)
+        });
+    let stopped = title_click.is_some_and(|r| r.drag_stopped());
+    let screen = ctx.content_rect();
+    let canvas = egui::Rect::from_min_max(
+        egui::pos2(screen.min.x, screen.min.y + TOP),
+        egui::pos2(screen.max.x, screen.max.y - STATUS_BAR),
+    );
+    let slot = super::panel_dock::title_buttons(ctx, id, order)
+        .or_else(|| super::panel_dock::snap_zones(ctx, canvas, pulled, stopped));
+    if let Some(slot) = slot {
+        super::panel_dock::set(ctx, name, Some(slot));
+    }
+}
+
+fn dialog_window<'a>(
+    ctx: &egui::Context,
+    title: egui::WidgetText,
+    size: [f32; 2],
+) -> egui::Window<'a> {
     // egui derives the window's id from `Some(title text)`; `esc` reads it
     // back. The test `escape_closes_the_dialog_on_top` catches a change.
     ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
@@ -944,7 +1141,43 @@ fn modal_impl<R: Default>(
     own_scroll: bool,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> ModalOut<R> {
+    let title = title.into();
     let id = egui::Id::new(("modal", name));
+    // Forms and settings windows can be docked as a pane (then they no longer
+    // block the program); a question that must be answered cannot.
+    let dock_name = format!("modal:{name}");
+    let dockable = !MODAL_QUESTIONS.contains(&name);
+    if dockable
+        && size[0] <= WIDE_DIALOG
+        && super::panel_dock::dialogs_dock_by_default(ctx)
+        && super::panel_dock::slot_of(ctx, &dock_name).is_none()
+        && !super::panel_dock::was_floated(ctx, &dock_name)
+    {
+        super::panel_dock::set(ctx, &dock_name, Some(super::panel_dock::Slot::Right));
+    }
+    if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, &dock_name) {
+        let shown = super::panel_dock::show_docked(
+            ctx,
+            self::id(&dock_name),
+            &dock_name,
+            title.text(),
+            slot,
+            super::panel_dock::PaneOptions {
+                closable: true,
+                float_tip: "Float this window",
+                scrolls: own_scroll,
+            },
+            add,
+        );
+        let closed = take_closed(ctx, &dock_name);
+        return ModalOut {
+            inner: shown.and_then(|r| r.inner).unwrap_or_default(),
+            ctx: ctx.clone(),
+            // The close button of the pane answers like a click outside.
+            clicked_outside: closed,
+            escape_ok: false,
+        };
+    }
     let layer = egui::LayerId::new(egui::Order::Foreground, id);
     let screen = ctx.content_rect();
     let mut full = screen.shrink(MARGIN);
@@ -1029,6 +1262,9 @@ fn modal_impl<R: Default>(
         }
     }
     let shown = window.show(ctx, add);
+    if dockable && shown.is_some() {
+        dock_controls(ctx, id, &dock_name, egui::Order::Foreground);
+    }
     let rect = shown.as_ref().map(|r| r.response.rect);
     let grabbed = ctx
         .read_response(id.with("__title_click"))

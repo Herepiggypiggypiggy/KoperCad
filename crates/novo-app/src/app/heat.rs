@@ -2145,6 +2145,7 @@ fn legend(
     .above_card()
     .fixed_open()
     .fit()
+    .dockable()
     // The notes can outgrow the room above a lesson card: the panel scrolls
     // them (its own bar always shows) instead of cutting them off.
     .scrolls()

@@ -109,10 +109,72 @@ pub(super) fn set(ctx: &egui::Context, name: &str, slot: Option<Slot>) {
     }
     let mut all = list(ctx);
     all.retain(|(n, _)| n != name);
-    if let Some(slot) = slot {
-        all.push((name.to_owned(), slot.code()));
+    let mut floated = floated_list(ctx);
+    floated.retain(|n| n != name);
+    match slot {
+        Some(slot) => all.push((name.to_owned(), slot.code())),
+        // The person floated it: a window that docks by default stays out.
+        None => floated.push(name.to_owned()),
     }
-    ctx.data_mut(|d| d.insert_persisted(list_id(), all));
+    ctx.data_mut(|d| {
+        d.insert_persisted(list_id(), all);
+        d.insert_persisted(floated_id(), floated);
+    });
+    ctx.request_repaint();
+}
+
+fn floated_id() -> egui::Id {
+    egui::Id::new("dock_floated")
+}
+
+fn floated_list(ctx: &egui::Context) -> Vec<String> {
+    ctx.data_mut(|d| d.get_persisted(floated_id()))
+        .unwrap_or_default()
+}
+
+/// Whether the person floated the window `name` on purpose (the float button
+/// of its pane): a window that docks by default then stays floating.
+pub(super) fn was_floated(ctx: &egui::Context, name: &str) -> bool {
+    floated_list(ctx).iter().any(|n| n == name)
+}
+
+fn default_id() -> egui::Id {
+    egui::Id::new("dock_dialogs_by_default")
+}
+
+/// Turns on that a dialog window docks at the right edge when it opens, until
+/// the person floats it (the app turns this on at start; the unit tests of
+/// the individual windows leave it off and look at floating windows).
+pub(super) fn set_dialogs_dock_by_default(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|d| d.insert_temp(default_id(), on));
+}
+
+pub(super) fn dialogs_dock_by_default(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(default_id()))
+        .unwrap_or(false)
+}
+
+fn folded_id() -> egui::Id {
+    egui::Id::new("dock_folded")
+}
+
+fn folded_list(ctx: &egui::Context) -> Vec<String> {
+    ctx.data_mut(|d| d.get_persisted(folded_id()))
+        .unwrap_or_default()
+}
+
+/// Whether the docked pane `name` is folded up to its header.
+pub(super) fn is_folded(ctx: &egui::Context, name: &str) -> bool {
+    folded_list(ctx).iter().any(|n| n == name)
+}
+
+pub(super) fn set_folded(ctx: &egui::Context, name: &str, folded: bool) {
+    let mut all = folded_list(ctx);
+    all.retain(|n| n != name);
+    if folded {
+        all.push(name.to_owned());
+    }
+    ctx.data_mut(|d| d.insert_persisted(folded_id(), all));
     ctx.request_repaint();
 }
 
@@ -142,7 +204,11 @@ pub(super) fn reset(ctx: &egui::Context) {
     if !list(ctx).is_empty() {
         ctx.data_mut(|d| d.insert_temp(changed_id(), SETTLE_FRAMES));
     }
-    ctx.data_mut(|d| d.insert_persisted(list_id(), Vec::<(String, u8)>::new()));
+    ctx.data_mut(|d| {
+        d.insert_persisted(list_id(), Vec::<(String, u8)>::new());
+        d.insert_persisted(floated_id(), Vec::<String>::new());
+        d.insert_persisted(folded_id(), Vec::<String>::new());
+    });
     set_navigator_right(ctx, false);
 }
 
@@ -243,7 +309,7 @@ fn shown_before(ctx: &egui::Context, slot: Slot) -> Vec<String> {
 
 /// Which pane of how many a panel is: the panels of a slot in the order they
 /// were docked, those that drew last pass and this panel.
-fn pane(ctx: &egui::Context, slot: Slot, name: &str) -> (usize, usize) {
+fn pane(ctx: &egui::Context, slot: Slot, name: &str) -> (usize, Vec<String>) {
     let before = shown_before(ctx, slot);
     let order: Vec<String> = list(ctx)
         .into_iter()
@@ -251,7 +317,7 @@ fn pane(ctx: &egui::Context, slot: Slot, name: &str) -> (usize, usize) {
         .map(|(n, _)| n)
         .collect();
     let at = order.iter().position(|n| n == name).unwrap_or(0);
-    (at, order.len().max(1))
+    (at, order)
 }
 
 fn weights_id(slot: Slot) -> egui::Id {
@@ -286,6 +352,55 @@ fn split(rect: egui::Rect, slot: Slot, w: &[f32], at: usize) -> egui::Rect {
         Slot::Left | Slot::Right => egui::Rect::from_min_size(
             egui::pos2(rect.left(), rect.top() + rect.height() * before),
             egui::vec2(rect.width(), rect.height() * part),
+        ),
+    }
+}
+
+/// How much of its slot a folded pane keeps: its header, and along the bottom
+/// slot a short stub of the header so the panes beside it keep their room.
+const FOLDED_WIDTH: f32 = 180.0;
+
+/// Like [`split`], with folded panes taking only their header: the others
+/// share what is left in proportion to their weights.
+fn split_folded(rect: egui::Rect, slot: Slot, w: &[f32], folded: &[bool], at: usize) -> egui::Rect {
+    if !folded.iter().any(|f| *f) {
+        return split(rect, slot, w, at);
+    }
+    let total = match slot {
+        Slot::Bottom => rect.width(),
+        _ => rect.height(),
+    };
+    let fixed = match slot {
+        Slot::Bottom => FOLDED_WIDTH,
+        _ => HEADER + 1.0,
+    };
+    let n_folded = folded.iter().filter(|f| **f).count() as f32;
+    let free = (total - fixed * n_folded).max(0.0);
+    let live: f32 = w
+        .iter()
+        .zip(folded)
+        .filter(|(_, f)| !**f)
+        .map(|(w, _)| *w)
+        .sum();
+    let size_of = |i: usize| {
+        if folded[i] {
+            fixed
+        } else if live > 0.0 {
+            free * w[i] / live
+        } else {
+            0.0
+        }
+    };
+    let before: f32 = (0..at).map(size_of).sum();
+    let part = size_of(at);
+    match slot {
+        Slot::Bottom => egui::Rect::from_min_size(
+            egui::pos2(rect.left() + before, rect.top()),
+            egui::vec2(part, rect.height()),
+        ),
+        _ => egui::Rect::from_min_size(
+            egui::pos2(rect.left(), rect.top() + before),
+            egui::vec2(rect.width(), part),
         ),
     }
 }
@@ -419,9 +534,16 @@ pub(super) fn show_docked<R>(
         ctx.request_repaint();
         return None;
     };
-    let (at, of) = pane(ctx, slot, name);
+    let (at, order) = pane(ctx, slot, name);
+    let of = order.len().max(1);
     let w = weights(ctx, slot, of);
-    let sub = split(slot_area, slot, &w, at);
+    let folded: Vec<bool> = if order.is_empty() {
+        vec![false]
+    } else {
+        order.iter().map(|n| is_folded(ctx, n)).collect()
+    };
+    let is_fold = folded.get(at).copied().unwrap_or(false);
+    let sub = split_folded(slot_area, slot, &w, &folded, at);
     let pal = crate::theme::ui_palette();
     let PaneOptions {
         closable,
@@ -430,6 +552,7 @@ pub(super) fn show_docked<R>(
     } = opts;
     let mut ask = None;
     let mut closed = false;
+    let mut fold_clicked = false;
     let mut out = egui::Area::new(id.with("docked"))
         .order(egui::Order::Background)
         .fixed_pos(sub.min)
@@ -454,8 +577,24 @@ pub(super) fn show_docked<R>(
                     sub.y_range(),
                     egui::Stroke::new(1.0, pal.border_subtle),
                 );
+                let fold_rect = egui::Rect::from_center_size(
+                    header.left_center() + egui::vec2(4.0 + BUTTON / 2.0, 0.0),
+                    egui::vec2(BUTTON, BUTTON),
+                );
+                let fold = ui
+                    .put(
+                        fold_rect,
+                        egui::Button::new(if is_fold {
+                            novo_theme::icons::CARET_RIGHT
+                        } else {
+                            novo_theme::icons::CARET_DOWN
+                        })
+                        .frame(false),
+                    )
+                    .on_hover_text(if is_fold { "Unfold" } else { "Fold up" });
+                fold_clicked = fold.clicked();
                 ui.painter().text(
-                    header.left_center() + egui::vec2(8.0, 0.0),
+                    header.left_center() + egui::vec2(8.0 + BUTTON, 0.0),
                     egui::Align2::LEFT_CENTER,
                     title,
                     egui::FontId::proportional(13.0),
@@ -513,24 +652,33 @@ pub(super) fn show_docked<R>(
                 // brings its own scrolling (the Pages list and its header).
                 let inner = ui
                     .scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                        if scrolls {
-                            egui::ScrollArea::both()
-                                .auto_shrink([false, false])
-                                .show(ui, add)
-                                .inner
+                        if is_fold {
+                            // Folded: only the header shows; the body is
+                            // not built (a hidden window costs nothing).
+                            None
+                        } else if scrolls {
+                            Some(
+                                egui::ScrollArea::both()
+                                    .auto_shrink([false, false])
+                                    .show(ui, add)
+                                    .inner,
+                            )
                         } else {
                             ui.set_clip_rect(body);
-                            add(ui)
+                            Some(add(ui))
                         }
                     })
                     .inner;
-                if at + 1 < of {
+                if at + 1 < of && !is_fold && !folded.get(at + 1).copied().unwrap_or(false) {
                     divider(ui, id, slot, slot_area, sub, at, &w);
                 }
                 inner
             })
             .inner
         });
+    if fold_clicked {
+        set_folded(ctx, name, !is_fold);
+    }
     match ask {
         Some(Ask::Float) => set(ctx, name, None),
         Some(Ask::Move(to)) => set(ctx, name, Some(to)),
@@ -541,15 +689,15 @@ pub(super) fn show_docked<R>(
     }
     // The pane fills its share of the slot whatever its content used.
     out.response.rect = sub;
-    Some(egui::InnerResponse::new(Some(out.inner), out.response))
+    Some(egui::InnerResponse::new(out.inner, out.response))
 }
 
 /// The dock buttons in the title bar of a floating panel: painted on the
 /// window's own layer and hit-tested by hand, since egui's title bar has no
 /// room for more buttons of ours. Returns the slot that was clicked.
-pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id) -> Option<Slot> {
+pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Order) -> Option<Slot> {
     let title = ctx.read_response(id.with("__title_click"))?;
-    let layer = egui::LayerId::new(egui::Order::Middle, id);
+    let layer = egui::LayerId::new(order, id);
     let pal = crate::theme::ui_palette();
     let painter = ctx.layer_painter(layer);
     let pointer = ctx.input(|i| i.pointer.hover_pos());
@@ -1081,5 +1229,164 @@ mod tests {
             three.iter().all(|w| (w - 1.0 / 3.0).abs() < 1e-6),
             "{three:?}"
         );
+    }
+
+    /// One frame of a window with the dock strips and a command dialog and a
+    /// settings form (modal) in it; `open` is the dialog's open flag.
+    fn dialog_frame(
+        h: &mut Harness,
+        open: &mut bool,
+        events: Vec<egui::Event>,
+    ) -> (egui::Rect, Option<egui::Rect>, Option<egui::Rect>) {
+        h.t += 0.05;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, SCREEN)),
+            time: Some(h.t),
+            events,
+            ..Default::default()
+        };
+        let mut canvas = egui::Rect::NOTHING;
+        let mut dialog = None;
+        let mut form = None;
+        let mut full = h.ctx.run_ui(input, |ui| {
+            spacers(ui);
+            canvas = egui::CentralPanel::no_frame()
+                .show(ui, |_| {})
+                .response
+                .rect;
+            let ctx = ui.ctx().clone();
+            if *open {
+                dialog = panel::dialog(&ctx, "Dock test dialog", [420.0, 300.0])
+                    .open(open)
+                    .show(&ctx, |ui| {
+                        ui.label("dialog body");
+                    })
+                    .map(|r| r.response.rect);
+            }
+            // A form docks, a question does not.
+            let f = panel::modal(&ctx, "page_form", "New pages", [380.0, 0.0], |ui| {
+                ui.label("form body");
+            });
+            let _ = f;
+            form = ctx.memory(|m| m.area_rect(egui::Id::new(("modal", "page_form"))));
+        });
+        full.textures_delta.clear();
+        (canvas, dialog, form)
+    }
+
+    #[test]
+    fn a_command_dialog_docks_at_the_right_edge_when_it_opens() {
+        let mut h = Harness::new();
+        set_dialogs_dock_by_default(&h.ctx, true);
+        let mut open = true;
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        let (canvas, dialog, _) = dialog_frame(&mut h, &mut open, vec![]);
+        let pane = dialog.expect("the dialog is shown");
+        assert_eq!(
+            slot_of(&h.ctx, "window:Dock test dialog"),
+            Some(Slot::Right)
+        );
+        assert!(
+            pane.right() > SCREEN.x - 2.0 && canvas.right() < SCREEN.x - 200.0,
+            "{pane:?} {canvas:?}"
+        );
+    }
+
+    #[test]
+    fn a_dialog_floats_when_docking_by_default_is_off() {
+        let mut h = Harness::new();
+        let mut open = true;
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        let (canvas, dialog, _) = dialog_frame(&mut h, &mut open, vec![]);
+        assert!(dialog.is_some());
+        assert_eq!(slot_of(&h.ctx, "window:Dock test dialog"), None);
+        assert!(canvas.right() > SCREEN.x - 1.0);
+    }
+
+    #[test]
+    fn a_floated_dialog_stays_floating_until_the_layout_is_reset() {
+        let mut h = Harness::new();
+        set_dialogs_dock_by_default(&h.ctx, true);
+        let mut open = true;
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        set(&h.ctx, "window:Dock test dialog", None);
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        assert_eq!(slot_of(&h.ctx, "window:Dock test dialog"), None);
+        reset(&h.ctx);
+        for _ in 0..3 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        assert_eq!(
+            slot_of(&h.ctx, "window:Dock test dialog"),
+            Some(Slot::Right)
+        );
+    }
+
+    #[test]
+    fn the_close_button_of_a_docked_dialog_closes_it() {
+        let mut h = Harness::new();
+        set_dialogs_dock_by_default(&h.ctx, true);
+        let mut open = true;
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        let (_, dialog, _) = dialog_frame(&mut h, &mut open, vec![]);
+        let pane = dialog.unwrap();
+        // The close button is the right-most one in the header.
+        let at = egui::pos2(pane.right() - 4.0 - BUTTON / 2.0, pane.top() + HEADER / 2.0);
+        let press = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        dialog_frame(&mut h, &mut open, vec![egui::Event::PointerMoved(at)]);
+        dialog_frame(&mut h, &mut open, vec![press(true)]);
+        dialog_frame(&mut h, &mut open, vec![press(false)]);
+        dialog_frame(&mut h, &mut open, vec![]);
+        assert!(!open, "the close button closes the docked dialog");
+    }
+
+    #[test]
+    fn a_folded_pane_keeps_only_its_header_and_the_other_pane_takes_the_room() {
+        let mut h = Harness::new();
+        h.settle(TWO);
+        set(&h.ctx, "dock_test_a", Some(Slot::Right));
+        set(&h.ctx, "dock_test_b", Some(Slot::Right));
+        let both = h.settle(TWO);
+        let (a, b) = (both.panels[0].unwrap(), both.panels[1].unwrap());
+        assert!((a.height() - b.height()).abs() < 2.0, "{a:?} {b:?}");
+        set_folded(&h.ctx, "dock_test_a", true);
+        let out = h.settle(TWO);
+        let (a, b) = (out.panels[0].unwrap(), out.panels[1].unwrap());
+        assert!(a.height() <= HEADER + 2.0, "folded pane: {a:?}");
+        assert!(
+            b.height() > both.panels[1].unwrap().height() + 100.0,
+            "{b:?}"
+        );
+        set_folded(&h.ctx, "dock_test_a", false);
+        let out = h.settle(TWO);
+        assert!(out.panels[0].unwrap().height() > HEADER * 3.0);
+    }
+
+    #[test]
+    fn a_settings_form_can_dock_but_a_question_stays_modal() {
+        assert!(!panel::MODAL_QUESTIONS_FOR_TEST.contains(&"page_form"));
+        assert!(panel::MODAL_QUESTIONS_FOR_TEST.contains(&"save_changes"));
+        let mut h = Harness::new();
+        set_dialogs_dock_by_default(&h.ctx, true);
+        let mut open = false;
+        for _ in 0..6 {
+            dialog_frame(&mut h, &mut open, vec![]);
+        }
+        assert_eq!(slot_of(&h.ctx, "modal:page_form"), Some(Slot::Right));
     }
 }
