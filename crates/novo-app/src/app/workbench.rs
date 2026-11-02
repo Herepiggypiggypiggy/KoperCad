@@ -635,6 +635,12 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cabinet.rules",
     "cabinet.plate",
     "cabinet.cutlist",
+    "cabinet.arrange_onto_rail",
+    "cabinet.arrange_rails",
+    "cabinet.arrange_ducts",
+    "cabinet.arrange_group",
+    "cabinet.arrange_tight",
+    "cabinet.arrange_even",
     "cabinet.door",
     "cabinet.surface",
     "export.bom",
@@ -1116,6 +1122,18 @@ impl NovoApp {
                 } else {
                     self.canvas.zoom_to_sheet();
                 }
+            }
+            "cabinet.arrange_onto_rail"
+            | "cabinet.arrange_rails"
+            | "cabinet.arrange_ducts"
+            | "cabinet.arrange_group"
+            | "cabinet.arrange_tight"
+            | "cabinet.arrange_even"
+                if self.is_open() =>
+            {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.keys.push(id.to_owned());
             }
             "cabinet.place-all" if self.is_open() => {
                 self.switch_workspace(Workspace::Cabinet);

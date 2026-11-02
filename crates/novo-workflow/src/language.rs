@@ -1467,6 +1467,36 @@ pub const DUTCH: &[Aliases] = &[
         &["zaaglijst", "lengtes", "knippen"],
     ),
     nl(
+        "cabinet.arrange_onto_rail",
+        &["plaats op rail", "zet op de rail"],
+        &["autoplaats", "rail"],
+    ),
+    nl(
+        "cabinet.arrange_rails",
+        &["maak rails", "rails aanmaken"],
+        &["rails", "rij"],
+    ),
+    nl(
+        "cabinet.arrange_ducts",
+        &["maak kanalen", "kanalen tussen rijen"],
+        &["kanaal", "kabelgoot"],
+    ),
+    nl(
+        "cabinet.arrange_group",
+        &["groepeer", "groepeer op soort"],
+        &["groep", "sorteer"],
+    ),
+    nl(
+        "cabinet.arrange_tight",
+        &["gaten dichten", "sluit op"],
+        &["afstand", "opschuiven"],
+    ),
+    nl(
+        "cabinet.arrange_even",
+        &["gelijke afstanden", "verdeel"],
+        &["afstand", "verdelen"],
+    ),
+    nl(
         "cabinet.rails",
         &["rails en kanalen", "voeg kanaal toe"],
         &["din-rail", "kabelgoot", "kanaal", "rail"],

@@ -876,6 +876,24 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("cabinet.rails", d(&drawn::DIN_RAIL), "Rails and ducts"),
     row(
+        "cabinet.arrange_onto_rail",
+        p(icons::MAGNET),
+        "Autoplace on rail",
+    ),
+    row("cabinet.arrange_rails", d(&drawn::DIN_RAIL), "Auto rails"),
+    row("cabinet.arrange_ducts", d(&drawn::DUCT), "Auto ducts"),
+    row("cabinet.arrange_group", p(icons::SQUARES_FOUR), "Autogroup"),
+    row(
+        "cabinet.arrange_tight",
+        p(icons::ARROWS_IN_LINE_HORIZONTAL),
+        "Close up gaps",
+    ),
+    row(
+        "cabinet.arrange_even",
+        p(icons::ARROWS_OUT_LINE_HORIZONTAL),
+        "Even gaps",
+    ),
+    row(
         "cabinet.surface",
         p(icons::PAINT_BUCKET),
         "Cabinet surfaces",

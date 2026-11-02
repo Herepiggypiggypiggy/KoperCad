@@ -234,6 +234,46 @@ impl CabinetLayout {
     /// Applies a plan. Because it is one call, it is one undo step in the UI.
     pub fn accept(&mut self, plan: &Plan, all: &[Candidate]) {
         self.rails.extend(plan.rails.iter().cloned());
+        // Arrange tools: devices that move, and ducts that are added.
+        let mut next = self
+            .rails
+            .iter()
+            .map(|r| r.id)
+            .chain(self.ducts.iter().map(|d| d.id))
+            .max()
+            .unwrap_or(0)
+            + 1;
+        if plan.title.is_some() {
+            for d in &plan.ducts {
+                self.ducts.push(Duct {
+                    id: next,
+                    x: d.x,
+                    y: d.y,
+                    length: d.length,
+                    width: d.width,
+                    vertical: d.vertical,
+                });
+                next += 1;
+            }
+        }
+        for m in &plan.moves {
+            if let Some(p) = self.placements.iter_mut().find(|p| p.id == m.id) {
+                p.x = m.x;
+                p.y = m.y;
+                p.rail = Some(m.rail);
+            } else if let Some(c) = all.iter().find(|c| c.id == m.id) {
+                self.placements.push(Placement {
+                    id: m.id,
+                    x: m.x,
+                    y: m.y,
+                    rotated: m.rotated,
+                    size: c.size,
+                    clearance: None,
+                    margins: Margins::default(),
+                    rail: Some(m.rail),
+                });
+            }
+        }
         for p in &plan.placements {
             if self.placements.iter().any(|q| q.id == p.id) {
                 continue;

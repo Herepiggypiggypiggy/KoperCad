@@ -159,6 +159,12 @@ pub const RELOCATED: &[(&str, Home)] = &[
     ("cabinet.rules", Home::Rail),
     ("cabinet.emc", Home::Rail),
     ("cabinet.cutlist", Home::Rail),
+    ("cabinet.arrange_onto_rail", Home::Rail),
+    ("cabinet.arrange_rails", Home::Rail),
+    ("cabinet.arrange_ducts", Home::Rail),
+    ("cabinet.arrange_group", Home::Rail),
+    ("cabinet.arrange_tight", Home::Rail),
+    ("cabinet.arrange_even", Home::Rail),
     ("heat.vents", Home::Rail),
     ("view.cabinet_table", Home::Rail),
     // Reports and Commissioning rail

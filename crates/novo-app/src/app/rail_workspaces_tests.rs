@@ -234,6 +234,7 @@ fn the_relocated_table_matches_what_the_rails_draw() {
         rail_cabinet::TOOLS,
         rail_cabinet::ASSISTS,
         rail_cabinet::PANELS,
+        super::cabinet_arrange::TOOLS,
         rr::REPORTS_TOOLS,
         rr::REPORTS_ASSISTS,
         rr::REPORTS_PANELS,
