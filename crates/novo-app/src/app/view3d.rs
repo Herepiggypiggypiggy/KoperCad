@@ -1146,14 +1146,13 @@ impl NovoApp {
         // The status of the heat simulation, whether or not its panel is open.
         let no_cabinet = empty_hint.is_some();
         let heat_shown = self.cabinet.heat.on;
-        let (changed, asked) = view3d_controls::toolbar(
+        let changed = view3d_controls::toolbar(
             ui.ctx(),
             view_rect,
             &mut mode.controls,
             &mut values,
             limit,
             &self.settings.camera_views,
-            !mode.view.state.selection.is_empty(),
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
             &mut |ui| {
@@ -1226,9 +1225,6 @@ impl NovoApp {
             None => {}
         }
         mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
-        if let Some(command) = asked {
-            self.wb.queued.push(command);
-        }
         match changed.views {
             Some(ViewsAction::Save) => {
                 // The menu disables Save when it is full.
