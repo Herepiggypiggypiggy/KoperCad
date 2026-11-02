@@ -81,7 +81,8 @@ fn painted_text(d: &mut Drive, size: egui::Vec2) -> String {
         ..Default::default()
     };
     let app = &mut d.app;
-    let output = d.ctx.run_ui(input, |ui| app.show(ui));
+    let mut output = d.ctx.run_ui(input, |ui| app.show(ui));
+    output.textures_delta.clear();
     let mut text = String::new();
     for clipped in &output.shapes {
         collect_text(&clipped.shape, &mut text);
@@ -111,12 +112,11 @@ fn the_3d_view_shows_the_chip_with_heat_off_and_every_panel_closed() {
     for _ in 0..4 {
         d.frame_sized(size, Vec::new());
     }
-    // The status is the first row of the toolbar, not a window of its own:
-    // it takes no room from the panels under the toolbar.
+    // The status is a slot of the status bar, not a window of its own: it
+    // takes no room from the panels under the toolbar.
     assert!(chip_rect(&ctx).is_none(), "3D has no separate chip card");
     let text = painted_text(&mut d, size);
-    assert!(text.contains("Heat has not been run"), "{text}");
-    assert!(text.contains("Run heat"), "{text}");
+    assert!(text.contains("Heat not run"), "{text}");
     let canvas = d.app.learn_anchor("workspace.view3d").expect("canvas");
     let toolbar = ctx
         .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
@@ -155,7 +155,7 @@ fn the_chip_follows_the_one_status_value_in_3d() {
 }
 
 #[test]
-fn the_cabinet_shows_the_same_chip() {
+fn the_cabinet_shows_the_same_chip_in_the_status_bar() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
@@ -164,8 +164,14 @@ fn the_cabinet_shows_the_same_chip() {
         d.frame();
     }
     assert!(!d.app.cabinet.heat.on);
-    assert!(
-        chip_rect(&ctx).is_some(),
-        "the chip is drawn in the Cabinet"
-    );
+    assert!(chip_rect(&ctx).is_none(), "no floating card in the Cabinet");
+    let text = painted_text(&mut d, egui::vec2(1366.0, 768.0));
+    assert!(text.contains("Heat not run"), "{text}");
+    // Nowhere else: the Schematic has no simulation slot.
+    d.app.run(&ctx, Action::ShowSchematic);
+    for _ in 0..3 {
+        d.frame();
+    }
+    let text = painted_text(&mut d, egui::vec2(1366.0, 768.0));
+    assert!(!text.contains("Heat not run"), "{text}");
 }

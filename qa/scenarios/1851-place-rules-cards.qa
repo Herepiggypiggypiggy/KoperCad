@@ -1,0 +1,36 @@
+@title Place rules cards: open, change a rule, Place all follows it, undo
+@area Cabinet
+@sizes 1366x768 1920x1080
+# The Rules panel shows one card per kind of device in plain words. A change applies to Place all at once and the
+# panel's Undo takes it back.
+open qa/fixtures/cabinet-unplaced-plate.novo
+wait 20
+click_text Cabinet #1
+wait 30
+click_text "Rules"
+wait 10
+shot rules-open
+expect "Where each kind goes"
+expect "Circuit breakers"
+click_text "Spacing for this kind" #1
+wait 5
+shot card-expanded
+click_text "Bottom" #1
+wait 10
+expect "Devices with letter Q, F, G go to the bottom of the plate"
+shot rule-changed
+key ctrl+shift+p
+wait 40
+shot place-all-after-change
+click_text "Cancel" #1
+wait 10
+click_text "KoperCAD's default rules"
+wait 5
+shot replace-all-confirmation
+expect "Replace all rules with KoperCAD's default rules?"
+click_text "Cancel"
+wait 5
+click_text "Undo"
+wait 10
+expect "Devices with letter Q, F, G go to the top of the plate"
+shot undone

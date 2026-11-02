@@ -546,8 +546,38 @@ pub(super) fn dragged_to(
 /// usable. A model value: it follows the solver's openings, not a
 /// measurement.
 pub(super) fn measured_m3h(snap: &CfdSnapshot, f: &Footprint) -> Option<f64> {
+    if let Some(q) = solved_m3h(snap, f) {
+        return Some(q);
+    }
     let (mean, area_m2) = opening_mean(snap, f, |inward_speed, _| inward_speed)?;
     Some(mean * area_m2 * 3600.0)
+}
+
+/// The air through the opening from the solver's own face fluxes (m3/h,
+/// positive into the cabinet): the opening patch on the same wall that the
+/// footprint overlaps most. These sum to zero in a closed cabinet. `None`
+/// when the result carries no fluxes (older results, other solvers).
+pub(super) fn solved_m3h(snap: &CfdSnapshot, f: &Footprint) -> Option<f64> {
+    use super::heat_settings::Wall;
+    let (face, t0, t1) = match f.wall {
+        Wall::Left => (0u8, 1, 2),
+        Wall::Right => (1, 1, 2),
+        Wall::Top => (2, 0, 2),
+        Wall::Bottom => (3, 0, 2),
+        Wall::Door => (5, 0, 1),
+    };
+    let ov = |a0: f64, a1: f64, b0: f64, b1: f64| (a1.min(b1) - a0.max(b0)).max(0.0);
+    snap.opening_flows
+        .iter()
+        .filter(|o| o.face == face)
+        .map(|o| {
+            let a = ov(f.lo[t0] * 1e-3, f.hi[t0] * 1e-3, o.lo[0], o.hi[0]);
+            let b = ov(f.lo[t1] * 1e-3, f.hi[t1] * 1e-3, o.lo[1], o.hi[1]);
+            (a * b, o.m3h)
+        })
+        .filter(|(area, _)| *area > 0.0)
+        .max_by(|x, y| x.0.total_cmp(&y.0))
+        .map(|(_, q)| q)
 }
 
 /// The heat the air carries out through the opening, W (negative: heat taken
@@ -929,6 +959,32 @@ mod tests {
             lo: [0.0, 20.0, 10.0],
             hi: [0.0, 60.0, 50.0],
         }
+    }
+
+    #[test]
+    fn solver_fluxes_win_over_the_speed_reading_and_balance() {
+        use novo_cfd::OpeningFlow;
+        let mut snap = super::super::heat_3d_tests::snapshot();
+        // A speed reading that would say 0.5 m/s out of the grille ...
+        snap.velocity.iter_mut().for_each(|v| *v = [-0.5, 0.0, 0.0]);
+        // ... but the solver's fluxes say 90 m3/h in here and 90 out there.
+        snap.opening_flows = vec![
+            OpeningFlow {
+                face: 0,
+                lo: [0.02, 0.01],
+                hi: [0.06, 0.05],
+                m3h: 90.0,
+            },
+            OpeningFlow {
+                face: 1,
+                lo: [0.0, 0.0],
+                hi: [0.05, 0.05],
+                m3h: -90.0,
+            },
+        ];
+        let q = measured_m3h(&snap, &grille()).unwrap();
+        assert!((q - 90.0).abs() < 1e-9, "{q}");
+        assert!(snap.opening_imbalance_m3h().abs() < 1e-9);
     }
 
     #[test]

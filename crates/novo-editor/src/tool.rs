@@ -257,6 +257,9 @@ pub struct Preview {
     /// position left out because it would overlap another device. Drawn as
     /// a red box with a cross so the missing symbol is explained.
     pub refused: Option<(Point, Point)>,
+    /// The wire tool: every pin on the page that has no wire yet, drawn as a
+    /// ring so the places a wire can start or end are visible.
+    pub free_pins: Vec<Point>,
 }
 
 /// A corner (two arms) or T (three arms) piece of a wire in progress.
@@ -378,6 +381,9 @@ fn pin_of(target: Target) -> Option<Endpoint> {
         _ => None,
     }
 }
+
+/// The reason shown when a wire is started on nothing.
+const START_NOTICE: &str = "Start a wire on a pin, junction or wire";
 
 /// The reason shown when a line would run back over the wire being drawn.
 const SELF_OVERLAP_NOTICE: &str = "A line cannot run back over the wire";
@@ -1236,7 +1242,7 @@ impl Editor {
                         Clicked::Step
                     }
                     (None, None) => {
-                        self.notice = Some("Start a wire on a pin, junction or wire".into());
+                        self.notice = Some(START_NOTICE.into());
                         Clicked::Refused
                     }
                     (Some(start), None) if w.drag && w.pull => {
@@ -2993,8 +2999,28 @@ impl Editor {
         };
         match &self.notice {
             Some(n) if text.is_empty() => n.clone(),
+            // The refusal of a start already says what to click: do not
+            // repeat it in the same line.
+            Some(n)
+                if n == START_NOTICE
+                    && matches!(&self.tool, Tool::Wire(w) if w.start.is_none()) =>
+            {
+                format!("{n} · Esc to stop")
+            }
             Some(n) => format!("{n} · {text}"),
             None => text,
+        }
+    }
+
+    /// The wire tool's step for the guide: 0 start, 1 turn or finish while a
+    /// wire is in progress, 2 when the pointer is on something to finish on.
+    /// `None` when the wire tool is not on.
+    pub fn wire_step(&self) -> Option<usize> {
+        match &self.tool {
+            Tool::Wire(w) if w.start.is_none() => Some(0),
+            Tool::Wire(_) if self.target.is_some() => Some(2),
+            Tool::Wire(_) => Some(1),
+            _ => None,
         }
     }
 
@@ -3005,6 +3031,9 @@ impl Editor {
             target_label: self.target.and_then(|t| target_label(doc.project(), t)),
             ..Preview::default()
         };
+        if matches!(self.tool, Tool::Wire(_)) {
+            preview.free_pins = free_pins(doc.project(), page);
+        }
         let Some(cursor) = self.cursor else {
             return preview;
         };
@@ -3165,6 +3194,25 @@ impl Editor {
 
 /// What a wiring target is, in a few words: a pin by its device tag and pin
 /// name, a junction, or a wire by its number.
+/// The pins of the page's symbols that have no wire on them.
+pub fn free_pins(project: &novo_core::Project, page: PageId) -> Vec<Point> {
+    let mut out = Vec::new();
+    for &sid in &project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(sid) else {
+            continue;
+        };
+        for pin in 0..sym.pins.len() {
+            let pin = pin as u16;
+            if let Some(q) = sym.pin_position(pin)
+                && project.wires_at(Endpoint::pin(sid, pin)).next().is_none()
+            {
+                out.push(q);
+            }
+        }
+    }
+    out
+}
+
 pub(crate) fn target_label(project: &novo_core::Project, target: Target) -> Option<String> {
     match target {
         Target::Endpoint(Endpoint::Pin { symbol, pin }, _) => {

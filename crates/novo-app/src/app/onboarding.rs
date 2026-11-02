@@ -113,6 +113,19 @@ pub(crate) fn build_practice(doc: &mut Document) -> novo_core::Result<novo_core:
 }
 
 impl NovoApp {
+    /// "Fast keys 2 of 7" while the walk-through runs under Live: the status
+    /// bar shows it where the card would be.
+    pub(super) fn walkthrough_progress(&self) -> Option<String> {
+        if !(self.walkthrough_on() && self.wb.live.on) {
+            return None;
+        }
+        let done = STEPS
+            .iter()
+            .filter(|s| self.settings.onboarding.is_ticked(s.id))
+            .count();
+        Some(format!("Fast keys {done} of {}", STEPS.len()))
+    }
+
     /// Whether the card is on show: the walk-through was started, not
     /// skipped, and a project is open.
     pub(super) fn walkthrough_on(&self) -> bool {
@@ -224,7 +237,10 @@ impl NovoApp {
                 )
             })
             .collect();
-        let pill = self.wb.live.on;
+        // While Live runs the list gives way to a slot of the status bar.
+        if self.wb.live.on {
+            return;
+        }
         let on_example = self.project_name().as_deref() == Some(super::example::EXAMPLE_NAME);
         let mut example = false;
         let mut close = false;
@@ -237,13 +253,7 @@ impl NovoApp {
         )
         .fixed_open()
         .fit();
-        // The pill has no heading of its own to put in a title bar.
-        let panel = if pill { panel.bare() } else { panel };
         panel.show(ctx, |ui| {
-            if pill {
-                ui.weak(format!("Fast keys {done} of {}", STEPS.len()));
-                return;
-            }
             ui.set_max_width(300.0);
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

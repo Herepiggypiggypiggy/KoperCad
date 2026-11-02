@@ -38,6 +38,8 @@ pub(crate) struct Carry {
     /// Strongest flux in the air and in solids, W/m2.
     pub top_air: f32,
     pub top_solid: f32,
+    /// The flux per cell, W/m2, for the flux map (see `heat_modes`).
+    pub field: Vec<[f32; 3]>,
 }
 
 /// Traces the layer once per result.
@@ -82,6 +84,7 @@ pub(crate) fn carry(snap: &CfdSnapshot, ambient: f64, place: Place) -> Carry {
         }
     }
     out.top_solid = conduction_arrows(snap, &field, place, &mut out.conduction);
+    out.field = field;
     out
 }
 

@@ -20,6 +20,8 @@ novo-reports.workspace = true
 novo-numbering.workspace = true
 novo-cables.workspace = true
 novo-layout.workspace = true
+novo-thermal.workspace = true
+novo-sim.workspace = true
 novo-py.workspace = true
 novo-storage.workspace = true
 
