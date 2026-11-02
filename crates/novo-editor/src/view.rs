@@ -1164,6 +1164,10 @@ impl SchematicView {
         // press must not start or end a wire under it.
         if let Some(pill) = self.guide_pill {
             let over = ui.input(|i| i.pointer.interact_pos().is_some_and(|p| pill.contains(p)));
+            ui.interact(pill, ui.id().with("wire_shape_pill"), egui::Sense::hover())
+                .on_hover_text(
+                    "Switch between right-angle corners and straight lines, same as Shift+W.",
+                );
             if over && ui.input(|i| i.pointer.any_pressed()) {
                 self.swallow = true;
                 self.guide_pill_down = true;

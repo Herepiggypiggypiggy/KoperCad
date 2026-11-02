@@ -400,7 +400,7 @@ pub(super) fn show(
             }
         }
     }
-    if novo_theme::widgets::ghost_button(ui, "Add a kind of device").clicked() {
+    if ui.button("+ Add a kind of device").clicked() {
         add_rule(rules);
         changed = true;
     }
@@ -558,7 +558,14 @@ pub(super) fn surface_text(rules: &SurfaceRules) -> String {
 
 /// One sentence for a surface rule.
 pub(super) fn surface_sentence(rule: &SurfaceRule) -> String {
-    let kinds: Vec<&str> = rule.codes.iter().map(|c| code_name(c)).collect();
+    let kinds: Vec<String> = rule
+        .codes
+        .iter()
+        .map(|c| match code_name(c) {
+            "devices" => format!("marked with letter {}", c.to_ascii_uppercase()),
+            n => n.to_owned(),
+        })
+        .collect();
     format!(
         "Devices that are {} go to the {} instead of the mounting plate.",
         kinds.join(", "),
@@ -635,7 +642,7 @@ pub(super) fn show_surfaces(ui: &mut egui::Ui, rules: &SurfaceRules) -> Option<O
         changed = true;
     }
     ui.horizontal(|ui| {
-        if novo_theme::widgets::ghost_button(ui, "Add a surface rule").clicked() {
+        if ui.button("+ Add a surface rule").clicked() {
             edited.rules.push(SurfaceRule {
                 surface: "door".to_owned(),
                 codes: vec!["Z".to_owned()],
