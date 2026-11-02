@@ -520,7 +520,7 @@ pub(super) fn show_cut_window(
                 ui.weak("This panel has no mounting plate yet.");
                 return;
             };
-            ui.weak("Stock bars of 2000 mm, 2 mm saw cut. Rails are cut shorter than the plate only when that saves a bar.");
+            super::dialog_ui::explained(ui, "Stock bars", "Stock bars of 2000 mm, 2 mm saw cut. Rails are cut shorter than the plate only when that saves a bar.");
             ui.add_space(4.0);
             if let Some((plan, pieces)) = &lists.rails {
                 ui.strong("DIN rail");

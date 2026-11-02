@@ -662,7 +662,11 @@ fn workshop_strip(
         );
     }
     print_check(ui, check, act);
-    ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the print scale check, the 1:1 drilling templates, the labels, the kitting list and the work cards in one folder next to the project.");
+    super::dialog_ui::explained(
+        ui,
+        "Workshop pack",
+        "The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the print scale check, the 1:1 drilling templates, the labels, the kitting list and the work cards in one folder next to the project.",
+    );
 }
 
 /// One thing the printed bench output cannot be trusted on yet.
@@ -923,7 +927,11 @@ fn defaults_row(
             }));
         }
     });
-    ui.weak("The size is a choice for the bench; the standards check still judges it against the breaker.");
+    super::dialog_ui::explained(
+        ui,
+        "Size choice",
+        "The size is a choice for the bench; the standards check still judges it against the breaker.",
+    );
 }
 
 /// The wires to cut, in the order of the printed list (size and colour
@@ -1256,7 +1264,7 @@ fn label_tab(
                     .suffix(" mm down"),
             );
         });
-        ui.weak("Print at 100% (actual size), not fit to page. Test on plain paper and hold it against the sheet to the light.");
+        super::dialog_ui::explained(ui, "Print at 100%, not fit to page", "Print at 100% (actual size), not fit to page. Test on plain paper and hold it against the sheet to the light.");
     });
     let valid = state.labels.is_valid();
     if !valid {
@@ -1377,7 +1385,11 @@ fn tape_fields(ui: &mut egui::Ui, t: &mut TapeStock) {
             ui.add(egui::DragValue::new(len).range(5.0..=300.0).suffix(" mm"));
         }
     });
-    ui.weak("One label per page, as wide as the tape. Print it from the printer's driver at the tape size.");
+    super::dialog_ui::explained(
+        ui,
+        "Label tape",
+        "One label per page, as wide as the tape. Print it from the printer's driver at the tape size.",
+    );
 }
 
 /// Parses a length typed in millimetres; a comma works as the decimal mark.

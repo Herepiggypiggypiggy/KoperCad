@@ -280,7 +280,7 @@ already has. These letters only start a project that has none yet. Yours, for ev
                         );
                     }
                     super::dialog_ui::section(ui, "Extra design checks", false);
-                    super::dialog_ui::hint(ui, "Off until you ask. Findings appear under Issues.");
+                    super::dialog_ui::help(ui, "Off until you ask. Findings appear under Issues.");
                     ui.add_space(4.0);
                     ui.checkbox(&mut tag_rule, "Device names follow page and column")
                         .on_hover_text(

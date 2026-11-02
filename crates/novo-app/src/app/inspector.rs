@@ -1397,7 +1397,7 @@ fn spec_section(
                 }
             }
         }
-        ui.add(egui::Label::new(egui::RichText::new(section.help).small().weak()).wrap());
+        novo_theme::widgets::help_mark(ui, section.help);
     });
 }
 

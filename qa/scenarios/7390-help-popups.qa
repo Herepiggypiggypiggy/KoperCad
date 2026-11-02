@@ -1,0 +1,43 @@
+@title Help popups: short labels with a ? popup in Calculations, Standards check, Sizing, Print preview, Kitting and Bench output
+@area Windows
+click_text "Open example"
+wait 20
+key ctrl+k
+text calculations
+key enter
+wait 10
+shot calculations
+tree Help
+key Escape
+wait 5
+key ctrl+k
+text Standards check
+key enter
+wait 10
+shot standards
+tree Help
+key Escape
+wait 5
+key ctrl+k
+text size enclosure
+key enter
+wait 10
+shot sizing
+tree Help
+key Escape
+wait 5
+key ctrl+k
+text Kitting
+key enter
+wait 10
+shot kitting
+tree Help
+key Escape
+wait 5
+key ctrl+k
+text print preview
+key enter
+wait 10
+shot print-preview
+tree Help
+check_layout
