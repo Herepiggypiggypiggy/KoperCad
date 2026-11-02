@@ -67,6 +67,12 @@ impl DefectsLive {
         self.generation
     }
 
+    /// How many defects are injected, and the label of the first.
+    pub(super) fn summary(&self) -> Option<(usize, String)> {
+        let all = self.set.defects();
+        all.first().map(|d| (all.len(), d.label()))
+    }
+
     /// Whether any defect is injected.
     pub(super) fn active(&self) -> bool {
         !self.set.is_empty()
@@ -379,9 +385,6 @@ impl NovoApp {
             live.defects.observe(project, &poles);
             ctx.request_repaint();
         }
-        if live.defects.active() {
-            banner(ctx, canvas, &live.defects, live.plc.is_running());
-        }
         if !live.defects.open {
             self.defects_save();
             return;
@@ -480,41 +483,6 @@ enum CardAction {
     Delete(usize),
     Record,
     StopRecord,
-}
-
-/// The strip over the canvas while a defect is injected, so nobody mistakes a faulted plant for
-/// the drawing.
-fn banner(ctx: &egui::Context, canvas: egui::Rect, defects: &DefectsLive, plc_running: bool) {
-    let palette = crate::theme::ui_palette();
-    let count = defects.set.defects().len();
-    let mut text = format!(
-        "DEFECT INJECTED ({count}): {}",
-        defects.set.defects()[0].label()
-    );
-    if count > 1 {
-        text.push_str(&format!(" and {} more", count - 1));
-    }
-    if plc_running {
-        text.push_str(" - not applied while a PLC program runs");
-    }
-    egui::Area::new(egui::Id::new("defect_banner"))
-        .fixed_pos(egui::pos2(canvas.center().x, canvas.top() + 6.0))
-        .pivot(egui::Align2::CENTER_TOP)
-        .order(egui::Order::Foreground)
-        .interactable(false)
-        .show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(palette.error)
-                .corner_radius(4.0)
-                .inner_margin(egui::Margin::symmetric(10, 4))
-                .show(ui, |ui| {
-                    ui.label(
-                        egui::RichText::new(text)
-                            .strong()
-                            .color(egui::Color32::WHITE),
-                    );
-                });
-        });
 }
 
 fn draw_card(
