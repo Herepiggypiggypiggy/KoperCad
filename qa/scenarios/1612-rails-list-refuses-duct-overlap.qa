@@ -10,6 +10,9 @@ click_text Cabinet #1
 wait 30
 click_text "Rails and ducts"
 wait 10
+# The window opens docked on the right; its table is wider than the strip, so float it first.
+click 1321 54
+wait 10
 shot list
 click_text "Turn" #6
 wait 10
