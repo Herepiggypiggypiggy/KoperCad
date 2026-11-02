@@ -206,7 +206,7 @@ pub(super) enum Ask {
     SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
     /// An arrange tool (`cabinet.arrange_*`) on these devices (none: all).
-    Arrange(&'static str, Vec<u64>),
+    AutoArrange(&'static str, Vec<u64>),
     /// Set a plate where a panel has none or too small a one, and place every
     /// device of every panel, as one undo step.
     PlaceEveryPanel,
@@ -2674,7 +2674,7 @@ impl NovoApp {
                             }
                             id if id.starts_with("cabinet.arrange_") && !has_plan => {
                                 if let Some(tool) = super::cabinet_arrange::tool_id(id) {
-                                    ask = Some(Ask::Arrange(tool, selected.clone()));
+                                    ask = Some(Ask::AutoArrange(tool, selected.clone()));
                                 }
                             }
                             "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
@@ -3028,7 +3028,7 @@ impl NovoApp {
                 || matches!(
                     ask,
                     Ask::PlaceAll
-                        | Ask::Arrange(..)
+                        | Ask::AutoArrange(..)
                         | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
                         | Ask::CoolerLayout(..)
@@ -3135,7 +3135,7 @@ impl NovoApp {
                 );
             }
             Ask::PlaceEveryPanel => self.place_every_panel(),
-            Ask::Arrange(tool, ids) => {
+            Ask::AutoArrange(tool, ids) => {
                 if let Some(layout) = layout {
                     self.arrange_preview(tool, &ids, &layout, cands);
                 }

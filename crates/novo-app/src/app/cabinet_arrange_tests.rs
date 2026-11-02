@@ -57,8 +57,12 @@ fn loose(d: &mut Drive) -> (novo_core::StructureId, Vec<u64>) {
 fn run(d: &mut Drive, cab: novo_core::StructureId, tool: &'static str) {
     let layout = novo_layout::model::load(project(d), cab);
     let cands = novo_layout::model::candidates(project(d), cab);
-    d.app
-        .cabinet_ask(Ask::Arrange(tool, Vec::new()), Some(cab), layout, &cands);
+    d.app.cabinet_ask(
+        Ask::AutoArrange(tool, Vec::new()),
+        Some(cab),
+        layout,
+        &cands,
+    );
     d.frame();
 }
 
