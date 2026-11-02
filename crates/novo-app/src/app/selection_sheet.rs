@@ -288,6 +288,7 @@ impl NovoApp {
         .above_card()
         .fixed_open()
         .height(560.0)
+        .dockable()
         .show(ctx, |ui| {
             ui.weak("Typing a value sets it on all of them");
             sheet_ui(ui, &sheet, &mut state, &candidates, &mut actions)

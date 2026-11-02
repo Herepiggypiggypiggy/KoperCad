@@ -181,6 +181,7 @@ pub(super) fn card(
         240.0,
     )
     .fit()
+    .dockable()
     .fixed_open()
     .top(super::view3d_controls::below(ctx))
     .bottom_room(bottom_room)

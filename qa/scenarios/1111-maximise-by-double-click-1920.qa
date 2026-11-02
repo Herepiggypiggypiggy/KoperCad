@@ -7,6 +7,9 @@ click_text File #1
 wait 5
 click_text Preferences
 wait 20
+# Preferences opens docked at the right edge; the float button of its pane header gives the window.
+click 1875 54
+wait 30
 shot preferences-home
 double_click 960 269
 wait 20

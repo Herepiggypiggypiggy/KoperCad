@@ -1,0 +1,50 @@
+@title Rename terminals opens docked right, folds, and its close button with text typed cancels (1366x768)
+@area Windows
+@sizes 1366x768
+key ctrl+k
+wait 4
+text terminal strips
+wait 6
+key Enter
+wait 40
+try click_text "Next"
+wait 20
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Next"
+wait 20
+try click_text "Do it for me"
+wait 30
+key ctrl+k
+wait 4
+text rename terminals
+wait 8
+key Enter
+wait 30
+expect "Nothing matches yet"
+shot rename-docked
+click 1063 54
+wait 30
+expect_not "Nothing matches yet"
+shot rename-folded
+click 1063 54
+wait 30
+expect "Nothing matches yet"
+shot rename-unfolded
+# Type a search into the form, then close the pane: nothing is applied.
+click 1220 86
+wait 4
+text "1"
+wait 10
+shot typed-not-applied
+click 1351 54
+wait 30
+expect_not "Nothing matches yet"
+expect_not "Renamed"
+shot closed-nothing-applied

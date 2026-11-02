@@ -1948,6 +1948,10 @@ impl NovoApp {
         self.drawer(ui);
         // Panels the person docked at an edge of the canvas take their strip here, so
         // the canvas is what is left.
+        // Command windows dock at the right edge when they open (the unit
+        // tests of single windows look at floating ones and leave this off).
+        #[cfg(not(test))]
+        panel_dock::set_dialogs_dock_by_default(ui.ctx(), true);
         panel_dock::spacers(ui);
         if pages_docked && let Some(slot) = panel_dock::pages_docked(&ctx) {
             let shown = panel_dock::show_docked(
