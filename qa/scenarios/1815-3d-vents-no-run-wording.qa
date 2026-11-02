@@ -1,0 +1,15 @@
+@title 3D Heat vents: before any run the openings show no measured flow and the panel says why
+@area 3D
+@sizes 1366x768 1920x1080
+# The cabinet with one small grille, no run yet: the Vents and fans panel lists the opening without a flow, and no air-in/out balance is claimed. This is the state with nothing solved; a result from before the solver reported openings falls back to the old speed reading with the same wording (covered by the heat_openings unit test).
+open qa/fixtures/cabinet-vents-small-grille.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+shot 01-no-run
+expect "Vents and fans"
+expect_not "Preliminary"
+check_layout
+check_blank 01-no-run

@@ -1105,7 +1105,9 @@ impl NovoApp {
         if id == "edit.duplicate" {
             self.tour_tick("duplicate");
         }
-        if self.workspace() == Workspace::Cabinet && matches!(id, "edit.rotate" | "edit.delete") {
+        if self.workspace() == Workspace::Cabinet
+            && matches!(id, "edit.rotate" | "edit.delete" | "edit.select_all")
+        {
             self.cabinet.keys.push(id.to_owned());
             return;
         }

@@ -277,3 +277,19 @@ fn the_carried_watts_are_printed_only_with_a_value_and_a_loss() {
     let no_loss = through(&specs, &flows, 0.0, Some(150.0)).unwrap();
     assert!(!no_loss.text().contains("carries out"));
 }
+
+#[test]
+fn air_in_and_out_that_differ_are_called_a_rough_reading_not_a_fact() {
+    let specs = [fan(Wall::Left, false), fan(Wall::Right, true)];
+    // 135 in against 100 out: 30 % apart.
+    let t = through(&specs, &[Some(135.0), Some(-100.0)], 300.0, None).unwrap();
+    assert!(t.imbalance() > 0.25);
+    assert!(
+        t.text().contains("differ by") && t.text().contains("closed cabinet"),
+        "{}",
+        t.text()
+    );
+    // Equal flows say nothing extra.
+    let ok = through(&specs, &[Some(600.0), Some(-600.0)], 300.0, None).unwrap();
+    assert!(ok.imbalance() < 1e-9 && !ok.text().contains("differ by"));
+}

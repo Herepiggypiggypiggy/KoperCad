@@ -35,12 +35,22 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> 
     }
     if h.cloud {
         out.push(String::from(
-            "Cloud: air at ambient is clear; colour and opacity run from ambient to the hot end of the air (its own scale, above)",
+            "Cloud: air at ambient is clear; colour and opacity run from ambient to the hot end of the air (its own scale, above). Hotter air turns white-hot and more solid. Same density from every side; a model, not a measurement",
         ));
     }
-    if h.carry {
+    if h.heat_flow.draws_air() || h.heat_flow.draws_map() {
         out.push(format!(
             "Heat flow (orange): up to {top_flux:.0} W/m², the heat the air carries away, no radiation"
+        ));
+    }
+    if h.heat_flow.draws_solids() {
+        out.push(String::from(
+            "Arrows in solids: heat conducted through plate, rails and devices (-k grad T), longer is more",
+        ));
+    }
+    if h.cloud && h.cloud_moves {
+        out.push(String::from(
+            "Moving cloud: the solved air flow carries the heat from cold air (a model, not a second solve)",
         ));
     }
     if h.devices {
@@ -85,7 +95,7 @@ pub(crate) fn strip(
     if h.flow.mode != FlowMode::Off {
         super::heat_flow::legend(ui, &h.flow, top_speed);
     }
-    if h.carry && top_flux > 0.0 {
+    if (h.heat_flow.draws_air() || h.heat_flow.draws_map()) && top_flux > 0.0 {
         super::heat_flow::flux_legend(ui, top_flux);
     }
     if wanted(h) || h.flow.mode != FlowMode::Off || h.cloud || h.carry {
@@ -197,6 +207,7 @@ mod tests {
             slice: false,
             cloud: true,
             carry: true,
+            heat_flow: super::super::heat_modes::HeatFlowMode::Air,
             ..Heat3d::default()
         };
         let n = notes(&h, Range { lo: 20.0, hi: 60.0 }, 0.0, 850.0);

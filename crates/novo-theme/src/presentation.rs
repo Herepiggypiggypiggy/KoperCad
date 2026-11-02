@@ -254,6 +254,11 @@ pub const TABLE: &[Presentation] = &[
         "Open crane cabinet example",
     ),
     row(
+        "file.example_crane_sim",
+        d(&drawn::BRIDGE),
+        "Open crane sim example",
+    ),
+    row(
         "file.example_plc",
         d(&drawn::PLC),
         "Open PLC cabinet example",

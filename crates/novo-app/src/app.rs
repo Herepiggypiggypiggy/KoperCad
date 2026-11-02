@@ -31,6 +31,7 @@ mod cabinet;
 mod cabinet_arrange;
 mod cabinet_bar;
 mod cabinet_door;
+mod cabinet_group;
 mod cabinet_inspector;
 mod cabinet_menu;
 mod cabinet_panel;
@@ -39,6 +40,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_rules_panel;
 mod cabinet_surface_move;
 mod cabinet_surface_size;
 mod cabinet_surfaces;
@@ -115,6 +117,7 @@ mod eplan_parts;
 mod error_words;
 mod example;
 mod example_crane;
+mod example_crane_sim;
 #[cfg(test)]
 mod example_gallery;
 mod example_kit;
@@ -146,6 +149,9 @@ mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
+mod heat_modes;
+#[cfg(test)]
+mod heat_modes_tests;
 mod heat_openings;
 mod heat_openings_store;
 #[cfg(test)]
@@ -386,6 +392,8 @@ mod bench_tests;
 #[cfg(test)]
 mod cabinet_arrange_tests;
 #[cfg(test)]
+mod cabinet_group_tests;
+#[cfg(test)]
 mod cabinet_rails_tests;
 #[cfg(test)]
 mod cabinet_routes_tests;
@@ -425,6 +433,8 @@ mod context_menu_tests;
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
+#[cfg(test)]
+mod example_crane_sim_tests;
 #[cfg(test)]
 mod example_gallery_tests;
 #[cfg(test)]
@@ -652,6 +662,7 @@ enum Leaving {
     EmcExample,
     MccExample,
     CraneExample,
+    CraneSimExample,
     PlcExample,
     PumpExample,
     CraneTemplate,
@@ -1051,6 +1062,7 @@ impl NovoApp {
             Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),
+            Action::OpenCraneSimExample => self.leave_then(ctx, Leaving::CraneSimExample),
             Action::OpenPlcExample => self.leave_then(ctx, Leaving::PlcExample),
             Action::OpenPumpExample => self.leave_then(ctx, Leaving::PumpExample),
             Action::NewCraneProject => self.leave_then(ctx, Leaving::CraneTemplate),
@@ -1229,6 +1241,7 @@ impl NovoApp {
             Leaving::EmcExample => self.open_emc_example(),
             Leaving::MccExample => self.open_mcc_example(),
             Leaving::CraneExample => self.open_crane_example(),
+            Leaving::CraneSimExample => self.open_crane_sim_example(),
             Leaving::PlcExample => self.open_plc_example(),
             Leaving::PumpExample => self.open_pump_example(),
             Leaving::CraneTemplate => self.open_crane_options(),
@@ -1791,7 +1804,11 @@ impl NovoApp {
                 if cabinet
                     && matches!(
                         *id,
-                        "edit.rotate" | "edit.delete" | "terminal.strip_up" | "terminal.strip_down"
+                        "edit.rotate"
+                            | "edit.delete"
+                            | "edit.select_all"
+                            | "terminal.strip_up"
+                            | "terminal.strip_down"
                     )
                 {
                     self.cabinet.keys.push((*id).to_owned());

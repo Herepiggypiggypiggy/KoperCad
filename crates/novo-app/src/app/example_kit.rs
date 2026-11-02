@@ -119,6 +119,29 @@ impl<'a, 't> Kit<'a, 't> {
         place(self.tx, self.page, symbol, placement, &options).expect("feed placed")
     }
 
+    /// An interruption point called `name` with its pin at `at`: every point of that name is one
+    /// electrical node, and none of them is a source (unlike a potential feed). `leaves_down`
+    /// turns it so the wire leaves downward (the start of a rung); otherwise the wire arrives
+    /// from above (the end of a rung).
+    pub fn ip(&mut self, name: &str, at: (f64, f64), leaves_down: bool) -> SymbolId {
+        let mut options = PlaceOptions::new();
+        options.interruption = Some(name.to_owned());
+        let symbol = self
+            .catalog
+            .get("iec/connectivity/interruption_point")
+            .expect("interruption point");
+        let placement = Placement {
+            origin: Point::new(at.0, at.1),
+            rotation: if leaves_down {
+                Rotation::R180
+            } else {
+                Rotation::R0
+            },
+            mirrored: false,
+        };
+        place(self.tx, self.page, symbol, placement, &options).expect("interruption point placed")
+    }
+
     /// A junction at `at`, to wire several pins to one point.
     pub fn junction(&mut self, at: (f64, f64)) -> novo_core::JunctionId {
         self.tx

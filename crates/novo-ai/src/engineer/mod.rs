@@ -17,6 +17,7 @@ pub mod cabinet;
 pub mod host;
 pub mod resolve;
 pub mod snapshot;
+pub mod studies;
 pub mod verify;
 
 pub use host::{
