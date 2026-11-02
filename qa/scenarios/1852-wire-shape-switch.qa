@@ -11,6 +11,10 @@ move 800 450
 wait 3
 shot shape-corners
 expect_scene "wire"
+move 1002 720
+wait_s 2
+shot shape-tooltip
+expect "right-angle corners"
 click 1002 720
 wait 5
 move 800 450
