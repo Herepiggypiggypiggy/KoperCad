@@ -22,10 +22,11 @@ wait 10
 click_text "Add the filter fan and a grille to the cabinet"
 wait 20
 shot 01-before-the-run-with-openings
-click_text Simulate #2
-wait_s 250
+# Adding the openings restarts the solve by itself.
+wait_s 300
 expect_not "Preliminary"
-expect "Air in"
+expect "Through-flow"
+expect "air in"
 expect "m³/h (model)"
 expect "Model estimate, not a measurement"
 shot 02-vents-and-fans-balance
