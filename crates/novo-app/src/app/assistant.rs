@@ -1079,7 +1079,9 @@ impl NovoApp {
                 egui::TextEdit::singleline(&mut self.wb.assistant.key_input)
                     .password(true)
                     .hint_text("sk-ant-…")
-                    .desired_width(220.0),
+                    // Leaves room for the Save key button in a narrow pane
+                    // (the window docks in a strip of about 300 points).
+                    .desired_width((ui.available_width() - 100.0).clamp(80.0, 220.0)),
             );
             if ui
                 .add_enabled(
