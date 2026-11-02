@@ -49,7 +49,7 @@ impl TopBarFit {
             search,
             search_width,
             name_chars: if width >= 1700.0 { 32 } else { 14 },
-            segment_names: if width >= 1500.0 {
+            segment_names: if width >= 1400.0 {
                 super::workspace::SegmentNames::All
             } else if width >= ICON_ONLY_BELOW {
                 super::workspace::SegmentNames::Current

@@ -221,7 +221,7 @@ impl NovoApp {
     ) -> Option<Workspace> {
         let pal = crate::theme::ui_palette();
         let mut picked = None;
-        let height = 28.0;
+        let height = super::top_bar::TILE_HEIGHT;
         // The track behind the five buttons.
         let track = ui.painter().add(egui::Shape::Noop);
         let start = ui.cursor().min;
@@ -237,7 +237,7 @@ impl NovoApp {
                 SegmentNames::None => false,
             };
             let label = workspace.label();
-            let font = egui::TextStyle::Button.resolve(ui.style());
+            let font = egui::FontId::proportional(11.5);
             let color = if reason.is_some() {
                 pal.text_tertiary
             } else if current {
@@ -247,7 +247,9 @@ impl NovoApp {
             };
             let galley =
                 show_name.then(|| ui.painter().layout_no_wrap(label.to_owned(), font, color));
-            let width = 8.0 + 16.0 + galley.as_ref().map_or(0.0, |g| 6.0 + g.size().x) + 8.0;
+            let width = galley
+                .as_ref()
+                .map_or(40.0, |g| (g.size().x + 16.0).max(48.0));
             let (rect, response) = ui.allocate_exact_size(
                 egui::vec2(width, height),
                 if reason.is_none() {
@@ -264,7 +266,7 @@ impl NovoApp {
                     label,
                 )
             });
-            let rounding = egui::CornerRadius::same(6);
+            let rounding = egui::CornerRadius::same(8);
             if current {
                 ui.painter().rect_filled(rect, rounding, pal.accent_wash);
             } else if reason.is_none() && response.hovered() {
@@ -281,14 +283,20 @@ impl NovoApp {
             workspace.glyph().paint(
                 ui.painter(),
                 egui::Rect::from_center_size(
-                    egui::pos2(rect.left() + 16.0, rect.center().y),
-                    egui::Vec2::splat(16.0),
+                    egui::pos2(
+                        rect.center().x,
+                        rect.top() + if galley.is_some() { 15.0 } else { height / 2.0 },
+                    ),
+                    egui::Vec2::splat(22.0),
                 ),
                 if current { pal.accent } else { color },
             );
             if let Some(galley) = galley {
                 ui.painter().galley(
-                    egui::pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
+                    egui::pos2(
+                        rect.center().x - galley.size().x / 2.0,
+                        rect.bottom() - galley.size().y - 5.0,
+                    ),
                     galley,
                     color,
                 );

@@ -623,7 +623,7 @@ const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
-const TOP_BAR: f32 = 40.0;
+const TOP_BAR: f32 = 58.0;
 /// Width of the outline, pinned or as a flyout.
 const OUTLINE_WIDTH: f32 = 248.0;
 /// The narrowest and widest the navigator column can be dragged to.
@@ -2409,7 +2409,7 @@ impl NovoApp {
                     fit.search.to_owned()
                 };
                 let mut search =
-                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 0.0));
+                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 36.0));
                 if !fit.search.is_empty() && fit.search_width > 0.0 {
                     search = search.shortcut_text(shortcut.clone());
                 }
