@@ -18,12 +18,12 @@ wait 20
 shot drive-started-brake-closed
 expect "brake closed"
 # Step 2 (S2): the brake opens above the drive's brake frequency and the wind shows in the reading.
-mouse_down 75 343
+mouse_down 123 359
 wait 400
 expect "brake open"
 expect "wind"
 shot running-in-wind
-mouse_up 75 343
+mouse_up 123 359
 wait 450
 wait 450
 expect "last stop"

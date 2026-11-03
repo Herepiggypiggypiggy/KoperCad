@@ -33,11 +33,6 @@ key Escape
 wait 5
 key ctrl+n
 wait 20
-key ctrl+k
-wait 3
-text Motor at variable frequency
-wait 4
-key Enter
-wait 20
+# The window stays docked across a new project and now reads the empty one; opening it again from the palette would close it.
 expect "no motor"
 shot no-motor
