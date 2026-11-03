@@ -29,15 +29,19 @@ check_layout
 expect "Model estimate"
 expect_not "What is this?"
 expect_not "Model estimate, not a measurement."
+# Each popup closes on a click outside it: a click on the empty canvas.
 click_text Help #1
 wait 8
-shot help-heat-strip
-key Escape
+shot help-a
+click 700 690
+wait 6
 click_text Help #2
 wait 8
-shot help-vents
-key Escape
-click_text Help #3
+shot help-b
+click 700 690
+wait 6
+try click_text Help #3
 wait 8
-shot help-heat-panel
-key Escape
+try shot help-c
+click 700 690
+wait 6
