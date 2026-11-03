@@ -110,13 +110,14 @@ fn read_card(path: &Path) -> Option<Card> {
         .iter()
         .filter(schematic)
         .find(|p| has_symbols(p.id))
-        .or_else(|| pages.first())?
-        .id;
+        .or_else(|| pages.first())
+        .map(|p| p.id);
     let members: Vec<Record> = project
         .records()
         .filter(|r| {
             matches!(r, Record::Symbol(_) | Record::Junction(_) | Record::Wire(_))
-                && r.page() == Some(first)
+                && first.is_some()
+                && r.page() == first
         })
         .collect();
     let def = BlockDefinition {
@@ -676,6 +677,7 @@ impl NovoApp {
                     StateView::Loading => "Reading…",
                     StateView::Missing => "File not found",
                     StateView::Unreadable => "No preview",
+                    StateView::Ready(card) if card.pages == 0 => "No pages yet",
                     StateView::Ready(_) => "Empty page",
                 };
                 ui.painter().text(
@@ -824,7 +826,9 @@ mod tests {
         let project = novo_core::Project::new("Card test");
         novo_storage::ProjectFile::create(&path, &project).unwrap();
         let card = read_card(&path);
-        // A new project has no page yet; the file itself must still read.
-        assert!(card.is_none() || card.unwrap().pages == project.pages().count());
+        // A new project has no page yet: the card is still there, without a picture.
+        let card = card.expect("a project with no pages still gives a card");
+        assert_eq!(card.pages, project.pages().count());
+        assert!(card.thumb.bounds.is_none());
     }
 }
