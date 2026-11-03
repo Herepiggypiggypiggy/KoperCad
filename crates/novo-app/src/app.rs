@@ -3037,28 +3037,31 @@ impl NovoApp {
                     crate::diag::BUILD_COMMIT,
                     crate::diag::BUILD_TIME
                 ));
+                let mut notes: Vec<String> = Vec::new();
                 if crate::is_portable() {
-                    ui.weak(
-                        "Portable: settings, logs and default-saved projects are in the data folder beside the program",
+                    notes.push(
+                        "Portable: settings, logs and default-saved projects are in the data folder beside the program".into(),
                     );
                 }
                 if crate::gpu::safe_graphics() {
-                    ui.weak("Started with --safe-graphics (software renderer asked for)");
+                    notes.push("Started with --safe-graphics (software renderer asked for)".into());
                 }
                 if let Some(gpu) = crate::diag::gpu() {
                     ui.weak(format!("Graphics: {gpu}"));
                 }
                 if let Some(avoided) = crate::startup::avoided_for_report() {
-                    ui.weak(format!(
+                    notes.push(format!(
                         "Graphics adapters tried last (a start stopped while using them): {avoided}"
                     ));
                 }
+                notes.push(
+                    "Works offline. Nothing is sent unless you use Ask Claude (your question goes to Anthropic with your own key) or press Check for updates (asks GitHub for the release list).".into(),
+                );
                 ui.add_space(novo_theme::space::M);
-                ui.label("Made by KoperVonk");
-                ui.weak("Free software, MIT or Apache-2.0, at your choice");
-                ui.weak("Works offline. Nothing is sent unless you use Ask Claude");
-                ui.weak("(your question goes to Anthropic with your own key)");
-                ui.weak("or press Check for updates (asks GitHub for the release list).");
+                ui.horizontal(|ui| {
+                    ui.label("Made by KoperVonk · MIT licence");
+                    window_help::mark(ui, &notes.join("\n\n"));
+                });
                 ui.add_space(novo_theme::space::M);
                 ui.columns(2, |cols| {
                     cols[0].vertical_centered(|ui| {
@@ -3088,7 +3091,7 @@ impl NovoApp {
                         match other {
                             UpdateCheck::Done(crate::update_check::Outcome::UpToDate) => {
                                 ui.label("No newer stable version found");
-                                ui.weak("Release candidates are not checked");
+
                             }
                             UpdateCheck::Done(crate::update_check::Outcome::Newer {
                                 tag,
@@ -3096,7 +3099,7 @@ impl NovoApp {
                             }) => {
                                 ui.label(format!("{tag} is available"));
                                 ui.hyperlink_to("Open the download page", url);
-                                ui.weak("Run the new installer over this copy; your projects stay as they are");
+                                window_help::mark(ui, "Run the new installer over this copy; your projects stay as they are");
                             }
                             UpdateCheck::Done(crate::update_check::Outcome::Failed(why)) => {
                                 ui.label(format!("Could not check: {why}"));

@@ -372,7 +372,7 @@ impl NovoApp {
         if card.finished {
             ui.label(egui::RichText::new(format!("✓ {}", card.words.done)).strong());
             if card.explain.is_empty() {
-                ui.label(&card.words.done_text);
+                super::window_help::mark(ui, &card.words.done_text);
             } else {
                 ui.label(
                     egui::RichText::new(if card.helped {
@@ -485,8 +485,7 @@ impl NovoApp {
                 }
             }
             if card.greyed {
-                ui.add_space(4.0);
-                ui.weak(&card.words.greyed_note);
+                super::window_help::mark(ui, &card.words.greyed_note);
             }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {

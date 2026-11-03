@@ -286,14 +286,18 @@ impl NovoApp {
                 }
             }
             ui.add_space(2.0);
+            let mut notes: Vec<String> = Vec::new();
             if done < 3 {
-                ui.weak("A tick means the tool opened, not that something was drawn.");
+                notes.push("A tick means the tool opened, not that something was drawn.".into());
             }
             if next.is_some() {
                 let key = self.step_key(&STEPS[STEPS.len() - 1]);
-                ui.weak(format!(
+                notes.push(format!(
                     "Skip hides this. {key}, then fast keys, brings it back."
                 ));
+            }
+            if !notes.is_empty() {
+                super::window_help::mark(ui, &notes.join("\n\n"));
             }
             if next.is_none() {
                 ui.add_space(4.0);

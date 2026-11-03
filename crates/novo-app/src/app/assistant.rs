@@ -1005,7 +1005,10 @@ impl NovoApp {
                     if self.settings.ai.enabled {
                         send = self.assistant_chat_ui(ui, &mut decide);
                     } else {
-                        ui.weak("Turn Claude on above to start a conversation.");
+                        super::window_help::mark(
+                            ui,
+                            "Turn Claude on above to start a conversation.",
+                        );
                     }
                 });
             });
@@ -1050,13 +1053,14 @@ impl NovoApp {
             return;
         }
         ui.add_space(4.0);
-        ui.label(
-            egui::RichText::new(
+        ui.horizontal(|ui| {
+            ui.strong("Settings");
+            super::window_help::mark(
+                ui,
                 "Optional. Uses your own Anthropic API key and your own API credits. \
                  KoperCAD has no account with Anthropic and sees none of your usage.",
-            )
-            .color(pal.text_secondary),
-        );
+            );
+        });
         ui.add_space(6.0);
 
         // 1. The key.
@@ -1071,7 +1075,8 @@ impl NovoApp {
                 ui.label(format!("{} ({where_from})", k.masked()));
             }
             None => {
-                ui.weak("No key yet. Create one at console.anthropic.com, API keys.");
+                ui.weak("No key yet");
+                super::window_help::mark(ui, "Create one at console.anthropic.com, API keys.");
             }
         }
         ui.horizontal(|ui| {
@@ -1136,18 +1141,19 @@ impl NovoApp {
         if let Some((good, note)) = &self.wb.assistant.key_note {
             ui.colored_label(if *good { pal.success } else { pal.error }, note);
         }
-        ui.weak(
+        let mut key_help = String::from(
             "The key is saved as a file in your user profile (not encrypted, not in the \
              project file; only its last four characters are ever shown). Anyone who can read \
              your profile can read it. Remove it here when you stop using Claude.",
         );
         if crate::is_portable() {
-            ui.weak(
-                "This is a portable install: the key file sits in the data folder next to the \
+            key_help.push_str(
+                "\n\nThis is a portable install: the key file sits in the data folder next to the \
                  program and travels with a copy of that folder (a USB stick, a shared drive). \
                  Remove the key here before you hand the folder on.",
             );
         }
+        super::window_help::mark(ui, &key_help);
         ui.add_space(6.0);
 
         // 2. What Claude may see.
@@ -1158,18 +1164,16 @@ impl NovoApp {
             .pending_scope
             .unwrap_or_else(|| self.settings.ai.consent.effective());
         for s in DataScope::ALL {
-            ui.radio_value(&mut scope, s, s.label());
-            ui.indent(("scope", s.id()), |ui| {
-                ui.weak(s.describes());
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut scope, s, s.label());
+                super::window_help::mark(ui, s.describes());
             });
         }
-        ui.weak(
-            "Buttons that say “with Claude” send the text shown on screen, whatever you chose here.",
-        );
-        super::dialog_ui::explained(
+        super::window_help::mark(
             ui,
-            "A picture shows the whole screen",
-            "A picture you attach shows everything on screen at that moment, whatever you chose here.",
+            "Buttons that say “with Claude” send the text shown on screen, whatever you chose \
+             here.\n\nA picture you attach shows everything on screen at that moment, whatever \
+             you chose here.",
         );
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
@@ -1186,12 +1190,9 @@ impl NovoApp {
             ui.horizontal_wrapped(|ui| {
                 ui.colored_label(
                     pal.warning,
-                    format!(
-                        "Claude is on. Allow it to read more: \"{}\"? {}",
-                        wider.label(),
-                        wider.describes()
-                    ),
+                    format!("Allow it to read more: \"{}\"?", wider.label()),
                 );
+                super::window_help::mark(ui, wider.describes());
             });
             ui.horizontal(|ui| {
                 if ui.button("Allow").clicked() {
@@ -1216,10 +1217,15 @@ impl NovoApp {
                         .on_hover_text(m.note);
                 }
             });
-        ui.weak(format!(
-            "{}. List price ${:.2} in / ${:.2} out per million tokens.",
-            model.note, model.input, model.output
-        ));
+        super::window_help::mark(
+            ui,
+            &format!(
+                "{}. List price ${:.2} in / ${:.2} out per million tokens.\n\nCosts are \
+                 estimates from Anthropic's list prices. Your Anthropic account shows the real \
+                 bill.",
+                model.note, model.input, model.output
+            ),
+        );
         ui.horizontal(|ui| {
             ui.label("Thinking");
             for e in novo_ai::config::EFFORTS {
@@ -1248,10 +1254,6 @@ impl NovoApp {
             },
             self.wb.assistant.ledger.requests
         ));
-        ui.weak(
-            "Costs are estimates from Anthropic's list prices. Your Anthropic account shows \
-             the real bill.",
-        );
         ui.add_space(6.0);
     }
 
@@ -1278,7 +1280,7 @@ impl NovoApp {
             .unwrap_or_else(|| self.settings.ai.consent.effective());
         let seen = self.wb.assistant.notice_seen == Some(CONSENT_VERSION);
         if !seen && !enabled {
-            ui.weak("Scroll down and read “4. Agree” to be able to agree.");
+            super::window_help::mark(ui, "Scroll down and read “4. Agree” to be able to agree.");
         }
         if enabled {
             if ui.button("Turn Claude off").clicked() {
@@ -1326,11 +1328,15 @@ impl NovoApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if self.wb.assistant.transcript.is_empty() {
-                    ui.weak(
-                        "Ask about your project, for example “Which devices have no part \
-                         assigned?” or “Check my tags against IEC 81346.” Claude can \
-                         suggest edits; you apply or reject each one.",
-                    );
+                    ui.horizontal(|ui| {
+                        ui.weak("Ask about your project");
+                        super::window_help::mark(
+                            ui,
+                            "For example “Which devices have no part assigned?” or “Check my \
+                             tags against IEC 81346.” Claude can suggest edits; you apply or \
+                             reject each one.",
+                        );
+                    });
                 }
                 for (i, entry) in self.wb.assistant.transcript.iter().enumerate() {
                     match entry {
@@ -1573,7 +1579,7 @@ fn change_set_ui(
             }
         } else {
             ui.label(egui::RichText::new(format!("Change set: {n} steps in a draft")).strong());
-            ui.weak("Nothing is in your project yet.");
+super::window_help::mark(ui, "Nothing is in your project yet.");
             egui::CollapsingHeader::new(format!("The {n} steps"))
                 .id_salt(("assistant_steps", index))
                 .default_open(false)
@@ -1631,7 +1637,8 @@ fn change_set_ui(
                 "Claude did not run the checks after its last edit; the numbers above are the program's own.",
             );
         }
-        ui.weak(
+super::window_help::mark(
+            ui,
             "The checks find drawing problems. They do not show that the design is right or \
              that it meets a standard.",
         );
@@ -1661,7 +1668,8 @@ fn change_set_ui(
                 ui.weak("Rejected.");
             }
             ProposalState::Superseded => {
-                ui.weak("Replaced by the change set below, which includes these steps.");
+                ui.weak("Replaced");
+super::window_help::mark(ui, "Replaced by the change set below, which includes these steps.");
             }
             ProposalState::Failed(why) => {
                 ui.colored_label(pal.error, why);
