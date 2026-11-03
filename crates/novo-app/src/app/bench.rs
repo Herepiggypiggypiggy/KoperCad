@@ -807,10 +807,13 @@ fn cut_tab(
         novo_theme::widgets::banner(
             ui,
             novo_theme::widgets::Level::Warning,
-            &format!(
-                "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
-            ),
-            |_| {},
+            &format!("{estimates} lengths are estimates (~)"),
+            |ui| {
+                super::window_help::mark(
+                    ui,
+                    "Estimated lengths print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate.",
+                );
+            },
         );
     } else {
         novo_theme::widgets::banner(
@@ -823,10 +826,13 @@ fn cut_tab(
     ui.add_space(4.0);
     defaults_row(ui, &mut state.defaults, &cache.unset, act);
     ui.add_space(4.0);
-    ui.weak(format!(
-        "Cut length = route + {} mm per end for a ferrule ({} mm from {} mm² for a lug). Change the allowances under Cabinet > Routes.",
-        rules.ferrule_mm, rules.lug_mm, rules.lug_from_mm2
-    ));
+    super::window_help::mark(
+        ui,
+        &format!(
+            "Cut length = route + {} mm per end for a ferrule ({} mm from {} mm² for a lug). Change the allowances under Cabinet > Routes.",
+            rules.ferrule_mm, rules.lug_mm, rules.lug_from_mm2
+        ),
+    );
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         if novo_theme::widgets::primary_button(ui, "Export bench cut list (PDF)")
@@ -1019,10 +1025,13 @@ fn ferrule_tab(
     stored: &FerruleStandard,
     act: &mut Option<Act>,
 ) {
-    novo_theme::widgets::section_label(ui, "Ferrule standard");
-    ui.weak(
-        "Colour, contact length, overall length, crimp profile and tool die per cross-section. The default is the DIN 46228-4 colour code as commonly sold; makers differ, above 16 mm² in particular. Edit it to match your stock.",
-    );
+    ui.horizontal(|ui| {
+        novo_theme::widgets::section_label(ui, "Ferrule standard");
+        super::window_help::mark(
+            ui,
+            "Colour, contact length, overall length, crimp profile and tool die per cross-section. The default is the DIN 46228-4 colour code as commonly sold; makers differ, above 16 mm² in particular. Edit it to match your stock.",
+        );
+    });
     let mut remove = None;
     egui::Grid::new("bench_standard")
         .num_columns(7)

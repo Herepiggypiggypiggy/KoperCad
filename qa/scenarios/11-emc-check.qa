@@ -18,7 +18,7 @@ text EMC check
 key enter
 wait 10
 expect "EMC check"
-expect "Off: the findings below are a preview"
+expect "Off: findings are a preview"
 shot emc-off
 check_layout
 click_text "Run the EMC rules with the design checks"

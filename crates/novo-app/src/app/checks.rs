@@ -339,7 +339,7 @@ impl NovoApp {
             standards_findings(self.shown_problems()),
             summary.errors + summary.warnings,
         ) {
-            ui.weak(note);
+            super::window_help::mark(ui, &note);
         }
         let filter = self.wb.issue_filter;
         // Errors first, then warnings, then infos, each in check order.

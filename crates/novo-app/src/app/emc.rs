@@ -456,12 +456,16 @@ impl NovoApp {
                     turn = Some(on);
                 }
                 if !enabled {
-                    ui.weak("Off: the findings below are a preview and do not appear in the Issues list.");
+                    ui.weak("Off: findings are a preview");
+                    super::window_help::add(ui.ctx(), "Off: the findings below are a preview and do not appear in the Issues list.");
                 }
-                ui.weak(format!(
-                    "{} Findings are rules on what is drawn, geometric indices and closed-form estimates with planning distances from common practice; clause numbers are unverified.",
-                    novo_emc::DESIGN_AID
-                ));
+                super::window_help::add(
+                    ui.ctx(),
+                    format!(
+                        "{} Findings are rules on what is drawn, geometric indices and closed-form estimates with planning distances from common practice; clause numbers are unverified.",
+                        novo_emc::DESIGN_AID
+                    ),
+                );
                 if let Some(done) = &self.emc.done {
                     ui.colored_label(p.success, done);
                 }
