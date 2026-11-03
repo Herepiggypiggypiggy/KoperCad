@@ -223,7 +223,7 @@ impl NovoApp {
                         apply = switch_section(ui, plan, &mut marks);
                     }
                     super::dialog_ui::section(ui, "Project information", false);
-                    super::dialog_ui::hint(
+                    super::dialog_ui::note(
                         ui,
                         "Printed on the cover pages (Front matter). Leave a field empty and the page shows a dash.",
                     );
@@ -248,7 +248,7 @@ impl NovoApp {
                             }
                         });
                     super::dialog_ui::section(ui, "Names for new groups and cabinets", false);
-                    super::dialog_ui::hint(
+                    super::dialog_ui::note(
                         ui,
                         "Nothing to set up: a new group or cabinet continues the names this project \
 already has. These letters only start a project that has none yet. Yours, for every project.",

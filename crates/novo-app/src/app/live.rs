@@ -1584,7 +1584,10 @@ impl NovoApp {
             if why_mode && answer.is_none() {
                 ui.weak("Click a wire or a device");
                 if !supply {
-                    ui.weak("Until a feed is placed the answer is always: no supply.");
+                    super::window_help::note(
+                        ui,
+                        "Until a feed is placed the answer is always: no supply.",
+                    );
                 }
             }
             if let Some(a) = &answer {
@@ -1610,7 +1613,10 @@ impl NovoApp {
                         ui.add(egui::Label::new(&line.text).wrap());
                     }
                 }
-                ui.weak("Follows potentials, not currents: no direction of flow is modelled.");
+                super::window_help::note(
+                    ui,
+                    "Follows potentials, not currents: no direction of flow is modelled.",
+                );
             }
             ui.add_space(2.0);
             open_motor =

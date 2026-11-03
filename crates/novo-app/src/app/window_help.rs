@@ -74,6 +74,20 @@ pub(super) fn add(ctx: &egui::Context, text: impl Into<String>) {
     });
 }
 
+/// Explanation text for the current window's "?" when a window is being built,
+/// otherwise a "?" mark in place. Never prints the text itself.
+pub(super) fn note(ui: &mut egui::Ui, text: &str) {
+    let in_window = ui
+        .ctx()
+        .data(|d| d.get_temp::<String>(current_id()))
+        .is_some();
+    if in_window {
+        add(ui.ctx(), text);
+    } else {
+        mark(ui, text);
+    }
+}
+
 /// The help text of the window `name` as of its last frame.
 pub(super) fn text(ctx: &egui::Context, name: &str) -> Option<String> {
     ctx.data(|d| d.get_temp(shown_id(name)))

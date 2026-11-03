@@ -226,7 +226,7 @@ impl NovoApp {
             [width, 640.0],
             |ui| {
                 super::panel::fill_above(ui, 44.0, |ui| {
-                    super::dialog_ui::hint(
+                    super::dialog_ui::note(
                         ui,
                         "Saved in the project file. Every rule is explicit; undo takes one back.",
                     );
@@ -263,7 +263,7 @@ impl NovoApp {
                     )
                     .on_hover_text("-X4:PE puts PE on its net without any other action");
                     super::dialog_ui::section(ui, "Generated pages", false);
-                    super::dialog_ui::hint(
+                    super::dialog_ui::note(
                         ui,
                         "Pages the project adds and keeps current. Deleting one switches it off here.",
                     );
@@ -279,7 +279,7 @@ impl NovoApp {
                         }
                     }
                     super::dialog_ui::section(ui, "Usual pin names", false);
-                    super::dialog_ui::hint(
+                    super::dialog_ui::note(
                         ui,
                         "Your own pin names per device class, as TOML. A class replaces the built-in \
                      names for the symbol functions it lists; Check > Issues then flags \

@@ -295,7 +295,11 @@ impl super::NovoApp {
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let Some(motor_symbol) = state.motor else {
-                    ui.weak("The project has no motor. Place one and give it a power (kW).");
+                    ui.weak("No motor");
+                    super::window_help::note(
+                        ui,
+                        "The project has no motor. Place one and give it a power (kW).",
+                    );
                     return;
                 };
                 ui.horizontal(|ui| {
@@ -398,8 +402,9 @@ impl super::NovoApp {
                     Some(run) => show_run(ui, run),
                     None => {
                         ui.add_space(6.0);
-                        ui.colored_label(
-                            crate::theme::ui_palette().warning,
+                        ui.colored_label(crate::theme::ui_palette().warning, "Not modelled");
+                        super::window_help::note(
+                            ui,
                             "This motor cannot be modelled yet. Give it a power in kW on its device.",
                         );
                     }
@@ -425,9 +430,10 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
     ui.add_space(6.0);
     let rated = m.rated_current();
     if r.stalled {
-        ui.colored_label(
-            crate::theme::ui_palette().error,
-            "The motor does not start: the load needs more torque than it makes at standstill",
+        ui.colored_label(crate::theme::ui_palette().error, "The motor does not start");
+        super::window_help::note(
+            ui,
+            "The load needs more torque than the motor makes at standstill.",
         );
     } else if let Some(t) = r.start_time {
         ui.label(format!(
@@ -448,15 +454,18 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
         r.i2t / 1e6
     ));
     let (bd, _) = m.breakdown();
-    ui.weak(format!(
-        "Estimated from the nameplate: locked-rotor torque {:.1} × rated, breakdown {:.1} × rated",
-        m.locked_rotor_torque() / m.rated_torque(),
-        bd / m.rated_torque()
-    ));
+    super::window_help::note(
+        ui,
+        &format!(
+            "Estimated from the nameplate: locked-rotor torque {:.1} × rated, breakdown {:.1} × rated",
+            m.locked_rotor_torque() / m.rated_torque(),
+            bd / m.rated_torque()
+        ),
+    );
     ui.add_space(4.0);
     chart(ui, r, m);
     for n in &run.notes {
-        ui.weak(&n.text);
+        super::window_help::note(ui, &n.text);
     }
     super::model_labels::badge(ui, super::model_labels::Model::MotorStart);
     super::model_labels::note(ui, super::model_labels::Model::MotorStart);

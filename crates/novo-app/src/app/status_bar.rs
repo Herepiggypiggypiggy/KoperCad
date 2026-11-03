@@ -59,6 +59,26 @@ fn machine_chip_label(summary: &str) -> String {
     format!("{}…", cut.trim_end())
 }
 
+/// The first clause of a hint or message: what the bar shows. The rest (the
+/// keys, the long explanation) sits behind a "?" next to it.
+fn split_lead(text: &str) -> (&str, Option<&str>) {
+    let cut = [" \u{b7} ", " (", ". "]
+        .iter()
+        .filter_map(|m| text.find(m))
+        .min();
+    let mut lead = cut.map_or(text, |i| &text[..i]);
+    if lead.split_whitespace().count() > 8
+        && let Some(i) = lead.find(": ")
+    {
+        lead = &lead[..i];
+    }
+    if lead.len() >= text.len() {
+        (text, None)
+    } else {
+        (lead, Some(&text[lead.len()..]))
+    }
+}
+
 /// A mode that is on, with the command that turns it off.
 pub(super) struct ModeChip {
     /// Drawn in the error colour: something is injected or wrong.
@@ -158,13 +178,19 @@ impl NovoApp {
                                 label.on_hover_text(text);
                             }
                             (Some(text), _) => {
-                                let label = ui.add(egui::Label::new(text).truncate());
+                                let (lead, rest) = split_lead(text);
+                                let label = ui.add(egui::Label::new(lead).truncate());
                                 spots.push(("dock.hint", label.rect, "hint"));
-                                label.on_hover_text(text);
+                                if rest.is_some() {
+                                    super::window_help::mark(ui, text);
+                                }
                             }
                             (None, Some((text, _))) => {
-                                let label = ui.add(egui::Label::new(text).truncate());
-                                label.on_hover_text(text);
+                                let (lead, rest) = split_lead(text);
+                                ui.add(egui::Label::new(lead).truncate());
+                                if rest.is_some() {
+                                    super::window_help::mark(ui, text);
+                                }
                             }
                             (None, None) => {
                                 let hint =

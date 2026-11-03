@@ -541,17 +541,12 @@ impl NovoApp {
                             }
                             let selected = win.selected.as_deref() == Some(entry.path.as_str());
                             let clicked = novo_theme::widgets::row(ui, selected, |ui| {
-                                ui.label(
+                                let name = ui.label(
                                     egui::RichText::new(&entry.name)
                                         .family(novo_theme::fonts::strong_family()),
                                 );
                                 if !entry.description.is_empty() {
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(&entry.description).weak(),
-                                        )
-                                        .truncate(),
-                                    );
+                                    name.on_hover_text(&entry.description);
                                 }
                             })
                             .clicked();
@@ -570,9 +565,7 @@ impl NovoApp {
                         None if win.selected.is_some() => {
                             ui.weak("This macro could not be read.");
                         }
-                        None => {
-                            ui.weak("Pick a macro to see what it will do.");
-                        }
+                        None => {}
                         Some(shown) => {
                             for parameter in &shown.definition.parameters {
                                 if let Some((_, value)) =
@@ -629,15 +622,23 @@ impl NovoApp {
                             }
                             match &shown.report {
                                 Ok(report) => {
-                                    ui.label(describe(report));
+                                    ui.horizontal(|ui| {
+                                        let n = report.tags.len();
+                                        ui.label(match n {
+                                            0 => "No devices".to_owned(),
+                                            1 => "1 device".to_owned(),
+                                            n => format!("{n} devices"),
+                                        });
+                                        super::window_help::mark(ui, &describe(report));
+                                    });
                                     if draws_plc_channels(&shown.definition) {
-                                        ui.add(
-                                            egui::Label::new(
-                                                egui::RichText::new(PLC_CARD_NOTE)
-                                                    .color(crate::theme::ui_palette().warning),
-                                            )
-                                            .wrap(),
-                                        );
+                                        ui.horizontal(|ui| {
+                                            ui.colored_label(
+                                                crate::theme::ui_palette().warning,
+                                                "Symbols only",
+                                            );
+                                            super::window_help::mark(ui, PLC_CARD_NOTE);
+                                        });
                                     }
                                 }
                                 Err(reason) => {

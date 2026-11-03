@@ -1362,7 +1362,6 @@ fn spec_section(
         section.summary.to_owned()
     };
     widgets::collapsing_section(ui, section.id, section.title, &summary, set > 0, |ui| {
-        ui.weak(section.comma_note);
         for k in section.keys {
             let shown = value_of(k.key);
             let id = egui::Id::new(("inspector_mech", k.key));
@@ -1378,14 +1377,19 @@ fn spec_section(
             } else {
                 format!("generic {}", k.default)
             };
-            let r = labelled_edit(ui, k.label, k.unit, |ui| {
+            let (short, aside) = split_aside(k.label);
+            let r = labelled_edit(ui, short, k.unit, |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut text)
                         .id(id)
                         .hint_text(hint)
                         .desired_width(f32::INFINITY),
                 )
-                .on_hover_text(k.key)
+                .on_hover_text(if aside.is_empty() {
+                    k.key.to_owned()
+                } else {
+                    format!("{aside}\n{}", k.key)
+                })
             });
             if r.has_focus() {
                 ui.data_mut(|d| d.insert_temp(id, text.clone()));
@@ -1397,8 +1401,17 @@ fn spec_section(
                 }
             }
         }
-        novo_theme::widgets::help_mark(ui, section.help);
+        novo_theme::widgets::help_mark(ui, &format!("{}\n\n{}", section.comma_note, section.help));
     });
+}
+
+/// "Ground level (m above the hook start)" -> ("Ground level", "m above the hook start"):
+/// a label stays a name, its explanation moves to the hover text.
+fn split_aside(label: &str) -> (&str, &str) {
+    match label.split_once(" (") {
+        Some((short, rest)) => (short, rest.trim_end_matches(')')),
+        None => (label, ""),
+    }
 }
 
 fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
@@ -1451,15 +1464,9 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
                     }
                 }
             }
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(
-                        "Blank is unknown: the checks stay silent, nothing is guessed. Results: Check > Calculations.",
-                    )
-                    .small()
-                    .weak(),
-                )
-                .wrap(),
+            super::window_help::note(
+                ui,
+                "Blank is unknown: the checks stay silent, nothing is guessed. Results: Check > Calculations.",
             );
         },
     );

@@ -358,7 +358,7 @@ fn draw_card(
     });
     if let Some(why) = ctl.damaged.clone() {
         ui.colored_label(palette.error, &why);
-        ui.weak("It is kept in the project until you discard it.");
+        super::window_help::note(ui, "It is kept in the project until you discard it.");
         if ui.small_button("Discard the stored controllers").clicked() {
             ctl.discard_damaged();
         }
@@ -400,9 +400,10 @@ fn draw_card(
     let popped = ctl.popped.contains(&id);
     let map = key_map(&profile);
     if popped {
-        ui.add(
-            egui::Label::new("This controller has a panel of its own. Dock it to operate it here.")
-                .wrap(),
+        ui.weak("In its own panel");
+        super::window_help::note(
+            ui,
+            "This controller has a panel of its own. Dock it to operate it here.",
         );
     } else {
         instance_controls(ui, ctl, &id, &profile);
@@ -1109,7 +1110,8 @@ fn machine_picker(ui: &mut egui::Ui, modules: &[ModuleEntry], chosen: &mut Optio
         return;
     }
     ui.separator();
-    ui.weak("Machine ports (drive Simulate > Hoist run or Drive run)");
+    ui.weak("Machine ports");
+    super::window_help::note(ui, "Drive Simulate > Hoist run or Drive run.");
     for m in modules {
         ui.collapsing(&m.label, |ui| {
             for p in &m.ports {

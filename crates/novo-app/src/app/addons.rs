@@ -1007,11 +1007,9 @@ fn manager_ui(
                 .heading()
                 .color(p.text_primary),
         );
-        ui.label(
-            egui::RichText::new(
-                "extra features you install from a file, without leaving the program",
-            )
-            .color(p.text_secondary),
+        super::window_help::note(
+            ui,
+            "Extra features you install from a file, without leaving the program. An add-on is a file ending in .kcaddon: install one with the button or drop it on this window. Nothing is installed for you and nothing is sent anywhere. Without a profile folder add-ons cannot be kept.",
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_enabled_ui(can_store, |ui| {
@@ -1040,7 +1038,7 @@ fn manager_ui(
             EmptySize::Panel,
             icons::ADDON_ICON,
             "Add-ons are not available here",
-            "This session has no profile folder to keep them in.",
+            "",
             |_| {},
         );
         return;
@@ -1058,13 +1056,21 @@ fn manager_ui(
             egui::vec2(ui.available_width(), full.y),
             egui::Layout::top_down(egui::Align::Min),
             |ui| match m.selected.as_ref().and_then(|id| set.get(id)) {
-                Some(entry) => details_ui(ui, m, entry, root, engines.stopped.get(&entry.id).map(String::as_str), engines.load.get(&entry.id).copied(), actions),
+                Some(entry) => details_ui(
+                    ui,
+                    m,
+                    entry,
+                    root,
+                    engines.stopped.get(&entry.id).map(String::as_str),
+                    engines.load.get(&entry.id).copied(),
+                    actions,
+                ),
                 None if set.entries.is_empty() => widgets::empty_state(
                     ui,
                     EmptySize::Panel,
                     icons::ADDON_ICON,
                     "No add-ons installed",
-                    "An add-on is a file ending in .kcaddon. Install one to add features; nothing is installed for you and nothing is sent anywhere.",
+                    "",
                     |ui| {
                         if widgets::primary_button(ui, "Install from file...").clicked() {
                             actions.push(Act::Pick(None));
@@ -1123,7 +1129,6 @@ fn list_ui(
             }
         });
     ui.add_space(space::S);
-    ui.weak("Drop a .kcaddon file on this window to install it.");
     kept_ui(ui, m, kept, actions);
 }
 
@@ -1261,7 +1266,7 @@ fn details_ui(
                 ui.add_space(space::M);
                 widgets::section_label(ui, "What it may do");
                 if manifest.addon.permissions.is_empty() {
-                    ui.weak("Nothing beyond showing information. It asks for no permissions.");
+                    ui.weak("No permissions");
                 }
                 for perm in &manifest.addon.permissions {
                     ui.label(format!("•  {}", perm.describe()));
