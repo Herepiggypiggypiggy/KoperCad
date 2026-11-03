@@ -3,7 +3,7 @@
 # The first-run start screen offers Try fast keys and Open example. Open example now
 # opens the window with every template and example; the motor starter is its first example.
 shot first-run-start
-expect "Seven short steps"
+expect "Try the fast keys"
 expect "Open example"
 click_text "Open example"
 wait 20

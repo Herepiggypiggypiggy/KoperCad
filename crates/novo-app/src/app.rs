@@ -303,6 +303,7 @@ mod standards;
 mod standards_report;
 #[cfg(test)]
 mod standards_report_tests;
+mod start_screen;
 mod status_bar;
 #[cfg(test)]
 mod strip_grouping_tests;
@@ -2044,7 +2045,7 @@ impl NovoApp {
                     self.after_canvas_frame();
                     self.wb.canvas_area = Some((ui.layer_id(), ui.min_rect()));
                 } else {
-                    self.start_panel(ui, &mut picked);
+                    self.start_screen(ui, &mut picked);
                 }
             })
             .response
@@ -2806,134 +2807,6 @@ impl NovoApp {
         }
     }
 
-    /// With no project open the canvas area offers the ways in: new, open
-    /// and the recent projects.
-    fn start_panel(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        let rect = ui.max_rect();
-        ui.painter()
-            .rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
-        let width = 320.0_f32.min(rect.width() - 32.0);
-        let top = rect.top() + (rect.height() * 0.15).min(120.0);
-        let column = egui::Rect::from_min_size(
-            egui::pos2(rect.center().x - width / 2.0, top),
-            egui::vec2(width, rect.bottom() - top),
-        );
-        ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
-            // Scrolls: on a small window the recent list runs below the edge.
-            egui::ScrollArea::vertical()
-                .id_salt("start_panel")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                        novo_theme::brand::lockup(ui, 64.0);
-                        ui.add_space(novo_theme::space::XXL);
-                        if self.first_run() {
-                            self.action_button(ui, Action::TryFastKeys, picked);
-                            ui.weak("Seven short steps: place, wire, cable, live view");
-                            ui.add_space(8.0);
-                        }
-                        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
-                            self.action_button(ui, a, picked);
-                        }
-                        // Quiet, not a headline: most people never need it, and the ones
-                        // who do look for the word "recover".
-                        let recover = ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new("File damaged? Recover it…")
-                                        .underline()
-                                        .color(ui.visuals().hyperlink_color),
-                                )
-                                .frame(false),
-                            )
-                            .on_hover_text(
-                                "Reads what can be read from a damaged project and opens it as a \
-                         recovered copy beside it. The damaged file is not changed.",
-                            );
-                        if recover.clicked() {
-                            let ctx = ui.ctx().clone();
-                            self.leave_then(&ctx, Leaving::Recover);
-                        }
-                        // Ways to learn, named as such and each with what it is, so the
-                        // two are not read as copies of each other.
-                        ui.add_space(12.0);
-                        ui.small("LEARN");
-                        if !self.first_run() {
-                            self.action_button(ui, Action::TryFastKeys, picked);
-                            ui.weak("Seven short steps: place, wire, cable, live view");
-                            ui.add_space(4.0);
-                        }
-                        self.learn_start_entry(ui);
-                        ui.weak("Lessons for every part of the program");
-                        let unsaved = self.backend.unsaved_projects();
-                        if !unsaved.is_empty() {
-                            ui.add_space(16.0);
-                            ui.small("UNSAVED");
-                            // The newest few; the rest fold away so a long history
-                            // of crashed or abandoned sessions does not fill the card.
-                            let (newest, older) =
-                                unsaved.split_at(unsaved.len().min(UNSAVED_SHOWN));
-                            let mut open = None;
-                            let mut rows = |ui: &mut egui::Ui, list: &[(PathBuf, SystemTime)]| {
-                                for (path, changed) in list {
-                                    let row = ui.add(
-                                        egui::Button::new(format!(
-                                            "{}, {}",
-                                            crate::backend::kept_label(path),
-                                            ago(*changed)
-                                        ))
-                                        .frame(false),
-                                    );
-                                    if row.clicked() {
-                                        open = Some(path.clone());
-                                    }
-                                }
-                            };
-                            rows(ui, newest);
-                            if !older.is_empty() {
-                                egui::CollapsingHeader::new(format!("{} older", older.len()))
-                                    .id_salt("unsaved_older")
-                                    .show(ui, |ui| rows(ui, older));
-                            }
-                            if let Some(path) = open {
-                                let ctx = ui.ctx().clone();
-                                self.leave_then(&ctx, Leaving::OpenPath(path));
-                            }
-                        }
-                        ui.add_space(16.0);
-                        ui.small("WHAT ELSE IS IN HERE");
-                        for line in [
-                            "Cabinet: size the enclosure, place devices, cut lists",
-                            "3D: look inside the cabinet (needs a mounting plate)",
-                            "Heat: temperatures and airflow, under Simulate",
-                            "Commissioning: checks and punch list",
-                            "Ctrl+K finds every command",
-                        ] {
-                            ui.weak(line);
-                        }
-                        let recent = self.settings.recent_projects.clone();
-                        if !recent.is_empty() {
-                            ui.add_space(16.0);
-                            ui.small("RECENT");
-                            for path in recent {
-                                let name = path
-                                    .file_stem()
-                                    .map(|n| n.to_string_lossy().into_owned())
-                                    .unwrap_or_else(|| path.display().to_string());
-                                let row = ui
-                                    .add(egui::Button::new(name).frame(false))
-                                    .on_hover_text(path.display().to_string());
-                                if row.clicked() {
-                                    let ctx = ui.ctx().clone();
-                                    self.leave_then(&ctx, Leaving::OpenPath(path));
-                                }
-                            }
-                        }
-                    });
-                });
-        });
-    }
-
     /// Cursor position and friends, faint, at the canvas's top right. On
     /// the drawing, the step hint is in the tool dock instead.
     fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
@@ -3059,16 +2932,6 @@ impl NovoApp {
             && let Err(e) = parts_bulk::open_folder(&dir)
         {
             self.message(Level::Error, format!("Could not open the folder: {e}"));
-        }
-    }
-
-    fn action_button(&self, ui: &mut egui::Ui, action: Action, picked: &mut Vec<Action>) {
-        let mut button = egui::Button::new(action.label());
-        if let Some(s) = action.shortcut() {
-            button = button.shortcut_text(ui.ctx().format_shortcut(&s));
-        }
-        if ui.add_enabled(self.is_enabled(action), button).clicked() {
-            picked.push(action);
         }
     }
 

@@ -1,0 +1,46 @@
+@title Start screen with seven recent projects
+@area Start
+@sizes 1366x768
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 20
+answer_dialog qa/fixtures/cabinet-cooling-advice.novo
+key ctrl+o
+wait 10
+try click_text "Don't save"
+wait 30
+answer_dialog qa/fixtures/cabinet-cooling-fans.novo
+key ctrl+o
+wait 10
+try click_text "Don't save"
+wait 30
+answer_dialog qa/fixtures/cabinet-crossing-ducts.novo
+key ctrl+o
+wait 10
+try click_text "Don't save"
+wait 30
+answer_dialog qa/fixtures/cabinet-heat-absurd-loss.novo
+key ctrl+o
+wait 10
+try click_text "Don't save"
+wait 30
+answer_dialog qa/fixtures/cabinet-heat-scale-hot.novo
+key ctrl+o
+wait 10
+try click_text "Don't save"
+wait 30
+answer_dialog qa/fixtures/cabinet-huge-enclosure.novo
+key ctrl+o
+wait 10
+try click_text "Don't save"
+wait 30
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 10
+try click_text "Don't save"
+wait 40
+shot many-cards
+check_layout
+expect "Recent projects"
