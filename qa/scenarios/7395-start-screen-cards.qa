@@ -16,3 +16,8 @@ expect "Recent projects"
 expect "What else is in here"
 expect "Open example"
 expect "Commissioning"
+# A capability card starts its lesson.
+click_text Heat
+wait 40
+shot heat-card-lesson
+expect "Heat"

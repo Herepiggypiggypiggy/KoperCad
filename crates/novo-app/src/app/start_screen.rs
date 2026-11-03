@@ -470,13 +470,13 @@ impl NovoApp {
             (
                 Action::OpenExample,
                 icons::GRADUATION_CAP,
-                "The Gate 1 motor starter",
+                "Finished projects to look through",
                 false,
             ),
             (
                 Action::TryFastKeys,
                 icons::KEYBOARD,
-                "Two minutes: place, wire, cable, live view",
+                "Seven short steps: place, wire, cable, live view",
                 first_run,
             ),
         ];
