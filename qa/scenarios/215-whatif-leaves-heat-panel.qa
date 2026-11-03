@@ -1,14 +1,18 @@
 @title Cooling what-if: the window leaves the Heat panel and the 3D picture usable
 @area 3D
 @sizes 1366x768 1920x1080
-# The what-if window opens at the left, under the toolbar, instead of over the Heat panel on the right: with the ranked list showing, the Heat panel's buttons are still clickable (Simulate starts a run) and the cabinet in the middle is not covered.
+# The what-if window opens at the left, under the toolbar, instead of over the Heat panel on the right: with the ranked list showing, the Heat panel's buttons are still clickable (Cancel stops the run that Auto started) and the cabinet in the middle is not covered.
 open qa/fixtures/cabinet-cooling-advice.novo
 wait 20
 click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
-click_text "Cooling what-if"
+key ctrl+k
+wait 6
+text cooling what-if
+wait 8
+key Enter
 wait 20
 expect "Cooling what-if"
 click_text "Try the fixes"
@@ -17,8 +21,9 @@ expect "Devices over limit"
 shot list-beside-the-heat-panel
 check_layout
 check_blank list-beside-the-heat-panel
-click_text "Simulate" Button #2
-wait 20
-expect "Simulating"
-shot simulate-clicked
+# The Heat panel's own button works under the open window: a run is going (Auto starts one), so Cancel is the button there, and pressing it gives Simulate back.
+click_text "Cancel" Button
+wait 30
+expect "Simulate"
+shot heat-button-pressed
 check_layout
