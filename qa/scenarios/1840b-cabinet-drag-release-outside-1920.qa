@@ -1,0 +1,38 @@
+@title Cabinet: a device dragged off the plate and released elsewhere is put down, never stuck to the pointer
+@area Cabinet
+@sizes 1920x1080
+# A press, a drag out over the side panels and a release away from the plate; then a second drag ended by Escape.
+# Each time the pointer must be free: moving the mouse afterwards moves nothing. Regression guard for the stuck part.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+move 300 900
+shot before
+mouse_down 1009 225
+move 1050 300
+move 1300 400
+move 1850 300
+wait 5
+shot dragging-out
+mouse_up 1850 300
+wait 10
+move 700 900
+wait 5
+move 760 880
+wait 5
+shot released-not-stuck
+check_layout
+mouse_down 1009 225
+move 1100 400
+key Escape
+wait 5
+mouse_up 1100 400
+wait 5
+move 600 900
+wait 5
+shot escape-not-stuck
+check_layout
+click 800 900
+wait 5
+shot clicked-elsewhere
