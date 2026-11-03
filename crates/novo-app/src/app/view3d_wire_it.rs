@@ -418,6 +418,7 @@ pub(super) fn strip(
         egui::Align2::CENTER_BOTTOM,
         egui::pos2(view.center().x, view.bottom() - MARGIN),
     )
+    .dock("Wire it")
     .foreground()
     .show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {

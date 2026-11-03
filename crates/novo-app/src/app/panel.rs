@@ -77,6 +77,7 @@ pub(super) struct Panel {
     own_scroll: bool,
     closable: bool,
     dockable: bool,
+    dock_by_default: bool,
 }
 
 impl Panel {
@@ -107,6 +108,7 @@ impl Panel {
             own_scroll: false,
             closable: false,
             dockable: false,
+            dock_by_default: false,
         }
     }
 
@@ -125,6 +127,14 @@ impl Panel {
     /// title bar.
     pub(super) fn dockable(mut self) -> Self {
         self.dockable = true;
+        self
+    }
+
+    /// Opens docked in the right strip until the person floats it (the app
+    /// turns default docking on at start, as for command windows). For cards
+    /// that are always present, so that nothing floats over the canvas.
+    pub(super) fn dock_by_default(mut self) -> Self {
+        self.dock_by_default = true;
         self
     }
 
@@ -235,6 +245,15 @@ impl Panel {
         // Cards that have no title bar or are flyouts cannot be docked,
         // whatever was asked for.
         let dockable = self.dockable && self.title_bar && !self.flyout;
+        if dockable
+            && self.dock_by_default
+            && ctx.content_rect().width() >= DOCK_BY_DEFAULT_FROM
+            && super::panel_dock::dialogs_dock_by_default(ctx)
+            && super::panel_dock::slot_of(ctx, self.id).is_none()
+            && !super::panel_dock::was_floated(ctx, self.id)
+        {
+            super::panel_dock::set(ctx, self.id, Some(super::panel_dock::Slot::Right));
+        }
         // Docked: a pane of its slot, not a window.
         if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, self.id) {
             return super::panel_dock::show_docked(
@@ -454,6 +473,10 @@ impl Panel {
     }
 }
 
+/// A window narrower than this does not dock its always-present cards by
+/// default: the strip would take too much of the picture.
+pub(super) const DOCK_BY_DEFAULT_FROM: f32 = 1100.0;
+
 /// A card without a title bar (the tool dock, the 3D tool cards): it sits at
 /// `at` until the person drags it by its background, then stays where they
 /// put it, kept on the canvas. Like [`Panel`], View > Reset panel layout
@@ -464,6 +487,9 @@ pub(super) struct Float {
     pivot: egui::Align2,
     at: egui::Pos2,
     order: egui::Order,
+    /// The title of the pane it docks as: the strip opens docked in the
+    /// right strip (see [`Float::dock`]).
+    dock: Option<&'static str>,
 }
 
 impl Float {
@@ -480,7 +506,16 @@ impl Float {
             pivot,
             at,
             order: egui::Order::Middle,
+            dock: None,
         }
+    }
+
+    /// The card is a pane when docked, with this title: it opens docked in
+    /// the right strip (folds, floats, moves to another edge) until the
+    /// person floats it, so a tool strip does not float over the canvas.
+    pub(super) fn dock(mut self, title: &'static str) -> Self {
+        self.dock = Some(title);
+        self
     }
 
     /// Above the other cards, for a strip that must stay in reach.
@@ -493,9 +528,33 @@ impl Float {
         self,
         ctx: &egui::Context,
         add: impl FnOnce(&mut egui::Ui) -> R,
-    ) -> egui::InnerResponse<R> {
+    ) -> Option<R> {
         let id = id(self.name);
         note_seen(ctx, self.name);
+        if let Some(title) = self.dock {
+            if super::panel_dock::dialogs_dock_by_default(ctx)
+                && super::panel_dock::slot_of(ctx, self.name).is_none()
+                && !super::panel_dock::was_floated(ctx, self.name)
+            {
+                super::panel_dock::set(ctx, self.name, Some(super::panel_dock::Slot::Right));
+            }
+            if let Some(slot) = super::panel_dock::slot_of(ctx, self.name) {
+                return super::panel_dock::show_docked(
+                    ctx,
+                    id,
+                    self.name,
+                    title,
+                    slot,
+                    super::panel_dock::PaneOptions {
+                        closable: false,
+                        float_tip: "Float this panel",
+                        scrolls: true,
+                    },
+                    add,
+                )
+                .and_then(|r| r.inner);
+            }
+        }
         match take_place(ctx, id) {
             Some(Some(at)) => {
                 mark_moved(ctx, id);
@@ -544,7 +603,7 @@ impl Float {
             set_float_pos(ctx, id, (base + delta).clamp(self.canvas.min, max));
             mark_moved(ctx, id);
         }
-        egui::InnerResponse::new(inner, shown.response)
+        Some(inner)
     }
 }
 
@@ -1382,12 +1441,6 @@ pub(super) fn reserve_dock(ctx: &egui::Context, width: f32) {
 fn reserved_dock(ctx: &egui::Context) -> f32 {
     ctx.data(|d| d.get_temp::<f32>(egui::Id::new("panel_dock_left")))
         .unwrap_or(0.0)
-}
-
-/// How much of the canvas's left edge the outline flyout covers: a panel on
-/// that side starts beside it, so the room it has is that much narrower.
-pub(super) fn flyout_width(ctx: &egui::Context) -> f32 {
-    reserved_left(ctx)
 }
 
 fn reserved_left(ctx: &egui::Context) -> f32 {
@@ -2372,13 +2425,12 @@ mod tests {
             },
             |ctx| {
                 let at = egui::pos2(canvas.center().x, canvas.bottom() - MARGIN);
-                let shown =
-                    Float::new("strip", canvas, egui::Align2::CENTER_BOTTOM, at).show(ctx, |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.label("A strip of tools, wide enough to grab by its edge");
-                        });
+                Float::new("strip", canvas, egui::Align2::CENTER_BOTTOM, at).show(ctx, |ui| {
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.label("A strip of tools, wide enough to grab by its edge");
                     });
-                rect = shown.response.rect;
+                });
+                rect = ctx.memory(|m| m.area_rect(id("strip"))).unwrap_or(rect);
             },
         );
         out.textures_delta.clear();

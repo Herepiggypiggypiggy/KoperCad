@@ -206,6 +206,7 @@ pub(super) fn readout(
         egui::Align2::LEFT_BOTTOM,
         view.left_bottom() + egui::vec2(MARGIN, -MARGIN),
     )
+    .dock("Measure")
     .show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.strong("Measure");

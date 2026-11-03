@@ -107,6 +107,7 @@ pub(super) fn strip(
             egui::Align2::CENTER_BOTTOM,
             egui::pos2(view.center().x, view.bottom() - MARGIN),
         )
+        .dock("Build order")
         .foreground()
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
@@ -130,7 +131,7 @@ pub(super) fn strip(
     at = at.min(steps.len());
     let p = crate::theme::ui_palette();
     let mut leave = false;
-    super::panel::Float::new("view3d_build_order", view, egui::Align2::CENTER_BOTTOM, egui::pos2(view.center().x, view.bottom() - MARGIN))
+    super::panel::Float::new("view3d_build_order", view, egui::Align2::CENTER_BOTTOM, egui::pos2(view.center().x, view.bottom() - MARGIN)).dock("Build order")
         .foreground()
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {

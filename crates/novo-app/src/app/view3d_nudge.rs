@@ -188,6 +188,7 @@ impl Fields {
             egui::Align2::RIGHT_BOTTOM,
             view.right_bottom() + egui::vec2(-MARGIN, -MARGIN),
         )
+        .dock("Position")
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.strong("Position");

@@ -196,6 +196,7 @@ pub(super) fn strip(ctx: &egui::Context, view: egui::Rect, devices: usize) -> Op
         egui::Align2::CENTER_BOTTOM,
         egui::pos2(view.center().x, view.bottom() - 12.0),
     )
+    .dock("Align and spread")
     .show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {

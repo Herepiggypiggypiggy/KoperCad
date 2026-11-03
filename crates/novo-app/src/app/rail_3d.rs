@@ -146,6 +146,13 @@ impl NovoApp {
                 if let Some(reason) = reason {
                     tip.push_str(&format!("\n{reason}"));
                 }
+                if id == "view.3d_ssao" && !self.view3d_ssao_available() {
+                    tip.push_str(
+                        "\nGreyed out: this computer has no separate (discrete) graphics \
+                         card. Integrated graphics and software drawing show the view \
+                         without ambient occlusion.",
+                    );
+                }
                 Some(FlyEntry {
                     id,
                     anchor: super::learn_labels::moved_anchor(id),

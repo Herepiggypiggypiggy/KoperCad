@@ -1,0 +1,35 @@
+@title 3D and Cabinet have no floating chips: the 3D view pane and the tool strips are docked panes
+@sizes 1366x768 1920x1080
+@area 3D
+# Views, door and Section live in the "3D view" pane of the right strip; Measure and the other tool strips dock too.
+open_starter_example
+wait 20
+click_text 3D #1
+wait 40
+expect "3D view"
+expect "Open door"
+shot 3d-view-pane-docked
+check_blank 3d-view-pane-docked
+check_layout
+click_text Views
+wait 8
+expect "Save this view"
+shot views-open-in-pane
+check_layout
+click_text "Save this view"
+wait 8
+expect "View 1"
+shot view-saved
+click_text "Section plane"
+wait 10
+expect "Cut the picture with a plane"
+shot section-in-pane
+check_layout
+key ctrl+k
+text Mouse and keys
+wait 5
+key Enter
+wait 10
+expect "Mouse and keys"
+shot mouse-and-keys-docked
+check_layout

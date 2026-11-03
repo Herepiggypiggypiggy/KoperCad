@@ -27,7 +27,6 @@ wait 6
 click_text "Section plane"
 wait 10
 shot section-on
-click_text "✔ Section"
 wait 8
 shot section-controls
 expect "Cut the picture"
