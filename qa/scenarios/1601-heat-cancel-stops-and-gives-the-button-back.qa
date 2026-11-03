@@ -8,7 +8,7 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
-click_text Simulate #2
+# Heat starts a run by itself on this small cabinet, so there is no Simulate button to press: the run is already going.
 wait_s 3
 shot running
 click_text Cancel

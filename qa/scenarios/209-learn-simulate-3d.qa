@@ -17,7 +17,7 @@ try click_text "Do it for me"
 wait 40
 shot 03-heat-panel-step
 check_layout
-click_text Heat #1
+click 24 427
 wait 20
 shot 04-settings-step
 check_layout
