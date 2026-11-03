@@ -218,13 +218,16 @@ pub fn profile_boxes(profile: Profile, width: f32, height: f32) -> Vec<(Vec3, Ve
                 7.5
             };
             let t = 1.0;
+            // A rail is screwed down through its middle: the 25 mm crown
+            // lies on the plate and the brims stand h proud of it, open side
+            // out, where the devices clip on.
             vec![
-                // Top web, two side walls, two outer flanges.
-                b(x0, x1, -12.5, 12.5, h - t, h),
+                // Crown on the plate, two side walls, two outer brims.
+                b(x0, x1, -12.5, 12.5, 0.0, t),
                 b(x0, x1, -12.5, -12.5 + t, t, h - t),
                 b(x0, x1, 12.5 - t, 12.5, t, h - t),
-                b(x0, x1, -17.5, -12.5, 0.0, t),
-                b(x0, x1, 12.5, 17.5, 0.0, t),
+                b(x0, x1, -17.5, -12.5, h - t, h),
+                b(x0, x1, 12.5, 17.5, h - t, h),
             ]
         }
         // Unit length has no slots to show; `slotted_boxes` makes the real one.
@@ -238,6 +241,67 @@ pub fn profile_boxes(profile: Profile, width: f32, height: f32) -> Vec<(Vec3, Ve
             ]
         }
     }
+}
+
+/// Length and width of a mounting slot in the crown of a rail, mm, and the
+/// bridge left between two slots. Typical of a slotted TS 35 rail (long slots
+/// along the rail), not the figures of one maker.
+pub const RAIL_SLOT_MM: (f32, f32) = (25.0, 5.2);
+pub const RAIL_BRIDGE_MM: f32 = 5.0;
+
+/// The boxes of a slotted top-hat rail of real length `len`, x from `-len / 2`
+/// to `len / 2`: the section of [`profile_boxes`] with a row of long mounting
+/// slots cut into the crown that lies on the plate (the screws go through
+/// them), the slots centred on the rail with a bridge between. A rail too
+/// short for two slots stays solid.
+pub fn slotted_rail_boxes(profile: Profile, len: f32) -> Vec<(Vec3, Vec3)> {
+    let (sl, sw) = RAIL_SLOT_MM;
+    let pitch = sl + RAIL_BRIDGE_MM;
+    let n = ((len - RAIL_BRIDGE_MM) / pitch).floor() as i32;
+    let solid = || {
+        profile_boxes(profile, 0.0, 0.0)
+            .into_iter()
+            .map(|(a, b)| {
+                (
+                    Vec3::new(a.x * len, a.y, a.z),
+                    Vec3::new(b.x * len, b.y, b.z),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    if n < 2 {
+        return solid();
+    }
+    let t = 1.0f32;
+    let b = |x0: f32, x1: f32, y0: f32, y1: f32, z0: f32, z1: f32| {
+        (Vec3::new(x0, y0, z0), Vec3::new(x1, y1, z1))
+    };
+    // Everything but the crown comes from the plain section.
+    let mut boxes: Vec<(Vec3, Vec3)> = solid()
+        .into_iter()
+        .filter(|(a, bb)| !(a.z <= 0.0 && bb.z <= t + 1e-4 && (bb.y - a.y) > 20.0))
+        .collect();
+    // The crown: two side strips along the whole length, and the bridges
+    // between the slots across its middle.
+    let (y0, y1) = (-12.5, 12.5);
+    let (m0, m1) = (-sw * 0.5, sw * 0.5);
+    let (x0, x1) = (-len * 0.5, len * 0.5);
+    boxes.push(b(x0, x1, y0, m0, 0.0, t));
+    boxes.push(b(x0, x1, m1, y1, 0.0, t));
+    let span = n as f32 * sl + (n - 1) as f32 * RAIL_BRIDGE_MM;
+    let first = -span * 0.5;
+    boxes.push(b(x0, first, m0, m1, 0.0, t));
+    for i in 0..n - 1 {
+        let s = first + i as f32 * pitch + sl;
+        boxes.push(b(s, s + RAIL_BRIDGE_MM, m0, m1, 0.0, t));
+    }
+    boxes.push(b(first + span, x1, m0, m1, 0.0, t));
+    boxes
+}
+
+/// The mesh of [`slotted_rail_boxes`].
+pub fn slotted_rail_mesh(profile: Profile, len: f32) -> MeshData {
+    MeshData::from_boxes(&slotted_rail_boxes(profile, len))
 }
 
 /// Wall and floor thickness of a duct, mm.
@@ -485,6 +549,47 @@ mod tests {
         assert!(lengths[..4].iter().all(|l| (l - 2.0).abs() < 1e-5));
         assert!(lengths[4..8].iter().all(|l| (l - 3.0).abs() < 1e-5));
         assert!(lengths[8..].iter().all(|l| (l - 5.0).abs() < 1e-5));
+    }
+
+    #[test]
+    fn a_rail_lies_on_its_crown_with_the_open_side_out_and_slots_in_the_crown() {
+        let hat = profile_boxes(Profile::TopHat35x7_5, 0.0, 0.0);
+        // The widest box on the plate is the crown; the brims stand 7.5 up.
+        let on_plate: Vec<_> = hat.iter().filter(|(a, _)| a.z == 0.0).collect();
+        assert_eq!(on_plate.len(), 1);
+        assert!((on_plate[0].1.y - on_plate[0].0.y - 25.0).abs() < 1e-5);
+        let brims: Vec<_> = hat
+            .iter()
+            .filter(|(_, b)| (b.z - 7.5).abs() < 1e-5)
+            .collect();
+        assert_eq!(brims.len(), 2);
+        assert!(brims.iter().all(|(a, b)| (b.y - a.y - 5.0).abs() < 1e-5));
+        // Slots: the crown has fewer solid area than the plain one, the brims are untouched.
+        let slotted = slotted_rail_boxes(Profile::TopHat35x7_5, 300.0);
+        let crown_area = |v: &[(Vec3, Vec3)]| -> f32 {
+            v.iter()
+                .filter(|(a, b)| a.z == 0.0 && b.z <= 1.0 + 1e-4)
+                .map(|(a, b)| (b.x - a.x) * (b.y - a.y))
+                .sum()
+        };
+        let solid: Vec<_> = hat
+            .iter()
+            .map(|(a, b)| {
+                (
+                    Vec3::new(a.x * 300.0, a.y, a.z),
+                    Vec3::new(b.x * 300.0, b.y, b.z),
+                )
+            })
+            .collect();
+        let cut = crown_area(&solid) - crown_area(&slotted);
+        assert!(cut > 5.2 * 25.0 * 5.0, "slots cut {cut} mm2");
+        assert!(
+            slotted
+                .iter()
+                .filter(|(_, b)| (b.z - 7.5).abs() < 1e-5)
+                .count()
+                == 2
+        );
     }
 
     #[test]
