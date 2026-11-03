@@ -14,8 +14,8 @@ key ctrl+k
 text "add plc card"
 wait 5
 key Enter
-wait 10
-expect "Add PLC card"
+wait 30
+expect "Digital inputs (DI)"
 expect "Address style"
 click_text "IEC 61131"
 wait 5

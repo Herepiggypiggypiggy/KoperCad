@@ -42,7 +42,7 @@ check_layout
 # The same markers in the 3D EMC view.
 click_text 3D #1
 wait 30
-click_text EMC #1
+click 24 464
 wait 30
 expect "Motor cable shield"
 shot threed-unplaced-markers
