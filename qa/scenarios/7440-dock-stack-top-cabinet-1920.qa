@@ -17,12 +17,6 @@ text standards check
 wait 6
 key Enter
 wait 40
-key ctrl+k
-wait 4
-text project settings
-wait 6
-key Enter
-wait 40
 shot windows-open
 check_layout
 # Fold the first window: it keeps its title row at the top and the others move up under it.

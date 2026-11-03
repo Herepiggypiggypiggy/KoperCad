@@ -17,12 +17,6 @@ text standards check
 wait 6
 key Enter
 wait 40
-key ctrl+k
-wait 4
-text project settings
-wait 6
-key Enter
-wait 40
 shot windows-open
 check_layout
 # Cooling what-if opens floating: its dock button puts it at the end of the stack, at the top-aligned stack, not at the bottom of the strip.
