@@ -73,6 +73,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `wait N`, `resize W H` | run N frames (at most 600); resize the window |
 | `wait_s N` | sleep N real seconds (at most 300), then run a few frames: for work on the wall clock such as the heat solver; `wait` counts frames, which pass faster in a small window |
 | `frame_stats [pan\|zoom\|none] [frames]` | run frames (default 120) while the page pans, zooms or stands still, and report UI pass and whole-frame times (mean, median, p95, worst, in ms); they appear under "Measurements" in `report.md`. On a box without a GPU the whole-frame time includes software rasterising: read the UI pass as the program's own cost |
+| `expect_popups_stable [frames]` | with a menu or popup open, run frames (default 60) and fail if it was not open, or if any popup layer closed, reopened, moved, resized or changed place in the stack: the flashing and twitching of a menu that is rebuilt every frame. Use it with a simulation running (Live, heat, drive run) |
 | `shot label` | labelled screenshot |
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
 | `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |

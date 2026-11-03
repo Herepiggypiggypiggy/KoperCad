@@ -1,0 +1,22 @@
+@title Escape closes a menu and leaves Live running
+@area Menus
+open_starter_example
+wait 20
+key shift+l
+wait 20
+expect "Live potentials"
+click_text View #1
+wait 6
+key Escape
+wait 6
+shot after-escape
+expect "Live potentials"
+click_text "KoperCAD" #1
+wait 6
+key Escape
+wait 6
+expect "Live potentials"
+# With nothing open, Escape still leaves Live.
+key Escape
+wait 6
+expect_not "Live potentials"

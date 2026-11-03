@@ -334,9 +334,9 @@ fn result(ui: &mut egui::Ui, trace: &Trace) {
                 ui.end_row();
             }
         });
-    ui.collapsing(
-        format!("What happened when ({})", trace.events.len()),
-        |ui| {
+    egui::CollapsingHeader::new(format!("What happened when ({})", trace.events.len()))
+        .id_salt("winch_events_header")
+        .show(ui, |ui| {
             egui::Grid::new("winch_events")
                 .striped(true)
                 .show(ui, |ui| {
@@ -346,8 +346,7 @@ fn result(ui: &mut egui::Ui, trace: &Trace) {
                         ui.end_row();
                     }
                 });
-        },
-    );
+        });
 }
 
 fn honesty(ui: &mut egui::Ui) {
