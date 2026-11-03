@@ -150,7 +150,7 @@ impl NovoApp {
         } else {
             wiring_links(project, &on_plate)
         };
-        let (mut plan, _) = regroup(
+        let (plan, _) = regroup(
             layout,
             ids,
             goal,
@@ -159,11 +159,6 @@ impl NovoApp {
                 links: &links,
                 rules: &self.cabinet.rules.rules,
             },
-        );
-        plan.notes.push(
-            "A search, not a proof: it never scores worse than the layout now, and Undo takes it \
-             back."
-                .into(),
         );
         Some(plan)
     }

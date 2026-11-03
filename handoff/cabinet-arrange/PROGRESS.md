@@ -1,3 +1,4 @@
 2026-11-02 14:00 UTC engine, commands, rail card, preview and tests done on claude/project-thread-5tafis; PR opened after checks
 2026-11-02 14:30 UTC regroup engine (wiring, heat, both) + 9 engine tests + app glue + QA 1721 written on claude/project-thread-nyj5hs (based on PR 1 head; rebase onto main once #1816 merges)
 2026-11-02 15:10 UTC PR 2 tests green (layout, workflow, theme, app lib 2137), pushed to claude/project-thread-nyj5hs without a PR; waiting for #1816 to merge. QA 1721 not run (no display tools here)
+2026-11-03 00:40 UTC fix: search panicked (subtract overflow) when a move emptied a row; `d` is now looked up per row and the row loop moves on after an accepted move; randomized engine test reproduces it; preview notes shortened (banner <= 3 lines), heat note says 'about the same' / 'higher' instead of '0% lower'. Group by heat alone is refused on the heat-place-all fixture (would break 3 place rules): a refusal picture, not a heat preview.

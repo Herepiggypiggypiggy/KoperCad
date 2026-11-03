@@ -291,3 +291,65 @@ fn devices_on_no_rail_are_left_and_named() {
     assert!(plan.moves.iter().all(|m| m.id != 3));
     assert!(plan.notes.iter().any(|n| n.contains("no rail")));
 }
+
+/// A small deterministic generator, so the test needs no extra crate.
+struct Lcg(u64);
+
+impl Lcg {
+    fn next(&mut self, n: u64) -> u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (self.0 >> 33) % n
+    }
+}
+
+#[test]
+fn a_move_that_empties_a_row_does_not_break_the_search() {
+    // Many small layouts with rows of one or two devices, so moves often
+    // empty a row; every goal must finish, stay clean and never score worse.
+    let mut rng = Lcg(7);
+    for round in 0..300 {
+        let rows = 2 + rng.next(3);
+        let mut placements = Vec::new();
+        let mut id = 0;
+        for r in 0..rows {
+            let n = 1 + rng.next(2);
+            for k in 0..n {
+                id += 1;
+                placements.push(dev(
+                    id,
+                    30.0 + 120.0 * k as f64,
+                    100.0 + 150.0 * r as f64,
+                    r + 1,
+                ));
+            }
+        }
+        let rails: Vec<Rail> = (0..rows)
+            .map(|r| rail(r + 1, 100.0 + 150.0 * r as f64))
+            .collect();
+        let l = layout(rails, placements);
+        let kinds = ["K", "Q", "T"];
+        let specs: Vec<Spec> = (1..=id)
+            .map(|i| {
+                let loss = (rng.next(3) == 0).then(|| 15.0 + rng.next(30) as f64);
+                let limit = (rng.next(3) == 0).then_some(42.0);
+                spec(i, kinds[rng.next(3) as usize], loss, limit)
+            })
+            .collect();
+        let mut links = Vec::new();
+        for _ in 0..rng.next(5) {
+            let (a, b) = (1 + rng.next(id), 1 + rng.next(id));
+            if a != b {
+                links.push(link(a, b));
+            }
+        }
+        for goal in [Goal::Wiring, Goal::Heat, Goal::Both] {
+            let (plan, _) = run(&l, &[], goal, &specs, &links);
+            let a = after(&l, &plan);
+            let r = a.report();
+            assert!(r.collisions.is_empty(), "round {round} {goal:?}");
+        }
+    }
+}

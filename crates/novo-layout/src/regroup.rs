@@ -727,9 +727,12 @@ pub fn regroup(
                     }
                 }
             }
-            // Moves to every other place.
-            let at = locate(&order, d).unwrap();
+            // Moves to every other place. `order` changes when a move is
+            // accepted, so `d` is looked up again for every row.
             for r in 0..ctx.rows.len() {
+                let Some(at) = locate(&order, d) else {
+                    break;
+                };
                 let len = order[r].len() - usize::from(r == at.0);
                 for k in 0..=len {
                     if (r, k) == at {
@@ -738,7 +741,6 @@ pub fn regroup(
                     if tried >= MAX_TRIES {
                         break 'passes;
                     }
-                    let at = locate(&order, d).unwrap();
                     let mut trial = order.clone();
                     trial[at.0].remove(at.1);
                     let k = k.min(trial[r].len());
@@ -752,6 +754,8 @@ pub fn regroup(
                             order = trial;
                             best_rects_v = rects;
                             improved = true;
+                            // `d` stands elsewhere now: on to the next row.
+                            break;
                         }
                     }
                 }
@@ -833,8 +837,8 @@ pub fn regroup(
 
     if goal.wiring() && pool_linked > 0 {
         plan.notes.push(format!(
-            "Wiring: straight-line wire estimate between connected devices {} to {} (an estimate, \
-             not a routed length); rows that mix power and signal parts {} to {}.",
+            "Wiring: estimated wire between connected devices {} to {} (straight line, not routed); \
+             rows mixing power and signal {} to {}.",
             metres(report.wire_before_mm),
             metres(report.wire_after_mm),
             report.mixed_before,
@@ -842,10 +846,18 @@ pub fn regroup(
         ));
     }
     if goal.heat() && report.heat_before > 0.0 {
-        plan.notes.push(format!(
-            "Heat: coupling score {:.0}% lower (planning score, not a temperature).",
-            100.0 * (1.0 - report.heat_after / report.heat_before).max(0.0)
-        ));
+        let change = 100.0 * (1.0 - report.heat_after / report.heat_before);
+        plan.notes.push(if change >= 1.0 {
+            format!("Heat: coupling score {change:.0}% lower (planning score, not a temperature).")
+        } else if change > -1.0 {
+            "Heat: coupling score about the same (planning score, not a temperature).".to_owned()
+        } else {
+            format!(
+                "Heat: coupling score {:.0}% higher, traded for the other goal (planning score, \
+                 not a temperature).",
+                -change
+            )
+        });
     }
     (plan, report)
 }
