@@ -489,7 +489,8 @@ impl NovoApp {
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("Reading the parts. You can keep this window open.");
+                        ui.label("Reading the parts");
+                        super::window_help::add(ui.ctx(), "You can keep this window open.");
                     });
                 },
             );
@@ -512,9 +513,13 @@ impl NovoApp {
                 ui.add_space(4.0);
                 let (added, changed, unchanged) = import.counts();
                 ui.label(format!(
-                "{} part(s) read: {added} new, {changed} would replace a catalog entry, {unchanged} already there as they are.",
-                import.parts().len()
-            ));
+                    "{} read: {added} new, {changed} replace, {unchanged} same",
+                    import.parts().len()
+                ));
+                super::window_help::add(
+                    ui.ctx(),
+                    "\"Replace\" parts would replace a catalog entry; \"same\" parts are already there as they are.",
+                );
                 ui.horizontal(|ui| {
                     ui.label("Manufacturer for rows without one");
                     maker_changed = ui.text_edit_singleline(&mut import.maker).changed();
@@ -575,7 +580,10 @@ impl NovoApp {
                     }
                 }
                 ui.add_space(6.0);
-                ui.weak("Only your own files are read. Nothing is added until you choose Add.");
+                super::window_help::add(
+                    ui.ctx(),
+                    "Only your own files are read. Nothing is added until you choose Add.",
+                );
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     go = ui
@@ -625,7 +633,7 @@ fn portal_summary(ui: &mut egui::Ui, portal: &PortalRead) {
             if portal.unrecognised.is_empty() {
                 ui.weak("Every attribute was placed.");
             } else {
-                ui.weak("Kept as written, not understood (name and how often):");
+                ui.weak("Not understood (name, count)");
                 for (name, n) in portal.unrecognised.iter().take(12) {
                     ui.weak(format!("  {name} x{n}"));
                 }
@@ -650,7 +658,10 @@ fn makers_ui(ui: &mut egui::Ui, import: &mut EplanPartsImport, changed: &mut boo
     let unknown = import.makers.iter().filter(|m| !m.known).count();
     ui.add_space(4.0);
     ui.strong("Makers in this file");
-    ui.weak("One name per maker. Type a name next to a code to merge it with a maker.");
+    super::window_help::add(
+        ui.ctx(),
+        "One name per maker. Type a name next to a code to merge it with a maker.",
+    );
     let rows: Vec<MakerSeen> = import.makers.clone();
     egui::ScrollArea::vertical()
         .id_salt("eplan_parts_makers")
@@ -682,9 +693,10 @@ fn makers_ui(ui: &mut egui::Ui, import: &mut EplanPartsImport, changed: &mut boo
         });
     if unknown > 0 {
         ui.weak(format!(
-            "{unknown} {} not known and added under the code itself.",
-            if unknown == 1 { "code is" } else { "codes are" }
+            "{unknown} {} unknown",
+            if unknown == 1 { "code" } else { "codes" }
         ));
+        super::window_help::add(ui.ctx(), "Unknown codes are added under the code itself.");
     }
 }
 

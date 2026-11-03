@@ -312,8 +312,8 @@ impl NovoApp {
             title,
             [width, body_height + CHROME],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ui.ctx(),
                     "Say what each column is. Nothing is added until you choose Add; what the file does not say stays unknown.",
                 );
                 changed |= settings_ui(ui, import);
@@ -392,7 +392,7 @@ fn settings_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) -> bool {
                     }
                 });
             if import.sheet != 0 && import.sheet == import.table.best_sheet() {
-                ui.weak("Started on the sheet with the order numbers; change it here.");
+                ui.weak("Started on the sheet with the order numbers");
             }
             ui.add_space(12.0);
         }
@@ -464,10 +464,7 @@ fn columns_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) -> 
     let p = crate::theme::ui_palette();
     let mut changed = false;
     if import.from_saved {
-        ui.colored_label(
-            p.info,
-            "The columns are set from your saved mapping for files with these headers.",
-        );
+        ui.colored_label(p.info, "Columns set from your saved mapping");
     }
     for problem in &import.preview.problems {
         ui.colored_label(p.error, problem);
@@ -564,7 +561,7 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
         ui.colored_label(p.error, problem);
     }
     if !import.preview.problems.is_empty() {
-        ui.weak("Fix the columns first; the rows are read once the mapping is complete.");
+        ui.weak("Fix the columns first");
         return;
     }
     // What the notes above the list take comes off the list's own height, so
@@ -666,8 +663,12 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
             }
             let total = import.preview.rows.len();
             if total > ROWS_SHOWN && !import.only_checks {
+                super::window_help::add(
+                    ui.ctx(),
+                    "The report saved with the catalog has every finding.",
+                );
                 ui.weak(format!(
-                    "{} more {} not listed; the report saved with the catalog has every finding.",
+                    "{} more {} not listed",
                     total - ROWS_SHOWN,
                     plural(total - ROWS_SHOWN, "row", "rows")
                 ));
@@ -686,7 +687,7 @@ fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
     ui.colored_label(
         p.warning,
         format!(
-            "{} {} more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
+            "{} {} more than one row ({rows} rows)",
             import.preview.repeated.len(),
             if import.preview.repeated.len() == 1 {
                 "order number appears in"
@@ -694,6 +695,10 @@ fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
                 "order numbers appear in"
             }
         ),
+    );
+    super::window_help::add(
+        ui.ctx(),
+        "The catalog keeps one entry per maker and order number: choose what it gets.",
     );
     let labels = [
         "Last row",
@@ -725,7 +730,7 @@ fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
     }
     if import.preview.repeated.len() > shown {
         ui.weak(format!(
-            "and {} more; every row of them says so below.",
+            "and {} more",
             import.preview.repeated.len() - shown
         ));
     }
@@ -779,10 +784,7 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
              The Rows step says why for every row.",
         );
     } else {
-        ui.colored_label(
-            p.error,
-            "The columns need a change before anything can be added.",
-        );
+        ui.colored_label(p.error, "Fix the columns first");
     }
     ui.horizontal(|ui| {
         let n = counts.new + counts.changed;
@@ -797,10 +799,7 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
             .clicked();
         });
         *cancel = ui.button("Cancel").clicked();
-        ui.checkbox(
-            &mut import.remember,
-            "Remember these columns for files with the same headers",
-        );
+        ui.checkbox(&mut import.remember, "Remember these columns");
     });
     go
 }

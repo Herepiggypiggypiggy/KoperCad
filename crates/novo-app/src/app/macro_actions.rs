@@ -179,8 +179,11 @@ impl Default for PlaceWindow {
 /// Shown in the Place window under the preview of a macro with PLC channel
 /// symbols: the symbols alone give no addresses, so the I/O list and PLC
 /// overview stay empty.
-const PLC_CARD_NOTE: &str =
-    "Symbols only: no addresses or I/O list until you add a PLC card (Draw > Add PLC card)";
+const PLC_CARD_NOTE: &str = "Symbols only, no I/O addresses";
+
+/// The "?" text that goes with [`PLC_CARD_NOTE`].
+const PLC_CARD_HELP: &str =
+    "Symbols only: no addresses or I/O list until you add a PLC card (Draw > Add PLC card).";
 
 /// Whether the macro draws PLC input or output channels (not just a supply
 /// or CPU), which need a registered card to show in the I/O list.
@@ -282,7 +285,10 @@ impl NovoApp {
         let mut save = false;
         let mut replace = false;
         let modal = super::panel::modal(ctx, "macro_save", "Save as macro", [380.0, 0.0], |ui| {
-            ui.weak("Keeps the selected circuit in your library, to place on any page.");
+            super::window_help::add(
+                ui.ctx(),
+                "Keeps the selected circuit in your library, to place on any page.",
+            );
             ui.add_space(8.0);
             ui.label("Name");
             let text = ui.add(
@@ -529,7 +535,11 @@ impl NovoApp {
                     .max_height(150.0)
                     .show(ui, |ui| {
                         if entries.is_empty() {
-                            ui.weak("No macros. Select a circuit and use Save as macro.");
+                            ui.weak("No macros");
+                            super::window_help::add(
+                                ui.ctx(),
+                                "Select a circuit and use Save as macro.",
+                            );
                         }
                         let mut folder: Option<&str> = None;
                         for entry in &entries {
@@ -545,15 +555,8 @@ impl NovoApp {
                                     egui::RichText::new(&entry.name)
                                         .family(novo_theme::fonts::strong_family()),
                                 );
-                                if !entry.description.is_empty() {
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(&entry.description).weak(),
-                                        )
-                                        .truncate(),
-                                    );
-                                }
                             })
+                            .on_hover_text(&entry.description)
                             .clicked();
                             if clicked {
                                 pick = Some(entry.path.clone());
@@ -568,12 +571,22 @@ impl NovoApp {
                     .max_height((ui.available_height() - 80.0).max(80.0))
                     .show(ui, |ui| match &win.shown {
                         None if win.selected.is_some() => {
-                            ui.weak("This macro could not be read.");
+                            ui.weak("Could not read this macro");
                         }
                         None => {
-                            ui.weak("Pick a macro to see what it will do.");
+                            ui.weak("No macro picked");
+                            super::window_help::add(
+                                ui.ctx(),
+                                "Pick a macro to see what it will do.",
+                            );
                         }
                         Some(shown) => {
+                            if !shown.definition.description.is_empty() {
+                                super::window_help::add(
+                                    ui.ctx(),
+                                    shown.definition.description.clone(),
+                                );
+                            }
                             for parameter in &shown.definition.parameters {
                                 if let Some((_, value)) =
                                     win.values.iter_mut().find(|(n, _)| *n == parameter.name)
@@ -595,7 +608,13 @@ impl NovoApp {
                                             }
                                         }
                                         if !parameter.description.is_empty() {
-                                            ui.weak(&parameter.description);
+                                            super::window_help::add(
+                                                ui.ctx(),
+                                                format!(
+                                                    "{}: {}",
+                                                    parameter.name, parameter.description
+                                                ),
+                                            );
                                         }
                                     });
                                 }
@@ -631,6 +650,7 @@ impl NovoApp {
                                 Ok(report) => {
                                     ui.label(describe(report));
                                     if draws_plc_channels(&shown.definition) {
+                                        super::window_help::add(ui.ctx(), PLC_CARD_HELP);
                                         ui.add(
                                             egui::Label::new(
                                                 egui::RichText::new(PLC_CARD_NOTE)
@@ -735,7 +755,7 @@ impl NovoApp {
         let Some(page) = self.macro_target_page() else {
             self.message(
                 Level::Error,
-                "Could not place: the project has no drawing page, only generated pages. Add a page first.",
+                "Could not place: no drawing page. Add a page first.",
             );
             return;
         };
@@ -796,20 +816,17 @@ impl NovoApp {
                 }
                 let text = if plc_note {
                     format!(
-                        "Placed {name} (symbols only: use Draw > Add PLC card for addresses) · {}",
+                        "Placed {name} (symbols only, no I/O addresses) · {}",
                         describe(&placed.report)
                     )
                 } else if fed > 0 && joined > 0 {
                     format!(
-                        "Placed {name}, L1 L2 L3 N PE fed · {} joined to the starter's open entries · {}",
+                        "Placed {name}, supply fed · {} joined to the starter · {}",
                         count_words::wires(joined),
                         describe(&placed.report)
                     )
                 } else if fed > 0 {
-                    format!(
-                        "Placed {name}, L1 L2 L3 N PE fed · now wire its outputs to the starter · {}",
-                        describe(&placed.report)
-                    )
+                    format!("Placed {name}, supply fed · {}", describe(&placed.report))
                 } else if joined > 0 {
                     format!(
                         "Placed {name}, {} joined to the Three-phase supply · {}",
@@ -831,7 +848,7 @@ impl NovoApp {
                     .count();
                 let text = if open > 0 && !plc_note {
                     format!(
-                        "{text} · {open} {} to connect to a supply (see the Issues list)",
+                        "{text} · {open} {} to connect",
                         if open == 1 { "point" } else { "points" }
                     )
                 } else {
@@ -841,9 +858,12 @@ impl NovoApp {
                     self.message(
                         Level::Warning,
                         format!(
-                            "{name}: {off_sheet} {} outside the page edge; move {} onto the sheet or use a bigger page",
-                            if off_sheet == 1 { "symbol is" } else { "symbols are" },
-                            if off_sheet == 1 { "it" } else { "them" }
+                            "{name}: {off_sheet} {} outside the page edge",
+                            if off_sheet == 1 {
+                                "symbol is"
+                            } else {
+                                "symbols are"
+                            }
                         ),
                     );
                 }

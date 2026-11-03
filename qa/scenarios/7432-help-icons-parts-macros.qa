@@ -1,0 +1,21 @@
+@title Help icons: Parts and Macros carry no explanation text
+@area Parts
+@sizes 1366x768 1920x1080
+# The notes of the Parts window, the Place macro window and the Macros window sit behind the ? of each window; check_text fails on any label of more than 20 words (the target is 8).
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+shot parts-empty
+check_text 20
+check_layout
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+shot place-macro-empty
+check_text 20
+check_layout

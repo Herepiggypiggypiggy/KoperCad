@@ -449,7 +449,7 @@ Nothing is stored until you press Import.",
                     if row.candidates.is_empty() {
                         ui.colored_label(
                             warn,
-                            "No part in your catalog matches this file. Search for the part below.",
+                            "No matching part: search below",
                         );
                     }
                     for (ci, c) in row.candidates.iter().enumerate() {
@@ -524,7 +524,8 @@ Nothing is stored until you press Import.",
                 });
         }
         if panel.rows.iter().any(|r| r.candidates.len() > 1) {
-            ui.weak(
+            super::window_help::add(
+                ui.ctx(),
                 "A family model fits several parts: tick the ones you want, or press Tick all probable.",
             );
         }

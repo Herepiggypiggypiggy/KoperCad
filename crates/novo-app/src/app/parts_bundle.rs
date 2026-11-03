@@ -247,7 +247,8 @@ impl BundleUi {
             }
             if let Some(form) = self.form.as_mut() {
                 ui.strong("Export library");
-                ui.weak(
+                super::window_help::add(
+                    ui.ctx(),
                     "Your parts in one file, to move to another computer or to give to a colleague.",
                 );
                 ui.radio_value(&mut form.backup, false, "Share: only the parts I wrote myself");
@@ -258,8 +259,9 @@ impl BundleUi {
                 );
                 if form.backup {
                     form.files = true;
-                    ui.colored_label(
-                        pal.warning,
+                    ui.colored_label(pal.warning, "Keep this backup for yourself");
+                    super::window_help::add(
+                        ui.ctx(),
                         "A backup may hold files from makers that are not meant to be passed on. Keep it for yourself.",
                     );
                 } else {
@@ -270,10 +272,11 @@ impl BundleUi {
                     if form.files {
                         ui.checkbox(
                             &mut form.mine,
-                            "These files are mine to share (I made them, or the maker allows passing them on)",
+                            "These files are mine to share",
                         );
                     }
-                    ui.weak(
+                    super::window_help::add(
+                        ui.ctx(),
                         "Parts from a maker's catalog are not included; only their order numbers are listed, so the receiver can import them from the maker.",
                     );
                 }
@@ -307,11 +310,18 @@ impl BundleUi {
                 ));
                 if !m.needs.is_empty() {
                     ui.weak(format!(
-                        "{} the sender used {} not included; import {} from the maker.",
+                        "{} not included",
                         count(m.needs.len(), "part", "parts"),
-                        if m.needs.len() == 1 { "is" } else { "are" },
-                        if m.needs.len() == 1 { "it" } else { "them" },
                     ));
+                    super::window_help::add(
+                        ui.ctx(),
+                        format!(
+                            "The sender used {} that {} not included; import {} from the maker.",
+                            count(m.needs.len(), "part", "parts"),
+                            if m.needs.len() == 1 { "is" } else { "are" },
+                            if m.needs.len() == 1 { "it" } else { "them" },
+                        ),
+                    );
                 }
                 if !p.different.is_empty() {
                     ui.checkbox(

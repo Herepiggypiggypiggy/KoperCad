@@ -177,7 +177,8 @@ impl NovoApp {
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let ed = &mut self.wb.macro_editor;
-                ui.weak(
+                super::window_help::add(
+                    ui.ctx(),
                     "A parameter is asked for when the macro is placed. Use {name} in the macro's texts and device properties where its value goes.",
                 );
                 ui.horizontal(|ui| {
@@ -196,8 +197,9 @@ impl NovoApp {
                 if ed.read_only {
                     ui.colored_label(
                         ui.visuals().warn_fg_color,
-                        "Company macro: read-only. Copy it to your macros to change it.",
+                        "Company macro: read-only",
                     );
+                    super::window_help::add(ui.ctx(), "Copy it to your macros to change it.");
                 }
                 ui.separator();
                 novo_theme::widgets::section_label(ui, "Parameters");
@@ -279,7 +281,7 @@ impl NovoApp {
                     ui.colored_label(
                         ui.visuals().warn_fg_color,
                         format!(
-                            "The macro uses {} but no parameter has that name; it stays literal text when placed.",
+                            "No parameter named {}; it stays literal text",
                             names.join(", ")
                         ),
                     );

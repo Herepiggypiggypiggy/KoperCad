@@ -160,15 +160,20 @@ fn duplicates_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -
     let mut jump = None;
     let mut picked = state.group.filter(|i| *i < groups.len());
     if groups.is_empty() {
-        ui.weak("No duplicates found. Parts are compared by order number and type number.");
+        ui.weak("No duplicates found");
+        super::window_help::add(
+            ui.ctx(),
+            "Parts are compared by order number and type number.",
+        );
         return None;
     }
     let mut refresh = false;
     ui.horizontal(|ui| {
-        ui.weak(format!(
-            "{} groups. Only values both parts record are compared; a missing value is not a conflict.",
-            groups.len()
-        ));
+        ui.weak(format!("{} groups", groups.len()));
+        super::window_help::add(
+            ui.ctx(),
+            "Only values both parts record are compared; a missing value is not a conflict.",
+        );
         refresh = ui
             .small_button("Refresh")
             .on_hover_text("Find duplicates again after editing parts")
@@ -267,12 +272,17 @@ fn review_ui(
 
     ui.horizontal_wrapped(|ui| {
         if queue.is_empty() {
-            ui.weak(
-                "Nothing waits for review. Imported parts show up here until you approve them.",
+            ui.weak("Nothing waits for review");
+            super::window_help::add(
+                ui.ctx(),
+                "Imported parts show up here until you approve them.",
             );
         } else {
             ui.strong(format!("{} imported parts not reviewed yet", queue.len()));
-            ui.weak("Review is a record, not a gate: nothing else in KoperCAD reads it yet.");
+            super::window_help::add(
+                ui.ctx(),
+                "Review is a record, not a gate: nothing else in KoperCAD reads it yet.",
+            );
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             refresh = ui
@@ -284,7 +294,11 @@ fn review_ui(
     if let Some(e) = &blocked {
         ui.colored_label(
             crate::theme::ui_palette().error,
-            format!("{e}. Decisions are switched off so the file is not overwritten."),
+            format!("{e}. Decisions are off"),
+        );
+        super::window_help::add(
+            ui.ctx(),
+            "Decisions are switched off so the file is not overwritten.",
         );
     }
     // One button per source file, for approving a whole import after a spot check.
@@ -333,7 +347,8 @@ fn review_ui(
                 .as_ref()
                 .and_then(|k| queue.iter().find(|q| &q.key == k))
             else {
-                ui.weak("Pick a part to look at what was imported.");
+                ui.weak("No part picked");
+                super::window_help::add(ui.ctx(), "Pick a part to look at what was imported.");
                 return;
             };
             ui.heading(&item.order_number);

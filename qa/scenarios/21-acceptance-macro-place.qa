@@ -10,14 +10,14 @@ text "place macro"
 wait 5
 key Enter
 wait 10
-expect "Pick a macro to see what it will do."
+expect "No macro picked"
 # The list is longer than the window: search, then click the row's own text.
 click 237 94
 text motor starter dol
 wait 5
 click_text "Motor starter DOL" Label
 wait 10
-expect_not "Pick a macro to see what it will do."
+expect_not "No macro picked"
 expect "Keep the macro's wire numbers"
 shot macro-picked
 click_text Place Button

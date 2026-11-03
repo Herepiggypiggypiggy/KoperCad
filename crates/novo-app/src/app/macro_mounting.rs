@@ -19,9 +19,10 @@ pub(super) fn show(ui: &mut egui::Ui, view: &MountingView, values: &[(String, St
     let width = ui.available_width().min(380.0);
     let height = (width as f64 * ph / pw.max(1.0)).clamp(90.0, 240.0) as f32;
     ui.weak(format!(
-        "Plate {pw:.0} x {ph:.0} mm, rails {}. Layout suggestion, not a measured cabinet.",
+        "Plate {pw:.0} x {ph:.0} mm, rails {}",
         view.rails.len()
     ));
+    super::window_help::add(ui.ctx(), "Layout suggestion, not a measured cabinet.");
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 4.0, pal.sunken);

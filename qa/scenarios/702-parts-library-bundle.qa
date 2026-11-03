@@ -17,7 +17,7 @@ answer_dialog qa/fixtures/parts/library/example-share.kcpl
 click_text "Import library"
 wait 40
 expect "2 new parts"
-expect "1 part the sender used is not included"
+expect "1 part not included"
 shot bundle-preview
 check_layout
 click_text "Import"
