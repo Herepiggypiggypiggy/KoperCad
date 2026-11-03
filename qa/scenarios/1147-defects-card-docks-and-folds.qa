@@ -9,7 +9,7 @@ click_text "Defects and walk-throughs"
 wait 30
 shot defects-floating
 # The card's title bar has a dock-left and a dock-right button.
-click 1339 72
+click 1339 90
 wait 40
 expect "Inject a defect"
 shot defects-docked
