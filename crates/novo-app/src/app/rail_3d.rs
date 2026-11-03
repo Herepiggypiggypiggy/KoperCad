@@ -34,6 +34,7 @@ pub(super) const PANELS: &[&str] = &[
     "view.emc",
     "view.3d_position",
     "view.3d_stats",
+    "view.3d_hints",
 ];
 
 /// The flyout rows of Align and spread, and of Hide and isolate.
@@ -114,6 +115,7 @@ impl NovoApp {
             "view.3d_place" => self.view3d.place.open,
             "view.3d_position" => !self.view3d.position.hidden,
             "view.3d_stats" => self.view3d.stats.shown,
+            "view.3d_hints" => self.view3d.hints.open,
             _ => false,
         }
     }

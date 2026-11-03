@@ -25,10 +25,7 @@ wait 10
 expect "Cut the picture with a plane"
 shot section-in-pane
 check_layout
-key ctrl+k
-text Mouse and keys
-wait 5
-key Enter
+click_text "3D hints"
 wait 10
 expect "Mouse and keys"
 shot mouse-and-keys-docked
