@@ -1,7 +1,7 @@
 @title Cable runs in 3D: Wire runs list, Run card, lit path
 @area 3D
 # Cabinet > Route all: set the cabinet entry. 3D > Wire runs (Ctrl+K): pick a row and read the Run card.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Cabinet #1
 wait 30

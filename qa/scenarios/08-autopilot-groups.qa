@@ -2,7 +2,7 @@
 @area Reports
 # The review list shows one line per protective device; opening a group shows its wires.
 # Wire rules (IEC 60204-1 or house rules) are a project setting inside the same window.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Reports
 wait 5

@@ -2,7 +2,7 @@
 @area 3D
 @sizes 1366x768
 # Pick a device in the Cabinet, then open 3D: the camera glides to frame it (220 ms, an instant move with Reduce motion). The harness shows still pictures, so the pictures are the end state: the first is the Cabinet with the device picked, the second the 3D view framing it. Compare with 3D opened without a pick, which shows the whole cabinet.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Cabinet #1
 wait 30

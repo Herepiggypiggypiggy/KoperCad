@@ -1,6 +1,6 @@
 @title Hostile: import a PNG, a damaged project and an empty file as parts tables
 @area Hostile
-click_text "Open example"
+open_starter_example
 wait 20
 import_table qa/fixtures/loose-terminal.png
 wait 15

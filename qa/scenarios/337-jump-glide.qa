@@ -3,7 +3,7 @@
 @sizes 1920x1080
 @env KOPERCAD_MOTION=1
 # Polish: a jump (outline row, problem, cross reference) glides for 220 ms instead of cutting. The harness normally runs without ambient motion (KOPERCAD_MOTION unset), so this scenario turns it on. The page starts fitted; the jump zooms in on wire 1 and, after the glide, it sits at the centre of the drawing. Only the end state is a stable picture; the glide itself is covered by a canvas unit test (the jump starts where the view was and lands on time, any drag or wheel stops it).
-click_text "Open example"
+open_starter_example
 wait 20
 click_text "Drawn wires"
 wait 6

@@ -1,7 +1,7 @@
 @title Wire production page added and exported as PDF, kept for inspection
 @area Reports
 # Add wire production page puts the cut list into the project as page 60; Export PDF with options (all pages) writes it with the drawing, keep_file copies the PDF.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

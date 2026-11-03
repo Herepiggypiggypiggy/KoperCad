@@ -1,7 +1,7 @@
 @title Wire runs panel keeps clear of the Inspector and the other 3D panels
 @area 3D
 # Open the Wire runs list, pick a wire, then select all devices so the Inspector opens: nothing may sit on anything else.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D
 wait 40

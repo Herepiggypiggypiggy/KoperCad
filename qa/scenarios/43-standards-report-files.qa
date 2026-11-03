@@ -1,7 +1,7 @@
 @title Standards report: PDF and Excel written and kept for inspection
 @area Reports
 # With IEC 60204-1 ticked, Ctrl+K "Export standards report" and "Export standards Excel" write the report files; keep_file copies them so an auditor can read the real content.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

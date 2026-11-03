@@ -1,7 +1,7 @@
 @title 3D Heat: a fan opening draws the same still picture under the test harness
 @area 3D
 # Fans turn and air dashes cross the openings in the live app; the harness (and Reduce motion) shows the still frame, so screenshots are deterministic.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 30

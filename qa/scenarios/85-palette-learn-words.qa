@@ -1,7 +1,7 @@
 @title Ctrl+K: "learning paths" finds Learn and "continue lesson" finds the lesson command
 @area Learn
 # Creative round 26: both words found nothing (S2). The palette matches each phrase against the command's keywords.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

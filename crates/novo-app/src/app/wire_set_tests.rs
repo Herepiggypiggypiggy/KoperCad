@@ -10,7 +10,7 @@ fn every_report_counts_the_same_wire_set() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let p = d.app.backend.document().unwrap().project();
     assert_eq!(novo_reports::wire_set_mismatch(p), None);
@@ -43,7 +43,7 @@ fn the_bench_counts_missing_values_per_wire_to_cut() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let p = d.app.backend.document().unwrap().project();
     let jobs = wire_cut_jobs(p);

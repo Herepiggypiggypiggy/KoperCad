@@ -11,7 +11,7 @@ use novo_pdf::PageSet;
 fn saved_example(dir: &std::path::Path) -> Drive {
     let mut d = Drive::new(&dir.join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(d.app.save_to(&dir.join("Plant.novo")));
     d.app.wb.pdf_dir = Some(dir.to_owned());

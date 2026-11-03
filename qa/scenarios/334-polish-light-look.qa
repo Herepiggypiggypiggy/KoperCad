@@ -1,7 +1,7 @@
 @title The quiet toast and the refusal mark in the Light look
 @area Schematic
 # Light-look check of the polish PRs: the refusal cross and reason beside a refused wire start, and a message toast. Pictures are the evidence.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

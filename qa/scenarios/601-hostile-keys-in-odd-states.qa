@@ -1,6 +1,6 @@
 @title Hostile: every kind of key while a tool is half-finished
 @area Hostile
-click_text "Open example"
+open_starter_example
 wait 20
 # Wire tool started, then delete, undo, escape, enter, tab, space.
 key w

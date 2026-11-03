@@ -1,6 +1,6 @@
 @title Every top menu opens and fits
 @area Menus
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

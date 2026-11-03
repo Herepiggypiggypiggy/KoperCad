@@ -41,7 +41,7 @@ fn drawing_on_the_pad_and_signing_verifies_the_item_with_the_strokes() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.app.run_command(&ctx, "view.commissioning", None);
     d.frame();
@@ -88,7 +88,7 @@ fn the_verified_button_opens_the_pad_instead_of_verifying() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.app.run_command(&ctx, "view.commissioning", None);
     d.frame();

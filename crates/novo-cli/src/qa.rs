@@ -233,6 +233,7 @@ const KNOWN_VERBS: &[&str] = &[
     "text",
     "answer_dialog",
     "import_table",
+    "open_starter_example",
     "expect",
     "expect_not",
     "expect_scene",
@@ -724,7 +725,7 @@ impl Ctx<'_> {
                     self.srv.stop();
                     self.srv.set_project(None);
                     self.srv.ensure()?;
-                    let _ = self.step(&["click_text".into(), "Open example".into()]);
+                    let _ = self.step(&["open_starter_example".into()]);
                     let _ = self.srv.tool("wait", &json!({"frames": 20}));
                 }
             }
@@ -1099,6 +1100,20 @@ impl Ctx<'_> {
                 self.srv
                     .tool("answer_dialog", &json!({"path": p.to_string_lossy()}))
                     .map(|_| ())
+            }
+            "open_starter_example" => {
+                // `open_starter_example`: the setup step of most scenarios. "Open
+                // example" opens the Templates and examples window; the
+                // motor starter is its first example tile.
+                let w = |s: &[&str]| s.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
+                self.step(&w(&["click_text", "Open example"]))?;
+                self.step(&w(&["wait", "10"]))?;
+                self.step(&w(&["text", "starter"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&["click_text", "Open motor starter example"]))?;
+                self.step(&w(&["wait", "4"]))?;
+                self.step(&w(&["click_text", "Open", "Button"]))?;
+                self.step(&w(&["wait", "20"]))
             }
             "import_table" => {
                 // `import_table FILE`: File > Import... > Import parts table,

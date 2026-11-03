@@ -1,6 +1,6 @@
 @title Hostile: very long, unicode, emoji and right-to-left text in project fields
 @area Hostile
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

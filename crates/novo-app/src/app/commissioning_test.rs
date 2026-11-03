@@ -569,7 +569,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         d.frame();
         d.app.switch_workspace(Workspace::Commissioning);
         for _ in 0..3 {

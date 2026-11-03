@@ -1,6 +1,6 @@
 @title Hostile: undo and redo storms, select all and delete, then undo back
 @area Hostile
-click_text "Open example"
+open_starter_example
 wait 20
 shot start
 # Undo past the beginning, many times: nothing to undo must not break anything.

@@ -1,6 +1,6 @@
 @title Sheet fit: the whole sheet, title block included, after opening a project and after Zoom to fit
 @area Schematic
-click_text "Open example"
+open_starter_example
 wait 20
 shot opened
 key ctrl+k

@@ -1,7 +1,7 @@
 @title Journey: example project to PDF, Excel, CSV and workshop pack
 @area Journeys
 # Exports land in the app's own Documents/KoperCAD folder (no dialog); expect_file looks there with ~/.
-click_text "Open example"
+open_starter_example
 wait 20
 shot example
 key ctrl+k

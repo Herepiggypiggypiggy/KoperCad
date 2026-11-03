@@ -2,7 +2,7 @@
 @area Schematic
 @sizes 1366x768
 # The chips of the feed menu ignored clicks when the menu was shifted up to stay on screen.
-click_text "Open example"
+open_starter_example
 wait 20
 click 337 106
 wait 4

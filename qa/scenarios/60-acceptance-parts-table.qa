@@ -1,7 +1,7 @@
 @title Parts table import: a workbook that opens on a cover sheet, bad rows, a second import, odd text files
 @area Parts
 # Acceptance round 3: the importer starts on the sheet that has the table, says why rows are left out, adds nothing twice, and refuses a binary file with a reason.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog qa/fixtures/parts/odd-list.xlsx
 click_text File

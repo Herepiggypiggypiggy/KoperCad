@@ -97,7 +97,7 @@ fn show_walkthrough_works_with_no_project_and_shows_when_one_opens() {
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::ShowWalkthrough);
     assert!(!d.app.walkthrough_on(), "no project, no card");
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(d.app.walkthrough_on());
 }

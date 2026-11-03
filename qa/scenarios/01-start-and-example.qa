@@ -8,7 +8,7 @@ expect "Open example"
 expect "Seven short steps"
 # Regression: a missing words key shows raw on the start screen (seen as "learn_menu" on main d3a90d4).
 expect_not learn_menu
-click_text "Open example"
+open_starter_example
 wait 20
 expect "Main circuit"
 expect "Schematic"

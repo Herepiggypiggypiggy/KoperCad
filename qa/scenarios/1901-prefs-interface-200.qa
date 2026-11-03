@@ -2,7 +2,7 @@
 @area Layout
 # Windows hardware test UWL-01 and UWL-05: after the screen shrank, the dialog
 # kept its old size and sat partly off screen. Done must stay in view.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

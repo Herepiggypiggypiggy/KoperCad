@@ -1,7 +1,7 @@
 @title Reports > I/O list on a project with no PLC says how to get rows
 @area Reports
 # Critical audit C-58: it said only "Nothing to list yet". Now it names the two ways in.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Reports
 wait 20

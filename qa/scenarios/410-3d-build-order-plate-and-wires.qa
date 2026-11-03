@@ -1,7 +1,7 @@
 @title 3D view: Build order lights the plate at the start and the wires at the end
 @area 3D
 # Layers > Build order. Step 0 shows the mounting plate in blue so it can be told from the back wall; the last step draws the wires in blue, or says why none can be drawn.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 40

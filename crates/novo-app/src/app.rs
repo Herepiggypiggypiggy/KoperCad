@@ -1067,7 +1067,9 @@ impl NovoApp {
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
             Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
             Action::RecoverProject => self.leave_then(ctx, Leaving::Recover),
-            Action::OpenExample => self.leave_then(ctx, Leaving::Example),
+            // Every "open example" entry point shows the same window.
+            Action::OpenExample => self.open_centre(novo_workflow::centres::Centre::Start),
+            Action::OpenStarterExample => self.leave_then(ctx, Leaving::Example),
             Action::OpenEmcExample => self.leave_then(ctx, Leaving::EmcExample),
             Action::OpenMccExample => self.leave_then(ctx, Leaving::MccExample),
             Action::OpenCraneExample => self.leave_then(ctx, Leaving::CraneExample),

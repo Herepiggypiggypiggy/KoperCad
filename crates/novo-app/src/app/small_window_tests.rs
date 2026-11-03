@@ -30,7 +30,7 @@ fn the_layout_stays_inside_a_683_by_384_window() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     for workspace in [
         Workspace::Schematic,
         Workspace::Cabinet,
@@ -55,7 +55,7 @@ fn preferences_fits_a_683_by_384_window() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.app.wb.preferences = true;
     for _ in 0..4 {
         frame(&mut d, 683.0, 384.0);
@@ -79,7 +79,7 @@ fn preferences_stays_usable_after_the_window_shrinks() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.app.wb.preferences = true;
     for _ in 0..3 {
         frame(&mut d, 1366.0, 768.0);
@@ -128,7 +128,7 @@ fn the_learn_window_regrows_after_the_app_window_shrinks_and_grows() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.app.learn.window = true;
     for _ in 0..4 {
         frame(&mut d, 1366.0, 768.0);

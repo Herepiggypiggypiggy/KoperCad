@@ -2,7 +2,7 @@
 @area Learn
 # Creative round 25: "learning paths" found nothing; a level chip with no lessons was clickable and said
 # "Try fewer words" (that is a unit test now, so the check does not depend on the catalog); every lesson carried an Early access tag.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

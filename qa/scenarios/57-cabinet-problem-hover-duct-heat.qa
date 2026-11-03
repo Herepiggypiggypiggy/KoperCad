@@ -1,6 +1,6 @@
 @title Cabinet: the problems pill names its problem on hover; "duct heat" finds the heat run
 @area Cabinet
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Cabinet #1
 wait 30

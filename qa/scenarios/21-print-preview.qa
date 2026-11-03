@@ -1,7 +1,7 @@
 @title Print preview: actions in view, thumbnails drawn, print opens the preview
 @area Reports
 # C-31 and C-32: Save PDF stays visible, thumbnails show the sheets, Ctrl+K print opens the preview.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 5

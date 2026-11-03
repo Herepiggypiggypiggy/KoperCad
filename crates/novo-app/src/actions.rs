@@ -11,6 +11,7 @@ pub enum Action {
     OpenReadOnly,
     RecoverProject,
     OpenExample,
+    OpenStarterExample,
     OpenEmcExample,
     OpenMccExample,
     OpenCraneExample,
@@ -55,6 +56,7 @@ impl Action {
         Action::OpenReadOnly,
         Action::RecoverProject,
         Action::OpenExample,
+        Action::OpenStarterExample,
         Action::OpenEmcExample,
         Action::OpenMccExample,
         Action::OpenCraneExample,
@@ -101,6 +103,7 @@ impl Action {
             Action::OpenReadOnly => "file.open_read_only",
             Action::RecoverProject => "file.recover",
             Action::OpenExample => "file.example",
+            Action::OpenStarterExample => "file.example_starter",
             Action::OpenEmcExample => "file.example_emc",
             Action::OpenMccExample => "file.example_mcc",
             Action::OpenCraneExample => "file.example_crane",
@@ -150,6 +153,7 @@ impl Action {
             Action::OpenReadOnly => "Open read-only…",
             Action::RecoverProject => "Recover a damaged project…",
             Action::OpenExample => "Open example",
+            Action::OpenStarterExample => "Open example: motor starter",
             Action::OpenEmcExample => "Open EMC example",
             Action::OpenMccExample => "Open example: motor control centre",
             Action::OpenCraneExample => "Open example: overhead crane cabinet",
@@ -199,6 +203,7 @@ impl Action {
             | Action::OpenReadOnly
             | Action::RecoverProject
             | Action::OpenExample
+            | Action::OpenStarterExample
             | Action::OpenEmcExample
             | Action::OpenMccExample
             | Action::OpenCraneExample
@@ -259,6 +264,7 @@ impl Action {
             | Action::OpenReadOnly
             | Action::RecoverProject
             | Action::OpenExample
+            | Action::OpenStarterExample
             | Action::OpenEmcExample
             | Action::OpenMccExample
             | Action::OpenCraneExample

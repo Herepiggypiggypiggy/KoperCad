@@ -10,7 +10,7 @@ fn edits_reach_every_selected_wire_and_bad_input_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let wires: Vec<_> = d
         .app

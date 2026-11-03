@@ -356,3 +356,29 @@ fn the_part_tools_centre_replaces_the_library_and_parts_submenus() {
     d.app.run_command(&ctx, "parts.browser", None);
     d.frame();
 }
+
+#[test]
+fn the_start_centre_keeps_its_width_while_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_project(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    assert_eq!(
+        d.app.wb.centre.as_ref().map(|c| c.kind),
+        Some(Centre::Start),
+        "Open example opens the Templates and examples window"
+    );
+    let width = |ctx: &egui::Context| {
+        ctx.memory(|m| m.area_rect(egui::Id::new(("modal", "start_centre"))))
+            .map(|r| r.width())
+    };
+    for _ in 0..4 {
+        d.frame();
+    }
+    let first = width(&ctx).expect("the window is up");
+    for _ in 0..60 {
+        d.frame();
+    }
+    let later = width(&ctx).unwrap();
+    assert!((first - later).abs() < 0.5, "{first} grew to {later}");
+}

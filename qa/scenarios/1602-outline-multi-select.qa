@@ -2,7 +2,7 @@
 @area Schematic
 @sizes 1920x1080
 # Ctrl+click adds a page to the selection or takes it out, Shift+click selects the range from the last click, and dragging one selected page drags them all: a badge shows the count and a line shows where the block lands. The outline shows "N pages selected". The outline is pinned at this size; the 1366x768 flyout version is 1603. Pictures: Ctrl selection, Shift range, mid-drag with the drop line, the new order, undo in one step, Ctrl+A, Esc.
-click_text "Open example"
+open_starter_example
 wait 20
 click 150 396 ctrl
 wait 6

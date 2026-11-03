@@ -2,7 +2,7 @@
 @area Assistant
 @sizes 1366x600
 # On a short window the notice (section 4) is below the fold: the box cannot be ticked until it has been in view.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

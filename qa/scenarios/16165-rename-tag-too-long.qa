@@ -3,7 +3,7 @@
 @sizes 1366x768
 
 # SB-04 / SB-02: the long tag used to be taken (its label then vanished); the refusal now shows in the rename box.
-click_text "Open example"
+open_starter_example
 wait 20
 click 353 228
 wait 5
