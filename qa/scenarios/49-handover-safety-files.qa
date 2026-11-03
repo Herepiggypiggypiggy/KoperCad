@@ -1,7 +1,7 @@
 @title Handover package and safety function sheets written and kept for inspection
 @area Reports
 # The example project has one safety function: the handover folder and the safety sheets PDF are written next to the (untitled) project in Documents; keep_file copies every file for inspection.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

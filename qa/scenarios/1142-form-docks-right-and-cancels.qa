@@ -1,7 +1,7 @@
 @title A settings form (Preferences) opens docked in the right strip, folds, and its close button cancels (1366x768)
 @area Windows
 @sizes 1366x768
-click_text "Open example"
+open_starter_example
 wait 30
 key ctrl+k
 wait 4

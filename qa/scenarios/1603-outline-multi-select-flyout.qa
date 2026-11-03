@@ -2,7 +2,7 @@
 @area Schematic
 @sizes 1366x768
 # Same as 1602 for the Pages flyout of a 1366x768 window. A plain click on a page opens it and closes the flyout, so the selection here starts with Ctrl+click. The drop line must read on the dark theme and the list says how many pages are selected.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text "Pages"
 wait 10

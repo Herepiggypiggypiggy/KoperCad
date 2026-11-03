@@ -1,7 +1,7 @@
 @title PLC exports: I/O list, PLCopen, TIA, Studio 5000 and address plan written and kept
 @area Reports
 # The demo I/O list (crates/novo-plc/tests/fixtures/io-list-demo.csv) is imported into the example project, so the cards carry tags and addresses; every PLC export command then writes its file next to the project and keep_file copies it for inspection.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog crates/novo-plc/tests/fixtures/io-list-demo.csv
 key ctrl+k

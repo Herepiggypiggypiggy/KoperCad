@@ -19,7 +19,7 @@ fn protection_needs_a_project_and_opens_a_window() {
     let ctx = d.ctx.clone();
     assert!(!d.app.is_enabled(Action::Protection));
     assert!(Action::from_id("view.protection").is_some());
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(d.app.is_enabled(Action::Protection));
     d.app.run(&ctx, Action::Protection);
@@ -34,7 +34,7 @@ fn protection_needs_a_project_and_opens_a_window() {
 fn protection_reads_the_devices_and_draws_every_tab() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let ids: Vec<(String, novo_core::DeviceId)> = d
         .doc()
@@ -104,7 +104,7 @@ fn the_fault_current_typed_in_the_window_is_saved_with_the_project() {
     use super::protection::Edit;
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     // The example states a 6 kA supply.
     assert_eq!(supply_property(&d), Some(Value::Float(6.0)));
@@ -130,7 +130,7 @@ fn limiter_credit_entries_are_checked_and_saved_on_the_device() {
     use super::protection::{Edit, limiter_value};
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let dev = first_device(&d);
     let table = "10000:5000:5e4; 100000:20000:4e5".to_string();

@@ -120,7 +120,7 @@ fn open_problems_are_asked_about_before_anything_is_written() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let summary = novo_checks::Summary::of(d.app.problems());
     assert!(
@@ -173,7 +173,7 @@ fn a_problem_that_is_not_drawn_has_no_place_to_jump_to() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.app.ask_handover();
     let ask = d.app.wb.handover_ask.as_ref().expect("asked");

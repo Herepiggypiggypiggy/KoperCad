@@ -2,7 +2,7 @@
 @area Export
 # The drawing PDF carries the generated report pages. Their columns share the page width by what the
 # text needs, so no cell ends in an ellipsis while the page has room. The file is kept for opening.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

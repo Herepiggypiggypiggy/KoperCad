@@ -1,6 +1,6 @@
 @title Hostile: close and new with unsaved changes ask, and Cancel keeps the edit
 @area Hostile
-click_text "Open example"
+open_starter_example
 wait 20
 key q
 wait 4

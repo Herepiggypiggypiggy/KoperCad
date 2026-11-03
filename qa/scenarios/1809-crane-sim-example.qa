@@ -1,7 +1,7 @@
 @title Crane simulation example: opens from Templates and examples, the radio moves hoist, bridge and crab through the drawn circuit
 @area Simulate
 @sizes 1366x768
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

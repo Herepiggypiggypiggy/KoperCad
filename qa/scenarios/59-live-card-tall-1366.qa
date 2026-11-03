@@ -3,7 +3,7 @@
 # QA round 1350 coverage: the Live card of the reversing, crane and conveyor lessons ran past the
 # bottom edge with no way to reach its last controls. Here the example's card on the control circuit
 # page is shown in a window only 520 high, so it is taller than the pane.
-click_text "Open example"
+open_starter_example
 wait 20
 key shift+l
 wait 40

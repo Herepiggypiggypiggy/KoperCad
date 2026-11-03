@@ -1,7 +1,7 @@
 @title 3D view: section plane and hide / show all
 @area 3D
 # Cut the picture with a plane, turn the axis, then hide the selection of all devices and show everything again.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 40

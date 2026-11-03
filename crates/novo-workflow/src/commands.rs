@@ -153,11 +153,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         ],
         Needs::Nothing,
     ),
+    // Opens the Templates and examples window; every "open example" entry
+    // point lands there. The starter itself is `file.example_starter`.
     cmd(
         "file.example",
         "Open example",
         "Project",
-        &["sample", "motor starter", "demo"],
+        &["sample", "motor starter", "demo", "templates", "examples"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "file.example_starter",
+        "Open example: motor starter",
+        "Project",
+        &["sample", "motor starter", "demo", "example", "small"],
         Needs::Nothing,
     ),
     cmd(

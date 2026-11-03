@@ -2,7 +2,7 @@
 @area Layout
 # Lane V4i (docs/design/visual-redesign.md section 6). Edit > Part tools... opens one window
 # with what File > Library and Edit > Parts held; neither submenu is in the menus any more.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Edit #1
 wait 6

@@ -1,7 +1,7 @@
 @title Help popups open: the ? in Standards check opens its text and it fits the window
 @area Windows
 @sizes 1366x768
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 text Standards check

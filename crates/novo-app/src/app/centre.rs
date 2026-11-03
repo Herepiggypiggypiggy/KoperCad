@@ -154,7 +154,11 @@ impl NovoApp {
             egui::vec2(width, height),
             egui::Layout::left_to_right(egui::Align::Min),
             |ui| {
-                let list_width = (width - DETAIL_WIDTH - 12.0).max(260.0);
+                // The row holds the list, a separator and the detail, with an item
+                // spacing around each: counting less than they take made the
+                // window a few points wider every frame.
+                let gaps = 3.0 * ui.spacing().item_spacing.x + 1.0;
+                let list_width = (width - DETAIL_WIDTH - gaps).max(260.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(list_width, height),
                     egui::Layout::top_down(egui::Align::Min),

@@ -4,7 +4,7 @@ key ctrl+k
 wait 4
 text open example
 wait 6
-click_text "Open example"
+open_starter_example
 wait 40
 key ctrl+k
 wait 4

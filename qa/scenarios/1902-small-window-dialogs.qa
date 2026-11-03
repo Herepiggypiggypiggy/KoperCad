@@ -3,7 +3,7 @@
 @sizes 1366x768
 # Floor cases of the window redesign: 380 x 240 points. The window shrinks
 # while the dialog is open, then grows back.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+a
 key Delete

@@ -2,7 +2,7 @@
 @area Schematic
 @sizes 1920x1080
 # The Pages panel is already open in a wide window. Same check as scenario 223: the macro goes to page 1, not onto the contents table. The pictures are the evidence.
-click_text "Open example"
+open_starter_example
 wait 40
 click 136 300
 wait 30

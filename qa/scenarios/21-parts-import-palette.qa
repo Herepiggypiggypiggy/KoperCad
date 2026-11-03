@@ -2,7 +2,7 @@
 @area Parts
 @sizes 1366x768 1920x1080
 # Round 21: "import parts from a table" opens the table importer (not the folder one), and an error toast from an earlier try is gone when the dialog opens.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog qa/fixtures/parts/price-list-de.csv
 click_text File

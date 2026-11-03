@@ -2,7 +2,7 @@
 @area Layout
 @sizes 1366x768
 # PR 1808: the 3D toolbar's Layers, Select and hide moved onto the rail.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D
 wait 30

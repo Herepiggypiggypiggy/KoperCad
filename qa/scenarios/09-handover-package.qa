@@ -1,6 +1,6 @@
 @title Handover package: search, open-problems question, result
 @area Reports
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

@@ -5,7 +5,7 @@
 # are gone: File has one Macros row; the Macros window has Import..., Export pack... and Edit parameters...;
 # Place macro is the Place tool of the rail; Save as macro is in the right-click menu of a selection.
 # Every one still runs from Ctrl+K.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

@@ -2,7 +2,7 @@
 @area 3D
 @slow
 # Finished-run picture of the example cabinet (horizontal wire ducts, 60 mm high) with the Z slice at 62.5 mm, just past the duct tops: the slice must show no holes where the ducts stand. The picture is for a human; the hole count itself is tested in heat_duct_slice_tests. Needs a release build to finish in minutes.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 30

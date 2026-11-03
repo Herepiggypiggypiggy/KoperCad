@@ -1,7 +1,7 @@
 @title The pinned Pages column moves to the right side of the window and back with the arrow in its header (1920x1080)
 @area Windows
 @sizes 1920x1080
-click_text "Open example"
+open_starter_example
 wait 30
 shot left
 check_layout

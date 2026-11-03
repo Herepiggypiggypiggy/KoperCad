@@ -1,7 +1,7 @@
 @title Work cards: the Build order strip prints the step on screen as one card
 @area 3D
 # 3D > Layers > Build order: on a part step the strip has "Print this step", which writes that step's work card as one PDF page next to the project. At the start (no part) the button is not offered.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 40

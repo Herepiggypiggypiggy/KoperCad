@@ -3,7 +3,7 @@
 # Lane V4f (docs/design/visual-redesign.md section 6). File > Templates and examples...
 # opens one window with the project templates and the example projects as tiles; File
 # no longer has the New from template and Examples submenus.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

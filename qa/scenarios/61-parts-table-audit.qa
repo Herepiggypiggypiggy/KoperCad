@@ -1,7 +1,7 @@
 @title Parts table import: Dutch maker headers, price date, repeated order numbers, long list, palette ranking, folder picked as file
 @area Parts
 # Audit C-53 (palette ranking, plain error), C-54 (repeated order numbers are a visible choice) and the wider header words (made-up Dutch list).
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

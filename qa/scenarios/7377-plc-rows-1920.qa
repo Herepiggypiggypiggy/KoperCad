@@ -4,7 +4,7 @@
 # Lane V4k (docs/design/visual-redesign.md section 6). Draw > PLC (4 rows) is gone: Add PLC card and
 # PLC overview are plain Draw rows, Import I/O list is a tile of the Import centre next to Import PLC
 # tags, and Send signal to PLC is a row of the right-click menu of a selected symbol.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Draw #1
 wait 6

@@ -4,7 +4,7 @@
 # window with everything the program can bring in as a tile; picking one shows
 # what it does. Search narrows the tiles; the Import button stays grey until a
 # tile is picked. File no longer has the Import and Import parts submenus.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

@@ -161,7 +161,7 @@ fn every_cover_note_stays_on_the_cover() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(d.app.save_to(&dir.path().join("Example.novo")));
     d.frame();

@@ -242,6 +242,11 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("file.recover", p(icons::FIRST_AID_KIT), "Recover project"),
     row("file.example", p(icons::LIGHTBULB), "Open example"),
+    row(
+        "file.example_starter",
+        p(icons::LIGHTBULB),
+        "Open motor starter example",
+    ),
     row("file.example_emc", d(&drawn::EMC), "Open EMC example"),
     row(
         "file.example_mcc",

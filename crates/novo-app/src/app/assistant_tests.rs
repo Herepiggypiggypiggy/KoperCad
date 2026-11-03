@@ -62,7 +62,7 @@ fn setup(scope: DataScope) -> Setup {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     let store = KeyStore::new(dir.path().join("ai"));
     store
         .save(&ApiKey::parse("sk-ant-api03-test-key-0000000000").unwrap())
@@ -287,7 +287,7 @@ fn snapshots_grow_with_the_scope() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     let p = d.app.document().unwrap().project();
     let none = snapshot_of(p, &[], DataScope::None);
     assert!(none.outline.is_null() && none.project.is_null());
@@ -366,7 +366,7 @@ fn the_other_edits_apply_and_undo() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     let (dev, tag) = {
         let p = d.app.document().unwrap().project();
         let dv = p.devices().next().unwrap();

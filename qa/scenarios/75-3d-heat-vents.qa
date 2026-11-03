@@ -1,7 +1,7 @@
 @title 3D Heat: vents and fans drawn in the cabinet, airflow coloured by speed
 @area 3D
 # Vents and fans panel: add a filter fan low on the door and two grilles; they show on their walls with arrows and labels before any run; a Quick run then shows the airflow from them, coloured by air speed with a legend.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 30

@@ -153,7 +153,7 @@ pub const START_SECTIONS: &[Section] = &[
         name: "Examples",
         about: "Finished projects to open, look through and learn from.",
         ids: &[
-            "file.example",
+            "file.example_starter",
             "file.example_crane",
             "file.example_crane_sim",
             "file.example_mcc",
@@ -436,7 +436,8 @@ pub fn describe(id: &str) -> &'static str {
         "file.new_crane" => "An overhead crane project with its structure tree and covers.",
         "file.new_mcc" => "A motor control centre with feeders, control supply and cabinet.",
         "file.new_pump" => "A pump station with its motor starters and control.",
-        "file.example" => "A small motor starter, to try the program on.",
+        "file.example" => "Opens the Templates and examples window.",
+        "file.example_starter" => "A small motor starter, to try the program on.",
         "file.example_crane" => "An overhead crane cabinet: 2-speed hoist, drives, 48 V control.",
         "file.example_crane_sim" => "A crane you can run: the radio drives hoist, bridge and crab.",
         "file.example_mcc" => "A motor control centre: 4 feeders, 24 V control, full cabinet.",

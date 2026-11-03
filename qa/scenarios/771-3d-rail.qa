@@ -3,7 +3,7 @@
 # Lane V3b of the visual redesign (docs/design/visual-redesign.md section 3.2).
 # The rail is the left edge of the 3D workspace; the toolbar with the
 # simulation status chip starts to its right.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D
 wait 30

@@ -1,7 +1,7 @@
 @title Review notes: right click on empty canvas adds a note at that spot
 @area Schematic
 # The context menu has Add review note...; the note is about the spot and shows a bubble there.
-click_text "Open example"
+open_starter_example
 wait 20
 click 640 420 right
 wait 6

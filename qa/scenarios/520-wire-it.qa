@@ -1,7 +1,7 @@
 @title Wire-it: run the wires one at a time, both ends and the path lit, ticks kept in the project
 @area 3D
 # The example project: Wire-it opens at the first wire, shows the cut, strip, ferrule, label and the duct fill after the wire, and keeps what is ticked.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 40

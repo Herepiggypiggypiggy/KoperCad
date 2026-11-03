@@ -2,7 +2,7 @@
 @area Windows
 @sizes 1920x1080
 # 1920 pins the navigator as a column (default 248 points wide).
-click_text "Open example"
+open_starter_example
 wait 20
 shot column-home
 # Drag the column's right edge wider, then double click it.

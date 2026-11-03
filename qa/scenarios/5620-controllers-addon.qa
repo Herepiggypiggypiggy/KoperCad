@@ -3,7 +3,7 @@
 @sizes 1366x768
 # Lane C3. Needs the built package: run scripts/build-controllers-addon.sh first (it writes
 # target/addons/controllers-0.2.0.kcaddon). The engine is novo-controller built to WebAssembly.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

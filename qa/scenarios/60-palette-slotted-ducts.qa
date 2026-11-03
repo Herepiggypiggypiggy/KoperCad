@@ -1,7 +1,7 @@
 @title Ctrl+K "fingered ducts" finds the Slotted ducts switch and turns it off and on in the 3D view
 @area Palette
 # C-23: the command answers to slotted, fingered, finger and trunking; run from the palette it opens the 3D view and flips Layers > Slotted ducts.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 4

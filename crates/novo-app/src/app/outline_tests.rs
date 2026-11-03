@@ -435,7 +435,7 @@ fn a_page_dragged_onto_a_cabinet_is_filed_there() {
 fn the_example_project_shows_as_a_tree_in_both_views() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.frame();
     let dump = |d: &Drive| -> Vec<String> {
@@ -464,7 +464,7 @@ fn the_example_project_shows_as_a_tree_in_both_views() {
 fn the_example_project_is_filed_by_its_tags() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.frame();
     let shape: Vec<String> = d
@@ -496,7 +496,7 @@ fn the_example_project_is_filed_by_its_tags() {
 fn unfiled_pages_are_offered_a_home_from_their_devices() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     // Unfile the example's pages, as an imported project would be.
     let ids: Vec<PageId> = d

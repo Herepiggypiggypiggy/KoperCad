@@ -367,7 +367,7 @@ fn the_example_has_a_rated_safety_function_and_the_command_exports_its_sheet() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.app.backend.document().unwrap().project();
     let list = novo_checks::safety::functions(project);

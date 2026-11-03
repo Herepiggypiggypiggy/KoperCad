@@ -30,7 +30,7 @@ fn open_example_works_with_no_project_and_shows_the_motor_starter() {
     let ctx = d.ctx.clone();
     assert!(d.app.document().is_none());
     assert!(d.app.is_enabled(Action::OpenExample));
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
 
     let project = d.doc().project();
@@ -63,7 +63,7 @@ fn open_example_works_with_no_project_and_shows_the_motor_starter() {
 fn the_example_has_no_error_level_problem() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let errors: Vec<_> = novo_checks::check(d.doc().project())
         .into_iter()
@@ -76,7 +76,7 @@ fn the_example_has_no_error_level_problem() {
 fn the_example_states_its_supply_so_the_single_line_diagram_has_figures() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let sl = novo_checks::single_line::single_line(
         d.doc().project(),
@@ -99,10 +99,10 @@ fn the_example_states_its_supply_so_the_single_line_diagram_has_figures() {
 fn opening_the_example_twice_gives_the_same_project() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let first = tags(&d);
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert_eq!(tags(&d), first);
 }
@@ -111,7 +111,7 @@ fn opening_the_example_twice_gives_the_same_project() {
 fn closing_the_example_untouched_leaves_nothing_under_unsaved() {
     let (dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(!d.app.is_dirty(), "marked saved once drawn");
     d.app.run(&ctx, Action::CloseProject);
@@ -127,7 +127,7 @@ fn closing_the_example_untouched_leaves_nothing_under_unsaved() {
 fn an_edited_example_is_kept_like_any_unsaved_project() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.place("mcb3", 120.0, 48.0);
     d.frame();
@@ -146,7 +146,7 @@ fn the_example_replaces_an_open_project() {
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert_eq!(d.doc().project().info().name, EXAMPLE_NAME);
     assert_eq!(tags(&d).len(), 8, "eight devices, the strip included");
@@ -159,7 +159,7 @@ fn the_example_cabinet_is_complete_and_simulates() {
 
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.doc().project();
 
@@ -241,7 +241,7 @@ fn the_example_wires_are_numbered_and_commissioning_names_them_by_number() {
     use novo_reports::{Report, WireList};
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.doc().project();
     let unnumbered: Vec<_> = project
@@ -340,7 +340,7 @@ fn the_example_survives_a_pxf_round_trip() {
 fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let p = d.doc().project();
     let cab = p
@@ -360,7 +360,7 @@ fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
 fn open_example_starts_with_an_empty_undo_history() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(!d.app.is_enabled(Action::Undo), "nothing to undo yet");
     assert!(!d.app.is_enabled(Action::Redo));
@@ -378,7 +378,7 @@ fn open_example_starts_with_an_empty_undo_history() {
 fn the_example_parts_state_the_same_ac3_current_in_text_and_input() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.doc().project();
     let mut checked = 0;
@@ -457,7 +457,7 @@ fn an_io_list_imported_next_to_the_report_pages_gets_the_next_free_page_numbers(
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, crate::actions::Action::OpenExample);
+    d.app.run(&ctx, crate::actions::Action::OpenStarterExample);
     d.frame();
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../novo-plc/tests/fixtures/io-list-demo.csv");
@@ -490,7 +490,7 @@ fn an_io_list_imported_next_to_the_report_pages_gets_the_next_free_page_numbers(
 fn clearing_the_last_warning_says_so_once_and_opening_a_project_does_not() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     for _ in 0..200 {
         d.frame();
         if !d.app.checks_pending() {
@@ -522,7 +522,7 @@ fn clearing_the_last_warning_says_so_once_and_opening_a_project_does_not() {
 fn a_new_project_after_one_with_warnings_does_not_say_the_issues_were_cleared() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     for _ in 0..200 {
         d.frame();
         if !d.app.checks_pending() {
@@ -555,7 +555,7 @@ fn a_new_project_after_one_with_warnings_does_not_say_the_issues_were_cleared() 
 fn what_a_list_row_rests_on_is_lit_on_the_drawing_for_one_frame_only() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let wire = d.doc().project().wires().next().unwrap().id;
     let lit = novo_canvas::model::item_id(novo_core::AnyId::Wire(wire));

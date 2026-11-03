@@ -1,7 +1,7 @@
 @title Cabinet heat: Simulate heat of the cabinet
 @area Heat
 # Cabinet workspace, run the coarse simulation from the command field, look at hot-spot cards and the Temperature panel.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Cabinet #1
 wait 20

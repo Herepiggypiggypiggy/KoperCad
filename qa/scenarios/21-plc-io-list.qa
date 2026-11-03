@@ -1,7 +1,7 @@
 @title Import an I/O list (PLC cards and pages)
 @area Fixtures
 # Draw > PLC > Import I/O list: the review comes first, Enter builds. The native file dialog is answered by the harness.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog crates/novo-plc/tests/fixtures/io-list-demo.csv
 key ctrl+k
@@ -22,7 +22,7 @@ check_layout
 check_blank io-list-built
 # A list with problems: duplicate address, a tag like a contactor, an unknown type.
 fresh
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog crates/novo-plc/tests/fixtures/io-list-with-problems.csv
 key ctrl+k
