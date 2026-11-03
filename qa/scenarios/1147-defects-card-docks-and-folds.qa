@@ -14,11 +14,11 @@ wait 40
 expect "Inject a defect"
 shot defects-docked
 check_layout
-click 1063 54
+click 1061 72
 wait 30
 expect_not "Inject a defect"
 shot defects-folded
-click 1063 54
+click 1061 72
 wait 30
 expect "Inject a defect"
 shot defects-unfolded
