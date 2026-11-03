@@ -8,10 +8,11 @@ click_text Cabinet #1
 wait 30
 click 746 29
 wait 40
-click 1868 92
+shot default-camera
+click 1857 123
 wait 30
-shot top-view
-scroll 1100 400 150
-wait 30
-shot top-view-closer
+shot front-view
+scroll 1000 540 330
+wait 40
+shot front-zoomed
 check_layout
