@@ -1,0 +1,29 @@
+@title App menu File pane: start tiles, recent projects, move-data tiles
+@area Layout
+# Visual redesign board "App menu": File opens with New / Open / Open example tiles, Recent, and Import / Export / Print tiles.
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Hidden
+wait 6
+key Escape
+wait 8
+key F10
+wait 10
+shot file-pane
+expect "Recent"
+expect "Move data in and out"
+expect "Open v0.1-motor-starter"
+check_layout
+key Down
+key Down
+key Down
+wait 4
+shot file-pane-keys
+key Escape
+wait 6

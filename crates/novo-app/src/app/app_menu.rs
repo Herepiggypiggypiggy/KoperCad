@@ -61,7 +61,27 @@ pub(super) enum Entry {
         open: bool,
     },
     Separator,
+    /// A big tile for one command (File pane: New, Open, Open example, Import,
+    /// Export, Print). It runs the command like a row does.
+    Tile {
+        info: &'static CommandInfo,
+    },
+    /// A small heading over the rows or tiles that follow. Not selectable.
+    Label(&'static str),
+    /// A recent project, an index into the settings' recent list.
+    Recent(usize),
 }
+
+/// The commands the File pane shows as tiles at its top, and as tiles under
+/// "Move data in and out".
+const FILE_TOP_TILES: [&str; 3] = ["file.new", "file.open", "file.example"];
+const FILE_DATA_TILES: [&str; 3] = [
+    "file.import_centre",
+    "file.export_centre",
+    "export.print_preview",
+];
+/// Recent projects the File pane lists.
+pub(super) const RECENT_SHOWN: usize = 3;
 
 /// The icon of an area, a generic one (the electrical icons belong to commands).
 fn area_icon(menu: &str) -> &'static str {
@@ -95,7 +115,105 @@ fn mnemonic(menu: &str) -> Option<egui::Key> {
 
 /// The lines of one area: its commands, its submenus as groups (their rows
 /// follow while unfolded), its separators.
+#[cfg(test)]
 pub(super) fn area_entries(menu: &str, expanded: &HashSet<&'static str>) -> Vec<Entry> {
+    area_entries_with(menu, expanded, 0)
+}
+
+/// [`area_entries`] with `recent` recent projects listed in the File pane.
+pub(super) fn area_entries_with(
+    menu: &str,
+    expanded: &HashSet<&'static str>,
+    recent: usize,
+) -> Vec<Entry> {
+    let plain = plain_area_entries(menu, expanded);
+    if menu == "File" {
+        file_pane(plain, recent)
+    } else {
+        plain
+    }
+}
+
+/// The File pane as designed (docs/design/visual-redesign.md, board "App
+/// menu"): tiles for the three ways to start, the recent projects, the
+/// everyday rows, then tiles for moving data in and out. Every command of the
+/// plain list is still here; only its place and look change.
+fn file_pane(plain: Vec<Entry>, recent: usize) -> Vec<Entry> {
+    let tile_ids: Vec<&str> = FILE_TOP_TILES
+        .iter()
+        .chain(&FILE_DATA_TILES)
+        .copied()
+        .collect();
+    let find = |id: &str| -> Option<&'static CommandInfo> {
+        menus::drawn("File")
+            .into_iter()
+            .find_map(|item| match item {
+                MenuItem::Command(c) if c.id == id => Some(c),
+                MenuItem::Submenu { items, .. } => items.into_iter().find(|c| c.id == id),
+                _ => None,
+            })
+    };
+    let tiles = |ids: &[&str]| -> Vec<Entry> {
+        ids.iter()
+            .filter_map(|id| find(id))
+            .map(|info| Entry::Tile { info })
+            .collect()
+    };
+    // What the folded "Open" group no longer holds.
+    let taken_from_open = menus::drawn("File")
+        .into_iter()
+        .find_map(|item| match item {
+            MenuItem::Submenu {
+                name: "Open",
+                items,
+            } => Some(items.iter().filter(|c| tile_ids.contains(&c.id)).count()),
+            _ => None,
+        })
+        .unwrap_or(0);
+    let mut out = tiles(&FILE_TOP_TILES);
+    if recent > 0 {
+        out.push(Entry::Label("Recent"));
+        out.extend((0..recent).map(Entry::Recent));
+    }
+    out.push(Entry::Separator);
+    let mut data_done = false;
+    for entry in plain {
+        match entry {
+            Entry::Command { info, .. } if tile_ids.contains(&info.id) => continue,
+            Entry::Group {
+                name: "Open",
+                count,
+                open,
+            } => out.push(Entry::Group {
+                name: "Open",
+                count: count.saturating_sub(taken_from_open),
+                open,
+            }),
+            other => {
+                let after_close =
+                    matches!(other, Entry::Command { info, .. } if info.id == "file.close");
+                out.push(other);
+                if after_close {
+                    out.push(Entry::Label("Move data in and out"));
+                    out.extend(tiles(&FILE_DATA_TILES));
+                    data_done = true;
+                }
+            }
+        }
+    }
+    if !data_done {
+        out.push(Entry::Label("Move data in and out"));
+        out.extend(tiles(&FILE_DATA_TILES));
+    }
+    // A separator never leads or doubles.
+    out.dedup_by(|a, b| matches!((a, b), (Entry::Separator, Entry::Separator)));
+    while matches!(out.last(), Some(Entry::Separator)) {
+        out.pop();
+    }
+    out
+}
+
+fn plain_area_entries(menu: &str, expanded: &HashSet<&'static str>) -> Vec<Entry> {
     let mut out = Vec::new();
     for item in menus::drawn(menu) {
         match item {
@@ -253,7 +371,11 @@ impl NovoApp {
     fn app_menu_entries(&self) -> Vec<Entry> {
         let menu = &self.wb.app_menu;
         if menu.filter.trim().is_empty() {
-            area_entries(MENUS[menu.area.min(MENUS.len() - 1)], &menu.expanded)
+            area_entries_with(
+                MENUS[menu.area.min(MENUS.len() - 1)],
+                &menu.expanded,
+                self.settings.recent_projects.len().min(RECENT_SHOWN),
+            )
         } else {
             search_entries(&menu.filter)
         }
@@ -284,7 +406,7 @@ impl NovoApp {
         let runnable: Vec<usize> = entries
             .iter()
             .enumerate()
-            .filter(|(_, e)| !matches!(e, Entry::Separator))
+            .filter(|(_, e)| !matches!(e, Entry::Separator | Entry::Label(_)))
             .map(|(i, _)| i)
             .collect();
         self.app_menu_keys(ui.ctx(), &entries, &runnable, searching);
@@ -364,10 +486,20 @@ impl NovoApp {
                                     .color(pal.text_secondary),
                                 );
                             }
-                            for (n, entry) in entries.iter().enumerate() {
+                            let mut n = 0;
+                            while n < entries.len() {
+                                if matches!(entries[n], Entry::Tile { .. }) {
+                                    let end = (n..entries.len())
+                                        .find(|&k| !matches!(entries[k], Entry::Tile { .. }))
+                                        .unwrap_or(entries.len());
+                                    self.app_menu_tiles(ui, &entries, n..end, &runnable);
+                                    n = end;
+                                    continue;
+                                }
                                 let highlighted = self.wb.app_menu.in_rows
                                     && runnable.get(self.wb.app_menu.row) == Some(&n);
-                                self.app_menu_entry(ui, *entry, n, highlighted, searching);
+                                self.app_menu_entry(ui, entries[n], n, highlighted, searching);
+                                n += 1;
                             }
                         });
                 },
@@ -482,9 +614,27 @@ impl NovoApp {
                             state.expanded.insert(name);
                         }
                     }
-                    Entry::Separator => {}
+                    Entry::Tile { info } => {
+                        if self.command_unavailable(info).is_none() {
+                            self.settings.remember_action(info.id);
+                            self.wb.queued.push(info.id);
+                            egui::Popup::close_all(ctx);
+                        }
+                    }
+                    Entry::Recent(i) => {
+                        self.open_recent_from_menu(ctx, i);
+                        egui::Popup::close_all(ctx);
+                    }
+                    Entry::Separator | Entry::Label(_) => {}
                 }
             }
+        }
+    }
+
+    /// Opens the `i`th recent project (the menu's Recent list).
+    fn open_recent_from_menu(&mut self, ctx: &egui::Context, i: usize) {
+        if let Some(path) = self.settings.recent_projects.get(i).cloned() {
+            self.leave_then(ctx, super::Leaving::OpenPath(path));
         }
     }
 
@@ -503,6 +653,84 @@ impl NovoApp {
                 ui.add_space(2.0);
                 ui.separator();
                 ui.add_space(2.0);
+            }
+            Entry::Label(text) => {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(text.to_uppercase())
+                        .size(11.0)
+                        .extra_letter_spacing(1.0)
+                        .color(pal.text_secondary),
+                );
+                ui.add_space(2.0);
+            }
+            Entry::Tile { .. } => {}
+            Entry::Recent(i) => {
+                let Some(path) = self.settings.recent_projects.get(i).cloned() else {
+                    return;
+                };
+                let name = path
+                    .file_stem()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let place = path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let (rect, response) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), ROW),
+                    egui::Sense::click(),
+                );
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        true,
+                        format!("Open {name}"),
+                    )
+                });
+                paint_row(ui, rect, highlighted, response.hovered());
+                ui.painter().text(
+                    egui::pos2(rect.left() + 18.0, rect.center().y),
+                    egui::Align2::CENTER_CENTER,
+                    icons::FILE,
+                    egui::FontId::proportional(16.0),
+                    pal.text_secondary,
+                );
+                let galley = ui.painter().text(
+                    egui::pos2(rect.left() + 36.0, rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    &name,
+                    egui::TextStyle::Body.resolve(ui.style()),
+                    pal.text_primary,
+                );
+                if !place.is_empty() {
+                    let width = ui
+                        .painter()
+                        .layout_no_wrap(
+                            place.clone(),
+                            egui::TextStyle::Small.resolve(ui.style()),
+                            pal.text_tertiary,
+                        )
+                        .size()
+                        .x;
+                    if galley.right() + 16.0 + width < rect.right() - 8.0 {
+                        ui.painter().text(
+                            egui::pos2(rect.right() - 8.0, rect.center().y),
+                            egui::Align2::RIGHT_CENTER,
+                            place,
+                            egui::TextStyle::Small.resolve(ui.style()),
+                            pal.text_tertiary,
+                        );
+                    }
+                }
+                let clicked = response.clicked();
+                response.on_hover_text(path.display().to_string());
+                if clicked {
+                    let ctx = ui.ctx().clone();
+                    self.open_recent_from_menu(&ctx, i);
+                    ui.close();
+                }
             }
             Entry::Group { name, count, open } => {
                 let (rect, response) = ui.allocate_exact_size(
@@ -683,6 +911,129 @@ impl NovoApp {
                 }
             }
         }
+    }
+}
+
+impl NovoApp {
+    /// A row of big tiles (File pane). Each is a command: it runs like a row,
+    /// is grey with its reason when it cannot run, and is highlighted by the
+    /// arrow keys.
+    fn app_menu_tiles(
+        &mut self,
+        ui: &mut egui::Ui,
+        entries: &[Entry],
+        range: std::ops::Range<usize>,
+        runnable: &[usize],
+    ) {
+        let pal = crate::theme::ui_palette();
+        let gap = 8.0;
+        let count = range.len().max(1) as f32;
+        let width = (ui.available_width() - gap * (count - 1.0)) / count;
+        let primary = range.start == 0;
+        ui.add_space(2.0);
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for n in range {
+                let Entry::Tile { info } = entries[n] else {
+                    continue;
+                };
+                let highlighted =
+                    self.wb.app_menu.in_rows && runnable.get(self.wb.app_menu.row) == Some(&n);
+                let reason = self.command_unavailable(info);
+                let enabled = reason.is_none();
+                let short = presentation::short_label(info.id).unwrap_or(info.label);
+                let caption = tile_caption(info.id);
+                let keys = self.command_shortcut_text(ui.ctx(), info.id);
+                let (rect, response) = ui.allocate_exact_size(
+                    egui::vec2(width, 92.0),
+                    if enabled {
+                        egui::Sense::click()
+                    } else {
+                        egui::Sense::hover()
+                    },
+                );
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, short)
+                });
+                let radius = egui::CornerRadius::same(novo_theme::radius::SURFACE);
+                let fill = if highlighted || (enabled && response.hovered()) {
+                    pal.hover
+                } else {
+                    pal.control
+                };
+                ui.painter().rect_filled(rect, radius, fill);
+                let stroke = if highlighted {
+                    egui::Stroke::new(1.5, pal.accent)
+                } else if primary && n == 0 {
+                    egui::Stroke::new(1.0, pal.border_control)
+                } else {
+                    egui::Stroke::new(1.0, pal.border_subtle)
+                };
+                ui.painter()
+                    .rect_stroke(rect, radius, stroke, egui::StrokeKind::Inside);
+                let ink = if enabled {
+                    pal.accent
+                } else {
+                    pal.text_tertiary
+                };
+                presentation::glyph(info.id).paint(
+                    ui.painter(),
+                    egui::Rect::from_min_size(
+                        rect.left_top() + egui::vec2(10.0, 8.0),
+                        egui::Vec2::splat(22.0),
+                    ),
+                    ink,
+                );
+                let title = ui.painter().text(
+                    egui::pos2(rect.left() + 10.0, rect.top() + 40.0),
+                    egui::Align2::LEFT_TOP,
+                    short,
+                    egui::FontId::proportional(14.0),
+                    if enabled {
+                        pal.text_primary
+                    } else {
+                        pal.text_tertiary
+                    },
+                );
+                let small = egui::TextStyle::Small.resolve(ui.style());
+                let galley = ui.painter().layout(
+                    keys.clone().unwrap_or_else(|| caption.to_owned()),
+                    small,
+                    pal.text_secondary,
+                    width - 20.0,
+                );
+                ui.painter().galley(
+                    egui::pos2(rect.left() + 10.0, title.bottom() + 2.0),
+                    galley,
+                    pal.text_secondary,
+                );
+                self.anchor(&format!("cmd.{}", info.id), rect, info.label);
+                let mut tip = caption.to_owned();
+                if let Some(reason) = reason {
+                    tip = format!("{reason}\n\n{tip}");
+                }
+                let clicked = enabled && response.clicked();
+                response.on_hover_text(tip);
+                if clicked {
+                    self.settings.remember_action(info.id);
+                    self.wb.queued.push(info.id);
+                    ui.close();
+                }
+            }
+        });
+    }
+}
+
+/// One line under a tile's name (or in its tooltip).
+fn tile_caption(id: &str) -> &'static str {
+    match id {
+        "file.new" => "A name and Enter",
+        "file.open" => "A project from disk",
+        "file.example" => "Finished projects to look through",
+        "file.import_centre" => "DXF, EPLAN, parts, spreadsheet",
+        "file.export_centre" => "PDF, DXF, Excel, PLC, workshop pack",
+        "export.print_preview" => "Plot sets and preview",
+        _ => "",
     }
 }
 

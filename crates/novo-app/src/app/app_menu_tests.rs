@@ -13,7 +13,7 @@ fn ids(entries: &[Entry]) -> Vec<&'static str> {
     entries
         .iter()
         .filter_map(|e| match e {
-            Entry::Command { info, .. } => Some(info.id),
+            Entry::Command { info, .. } | Entry::Tile { info } => Some(info.id),
             _ => None,
         })
         .collect()
@@ -229,4 +229,54 @@ fn a_name_match_ranks_before_a_keyword_match() {
         "the first hit for pdf is not named pdf: {}",
         ids[0]
     );
+}
+
+#[test]
+fn the_file_pane_has_start_tiles_recent_rows_and_data_tiles_and_loses_no_command() {
+    let all: HashSet<&'static str> = menus::drawn("File")
+        .into_iter()
+        .filter_map(|i| match i {
+            menus::MenuItem::Submenu { name, .. } => Some(name),
+            _ => None,
+        })
+        .collect();
+    let full = super::app_menu::area_entries_with("File", &all, 2);
+    // The three ways to start are the first tiles, the data tiles come after the everyday rows.
+    let tiles: Vec<&str> = full
+        .iter()
+        .filter_map(|e| match e {
+            Entry::Tile { info } => Some(info.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        tiles,
+        [
+            "file.new",
+            "file.open",
+            "file.example",
+            "file.import_centre",
+            "file.export_centre",
+            "export.print_preview"
+        ]
+    );
+    assert!(matches!(full[3], Entry::Label("Recent")));
+    assert!(matches!(full[4], Entry::Recent(0)) && matches!(full[5], Entry::Recent(1)));
+    // Same commands as the plain list (unfolded): tiles moved, none lost.
+    let mut a = ids(&super::app_menu::area_entries("File", &all));
+    let mut b = ids(&full);
+    a.sort_unstable();
+    b.sort_unstable();
+    assert_eq!(a, b);
+    // Folded, the Open group counts only what it still holds.
+    let folded = super::app_menu::area_entries_with("File", &HashSet::new(), 0);
+    let open = folded.iter().find_map(|e| match e {
+        Entry::Group {
+            name: "Open",
+            count,
+            ..
+        } => Some(*count),
+        _ => None,
+    });
+    assert_eq!(open, Some(2));
 }
