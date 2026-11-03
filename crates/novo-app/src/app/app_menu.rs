@@ -411,7 +411,7 @@ impl NovoApp {
             .collect();
         self.app_menu_keys(ui.ctx(), &entries, &runnable, searching);
 
-        let height = (ui.ctx().content_rect().height() - 190.0).clamp(220.0, 460.0);
+        let height = (ui.ctx().content_rect().height() - 190.0).clamp(220.0, 620.0);
         ui.horizontal_top(|ui| {
             // The areas.
             ui.allocate_ui_with_layout(
@@ -770,7 +770,11 @@ impl NovoApp {
                 ui.painter().text(
                     egui::pos2(rect.right() - 8.0, rect.center().y),
                     egui::Align2::RIGHT_CENTER,
-                    count.to_string(),
+                    if count == 1 {
+                        "1 command".to_owned()
+                    } else {
+                        format!("{count} commands")
+                    },
                     egui::TextStyle::Small.resolve(ui.style()),
                     pal.text_tertiary,
                 );
@@ -1030,7 +1034,7 @@ fn tile_caption(id: &str) -> &'static str {
         "file.new" => "A name and Enter",
         "file.open" => "A project from disk",
         "file.example" => "Finished projects to look through",
-        "file.import_centre" => "DXF, EPLAN, parts, spreadsheet",
+        "file.import_centre" => "DXF, parts, spreadsheet",
         "file.export_centre" => "PDF, DXF, Excel, PLC, workshop pack",
         "export.print_preview" => "Plot sets and preview",
         _ => "",

@@ -114,7 +114,7 @@ from drifting from the program.
 It does **not** show, and should not pretend to: PLC cards and an I/O list (15), signals across pages (8),
 macros (9), revisions (34), variants and options (40), imports (39), the other drawing standard (41).
 Those lessons keep their own sample project. Extending the example is not needed to teach them; adding a
-PLC card, a revision and a macro to it would make the first-run example less clean and the CV200 machine
+PLC card, a revision and a macro to it would make the first-run example less clean and the real machine
 that would show them honestly is blocked (real-machine verdict: RM-03, RM-04, RM-11 and RM-17 open).
 Decision: the example stays a single motor starter. Revisit when those four close.
 

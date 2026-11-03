@@ -1,6 +1,6 @@
 # CFD for large cabinets: roadmap
 
-Scope: whole-cabinet 3D CFD for real machine cabinets (CV-200: 115 devices, 9 rails, 11 ducts, 1.48 M cells at Coarse, never converged). Engine in `crates/novo-cfd/src/large/`, wired into `CabinetSolver`.
+Scope: whole-cabinet 3D CFD for real machine cabinets (real machine: 115 devices, 9 rails, 11 ducts, 1.48 M cells at Coarse, never converged). Engine in `crates/novo-cfd/src/large/`, wired into `CabinetSolver`.
 
 ## Done
 - Reduction: cold devices lumped into row blocks, planes clustered and snapped (hot devices too, shift reported), ducts and rails widened to porous strips with volume kept, pitch chosen from the cell budget with a volume-growth limit.
@@ -17,4 +17,4 @@ Scope: whole-cabinet 3D CFD for real machine cabinets (CV-200: 115 devices, 9 ra
 5. Pitch per region (not one global pitch) once the solver supports non-tensor meshes.
 
 ## Open questions
-- Is a lumped member's housing estimate good enough to flag "Over"? (48 of 115 devices came out Over at Medium on the CV-200 because the air round the block is above their 60 C limit.)
+- Is a lumped member's housing estimate good enough to flag "Over"? (48 of 115 devices came out Over at Medium on the real machine because the air round the block is above their 60 C limit.)
