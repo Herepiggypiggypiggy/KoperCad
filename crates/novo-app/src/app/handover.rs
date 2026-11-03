@@ -193,10 +193,13 @@ impl NovoApp {
                 } else {
                     "remain"
                 };
-                ui.label(format!(
-                    "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
-                    ask.summary.pill_text()
-                ));
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} {verb}", ask.summary.pill_text()));
+                    super::window_help::mark(
+                        ui,
+                        "Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
+                    );
+                });
                 ui.add_space(4.0);
             }
             egui::ScrollArea::vertical()

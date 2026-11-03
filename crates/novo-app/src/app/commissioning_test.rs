@@ -245,35 +245,31 @@ fn test_tab_body(
         return None;
     }
     let progress = test_progress(&sheet, &mode.store);
-    ui.label(
-        egui::RichText::new(
-            "Design aid: expected values are planning values from the drawing, not a \
-             compliance test record.",
-        )
-        .small()
-        .color(p.text_tertiary),
-    );
-    ui.add_space(space::S);
-    ui.label(
-        egui::RichText::new(format!(
-            "{} wires in the drawing: {} tested, {} missed",
-            progress.total,
-            progress.total - progress.not_tested,
-            progress.miss
-        ))
-        .strong(),
-    );
+    let mut notes = vec![
+        "Design aid: expected values are planning values from the drawing, not a compliance test record."
+            .to_owned(),
+    ];
     // Wire-it and the cut list count connections: one drawn through several wires is one.
     let bench = novo_reports::wire_it_plan(project).steps.len();
     if bench != progress.total {
+        notes.push(format!(
+            "The bench cut list and Wire-it count connections ({bench}), not drawn wires, so the numbers can differ."
+        ));
+    }
+    notes.push("Zero the test leads first. For OL or over range press Open circuit.".to_owned());
+    notes.push("Disconnect electronics and surge arresters before an insulation test.".to_owned());
+    ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!(
-                "The bench cut list and Wire-it count connections ({bench}), not drawn wires, so the numbers can differ."
+                "{} wires in the drawing: {} tested, {} missed",
+                progress.total,
+                progress.total - progress.not_tested,
+                progress.miss
             ))
-            .small()
-            .color(p.text_tertiary),
+            .strong(),
         );
-    }
+        super::window_help::mark(ui, &notes.join("\n\n"));
+    });
     if progress.not_tested > 0 {
         ui.label(
             egui::RichText::new(format!(
@@ -320,7 +316,8 @@ fn test_tab_body(
                         .suffix(" ohm"),
                 );
             });
-            ui.weak(
+            super::window_help::mark(
+                ui,
                 "Wire resistance is copper at 20 C from the drawn length, times a 1.25 margin.",
             );
         });
@@ -347,20 +344,17 @@ fn test_tab_body(
         } else {
             point.number.clone()
         };
-        ui.label(egui::RichText::new(format!("#{}  {name}", point.seq)).strong());
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("#{}  {name}", point.seq)).strong());
+            if !point.hint.is_empty() {
+                super::window_help::mark(ui, &point.hint);
+            }
+        });
         ui.label(
             egui::RichText::new(format!("{} -> {}", point.from, point.to))
                 .small()
                 .color(p.text_secondary),
         );
-        if !point.hint.is_empty() {
-            ui.label(
-                egui::RichText::new(&point.hint)
-                    .small()
-                    .color(p.text_tertiary),
-            );
-        }
-        ui.weak("Zero the test leads first. For OL or over range press Open circuit.");
         let mut record = false;
         let mut open = false;
         ui.horizontal(|ui| {
@@ -400,7 +394,6 @@ fn test_tab_body(
                     record = true;
                 }
             });
-            ui.weak("Disconnect electronics and surge arresters before an insulation test");
         }
         let b = ui.button("Record");
         note_ctx(ui.ctx(), "commissioning.test_record", "Record reading", &b);

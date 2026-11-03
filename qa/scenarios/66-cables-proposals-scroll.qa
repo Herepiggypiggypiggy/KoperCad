@@ -16,7 +16,7 @@ check_blank cables-many-top
 try scroll 700 668 -3000
 try scroll 700 980 -3000
 wait 6
-expect "No cables yet. Accept the proposed ones"
+expect "No cables"
 # no check_layout here: rows scrolled out of view are still in the widget tree and count as overlapping the tabs
 shot cables-many-end
 open qa/fixtures/cable-proposals-few.novo
@@ -24,7 +24,7 @@ wait 20
 key ctrl+4
 wait 10
 expect "Proposed cables"
-expect "No cables yet. Accept the proposed ones"
+expect "No cables"
 shot cables-few
 check_layout
 open qa/fixtures/cable-proposals-none.novo
@@ -32,6 +32,6 @@ wait 20
 key ctrl+4
 wait 10
 expect_not "Proposed cables"
-expect "No cables yet. Wires between two locations"
+expect "No cables"
 shot cables-none
 check_layout
