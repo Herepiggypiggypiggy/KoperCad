@@ -11,8 +11,6 @@ wait 8
 key Enter
 wait 30
 scroll 360 400 -700
-wait 4
-scroll 360 400 -260
 wait 6
 shot 00-scrolled
 expect "Preview: Move it to the nearest free spot where the modelled field"

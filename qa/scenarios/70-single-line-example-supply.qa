@@ -14,6 +14,6 @@ check_blank example-single-line
 check_layout
 click_text "Enter supply data"
 wait 6
-expect "Electrical inputs"
+expect "Short-circuit current Ik (max)"
 shot example-single-line-supply-data
 check_layout

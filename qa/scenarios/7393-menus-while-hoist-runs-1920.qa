@@ -1,0 +1,35 @@
+@title Menus stay open while the drive hoist runs, wide window
+@area Menus
+@sizes 1920x1080
+open qa/fixtures/hoist-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+mouse_down 370 343
+wait 150
+mouse_up 370 343
+click_text File #1
+wait 6
+shot file-menu-hoist-running
+expect_popups_stable 90
+key Escape
+click_text "KoperCAD" #1
+wait 6
+shot app-menu-hoist-running
+expect_popups_stable 90
+key Escape
+click_text View #1
+wait 6
+shot view-menu-hoist-running
+expect_popups_stable 90
+key Escape

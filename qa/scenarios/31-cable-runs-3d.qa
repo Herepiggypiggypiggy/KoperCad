@@ -1,21 +1,13 @@
 @title Cable runs in 3D: Wire runs list, Run card, lit path
 @area 3D
-# Cabinet > Route all: set the cabinet entry. 3D > Wire runs (Ctrl+K): pick a row and read the Run card.
-open_starter_example
-wait 20
-click_text Cabinet #1
-wait 30
+# The EMC example has a motor cable (=A1+CAB-W2). 3D > Wire runs (Ctrl+K): pick a core of the cable, select all its cores, then pick one wire and read the Run card.
 key ctrl+k
-wait 3
-text Route all
-wait 4
+wait 6
+text open emc example
+wait 8
 key Enter
 wait 30
-shot routes-panel
-click_text Set
-wait 20
-shot entry-set
-click_text 3D
+click_text 3D #1
 wait 40
 key ctrl+k
 wait 3
@@ -25,18 +17,23 @@ key Enter
 wait 40
 shot wire-runs-list
 expect "Wire runs"
-click_text "4   549 mm"
-wait 60
-shot run-card-entry
-expect "Run 4"
-expect "Drawn to the cabinet entry"
+click_text "=A1+CAB-U1:U"
+wait 40
+scroll 1200 560 -900
+wait 5
+shot run-card-core
+expect "Select all cores of the cable"
 expect "Not checked: how stiff this cable is"
 click_text "Select all cores of the cable"
 wait 60
 shot cable-cores
 expect "runs"
-click_text "2   462 mm"
+expect "Cable =A1+CAB-W2"
+click_text "4   682 mm"
 wait 60
+scroll 1200 560 -900
+wait 5
 shot run-card-routed
+expect "Run 4"
 expect "routed"
 expect "Duct at"
