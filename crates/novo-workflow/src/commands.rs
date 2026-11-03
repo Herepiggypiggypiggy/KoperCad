@@ -2849,6 +2849,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["add rail", "add duct"],
     ),
     cmd(
+        "cabinet.arrange_all",
+        "Auto-reconfigure (Cabinet)",
+        "View",
+        &[
+            "auto reconfigure",
+            "reconfigure",
+            "tidy cabinet",
+            "arrange all",
+            "auto arrange",
+            "clean up layout",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "cabinet.arrange_onto_rail",
         "Autoplace on rail (Cabinet)",
         "View",

@@ -364,3 +364,128 @@ fn an_old_overlap_with_a_duct_may_stay_but_not_grow() {
     let plan = arrange::distribute(&l, &[], Spacing::Tight);
     assert!(plan.moves.is_empty(), "{:?}", plan.moves);
 }
+
+fn keys(list: &[(u64, &str)]) -> BTreeMap<u64, String> {
+    list.iter().map(|(i, k)| (*i, (*k).to_owned())).collect()
+}
+
+#[test]
+fn reconfigure_chains_rails_grouping_and_ducts_into_one_plan() {
+    // Two rows of loose devices, kinds mixed in the upper row.
+    let l = layout(
+        vec![],
+        vec![
+            dev(1, 40.0, 100.0, 40.0, 60.0, None),
+            dev(2, 140.0, 102.0, 40.0, 60.0, None),
+            dev(3, 240.0, 100.0, 40.0, 60.0, None),
+            dev(4, 40.0, 300.0, 40.0, 60.0, None),
+        ],
+    );
+    let k = keys(&[
+        (1, "K000001"),
+        (2, "F000001"),
+        (3, "K000002"),
+        (4, "F000002"),
+    ]);
+    let plan = arrange::reconfigure(&l, &[], &[], &k);
+    assert_eq!(plan.title.as_deref(), Some("Auto-reconfigure"));
+    assert_eq!(plan.rails.len(), 2);
+    assert_eq!(plan.ducts.len(), 1, "a duct between the two rows");
+    assert_eq!(plan.moves.len(), 4);
+    assert!(plan.moves.iter().all(|m| m.new_rail), "both rails are new");
+    let mut ids: Vec<u64> = plan.moves.iter().map(|m| m.id).collect();
+    ids.sort();
+    ids.dedup();
+    assert_eq!(ids.len(), 4, "one move per device");
+    // The plan is a faithful single step: accepting it gives the final state.
+    let a = after(&l, &plan);
+    assert!(a.placements.iter().all(|p| p.rail.is_some()));
+    let x = |id: u64| a.placements.iter().find(|p| p.id == id).unwrap().x;
+    assert!(x(2) < x(1) && x(1) < x(3), "F before K, then by number");
+    assert_eq!(x(1) - (x(2) + 40.0), 20.0, "group gap between kinds");
+    assert!(a.report().off_centre.is_empty());
+    clean(&a);
+    // The steps are listed in the notes.
+    assert!(plan.notes.iter().any(|n| n.starts_with("Auto rails:")));
+    assert!(plan.notes.iter().any(|n| n.starts_with("Auto ducts:")));
+    assert!(
+        plan.notes
+            .iter()
+            .any(|n| n.contains("can shift by a few mm"))
+    );
+}
+
+#[test]
+fn reconfigure_uses_a_stored_rail_before_making_a_new_one() {
+    let l = layout(
+        vec![rail(1, 100.0)],
+        vec![
+            dev(1, 30.0, 70.0, 40.0, 60.0, Some(1)),
+            dev(2, 200.0, 400.0, 40.0, 60.0, None),
+        ],
+    );
+    let plan = arrange::reconfigure(&l, &[], &[], &keys(&[(1, "K000001"), (2, "K000002")]));
+    assert!(plan.rails.is_empty(), "the stored rail has room");
+    let m = plan.moves.iter().find(|m| m.id == 2).unwrap();
+    assert_eq!(m.rail, 1);
+    assert!(!m.new_rail);
+}
+
+#[test]
+fn reconfigure_with_a_selection_leaves_the_rest_alone() {
+    let l = layout(
+        vec![],
+        vec![
+            dev(1, 40.0, 100.0, 40.0, 60.0, None),
+            dev(2, 40.0, 300.0, 40.0, 60.0, None),
+        ],
+    );
+    let plan = arrange::reconfigure(&l, &[1], &[], &keys(&[(1, "K000001"), (2, "K000002")]));
+    assert_eq!(plan.moves.iter().filter(|m| m.id == 2).count(), 0);
+    assert_eq!(plan.rails.len(), 1);
+    assert!(plan.ducts.is_empty(), "one rail, no band to fill");
+}
+
+#[test]
+fn reconfigure_says_once_that_every_gap_has_a_duct() {
+    use novo_layout::Duct;
+    let mut l = layout(
+        vec![rail(1, 100.0), rail(2, 300.0), rail(3, 500.0)],
+        vec![
+            dev(1, 30.0, 70.0, 40.0, 60.0, Some(1)),
+            dev(2, 30.0, 270.0, 40.0, 60.0, Some(2)),
+            dev(3, 30.0, 470.0, 40.0, 60.0, Some(3)),
+        ],
+    );
+    l.ducts = vec![
+        Duct {
+            id: 10,
+            x: 20.0,
+            y: 200.0,
+            length: 500.0,
+            width: 30.0,
+            vertical: false,
+        },
+        Duct {
+            id: 11,
+            x: 20.0,
+            y: 400.0,
+            length: 500.0,
+            width: 30.0,
+            vertical: false,
+        },
+    ];
+    let plan = arrange::reconfigure(
+        &l,
+        &[],
+        &[],
+        &keys(&[(1, "K000001"), (2, "K000002"), (3, "K000003")]),
+    );
+    let ducts: Vec<_> = plan
+        .notes
+        .iter()
+        .filter(|n| n.starts_with("Auto ducts:"))
+        .collect();
+    assert_eq!(ducts.len(), 1, "{:?}", plan.notes);
+    assert!(ducts[0].contains("every gap between rows already has a duct"));
+}

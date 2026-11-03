@@ -1,0 +1,39 @@
+@title Cabinet: Auto-reconfigure is one preview and one undo step (1366x768)
+@area Cabinet
+@sizes 1366x768
+# Where it lives: Arrange card of the Cabinet left rail (first row), Ctrl K "auto-reconfigure", plate right-click.
+# K1 is dragged off its rail first so the chain has something to do. Only K1 moves then (Autogroup has nothing to change); the Autogroup warning is covered by the engine test.
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 20
+click_text Cabinet #1
+wait 30
+shot before
+drag 700 302 860 432
+wait 10
+shot k1-off-the-rail
+key ctrl+k
+wait 3
+text auto-reconfigure
+wait 4
+shot palette
+key Enter
+wait 10
+expect "Preview (Auto-reconfigure)"
+expect "not a clearance check or a heat calculation"
+shot reconfigure-preview
+key Escape
+wait 5
+shot cancelled
+key ctrl+k
+wait 3
+text auto-reconfigure
+wait 4
+key Enter
+wait 10
+key Enter
+wait 10
+shot reconfigure-accepted
+check_layout
+key ctrl+z
+wait 10
+shot reconfigure-undone

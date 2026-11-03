@@ -635,6 +635,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cabinet.rules",
     "cabinet.plate",
     "cabinet.cutlist",
+    "cabinet.arrange_all",
     "cabinet.arrange_onto_rail",
     "cabinet.arrange_rails",
     "cabinet.arrange_ducts",
@@ -1128,7 +1129,8 @@ impl NovoApp {
                     self.canvas.zoom_to_sheet();
                 }
             }
-            "cabinet.arrange_onto_rail"
+            "cabinet.arrange_all"
+            | "cabinet.arrange_onto_rail"
             | "cabinet.arrange_rails"
             | "cabinet.arrange_ducts"
             | "cabinet.arrange_group"

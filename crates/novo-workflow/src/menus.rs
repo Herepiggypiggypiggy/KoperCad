@@ -292,6 +292,7 @@ pub const MOVED: &[&str] = &[
     "cabinet.rules",
     "cabinet.plate",
     "cabinet.cutlist",
+    "cabinet.arrange_all",
     "cabinet.arrange_onto_rail",
     "cabinet.arrange_rails",
     "cabinet.arrange_ducts",

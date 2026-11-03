@@ -761,3 +761,99 @@ fn duct_rect(d: &PlannedDuct) -> Rect {
         }
     }
 }
+
+/// Auto-reconfigure: runs the arrange tools one after the other on the same
+/// devices and returns ONE plan, so the Cabinet shows one preview and stores
+/// one undo step. The order is fixed and each step sees the result of the
+/// steps before it:
+///
+/// 1. Autoplace on rail: loose devices go onto the nearest rail with room.
+/// 2. Auto rails: devices that still stand on no rail get a rail per row.
+/// 3. Autogroup: devices on each rail are ordered by kind and closed up with
+///    the group gaps (this also does the work of Autodistance: close up).
+/// 4. Auto ducts: ducts go into the free bands between the rows.
+///
+/// `ids` limits it to those devices (empty: everything); `unplaced` are
+/// devices not on the plate yet, which only come along when named in `ids`.
+/// The notes list what each step did and what it left alone. A step that
+/// finds nothing to do says nothing. These are the plain rules of the single
+/// tools, not a search; they know nothing about heat or wiring.
+pub fn reconfigure(
+    layout: &CabinetLayout,
+    ids: &[u64],
+    unplaced: &[Candidate],
+    keys: &BTreeMap<u64, String>,
+) -> Plan {
+    let mut out = titled("Auto-reconfigure");
+    let mut sim = layout.clone();
+    let mut order: Vec<u64> = Vec::new();
+    let mut moves: BTreeMap<u64, Move> = BTreeMap::new();
+    let mut sizes = Vec::new();
+    for step in 0..4 {
+        let plan = match step {
+            0 => onto_rails(&sim, ids, unplaced),
+            1 => make_rails(&sim, ids),
+            2 => group(&sim, ids, keys),
+            _ => add_ducts(&sim),
+        };
+        let name = plan.title.clone().unwrap_or_default();
+        let mut bits = Vec::new();
+        if !plan.moves.is_empty() {
+            bits.push(format!("{} device(s) moved", plan.moves.len()));
+        }
+        if !plan.rails.is_empty() {
+            bits.push(format!("{} rail(s) added", plan.rails.len()));
+        }
+        if !plan.ducts.is_empty() {
+            bits.push(format!("{} duct(s) added", plan.ducts.len()));
+        }
+        if !bits.is_empty() {
+            sizes.push(format!("{name}: {}.", bits.join(", ")));
+        }
+        if step == 2 && !plan.moves.is_empty() {
+            sizes.push(
+                "Autogroup lays out each whole rail again, so even a tidy rail can shift by a \
+                 few mm; Cancel keeps it as it is."
+                    .into(),
+            );
+        }
+        // One line for all the gaps that have a duct already.
+        let (have, other): (Vec<&String>, Vec<&String>) = plan
+            .notes
+            .iter()
+            .partition(|n| n.ends_with("there is a duct already."));
+        if !have.is_empty() {
+            let text = if other.is_empty() && plan.ducts.is_empty() {
+                "nothing to add, every gap between rows already has a duct.".to_owned()
+            } else {
+                format!("{} gap(s) between rows already have a duct.", have.len())
+            };
+            out.notes.push(format!("{name}: {text}"));
+        }
+        for note in other {
+            out.notes.push(format!("{name}: {note}"));
+        }
+        sim.accept(&plan, unplaced);
+        out.rails.extend(plan.rails.iter().cloned());
+        out.ducts.extend(plan.ducts.iter().cloned());
+        for m in plan.moves {
+            if !moves.contains_key(&m.id) {
+                order.push(m.id);
+            }
+            moves.insert(m.id, m);
+        }
+    }
+    // A rail made by an earlier step is "new" for the whole plan.
+    out.moves = order
+        .into_iter()
+        .filter_map(|id| moves.remove(&id))
+        .map(|mut m| {
+            m.new_rail = out.rails.iter().any(|r| r.id == m.rail);
+            m
+        })
+        .collect();
+    // Steps first, then what was left alone.
+    sizes.append(&mut out.notes);
+    out.notes = sizes;
+    out
+}

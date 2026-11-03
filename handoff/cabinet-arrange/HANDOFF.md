@@ -9,7 +9,8 @@ Updated 2026-11-02.
 - App glue: `crates/novo-app/src/app/cabinet_arrange.rs` (+ `_tests.rs`), `rail_cabinet.rs`
   (`rail.arrange` entry and flyout), `cabinet_menu.rs` rows, `workbench.rs` command arm,
   `cabinet.rs` (`Ask::Arrange`, banner text, accept label).
-- Six commands: `cabinet.arrange_onto_rail|rails|ducts|group|tight|even`.
+- Seven commands: `cabinet.arrange_all` (Auto-reconfigure, chains the others in one plan) and
+  `cabinet.arrange_onto_rail|rails|ducts|group|tight|even`.
 
 ## How it works
 Tools read a `CabinetLayout` and return a `Plan` with `moves` (devices already on the plate),
