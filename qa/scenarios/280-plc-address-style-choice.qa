@@ -32,7 +32,7 @@ wait 20
 expect "Addresses"
 shot io-list-siemens
 check_layout
-click 475 53
+click 530 69
 wait 5
 shot io-list-style-open
 click_text Rockwell Button

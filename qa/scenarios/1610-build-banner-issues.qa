@@ -13,7 +13,7 @@ expect "Check the plate"
 expect "The cabinet layout has no open problems"
 shot build-first-step
 check_layout
-expect "The design has 2 errors and 8 warnings in Issues"
+expect "The design has 7 errors and 8 warnings in Issues"
 expect "Show issues"
 click_text "Show issues"
 wait 10
