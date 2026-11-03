@@ -422,7 +422,11 @@ pub(super) fn strip(
     .foreground()
     .show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.set_max_width(TEXT_WIDTH.min(view.width() - 2.0 * MARGIN));
+            ui.set_max_width(
+                TEXT_WIDTH
+                    .min(view.width() - 2.0 * MARGIN)
+                    .min(ui.available_width()),
+            );
             if plan.steps.is_empty() {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -442,7 +446,8 @@ pub(super) fn strip(
             *at = (*at).min(last);
             let step = &plan.steps[*at];
             let done = wire_it_done(project, step);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 ui.add_enabled_ui(*at > 0, |ui| {
                     let back = ui.button("Previous");
                     super::cabinet_bar::note_ctx(ctx, "wire_it.previous", "Previous", &back);
@@ -450,16 +455,6 @@ pub(super) fn strip(
                         *at -= 1;
                     }
                 });
-                ui.label(
-                    egui::RichText::new(format!(
-                        "Wire {} of {}: {}",
-                        *at + 1,
-                        plan.steps.len(),
-                        step.class.name()
-                    ))
-                    .strong()
-                    .color(p.text_strong),
-                );
                 ui.add_enabled_ui(*at < last, |ui| {
                     let next = ui.button("Next");
                     super::cabinet_bar::note_ctx(ctx, "wire_it.next", "Next", &next);
@@ -483,6 +478,58 @@ pub(super) fn strip(
                     asked.print = true;
                 }
             });
+            ui.horizontal_wrapped(|ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                if done {
+                    let undo = ui.button("Not run yet");
+                    if undo.clicked() {
+                        asked.ticks.push(Tick {
+                            step: step.clone(),
+                            on: false,
+                        });
+                    }
+                } else {
+                    let go = ui
+                        .button(egui::RichText::new("Run, next wire").strong())
+                        .on_hover_text("Mark this wire run and go to the next one");
+                    super::cabinet_bar::note_ctx(ctx, "wire_it.run", "Run, next wire", &go);
+                    if go.clicked() {
+                        asked.ticks.push(Tick {
+                            step: step.clone(),
+                            on: true,
+                        });
+                        if *at < last {
+                            *at += 1;
+                        }
+                    }
+                    let only = ui.button("Mark run");
+                    if only.clicked() {
+                        asked.ticks.push(Tick {
+                            step: step.clone(),
+                            on: true,
+                        });
+                    }
+                }
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} of {} run, {:.1} m of wire still to cut",
+                        progress.done,
+                        progress.total,
+                        plan.cut_m_left(project)
+                    ))
+                    .color(p.text_secondary),
+                );
+            });
+            ui.label(
+                egui::RichText::new(format!(
+                    "Wire {} of {}: {}",
+                    *at + 1,
+                    plan.steps.len(),
+                    step.class.name()
+                ))
+                .strong()
+                .color(p.text_strong),
+            );
             let name = if step.wire_number.is_empty() {
                 "(no wire number)".to_owned()
             } else {
@@ -578,50 +625,10 @@ pub(super) fn strip(
                     .color(p.text_secondary),
                 );
             }
-            ui.horizontal(|ui| {
-                if done {
-                    let undo = ui.button("Not run yet");
-                    if undo.clicked() {
-                        asked.ticks.push(Tick {
-                            step: step.clone(),
-                            on: false,
-                        });
-                    }
-                } else {
-                    let go = ui
-                        .button(egui::RichText::new("Run, next wire").strong())
-                        .on_hover_text("Mark this wire run and go to the next one");
-                    super::cabinet_bar::note_ctx(ctx, "wire_it.run", "Run, next wire", &go);
-                    if go.clicked() {
-                        asked.ticks.push(Tick {
-                            step: step.clone(),
-                            on: true,
-                        });
-                        if *at < last {
-                            *at += 1;
-                        }
-                    }
-                    let only = ui.button("Mark run");
-                    if only.clicked() {
-                        asked.ticks.push(Tick {
-                            step: step.clone(),
-                            on: true,
-                        });
-                    }
-                }
-                ui.label(
-                    egui::RichText::new(format!(
-                        "{} of {} run, {:.1} m of wire still to cut",
-                        progress.done,
-                        progress.total,
-                        plan.cut_m_left(project)
-                    ))
-                    .color(p.text_secondary),
-                );
-            });
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 let mut pos = *at;
-                ui.spacing_mut().slider_width = 240.0;
+                ui.spacing_mut().slider_width = 240.0_f32.min(ui.available_width() - 8.0).max(80.0);
                 if ui
                     .add(egui::Slider::new(&mut pos, 0..=last).show_value(false))
                     .on_hover_text("Drag to any wire")
