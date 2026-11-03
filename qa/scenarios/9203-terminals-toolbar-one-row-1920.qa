@@ -16,7 +16,7 @@ key Home
 wait 20
 shot a-before
 click 560 640
-click 906 589 shift
+click 893 600 shift
 wait 10
 shot b-two-selected
 wait 20

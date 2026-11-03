@@ -15,11 +15,14 @@ wait 40
 move 1250 420
 wait 15
 shot overview-on
+# Layers sits on the 3D rail: open the rail first.
+click 23 722
+wait 8
 click_text "Layers"
 wait 8
 shot layers-menu-ticked
-expect "Metal finish"
-click_text "Metal finish"
+expect "Surface finish in 3D"
+click_text "Surface finish in 3D"
 wait 8
 key Escape
 move 1250 420
@@ -27,7 +30,7 @@ wait 30
 shot overview-off
 click_text "Layers"
 wait 8
-click_text "Metal finish"
+click_text "Surface finish in 3D"
 wait 8
 key Escape
 wait 10
@@ -46,7 +49,7 @@ wait 30
 shot close-on
 click_text "Layers"
 wait 8
-click_text "Metal finish"
+click_text "Surface finish in 3D"
 wait 8
 key Escape
 move 1250 420
