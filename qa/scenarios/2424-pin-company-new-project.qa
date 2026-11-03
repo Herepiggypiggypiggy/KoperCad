@@ -11,10 +11,11 @@ text rules
 wait 10
 key Return
 wait 20
-scroll 680 400 -600
+scroll 1200 400 -600
 wait 10
 shot rules
-click 680 520
+click 1200 570
+key ctrl+a
 wait 5
 text class = [{ id = 'motor.brake', label = 'brake motor', functions = ['motor.ac3'], set = [{ name = 'with brake', required = ['U1', 'V1', 'W1', 'BD1', 'BD2'] }] }]
 wait 10
@@ -41,7 +42,7 @@ text rules
 wait 10
 key Return
 wait 20
-scroll 680 400 -600
+scroll 1200 400 -600
 wait 10
 shot used
 expect "1 class read"
@@ -66,7 +67,7 @@ text rules
 wait 10
 key Return
 wait 20
-scroll 680 400 -600
+scroll 1200 400 -600
 wait 10
 expect "Built-in names only"
 check_layout

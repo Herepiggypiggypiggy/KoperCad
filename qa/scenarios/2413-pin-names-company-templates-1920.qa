@@ -11,10 +11,11 @@ wait 10
 key Return
 wait 20
 expect "Usual pin names"
-scroll 960 500 -600
+scroll 1740 500 -600
 wait 10
 shot scrolled
-click 960 695
+click 1740 882
+key ctrl+a
 wait 5
 text class = [{ id = 'motor.brake', label = 'brake motor', functions = ['motor.ac3'], set = [{ name = 'with brake', required = ['U1', 'V1', 'W1', 'BD1', 'BD2'] }] }]
 wait 10
