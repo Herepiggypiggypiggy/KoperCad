@@ -18,7 +18,7 @@ text emc net classes
 wait 8
 key Enter
 wait 20
-click 513 540
+click 561 520
 wait 12
 expect "Cable =A1+CAB-W2"
 expect "Indicative: a design aid, not a test result."

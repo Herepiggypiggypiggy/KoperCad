@@ -5,13 +5,13 @@
 open qa/fixtures/emc-cabinet-bonding.novo
 wait 20
 click_text 3D #1
-wait 30
-click_text EMC #2
-wait 30
-click 1068 279
+wait 60
+click 24 464
+wait 60
+click 1068 295
 wait 10
 shot emc-overview-bonding-off
-click 548 372
+click 612 388
 wait 10
 key f
 wait 20
