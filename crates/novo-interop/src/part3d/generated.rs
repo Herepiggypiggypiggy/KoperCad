@@ -167,6 +167,11 @@ fn rail_prism(spec: &RailSpec, len: f64, slotted: bool) -> Prism {
     let (h, t) = spec.profile.height_and_thickness();
     let (w2, yo) = (RAIL_WIDTH_MM / 2.0, HAT_OUTER_MM / 2.0);
     let yi = yo - t;
+    // The drawing below has the crown (the screwed-down middle) at the top;
+    // a real rail lies the other way: crown on the plate, brims h proud, open
+    // side out. `flip` mirrors a polygon in z and keeps it counter-clockwise.
+    let flip =
+        |poly: Vec<P2>| -> Vec<P2> { poly.into_iter().map(|[y, z]| [y, h - z]).rev().collect() };
     let full: Vec<P2> = vec![
         [-w2, 0.0],
         [-yi, 0.0],
@@ -204,6 +209,7 @@ fn rail_prism(spec: &RailSpec, len: f64, slotted: bool) -> Prism {
         [yi, h - t],
     ];
     let bite: Vec<P2> = vec![[-yi, h - t], [yi, h - t], [yi, h], [-yi, h]];
+    let (full, left, right, bite) = (flip(full), flip(left), flip(right), flip(bite));
 
     let (lo, hi) = (-len / 2.0, len / 2.0);
     // Slot centres: one pitch in from each end, every pitch.

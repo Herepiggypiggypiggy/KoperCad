@@ -12,12 +12,12 @@ wait 40
 expect "Appearance"
 shot form-docked
 check_layout
-click 1617 54
+click 1615 72
 wait 30
 expect_not "Appearance"
 shot form-folded
 check_layout
-click 1617 54
+click 1615 72
 wait 30
 expect "Appearance"
 shot form-unfolded

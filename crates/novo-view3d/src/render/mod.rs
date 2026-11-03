@@ -13,7 +13,7 @@ use crate::look::{Highlight, Look, Rgb, mix};
 use crate::math::Frustum;
 use crate::mesh::{
     FINGER_WIDTH_MM, GeometryKey, MeshData, MeshLibrary, SLOT_WIDTH_MM, profile_mesh, slotted_mesh,
-    unit_box,
+    slotted_rail_mesh, unit_box,
 };
 use crate::overlay::Overlay;
 use crate::scene::{Item, ItemId, ItemKind, Mark, Profile, Scene, Shape};
@@ -231,6 +231,8 @@ enum MeshKey {
     /// Slotted duct, width, height and length in half millimetres, and
     /// whether the outline of every finger is drawn.
     Slotted(u32, u32, u32, bool),
+    /// Slotted top-hat rail, profile and length in half millimetres.
+    SlottedRail(Profile, u32),
     Part(GeometryKey, u8),
 }
 
@@ -1254,6 +1256,11 @@ impl Renderer {
                 }
                 GpuMesh::upload(device, "slotted duct", &m)
             }
+            MeshKey::SlottedRail(p, len) => GpuMesh::upload(
+                device,
+                "slotted rail",
+                &slotted_rail_mesh(p, len as f32 * 0.5),
+            ),
             MeshKey::Part(k, lod) => {
                 let m = library
                     .get(k)
@@ -1486,14 +1493,15 @@ impl Renderer {
         if self
             .meshes
             .keys()
-            .filter(|k| matches!(k, MeshKey::Slotted(..)))
+            .filter(|k| matches!(k, MeshKey::Slotted(..) | MeshKey::SlottedRail(..)))
             .count()
             > SLOTTED_MESHES_KEPT
         {
             let used: std::collections::HashSet<MeshKey> =
                 draws.iter().chain(&shadow_draws).map(|(k, _)| *k).collect();
-            self.meshes
-                .retain(|k, _| !matches!(k, MeshKey::Slotted(..)) || used.contains(k));
+            self.meshes.retain(|k, _| {
+                !matches!(k, MeshKey::Slotted(..) | MeshKey::SlottedRail(..)) || used.contains(k)
+            });
         }
 
         if target.overlay_revision != Some(frame.overlay_revision) {
@@ -1888,6 +1896,12 @@ impl Renderer {
                     )
                 }
             }),
+            Shape::Profile(p @ (Profile::TopHat35x7_5 | Profile::TopHat35x15))
+                if slots && size_px > 60.0 =>
+            {
+                cull::lod_for(size_px, 1)
+                    .map(|_| (MeshKey::SlottedRail(p, q(item.size.x)), Vec3::ONE))
+            }
             Shape::Profile(p) => cull::lod_for(size_px, 1).map(|_| {
                 (
                     MeshKey::Profile(p, q(item.size.y), q(item.size.z)),

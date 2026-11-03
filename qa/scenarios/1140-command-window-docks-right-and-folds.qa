@@ -13,12 +13,12 @@ expect "Check against"
 shot docked-open
 check_layout
 # The fold arrow is the first button in the pane header.
-click 1063 54
+click 1061 72
 wait 30
 expect_not "Check against"
 shot folded
 check_layout
-click 1063 54
+click 1061 72
 wait 30
 expect "Check against"
 shot unfolded
