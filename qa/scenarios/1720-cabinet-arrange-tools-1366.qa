@@ -31,7 +31,7 @@ wait 4
 shot palette-autoplace
 key Escape
 wait 4
-drag 727 270 880 405
+drag 729 284 880 405
 wait 10
 shot k1-off-the-rail
 key ctrl+k
