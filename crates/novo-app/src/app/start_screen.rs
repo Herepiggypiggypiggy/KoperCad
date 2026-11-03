@@ -454,7 +454,6 @@ impl NovoApp {
 
     /// The mark and the four tiles, then the quiet extras.
     fn start_ways_in(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        let p = ui_palette();
         lockup_left(ui);
         ui.add_space(24.0);
         let first_run = self.first_run();
@@ -564,11 +563,7 @@ impl NovoApp {
             }
         }
         ui.add_space(20.0);
-        ui.label(
-            egui::RichText::new("Ctrl K finds every command · F10 opens the menu")
-                .size(12.0)
-                .color(p.text_secondary),
-        );
+        super::window_help::mark(ui, "Ctrl K finds every command · F10 opens the menu");
     }
 
     /// Recent projects as cards with a picture of the first page.
