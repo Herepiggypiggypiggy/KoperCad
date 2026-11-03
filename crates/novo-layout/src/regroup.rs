@@ -476,6 +476,8 @@ pub fn regroup(
     input: &Inputs<'_>,
 ) -> (Plan, Report) {
     let mut plan = titled(goal.title());
+    let asked = goal;
+    let mut goal = goal;
     let mut report = Report::default();
 
     let spec: HashMap<u64, &Spec> = input.specs.iter().map(|s| (s.id, s)).collect();
@@ -571,8 +573,14 @@ pub fn regroup(
              so there is nothing to group by."
                 .into(),
         );
-        if goal == Goal::Wiring {
-            return (plan, report);
+        match goal {
+            Goal::Wiring => return (plan, report),
+            // Nothing to group by on the wiring side: only heat is left.
+            Goal::Both => {
+                plan.notes.push("Grouping by heat only.".into());
+                goal = Goal::Heat;
+            }
+            Goal::Heat => {}
         }
     }
 
@@ -598,8 +606,14 @@ pub fn regroup(
             "No device states a power loss of {:.0} W or more, so there is no heat to arrange by.",
             heat.min_source_w
         ));
-        if goal == Goal::Heat {
-            return (plan, report);
+        match goal {
+            Goal::Heat => return (plan, report),
+            // Nothing to group by on the heat side: only wiring is left.
+            Goal::Both => {
+                plan.notes.push("Grouping by wiring only.".into());
+                goal = Goal::Wiring;
+            }
+            Goal::Wiring => {}
         }
     }
     if goal.heat() && input.rules.heat.is_none() {
@@ -776,12 +790,39 @@ pub fn regroup(
         plan.notes.push(format!(
             "The devices already stand about as well as this search finds for {} ({tried} layouts \
              tried); nothing was moved.",
-            match goal {
+            match asked {
                 Goal::Wiring => "wiring",
                 Goal::Heat => "heat",
                 Goal::Both => "wiring and heat",
             }
         ));
+        return (plan, report);
+    }
+
+    // A goal may get worse only when the other one clearly gets better; a
+    // plan whose only effect is a worse score is not offered.
+    let gain = |before: f64, after: f64| {
+        if before > 0.0 {
+            1.0 - after / before
+        } else {
+            0.0
+        }
+    };
+    let wire_gain = gain(report.wire_before_mm, report.wire_after_mm);
+    let heat_gain = gain(report.heat_before, report.heat_after);
+    let heat_worse = goal.heat() && heat_gain < -0.01;
+    let wire_worse = goal.wiring() && wire_gain < -0.01;
+    let traded = match goal {
+        Goal::Both => (heat_worse && wire_gain < 0.01) || (wire_worse && heat_gain < 0.01),
+        Goal::Heat => heat_worse,
+        Goal::Wiring => false,
+    };
+    if traded {
+        plan.notes.push(
+            "The only regrouping found would make one score worse without making the other \
+             better, so nothing was moved."
+                .into(),
+        );
         return (plan, report);
     }
 
@@ -853,9 +894,10 @@ pub fn regroup(
             "Heat: coupling score about the same (planning score, not a temperature).".to_owned()
         } else {
             format!(
-                "Heat: coupling score {:.0}% higher, traded for the other goal (planning score, \
-                 not a temperature).",
-                -change
+                "Heat: coupling score {:.0}% higher, traded for a {:.0}% shorter wire estimate \
+                 (planning score, not a temperature).",
+                -change,
+                100.0 * wire_gain
             )
         });
     }

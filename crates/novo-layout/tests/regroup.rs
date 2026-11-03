@@ -353,3 +353,87 @@ fn a_move_that_empties_a_row_does_not_break_the_search() {
         }
     }
 }
+
+#[test]
+fn both_without_wiring_groups_by_heat_alone_and_never_offers_a_worse_heat_score() {
+    // Power and signal parts mixed on one row, one heat source, no wires.
+    // The wiring side has nothing to group by, so "both" is "heat" alone:
+    // it never offers a plan whose heat score is worse.
+    let l = layout(
+        vec![rail(1, 100.0), rail(2, 250.0)],
+        vec![
+            dev(1, 30.0, 100.0, 1),
+            dev(2, 90.0, 100.0, 1),
+            dev(3, 150.0, 100.0, 1),
+            dev(4, 210.0, 100.0, 1),
+        ],
+    );
+    let specs = vec![
+        spec(1, "Q", None, None),
+        spec(2, "K", Some(40.0), None),
+        spec(3, "Q", None, Some(42.0)),
+        spec(4, "K", None, Some(42.0)),
+    ];
+    let (plan, report) = run(&l, &[], Goal::Both, &specs, &[]);
+    assert!(
+        plan.notes.iter().any(|n| n.contains("heat only")),
+        "{:?}",
+        plan.notes
+    );
+    if plan.moves.is_empty() {
+        return;
+    }
+    assert!(report.heat_after <= report.heat_before * 1.01, "{report:?}");
+}
+
+#[test]
+fn a_worse_heat_score_is_only_traded_for_a_better_wire_estimate_with_its_number() {
+    for seed in 0..200u64 {
+        let mut rng = Lcg(seed);
+        let l = layout(
+            vec![rail(1, 100.0), rail(2, 250.0)],
+            (1..=5)
+                .map(|i| {
+                    dev(
+                        i,
+                        30.0 + 90.0 * (i - 1) as f64,
+                        100.0 + 150.0 * (i % 2) as f64,
+                        1 + i % 2,
+                    )
+                })
+                .collect(),
+        );
+        let specs: Vec<Spec> = (1..=5)
+            .map(|i| {
+                spec(
+                    i,
+                    "K",
+                    (rng.next(2) == 0).then(|| 20.0 + rng.next(30) as f64),
+                    Some(42.0),
+                )
+            })
+            .collect();
+        let links: Vec<Link> = (0..rng.next(4))
+            .map(|_| link(1 + rng.next(5), 1 + rng.next(5)))
+            .filter(|l| l.a != l.b)
+            .collect();
+        let (plan, report) = run(&l, &[], Goal::Both, &specs, &links);
+        if plan.moves.is_empty() || report.heat_before == 0.0 {
+            continue;
+        }
+        let worse = report.heat_after > report.heat_before * 1.01;
+        if worse {
+            assert!(
+                report.wire_after_mm < report.wire_before_mm * 0.99,
+                "seed {seed} {report:?}"
+            );
+            assert!(
+                plan.notes
+                    .iter()
+                    .any(|n| n.contains("shorter wire estimate")),
+                "{:?}",
+                plan.notes
+            );
+        }
+    }
+}
