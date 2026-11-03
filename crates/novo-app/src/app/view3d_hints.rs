@@ -68,7 +68,7 @@ impl Hints {
                     .show(ui, |ui| {
                         for (what, how) in ROWS {
                             ui.label(egui::RichText::new(*what).small().strong());
-                            ui.label(egui::RichText::new(*how).small());
+                            ui.add(egui::Label::new(egui::RichText::new(*how).small()).wrap());
                             ui.end_row();
                         }
                     });
