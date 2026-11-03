@@ -1,4 +1,4 @@
-@title Docked windows stack from the top: three windows open in the right strip, fold and unfold in place, order stays (3d, 1366x768)
+@title Docked windows stack from the top: windows open in the right strip, fold and unfold in place, order stays (3d, 1366x768)
 @area Windows
 @sizes 1366x768
 open_starter_example
@@ -19,19 +19,35 @@ key Enter
 wait 40
 key ctrl+k
 wait 4
+text project settings
+wait 6
+key Enter
+wait 40
+shot windows-open
+check_layout
+# Cooling what-if opens floating: its dock button puts it at the end of the stack, at the top-aligned stack, not at the bottom of the strip.
+key ctrl+k
+wait 4
 text cooling what-if
 wait 6
 key Enter
 wait 40
-shot three-open
+click 523 146
+wait 30
+shot cooling-docked
 check_layout
-# Fold the first window: it keeps its title row at the top, the others move up under it.
-click 1063 54
+# Fold the first window: it keeps its title row at the top and the others move up under it.
+click 1061 72
 wait 30
 shot first-folded
 check_layout
-# Unfold it again: it grows downward and nothing jumps to the bottom of the strip.
-click 1063 54
+# Fold the second as well: both title rows stay at the top, in order.
+click 1061 101
+wait 30
+shot two-folded
+check_layout
+# Unfold the first: it grows downward, the folded one stays right under it.
+click 1061 72
 wait 30
 shot first-unfolded
 check_layout
