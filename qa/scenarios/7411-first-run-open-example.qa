@@ -1,0 +1,22 @@
+@title First run: Open example on the start screen opens Templates and examples, the motor starter is a tile
+@area Start
+# The first-run start screen offers Try fast keys and Open example. Open example now
+# opens the window with every template and example; the motor starter is its first example.
+shot first-run-start
+expect "Seven short steps"
+expect "Open example"
+click_text "Open example"
+wait 20
+shot first-run-templates-and-examples
+expect "Choose a template or example"
+expect "Open motor starter example"
+check_layout
+click_text "Open motor starter example"
+wait 6
+shot first-run-starter-picked
+expect "A small motor starter, to try the program on."
+click_text "Open" Button
+wait 30
+shot first-run-starter-open
+expect "Motor starter"
+check_layout
