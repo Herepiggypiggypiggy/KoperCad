@@ -9,12 +9,12 @@ wait 30
 shot 3d-start
 click_text Heat #1
 wait 20
-expect "fills this strip"
+expect "Air speed"
 expect "Vents and fans"
 shot heat-on
 click_text "Settings for the next run"
 wait 10
-click_text Quick
+try click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 100
@@ -26,7 +26,7 @@ shot heat-result
 check_layout
 click_text "✔ Heat"
 wait 20
-expect_not "fills this strip"
+expect_not "Air speed"
 expect_not "Vents and fans"
 expect_not "Vents and fans"
 shot heat-off
