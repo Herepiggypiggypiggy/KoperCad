@@ -1,0 +1,35 @@
+@title Docked windows stack from the top: three windows open in the right strip, fold and unfold in place, order stays (schematic, 1366x768)
+@area Windows
+@sizes 1366x768
+open_starter_example
+wait 30
+key ctrl+k
+wait 4
+text preferences
+wait 6
+key Enter
+wait 40
+key ctrl+k
+wait 4
+text standards check
+wait 6
+key Enter
+wait 40
+key ctrl+k
+wait 4
+text cooling what-if
+wait 6
+key Enter
+wait 40
+shot three-open
+check_layout
+# Fold the first window: it keeps its title row at the top, the others move up under it.
+click 1063 54
+wait 30
+shot first-folded
+check_layout
+# Unfold it again: it grows downward and nothing jumps to the bottom of the strip.
+click 1063 54
+wait 30
+shot first-unfolded
+check_layout
