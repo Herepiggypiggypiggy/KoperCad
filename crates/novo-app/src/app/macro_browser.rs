@@ -431,10 +431,10 @@ impl NovoApp {
                     novo_theme::widgets::section_label(ui, "Selected");
                     ui.strong(&e.name);
                     if !e.description.is_empty() {
-                        ui.label(&e.description);
+                        super::window_help::add(ui.ctx(), e.description.clone());
                     }
                     ui.weak(format!(
-                        "{} symbols and wires, {} parts carried, {} parameters, revision {}{}{}",
+                        "{} symbols and wires \u{b7} {} parts \u{b7} {} parameters \u{b7} rev {}{}{}",
                         e.members,
                         e.parts,
                         e.parameters,
@@ -556,7 +556,8 @@ impl NovoApp {
                 if !updates.is_empty() {
                     ui.separator();
                     novo_theme::widgets::section_label(ui, "Newer in the library");
-                    ui.weak(
+                    super::window_help::add(
+                        ui.ctx(),
                         "This project holds older copies. Setting one aside renames it, so placing the macro again brings the new revision; circuits already placed keep the old one.",
                     );
                     for u in &updates {

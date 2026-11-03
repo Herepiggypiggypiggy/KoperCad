@@ -9,7 +9,7 @@ text "place macro"
 wait 5
 key Enter
 wait 10
-expect "Pick a macro to see what it will do."
+expect "No macro picked"
 click 1759 103
 text rectifier
 wait 5

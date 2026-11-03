@@ -400,11 +400,7 @@ fn a_circuit_lands_where_the_pointer_last_was_and_says_what_is_left_to_connect()
         (190.0..=225.0).contains(&left),
         "the circuit starts at the pointer, not the view corner: {left}"
     );
-    let said = d
-        .app
-        .messages
-        .iter()
-        .any(|m| m.text.contains("to connect to a supply"));
+    let said = d.app.messages.iter().any(|m| m.text.contains("to connect"));
     assert!(
         said,
         "{:?}",

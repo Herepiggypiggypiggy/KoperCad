@@ -605,8 +605,13 @@ fn the_waiting_strip_says_whether_an_account_is_needed_and_that_no_password_is_t
     b.win.pump_import(10.0);
     let text = b.painted();
     assert!(text.contains("An account is needed at WAGO"), "{text}");
+    // The password promise is in the note, behind the "?" of the window.
     assert!(
-        text.contains("never asks for or keeps your password"),
+        b.win
+            .import
+            .as_ref()
+            .and_then(|i| i.account.as_deref())
+            .is_some_and(|n| n.contains("never asks for or keeps your password")),
         "{text}"
     );
     let s = schneider(&mut b, "LC1D09BD");

@@ -16,3 +16,9 @@ Not done (see INVENTORY.md for every long label found)
 
 Resume: `scripts/qa.sh --only help-icons --out <dir>` (needs `KOPERCAD_BIN_DIR` after `cargo build -p novo-app -p novo-cli`). To re-measure a whole area: set `KOPERCAD_QA_TEXT_AUDIT`.
 Traps: a lesson or scenario that quotes removed text (grep `assets/lessons` and `qa/scenarios` for the old wording; heat-and-sizing quotes the 2D legend, which still shows it).
+
+Parts and Macros (second PR, 2026-11-03)
+- Done: Parts window and its sub-forms (parts.rs, parts_bundle, parts_cad, parts_quality, parts_table, parts_bulk, eplan_parts), Place macro (macro_actions), Macros window (macro_browser), macro editor, mounting view. Macro descriptions and parameter descriptions are behind the "?" of the Place macro window; the list rows show the name only (description on hover).
+- `panel::modal` floating windows are now wrapped in `window_help::scope` (name = dock name), so any dockable form shows a "?" in its title bar. Questions in `MODAL_QUESTIONS` keep their text (no header "?").
+- Left: hover texts (hidden), error toasts, result sentences over 20 words (import summaries, Takes -F1... tag lists), maker_guide lines (data), pin_offer question.
+- Scenarios changed: 702, 706, 1583, 17100, 17100b, 21 (strings). New: 7432.

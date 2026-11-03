@@ -1,2 +1,3 @@
 2026-11-03 14:30 UTC Task received: explanation text behind one "?" per window, about 95 % less text.
 2026-11-03 15:20 UTC window_help mechanism, Heat/Vents/Hoist/Drive run changes, check_text step, text audit switch; inventory from 112 scenarios.
+2026-11-03 18:10 UTC Parts and Macros sweep (branch claude/project-thread-ss17xr): Parts window (maker guide, ETIM install, empty list, import wait/drop texts, source, 3D model status, detail), library export/import, CAD files, quality review, table import, EPLAN/maker XML import, auto-assign, Place macro, Macros window, macro editor, mounting view. Floating forms (panel::modal) now run inside window_help::scope, so they get a "?" in the title bar; modal questions (MODAL_QUESTIONS) keep their text. Scenario 7432.

@@ -475,13 +475,18 @@ impl NovoApp {
             "Assign parts to all devices",
             [780.0, 560.0],
             |ui| {
-                ui.weak(
+                super::window_help::add(
+                    ui.ctx(),
                     "Tick the devices that get a part and pick the part. Only parts that are \
                  sure are ticked; a part of another kind is never offered.",
                 );
                 ui.add_space(4.0);
                 if preview.rows.is_empty() {
-                    ui.label("No part in the catalog fits any of the devices without a part.");
+                    ui.label("No part fits");
+                    super::window_help::add(
+                        ui.ctx(),
+                        "No part in the catalog fits any of the devices without a part.",
+                    );
                 }
                 ui.horizontal(|ui| {
                     if !preview.rows.is_empty() && ui.small_button("Tick sure parts").clicked() {

@@ -1331,7 +1331,9 @@ fn modal_impl<R: Default>(
             window = window.drag_area(egui::containers::WindowDrag::Anywhere);
         }
     }
-    let shown = window.show(ctx, add);
+    let shown = window.show(ctx, |ui| {
+        super::window_help::scope(ctx, &dock_name, || add(ui))
+    });
     if dockable && shown.is_some() {
         dock_controls(ctx, id, &dock_name, egui::Order::Foreground);
     }

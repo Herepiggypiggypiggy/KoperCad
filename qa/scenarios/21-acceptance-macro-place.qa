@@ -11,7 +11,7 @@ text "place macro"
 wait 5
 key Enter
 wait 10
-expect "Pick a macro to see what it will do."
+expect "No macro picked"
 # The list is longer than the window: search, then click the row's own text.
 # The Place macro window docks at the right edge: its search field is at x 1205 at 1366 wide and x 1759 at 1920 wide (a click outside the window would take the keyboard away, so each size has its own file).
 click 1205 103
@@ -20,7 +20,7 @@ text motor starter dol
 wait 5
 click_text "Motor starter DOL" Label
 wait 10
-expect_not "Pick a macro to see what it will do."
+expect_not "No macro picked"
 expect "Keep the macro's wire numbers"
 shot macro-picked
 click_text Place Button
