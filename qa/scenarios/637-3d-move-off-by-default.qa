@@ -1,17 +1,24 @@
 @title 3D view: Move is off by default, so a plain drag cannot move a duct through the wall
 @area 3D
-# Hardware test KC-15: the 3D toolbar opened with Move on and a drag meant to look around moved parts.
-key ctrl+k
-wait 6
-text open emc example
-wait 8
-key Enter
-wait 30
+@sizes 1366x768
+# Hardware test KC-15: the 3D toolbar opened with Move on and a drag meant to look around moved parts. Front view, select K1 (550,393 at 1366x768): with Move off a drag leaves it at 55, 210 mm; after the Move icon (24,118) the same drag moves it.
+open_starter_example
+wait 20
 click_text 3D #1
 wait 30
+click 1295 124
+wait 40
+click 550 393
+wait 20
+expect "55, 210 mm"
 shot move-off
-expect_not "✔ Move"
-click_text Move #1
+drag 540 410 640 410
+wait 30
+expect "55, 210 mm"
+shot move-off-dragged
+click 24 118
 wait 10
-shot move-on
-expect "✔ Move"
+drag 540 410 640 410
+wait 30
+expect_not "55, 210 mm"
+shot move-on-dragged
