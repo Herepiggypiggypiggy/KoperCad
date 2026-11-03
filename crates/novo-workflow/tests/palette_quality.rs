@@ -661,3 +661,18 @@ fn the_icon_gallery_is_found_by_name_and_by_its_dutch_word() {
         Target::Command("view.icon_gallery")
     );
 }
+
+#[test]
+fn auto_reconfigure_and_the_autogroup_commands_each_rank_first_for_their_own_words() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for (query, command) in [
+        ("auto-reconfigure", "cabinet.arrange_all"),
+        ("auto reconfigure", "cabinet.arrange_all"),
+        ("autogroup wiring", "cabinet.arrange_group_wiring"),
+        ("group by heat", "cabinet.arrange_group_heat"),
+        ("regroup", "cabinet.arrange_group_both"),
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(rows[0].target, Target::Command(command), "{query}");
+    }
+}

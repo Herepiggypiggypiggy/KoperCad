@@ -2928,8 +2928,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         &[
             "autogroup wiring and heat",
             "regroup",
-            "auto reconfigure",
-            "auto-reconfigure",
+            "group by wiring and heat",
         ],
         Needs::Project,
     ),
