@@ -11,7 +11,7 @@ text import io list
 wait 6
 key Enter
 wait 20
-expect "Import I/O list"
+expect "Add cards and pages"
 key Enter
 wait 30
 try click_text Pages

@@ -12,7 +12,7 @@ wait 5
 key Escape
 wait 5
 shot placed
-click_text Corners
+key w
 wait 3
 click 1000 521
 wait 5

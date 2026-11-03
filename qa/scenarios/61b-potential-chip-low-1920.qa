@@ -4,9 +4,9 @@
 # The chips of the feed menu ignored clicks when the menu was shifted up to stay on screen.
 open_starter_example
 wait 20
-click 560 131
+click 563 152
 wait 4
-drag 560 131 900 980
+drag 563 152 900 980
 wait 6
 shot feed-low
 click 900 980 right
