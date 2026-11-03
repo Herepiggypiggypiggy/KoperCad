@@ -219,7 +219,7 @@ fn body(
             }
             if let Some(line) = operating_point(&spec, flow) {
                 let (shown, why) = line.split_once(" against").unwrap_or((&line, ""));
-                ui.label(muted(shown));
+                ui.label(muted(&format!("{shown} (model)")));
                 if !why.is_empty() {
                     super::window_help::add(
                         ui.ctx(),

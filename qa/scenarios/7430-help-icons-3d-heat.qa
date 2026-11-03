@@ -26,5 +26,18 @@ wait_s 200
 shot heat-clean
 check_text 40
 check_layout
+expect "Model estimate"
 expect_not "What is this?"
 expect_not "Model estimate, not a measurement."
+click_text Help #1
+wait 8
+shot help-heat-strip
+key Escape
+click_text Help #2
+wait 8
+shot help-vents
+key Escape
+click_text Help #3
+wait 8
+shot help-heat-panel
+key Escape

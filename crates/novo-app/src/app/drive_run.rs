@@ -1128,7 +1128,7 @@ impl NovoApp {
                         });
                 }
                 ui.separator();
-                ui.label(egui::RichText::new("Model, not measurement").strong());
+                ui.label(egui::RichText::new("Model, not measurement. Not a safety function.").strong());
                 let mut model = String::from("Model, not measurement:");
                 model.push('\n');
                 model.push_str(
