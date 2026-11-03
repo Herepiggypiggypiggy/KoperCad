@@ -1,0 +1,18 @@
+@title Start screen with recent project cards
+@area Start
+# Visual redesign section 10: tiles, recent project cards with a first-page picture, capability cards.
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 30
+shot cards
+check_blank cards
+check_layout
+expect "Recent projects"
+expect "What else is in here"
+expect "Open example"
+expect "Commissioning"

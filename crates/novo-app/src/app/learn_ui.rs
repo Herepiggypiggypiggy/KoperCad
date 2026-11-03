@@ -758,17 +758,6 @@ impl NovoApp {
 
     // ------------------------------------------------------------------
     // The Learn window
-
-    /// The start panel's Learn entry: a button, and a line for a lesson
-    /// that is still open.
-    pub(super) fn learn_start_entry(&mut self, ui: &mut egui::Ui) {
-        let label = self.learn.say("learn_menu");
-        let response = ui.button(label);
-        self.anchor_response("start.learn", &response, "Learn");
-        if response.clicked() {
-            self.learn.window = true;
-        }
-    }
 }
 
 /// Whether a click the check waits for is on a control that is greyed out now:

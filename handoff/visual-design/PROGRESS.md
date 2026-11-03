@@ -8,3 +8,4 @@
 2026-10-28 14:07 UTC #1583 merged (3ad60cd0). Follow-up nits to docs/design/visual-redesign-3d.md: Not set before Out of date, chip reports the analysis not the overlay, floating section fold chevron disabled (V1), section 7 step 3 points to section 5.
 2026-10-28 11:40 UTC Audit, 12 boards, 40 icons, design doc and handoff written; PR opened from claude/project-thread-1ytuxa.
 2026-10-28 13:00 UTC Lane V0 built (handoff/visual-v0): icon engine, presentation table, homes invariant, icon gallery.
+2026-11-03 Audit of the boards against main written (AUDIT-boards-vs-main.md). Lane V6 start screen built: app/start_screen.rs (tiles, recent project cards with first-page picture, capability cards that open lessons). Next: app menu File pane (tiles, recent, move-data tiles); decision on menu words default.
