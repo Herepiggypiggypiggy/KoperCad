@@ -1,0 +1,17 @@
+@title 3D: a DIN rail lies on its crown with the open side out and slots in the crown
+@area Cabinet
+@sizes 1366x768
+# The rail is screwed down through its slotted middle; its brims stand 7.5 mm out, where devices clip on.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+click 746 29
+wait 40
+click 1308 92
+wait 30
+shot top-view
+scroll 780 290 150
+wait 30
+shot top-view-closer
+check_layout
