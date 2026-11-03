@@ -219,6 +219,7 @@ const KNOWN_VERBS: &[&str] = &[
     "wait",
     "wait_s",
     "frame_stats",
+    "expect_popups_stable",
     "resize",
     "click_text",
     "click",
@@ -957,6 +958,35 @@ impl Ctx<'_> {
                     f("period_ms", "p95"),
                     f("period_ms", "max"),
                 ));
+                Ok(())
+            }
+            "expect_popups_stable" => {
+                // `expect_popups_stable [frames]`: with a menu or popup open, run
+                // frames and fail if it closed, reopened or jumped (the flashing
+                // and twitching of a menu that is rebuilt every frame).
+                let frames = a(1).map_or(Ok(60.0), |_| num(1, "frames"))?;
+                let r = self
+                    .srv
+                    .send(json!({"cmd": "watch_popups", "frames": frames}))?;
+                let w = &r["watch_popups"];
+                let n = |k: &str| w[k].as_u64().unwrap_or(0);
+                let line = format!(
+                    "popups over {} frames: {} open at the start, {} at the end, closed in {}, opened in {}, moved in {}, restacked in {}",
+                    w["frames"],
+                    n("open_first"),
+                    n("open_last"),
+                    n("closed"),
+                    n("opened"),
+                    n("moved"),
+                    n("reordered")
+                );
+                self.notes.push(line.clone());
+                if n("open_first") == 0 {
+                    return Err(format!("no popup or menu was open to watch ({line})"));
+                }
+                if n("closed") + n("opened") + n("moved") + n("reordered") > 0 {
+                    return Err(format!("a menu is not steady: {line}"));
+                }
                 Ok(())
             }
             "resize" => {

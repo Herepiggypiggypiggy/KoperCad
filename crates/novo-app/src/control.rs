@@ -33,6 +33,13 @@
 //!   the UI thread) and `period_ms` (start of one frame to the start of the
 //!   next, so with the GPU submit and present). Mean, median, 95th percentile
 //!   and worst, after 5 warm-up frames.
+//! - `watch_popups` `{frames?}`: runs `frames` (default 60) frames with the input
+//!   left alone and reports how the popup layers (menus, combo lists, anything
+//!   in the foreground order) behaved: `open_first`, `open_last`, `closed`
+//!   (frames where a layer vanished), `opened` (layers that appeared after the
+//!   first frame) and `moved` (frames where a layer kept its id but changed
+//!   position or size) and `reordered` (frames where layers swapped places in the stack). A steady menu reports zeros: the QA step
+//!   `expect_popups_stable` fails on anything else.
 //! - `open_file` `{path, recover?}`: opens the project at `path` the way a person
 //!   does: answers the next file dialog with `path` and starts File > Open
 //!   (Ctrl+O). With `recover: true` it runs the command "Recover a damaged
@@ -258,6 +265,7 @@ enum Step {
     Scene(bool),
     Resize(f32, f32),
     Measure(Box<Measure>),
+    Watch(Box<Watch>),
     Quit,
     Done(Value),
 }
@@ -281,6 +289,31 @@ struct Measure {
     last_start: Option<std::time::Instant>,
     periods: Vec<f64>,
     passes: Vec<f64>,
+}
+
+/// A `watch_popups` run in progress: the foreground layers seen last frame.
+struct Watch {
+    frames: u32,
+    tick: u32,
+    last: Option<Vec<(egui::LayerId, egui::Rect)>>,
+    open_first: usize,
+    open_last: usize,
+    closed: u32,
+    opened: u32,
+    moved: u32,
+    reordered: u32,
+}
+
+/// The foreground layers (popups, menus) and where they are now.
+fn popup_layers(ctx: &Context) -> Vec<(egui::LayerId, egui::Rect)> {
+    ctx.memory(|m| {
+        let v: Vec<_> = m
+            .layer_ids()
+            .filter(|l| l.order == egui::Order::Foreground)
+            .filter_map(|l| m.area_rect(l.id).map(|r| (l, r)))
+            .collect();
+        v
+    })
 }
 
 /// Mean, median, 95th percentile and worst of `v`, in the unit it holds.
@@ -485,6 +518,67 @@ impl egui::Plugin for Control {
                     }
                     m.tick += 1;
                     active.steps.push_front(Step::Measure(m));
+                    ctx.request_repaint();
+                    return;
+                }
+                Step::Watch(mut w) => {
+                    let now = popup_layers(ctx);
+                    if w.tick == 0 {
+                        w.open_first = if egui::Popup::is_any_open(ctx) {
+                            now.len().max(1)
+                        } else {
+                            0
+                        };
+                    }
+                    if let Some(last) = &w.last {
+                        if last.iter().any(|(l, _)| !now.iter().any(|(n, _)| n == l)) {
+                            w.closed += 1;
+                        }
+                        if now.iter().any(|(n, _)| !last.iter().any(|(l, _)| l == n)) {
+                            w.opened += 1;
+                        }
+                        let shifted = now.iter().any(|(n, r)| {
+                            last.iter().any(|(l, lr)| {
+                                l == n
+                                    && ((lr.min - r.min).abs().max_elem() > 0.5
+                                        || (lr.size() - r.size()).abs().max_elem() > 0.5)
+                            })
+                        });
+                        if shifted {
+                            w.moved += 1;
+                        }
+                        // The layers both frames have, bottom to top: a window that
+                        // jumps over an open menu changes this order.
+                        let a: Vec<_> = last
+                            .iter()
+                            .map(|(l, _)| l)
+                            .filter(|l| now.iter().any(|(n, _)| n == *l))
+                            .collect();
+                        let b: Vec<_> = now
+                            .iter()
+                            .map(|(l, _)| l)
+                            .filter(|l| last.iter().any(|(n, _)| n == *l))
+                            .collect();
+                        if a != b {
+                            w.reordered += 1;
+                        }
+                    }
+                    w.open_last = now.len();
+                    w.last = Some(now);
+                    if w.tick >= w.frames {
+                        active.result["watch_popups"] = json!({
+                            "frames": w.frames,
+                            "open_first": w.open_first,
+                            "open_last": w.open_last,
+                            "closed": w.closed,
+                            "opened": w.opened,
+                            "moved": w.moved,
+                            "reordered": w.reordered,
+                        });
+                        continue;
+                    }
+                    w.tick += 1;
+                    active.steps.push_front(Step::Watch(w));
                     ctx.request_repaint();
                     return;
                 }
@@ -757,6 +851,23 @@ impl Control {
                     last_start: None,
                     periods: Vec::new(),
                     passes: Vec::new(),
+                })));
+            }
+            "watch_popups" => {
+                let frames = req
+                    .get("frames")
+                    .and_then(Value::as_f64)
+                    .map_or(60, |n| n.clamp(5.0, 1000.0) as u32);
+                steps.push_back(Step::Watch(Box::new(Watch {
+                    frames,
+                    tick: 0,
+                    last: None,
+                    open_first: 0,
+                    open_last: 0,
+                    closed: 0,
+                    opened: 0,
+                    moved: 0,
+                    reordered: 0,
                 })));
             }
             "scroll" => {
