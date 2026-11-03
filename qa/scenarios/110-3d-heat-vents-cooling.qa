@@ -8,6 +8,17 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+# Opening Heat on a small cabinet starts an automatic run, which greys out the Quality row: stop it first.
+click_text Cancel
+wait 10
+# With Auto on a stopped run starts again at once and greys out the Quality row: switch Auto off and stop the run again.
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
 click_text "Settings for the next run"
 wait 10
 click_text Quick

@@ -25,7 +25,7 @@ move 125 434
 wait 10
 shot row-hovered
 check_layout
-click_text "✔ Heat"
+click 24 427
 wait 20
 shot panel-closed
 expect_not "Vents and fans"

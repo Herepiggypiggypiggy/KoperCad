@@ -1,5 +1,6 @@
 @title Work cards: printed, then a cooler layout is applied, the strip says the cards are out of date
 @area 3D
+@sizes 1366x768
 # Print the cards, apply a cooling move, and the Build order strip names how many cards changed. The next print marks them CHANGED.
 open qa/fixtures/cabinet-cooler-layout.novo
 wait 30
@@ -19,6 +20,17 @@ expect_file "~/Documents/KoperCAD/qa 230 work cards.pdf" 3000
 shot printed
 click_text Heat #1
 wait 20
+# Heat starts a Thorough run by itself on this small cabinet and greys the Quality row: stop it, run Quick, then open the cooling buttons.
+click_text Cancel
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 120
+click_text "Cooling selection"
+wait 10
+scroll 1190 560 -500
+wait 10
 click_text "Cooler layout"
 wait_s 120
 expect "Apply the moves"

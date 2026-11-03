@@ -6,8 +6,11 @@ open qa/fixtures/cabinet-wire-heat.novo
 wait 20
 click_text 3D #1
 wait 30
-click_text Heat #1
+click 24 427
 wait 20
+# Opening Heat on a small cabinet starts an automatic run, which greys out the Quality row: stop it first.
+try click_text Cancel
+wait 10
 click_text "Settings for the next run"
 wait 10
 click_text Quick
