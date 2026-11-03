@@ -130,7 +130,10 @@ pub(super) fn show(ui: &mut egui::Ui, card: &SurfaceCard) -> Option<Ask> {
             ask = Some(Ask::SetSurfaceSize(card.structure, card.name.clone(), None));
         }
     } else if !card.profile {
-        ui.weak("Planning values from the cabinet. Change a number to store a size.");
+        super::window_help::add(
+            ui.ctx(),
+            "Planning values from the cabinet. Change a number to store a size.",
+        );
     }
     ask
 }

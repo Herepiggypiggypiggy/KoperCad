@@ -16,3 +16,6 @@ Not done (see INVENTORY.md for every long label found)
 
 Resume: `scripts/qa.sh --only help-icons --out <dir>` (needs `KOPERCAD_BIN_DIR` after `cargo build -p novo-app -p novo-cli`). To re-measure a whole area: set `KOPERCAD_QA_TEXT_AUDIT`.
 Traps: a lesson or scenario that quotes removed text (grep `assets/lessons` and `qa/scenarios` for the old wording; heat-and-sizing quotes the 2D legend, which still shows it).
+
+## Cabinet area (done 2026-11-03)
+Files: cabinet.rs, cabinet_routes.rs, cabinet_door.rs, cabinet_panel.rs, cabinet_rails.rs, cabinet_rules.rs, cabinet_rules_panel.rs, cabinet_surface_size.rs. Inside a Panel or dialog the text goes through `window_help::add`; in raw egui side panels (Routes, Unplaced) and banners it is `window_help::mark`. Left: EMC check window texts in emc_view.rs, per-surface Info notes (`surface_notes` in cabinet.rs).

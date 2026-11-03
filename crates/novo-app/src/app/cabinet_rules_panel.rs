@@ -203,7 +203,7 @@ fn card(ui: &mut egui::Ui, index: usize, count: usize, rule: &mut KindRule) -> E
                 edit = Edit::Move(index, -1);
             }
         });
-        dialog_ui::hint(ui, &rule_sentence(rule));
+        super::window_help::add(ui.ctx(), rule_sentence(rule));
         ui.add_space(4.0);
 
         // The letter codes, as a short text field.
@@ -369,8 +369,8 @@ pub(super) fn show(
 ) -> (bool, Option<Option<String>>) {
     let mut changed = false;
     let mut surface_edit = None;
-    dialog_ui::hint(
-        ui,
+    super::window_help::add(
+        ui.ctx(),
         "Place all builds the plate from the top down, one row of devices per rail. \
          Each card says where one kind of device goes. Changes apply to the next \
          Place all at once; Save keeps them as your own defaults.",
@@ -580,8 +580,8 @@ pub(super) fn show_surfaces(ui: &mut egui::Ui, rules: &SurfaceRules) -> Option<O
     let mut changed = false;
     let mut reset = false;
     dialog_ui::section(ui, "Door and other surfaces", false);
-    dialog_ui::hint(
-        ui,
+    super::window_help::add(
+        ui.ctx(),
         if rules.standard {
             "This cabinet uses KoperCAD's default: pilot devices (push buttons, lamps, meters) go on the door, everything else on the plate. Change a card to make your own rules for this cabinet."
         } else {
@@ -592,7 +592,7 @@ pub(super) fn show_surfaces(ui: &mut egui::Ui, rules: &SurfaceRules) -> Option<O
     for (i, rule) in edited.rules.iter_mut().enumerate() {
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            dialog_ui::hint(ui, &surface_sentence(rule));
+            super::window_help::add(ui.ctx(), surface_sentence(rule));
             ui.horizontal(|ui| {
                 ui.label("Goes to");
                 let id = ui.id().with(("surface", i));

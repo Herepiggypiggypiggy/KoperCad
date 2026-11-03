@@ -86,12 +86,19 @@ pub(super) fn show(
         },
         set > 0,
         |ui| {
+            let ctx = ui.ctx().clone();
             if current.iter().all(String::is_empty) && data.mounting.is_none() {
-                ui.weak("No data from the part. Type it here, or pick a part with a data sheet.");
+                super::window_help::add(
+                    &ctx,
+                    "No data from the part. Type it here, or pick a part with a data sheet.",
+                );
             } else {
-                ui.weak("A value here overrides the part's.");
+                super::window_help::add(&ctx, "A value here overrides the part's.");
             }
-            ui.weak("Space is measured as the part is drawn, before rotating.");
+            super::window_help::add(
+                &ctx,
+                "Space is measured as the part is drawn, before rotating.",
+            );
             ui.add_space(6.0);
             for (i, (key, label, unit)) in NUMBERS.iter().enumerate() {
                 ui.horizontal(|ui| {
