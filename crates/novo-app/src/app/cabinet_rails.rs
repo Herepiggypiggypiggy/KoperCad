@@ -425,11 +425,11 @@ pub(super) fn show_window(
         .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             let Some(structure) = structure else {
-                ui.weak("This panel has no cabinet yet.");
+                super::window_help::add(ui.ctx(), "This panel has no cabinet yet.");
                 return;
             };
             if novo_layout::model::load(project, structure).is_none() {
-                ui.weak("Set the mounting plate first.");
+                super::window_help::add(ui.ctx(), "Set the mounting plate first.");
                 return;
             }
             ui.horizontal(|ui| {
@@ -471,7 +471,8 @@ pub(super) fn show_window(
                     ask = Some(RailAsk::CentreRails);
                 }
             });
-            ui.weak(
+            super::window_help::add(
+                ui.ctx(),
                 "Edit a value to move or resize, or drag the selected one on the plate: \
                  its body to move, either end handle to cut it shorter or longer. \
                  Delete removes it. Ctrl+Z undoes each step.",
@@ -487,7 +488,10 @@ pub(super) fn show_window(
             rails.sort_by_key(|r| (r.kind != RailKind::DinRail, r.id.raw()));
             if rails.is_empty() {
                 ui.add_space(6.0);
-                ui.weak("No rails or ducts yet. Place all adds them, or add one above.");
+                super::window_help::add(
+                    ui.ctx(),
+                    "No rails or ducts yet. Place all adds them, or add one above.",
+                );
                 return;
             }
             egui::Grid::new("cabinet_rails_grid")

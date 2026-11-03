@@ -1453,26 +1453,30 @@ impl NovoApp {
                 .and_then(|e| e.heat.as_ref())
                 .map(|h| h.message())
                 .filter(|_| arranging.is_none());
+            // The banner keeps the count; what the preview means sits behind
+            // its "?".
+            let mut help = String::new();
             let mut text = arranging.unwrap_or_else(|| {
-                format!(
-                    "Preview{}: {n} {} would be placed. Nothing is stored until you accept.",
-                    if heat.is_some() {
-                        " (heat-aware: hot devices are kept apart using their power loss)"
-                    } else {
-                        ""
-                    },
-                    if n == 1 { "device" } else { "devices" }
-                )
+                help.push_str("Nothing is stored until you accept.");
+                if heat.is_some() {
+                    help.push_str(
+                        " Heat-aware: hot devices are kept apart using their power loss.",
+                    );
+                }
+                format!("Preview: {n} {}", if n == 1 { "device" } else { "devices" })
             });
             if let Some(heat) = heat {
-                text.push(' ');
-                text.push_str(&heat);
+                help.push(' ');
+                help.push_str(&heat);
             }
             if left > 0 {
-                text.push_str(&format!(" {left} do not fit."));
+                text.push_str(&format!(" · {left} do not fit"));
             }
             let mut accept = None;
             novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, &text, |ui| {
+                if !help.trim().is_empty() {
+                    super::window_help::mark(ui, help.trim());
+                }
                 let r = cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true);
                 if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &r).clicked() {
                     accept = Some(Ask::Accept);
@@ -1495,7 +1499,7 @@ impl NovoApp {
             ask = accept.or(ask);
         } else if let Some(plate) = plate_offer {
             let text = format!(
-                "These devices need a larger plate than {} x {} mm.",
+                "Plate too small: {} x {} mm",
                 current_plate.map_or(0.0, |c| c.width),
                 current_plate.map_or(0.0, |c| c.height)
             );
@@ -1609,11 +1613,9 @@ impl NovoApp {
                     ui.add_space(2.0);
                     if let Some(note) = note {
                         ui.add(egui::Label::new(note).wrap());
-                        ui.add(
-                            egui::Label::new(egui::RichText::new(
-                                "Drag, turn or take off its devices here. Put a device on this surface with Inspector > On surface.",
-                            ))
-                            .wrap(),
+                        super::window_help::mark(
+                            ui,
+                            "Drag, turn or take off its devices here. Put a device on this surface with Inspector > On surface.",
                         );
                     }
                     for problem in &sum.problems {
@@ -1676,21 +1678,20 @@ impl NovoApp {
                     .resizable(true)
                     .show(ui, |ui| {
                         ui.add_space(6.0);
-                        ui.strong("Unplaced");
-                        ui.weak("Drag onto the plate");
-                        if unplaced_list
+                        let guessed = unplaced_list
                             .iter()
-                            .any(|(_, _, size)| size.starts_with('~'))
-                        {
-                            ui.add_space(2.0);
-                            ui.label(
-                                egui::RichText::new(
-                                    "~ Size guessed from the device type until a part is assigned.",
-                                )
-                                .size(12.0)
-                                .color(novo_theme::Palette::of(ui).text_tertiary),
+                            .any(|(_, _, size)| size.starts_with('~'));
+                        ui.horizontal(|ui| {
+                            ui.strong("Unplaced");
+                            super::window_help::mark(
+                                ui,
+                                if guessed {
+                                    "Drag a device onto the plate.\n\n~ Size guessed from the device type until a part is assigned."
+                                } else {
+                                    "Drag a device onto the plate."
+                                },
                             );
-                        }
+                        });
                         ui.add_space(4.0);
                         for (id, tag, size) in &unplaced_list {
                             ui.dnd_drag_source(egui::Id::new(("cabinet_device", *id)), *id, |ui| {
@@ -2714,15 +2715,32 @@ impl NovoApp {
                 // right under the sentence, not at the far end of the bar.
                 ui.add_space(48.0);
                 ui.vertical_centered(|ui| {
-                    ui.label(match (&location, structure) {
-                        (None, _) => "No panel yet. Create a cabinet, or give a page a panel name (+K1), to lay it out.",
-                        (Some(_), None) => {
-                            "This panel has no cabinet yet. Create one to set its plate and place devices."
-                        }
-                        _ => "Set the size of the mounting plate to start placing devices.",
+                    ui.horizontal(|ui| {
+                        let (short, long) = match (&location, structure) {
+                            (None, _) => (
+                                "No panel yet",
+                                "Create a cabinet, or give a page a panel name (+K1), to lay it out.",
+                            ),
+                            (Some(_), None) => (
+                                "No cabinet yet",
+                                "Create a cabinet to set its plate and place devices.",
+                            ),
+                            _ => (
+                                "No mounting plate yet",
+                                "Set the size of the mounting plate to start placing devices.",
+                            ),
+                        };
+                        ui.label(short);
+                        super::window_help::mark(ui, long);
                     });
                     if search_asked {
-                        ui.label("Cooler layout needs a plate: set its size, then search again.");
+                        ui.horizontal(|ui| {
+                            ui.label("Cooler layout needs a plate");
+                            super::window_help::mark(
+                                ui,
+                                "Set the plate size, then search again.",
+                            );
+                        });
                     }
                     ui.add_space(8.0);
                     match (&location, structure) {
@@ -2755,7 +2773,6 @@ impl NovoApp {
                                 ask = Some(Ask::SetPlate(s));
                             }
                             ui.add_space(4.0);
-                            ui.weak("You can change the size later under Plate setup.");
                             if locations.len() > 1 {
                                 ui.add_space(10.0);
                                 if ui
