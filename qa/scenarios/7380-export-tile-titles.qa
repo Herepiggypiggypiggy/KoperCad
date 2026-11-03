@@ -2,7 +2,7 @@
 @area Layout
 # Parked item: three Export tile titles were cut off at 1920x1080. Scroll the
 # tiles list and look at every group.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

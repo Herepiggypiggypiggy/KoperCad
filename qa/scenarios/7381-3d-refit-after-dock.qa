@@ -2,7 +2,7 @@
 @area Layout
 # Docking or moving a panel refits the 3D camera (app.rs: take_changed sets the
 # 3D fit pending). This opens the Navigator over the 3D view and checks the layout.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D
 wait 20

@@ -1,7 +1,7 @@
 @title The Reports list docks as a pane of the left strip with the button in its header and floats back to its column (1920x1080)
 @area Windows
 @sizes 1920x1080
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Reports #2
 wait 30

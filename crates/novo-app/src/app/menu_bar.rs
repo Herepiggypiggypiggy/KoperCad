@@ -488,7 +488,7 @@ mod width_tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         for workspace in [
             Workspace::Schematic,
             Workspace::Cabinet,
@@ -516,7 +516,7 @@ mod width_tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         for workspace in [
             Workspace::Schematic,
             Workspace::Cabinet,
@@ -542,7 +542,7 @@ mod width_tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         // The window floor, and 1366 x 768 at 200 %.
         for (w, h) in [(680.0, 320.0), (683.0, 384.0)] {
             for workspace in [

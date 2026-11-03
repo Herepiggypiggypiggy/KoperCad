@@ -1,7 +1,7 @@
 @title Bench packet: window button, command and file
 @area Reports
 # Reports > Bench output has a "Bench packet (PDF)" button; Ctrl+K "bench packet" and Reports > Export write the same file.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Reports
 wait 5

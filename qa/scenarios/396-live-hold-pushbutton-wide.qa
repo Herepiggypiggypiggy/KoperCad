@@ -8,7 +8,7 @@
 # (after one frame), and egui stops counting a plain click sense as pressed
 # after 0.8 s. The second picture is taken 40 frames later (about 2 s) to show
 # the hold survives both.
-click_text "Open example"
+open_starter_example
 wait 20
 key shift+l
 wait 20

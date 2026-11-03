@@ -2,7 +2,7 @@
 @area Windows
 @sizes 1920x1080
 # At 1920 the navigator is pinned: its right edge (x 247) is dragged to the 520 pt cap and back to the 200 pt minimum.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 5

@@ -1,7 +1,7 @@
 @title 3D view: first-time walk (open, navigate, layers, dimensions, clearance, section, door, saved views)
 @area 3D
 # A first-time user opens the example and works through the 3D tab.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 40

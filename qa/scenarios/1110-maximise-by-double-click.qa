@@ -1,7 +1,7 @@
 @title Double click on a title bar maximises a window and a second one restores it (Pages flyout, Preferences)
 @area Windows
 @sizes 1366x768
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Pages
 wait 20

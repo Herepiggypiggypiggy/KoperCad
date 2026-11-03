@@ -10,7 +10,7 @@ fn the_example_opens_with_the_whole_sheet_in_view_at_1366() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     for _ in 0..4 {
         d.frame_sized(egui::vec2(1366.0, 768.0), Vec::new());
     }
@@ -50,7 +50,7 @@ fn escape_closes_the_standards_check_and_the_calculations_windows() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.app.run_command(&ctx, "check.standards", None);
     d.app.run_command(&ctx, "check.calculations", None);
@@ -72,7 +72,7 @@ fn escape_closes_three_stacked_windows_one_after_another() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     d.app.run_command(&ctx, "check.standards", None);
     d.frame();

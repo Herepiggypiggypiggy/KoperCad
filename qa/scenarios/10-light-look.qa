@@ -1,6 +1,6 @@
 @title Light look: every workspace and the main dialogs
 @area Layout
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

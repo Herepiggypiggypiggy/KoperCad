@@ -1,7 +1,7 @@
 @title Double click on a title bar maximises a window and a second one restores it (Preferences, 1920x1080)
 @area Windows
 @sizes 1920x1080
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 5

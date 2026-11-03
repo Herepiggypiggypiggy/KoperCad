@@ -2,7 +2,7 @@
 @area Reports
 @sizes 1920x1080
 # Accept one protective device's group under IEC 60204-1, then state house rules; those wires break them.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Reports
 wait 5

@@ -1,7 +1,7 @@
 @title Work cards: Export centre and command field
 @area Reports
 # File > Export... lists "Export work cards (PDF)" among the workshop formats, also the command field ("export work cards"). Same file as the Build order strip button.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 8

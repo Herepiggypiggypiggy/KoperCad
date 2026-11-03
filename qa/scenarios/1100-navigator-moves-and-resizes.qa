@@ -2,7 +2,7 @@
 @area Windows
 @sizes 1366x768
 # 1366x768: the navigator floats (it pins from 1700 points). It hangs from the left edge, its title bar at y 72, its bottom right corner at (655, 733).
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Pages
 wait 20

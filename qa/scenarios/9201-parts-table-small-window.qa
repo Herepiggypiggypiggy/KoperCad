@@ -1,7 +1,7 @@
 @title Parts table import at 700x420: the dialog fits the window and scrolls sideways
 @area Parts
 # Hardware test PIR-07: the dialog was cut off at both edges in a 700 wide window.
-click_text "Open example"
+open_starter_example
 wait 20
 import_table qa/fixtures/parts/price-list-nl.csv
 wait 10

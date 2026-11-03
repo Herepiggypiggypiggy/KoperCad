@@ -18,7 +18,7 @@ fn example(size: egui::Vec2, workspace: Workspace) -> (tempfile::TempDir, Drive)
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame_sized(size, Vec::new());
     d.app.switch_workspace(workspace);
     for _ in 0..4 {

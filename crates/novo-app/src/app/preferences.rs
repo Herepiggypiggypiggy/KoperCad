@@ -342,7 +342,7 @@ mod stack_tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         d.app.sizing.panel_open = true;
         d.app.wb.queued.push("app.preferences");
         for _ in 0..2 {

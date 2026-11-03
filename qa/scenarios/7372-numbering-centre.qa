@@ -2,7 +2,7 @@
 @area Layout
 # Lane V4h (docs/design/visual-redesign.md section 6). Edit > Numbering... opens one window
 # with what Edit > Wire numbers and Edit > Renumber held; Edit no longer has those two submenus.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Edit #1
 wait 6

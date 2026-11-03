@@ -2,7 +2,7 @@
 @area Parts
 @sizes 1366x768 1920x1080
 # Hardware test KC-09: the report said nothing about a row without order number, a 50,000 mm width, a negative width or a cut-off order number.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog qa/fixtures/parts-inbox-odd
 click_text File

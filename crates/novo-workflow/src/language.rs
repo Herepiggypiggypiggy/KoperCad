@@ -62,6 +62,7 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
+    nl("file.example_starter", &[], &["motorstarter voorbeeld"]),
     nl(
         "file.example_emc",
         &[],

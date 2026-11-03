@@ -4,7 +4,7 @@
 # Lane V4e (docs/design/visual-redesign.md section 5.2). File > Pages (6 rows) and Help > Lesson (4 rows)
 # are gone: the Pages list has the + New button and the right-click menu of a page, the lesson card has
 # its Back, Next, Start over and Close. Every command still runs from Ctrl+K, which names the panel.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

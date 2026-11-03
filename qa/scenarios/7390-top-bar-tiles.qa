@@ -1,7 +1,7 @@
 @title Top bar tiles: captions in words, active tile underlined, Undo and Redo tooltips say why they are off
 @area Workspaces
 # 1815: taller top bar. Every tile has a caption; the active workspace also has a bar under it.
-click_text "Open example"
+open_starter_example
 wait 30
 shot bar-schematic
 check_layout

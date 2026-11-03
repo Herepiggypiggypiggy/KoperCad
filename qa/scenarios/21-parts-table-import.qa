@@ -1,7 +1,7 @@
 @title Parts table import (mapping, preview, add)
 @area Parts
 # A made-up German price list (Windows-1252, semicolons, units in headers); the native file dialog is answered by the harness.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog qa/fixtures/parts/price-list-de.csv
 click_text File

@@ -2,7 +2,7 @@
 @area Layout
 # At 1366x768 the toolbar, pushed right by the open Navigator, ran under the
 # view cube. Its width now leaves out the Navigator's share of the view.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D
 wait 20

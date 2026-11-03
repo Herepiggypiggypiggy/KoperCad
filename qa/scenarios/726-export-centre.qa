@@ -3,7 +3,7 @@
 # Lane V4 (docs/design/visual-redesign.md section 6). File > Export... opens one
 # window with every format as a tile; picking one shows what it writes. Search
 # narrows the tiles; the Export button stays grey until a format is picked.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

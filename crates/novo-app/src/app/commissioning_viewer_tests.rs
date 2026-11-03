@@ -37,7 +37,7 @@ fn a_thumbnail_opens_the_picture_in_a_window() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     assert!(d.app.save_to(&dir.path().join("proj.novo")));
     d.app.run_command(&ctx, "view.commissioning", None);

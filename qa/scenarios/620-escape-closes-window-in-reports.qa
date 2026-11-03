@@ -2,7 +2,7 @@
 @area Workspaces
 # Click test finding C-01: the Reports list took Escape even with nothing to clear, so Standards check,
 # Bench output and the like stayed open and piled up over the report list.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Reports #2
 wait 20

@@ -1,7 +1,7 @@
 @title Tool dock at 1920x1080: drag it by its background, it stays; View > Reset panel layout brings it home
 @area Windows
 @sizes 1920x1080
-click_text "Open example"
+open_starter_example
 wait 20
 shot dock-home
 check_layout

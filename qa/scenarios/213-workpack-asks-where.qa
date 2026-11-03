@@ -1,7 +1,7 @@
 @title Work cards: the PDF asks where to save, then says the folder
 @area 3D
 # 3D > Layers > Build order > "Work cards (PDF)" opens a save dialog (title "Save the work cards", file name "<project> work cards.pdf", starting next to the project) instead of writing silently. After the answer the status line names the file and its folder and keeps the "Open folder" button.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text 3D #1
 wait 40

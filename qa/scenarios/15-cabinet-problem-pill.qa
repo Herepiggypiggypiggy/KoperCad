@@ -1,6 +1,6 @@
 @title Cabinet: the problems pill opens the list of what is wrong
 @area Cabinet
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Cabinet #1
 wait 30

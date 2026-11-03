@@ -50,7 +50,7 @@ fn open_redlines_on_a_placed_device_or_its_terminals_are_marked_once_with_every_
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.doc().project();
     let all = targets(project);
@@ -110,7 +110,7 @@ fn the_outline_reports_its_text_only_while_the_pointer_is_over_it() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.doc().project();
     let device = targets(project)
@@ -226,7 +226,7 @@ fn a_device_on_the_door_has_no_outline_on_the_plate() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let project = d.doc().project();
     let device = targets(project)

@@ -703,7 +703,6 @@ impl<'a> Dialog<'a> {
     }
 
     /// Opens floating, not docked; the buttons in the title bar still dock it.
-    #[allow(dead_code)]
     pub(super) fn floating(mut self) -> Self {
         self.floats = true;
         self

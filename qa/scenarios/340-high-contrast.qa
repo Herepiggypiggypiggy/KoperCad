@@ -1,7 +1,7 @@
 @title High contrast: dark and light, schematic, live view, cabinet and preferences
 @area Appearance
 # Preferences > Appearance > Contrast > High. Pictures: the dark one first, then the light one, each on the schematic, in Live and on the cabinet.
-click_text "Open example"
+open_starter_example
 wait 20
 key ctrl+k
 wait 6

@@ -3,7 +3,7 @@
 # Lane V4g (docs/design/visual-redesign.md section 6). File > Project settings... opens one
 # window with what the File > Project submenu and Report languages held; File no longer
 # has the Project submenu. Variant, option and tie take a name in the command field.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text File #1
 wait 6

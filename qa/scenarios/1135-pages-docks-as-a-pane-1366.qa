@@ -1,7 +1,7 @@
 @title Pages docks as a pane of the left strip with the button in its header, moves to the right strip and floats back to the column (1366x768)
 @area Windows
 @sizes 1366x768
-click_text "Open example"
+open_starter_example
 wait 30
 # At this width the navigator floats; its pin makes it the column.
 click_text Pages

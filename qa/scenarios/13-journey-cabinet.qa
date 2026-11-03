@@ -1,7 +1,7 @@
 @title Journey: example project to placed, routed and cut-listed cabinet
 @area Journeys
 # Cabinet workspace steps through the palette: place all, size the enclosure, route, cut list, 3D.
-click_text "Open example"
+open_starter_example
 wait 20
 click_text Cabinet #1
 wait 20

@@ -1,7 +1,7 @@
 @title Inspector: selecting a device keeps the sheet and the title block clear, and Properties opens below the menu bar
 @area Schematic
 @sizes 1366x768
-click_text "Open example"
+open_starter_example
 wait 30
 shot before-select
 click 358 185

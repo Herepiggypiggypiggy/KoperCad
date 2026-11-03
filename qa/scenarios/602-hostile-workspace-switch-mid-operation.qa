@@ -1,6 +1,6 @@
 @title Hostile: switch workspaces while placing, wiring and with menus open
 @area Hostile
-click_text "Open example"
+open_starter_example
 wait 20
 key q
 wait 4

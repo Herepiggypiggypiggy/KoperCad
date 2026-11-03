@@ -2,7 +2,7 @@
 @area Parts
 @env KOPERCAD_QA_SLOW_READ_MS=4000
 # An invented article file (no EPLAN data); the native file dialog is answered by the harness.
-click_text "Open example"
+open_starter_example
 wait 20
 answer_dialog qa/fixtures/parts/invented-articles.eod
 click_text File

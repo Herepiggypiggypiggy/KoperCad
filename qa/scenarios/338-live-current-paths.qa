@@ -5,7 +5,7 @@
 # there is no Current paths switch. Holding start closes the circuit to the
 # contactor coil: the wires on that route get thin dashes, the card offers the
 # switch, and turning it off takes them away.
-click_text "Open example"
+open_starter_example
 wait 20
 key shift+l
 wait 20

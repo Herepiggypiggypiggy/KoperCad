@@ -1,6 +1,6 @@
 @title Every shipped lesson opens
 @area Learn
 @slow
-click_text "Open example"
+open_starter_example
 wait 20
 sweep_lessons

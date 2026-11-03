@@ -2,7 +2,7 @@
 @area Regressions
 # Each check states the FIXED behaviour; a finding means the defect is still there.
 # Ids are those in audit/critic/defects.md. Visual-only defects (C-02, C-04, C-06, C-12) have a picture, no assertion.
-click_text "Open example"
+open_starter_example
 wait 20
 # C-03: a freshly opened file starts with an empty undo history.
 expect_disabled Undo

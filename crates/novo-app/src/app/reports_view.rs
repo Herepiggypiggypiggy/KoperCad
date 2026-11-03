@@ -1177,7 +1177,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         d.frame();
         for (_, id) in REPORT_COMMANDS {
             d.app.show_report(id);
@@ -1218,7 +1218,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         d.frame();
         d.app.show_report("devices");
         d.frame();
@@ -1247,7 +1247,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         d.frame();
         d.app.show_report("devices");
         d.frame();
@@ -1286,7 +1286,7 @@ mod tests {
     fn saved_example(dir: &Path) -> Drive {
         let mut d = Drive::new(&dir.join("untitled"));
         let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
+        d.app.run(&ctx, Action::OpenStarterExample);
         d.frame();
         assert!(d.app.save_to(&dir.join("Plant.novo")));
         d.app.wb.pdf_dir = Some(dir.to_owned());

@@ -1,0 +1,40 @@
+@title 3D Heat panel: Cooler layout takes you to the Cabinet view with the search
+@area Heat
+@sizes 1920x1080
+# The button sits in the 3D Heat panel too. It used to do nothing there; now it switches to the Cabinet view, where the window with the suggestions opens.
+# Heat starts a Thorough run by itself on this small cabinet: stop it, switch Auto off (else it restarts), run Quick, then open the cooling buttons.
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 30
+click_text 3D #1
+wait 30
+click 24 427
+wait 20
+try click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 120
+shot panel-3d
+click_text "Cooling selection"
+wait 10
+scroll 1740 560 -500
+wait 10
+click_text "Cooler layout"
+wait 3
+shot message
+wait 30
+shot clicked
+wait_s 120
+expect "Apply the moves"
+shot found
+check_layout

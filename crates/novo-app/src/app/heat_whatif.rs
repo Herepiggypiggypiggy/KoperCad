@@ -424,7 +424,11 @@ impl Wizard {
         // Folds to its title bar, so the preview behind it can be looked at
         // on a small screen. It opens above `at` (its old bottom left
         // corner) and can be dragged and resized from there.
+        // Opens floating at the left edge (`at`), not docked at the right:
+        // the docked pane covered the floating Heat panel and the view cube.
+        // The title bar buttons still dock it.
         let shown = super::panel::dialog(ctx, "Cooling what-if", [WINDOW_WIDTH, 0.0])
+            .floating()
             .open(super::panel::esc(ctx, &mut open))
             // The list scrolls inside; the buttons below it stay in view.
             .scroll([false, false])

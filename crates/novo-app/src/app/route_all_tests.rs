@@ -108,7 +108,7 @@ fn place_all_then_route_all_routes_every_wire_of_the_motor_starter() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
+    d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
     let cab = d
         .doc()

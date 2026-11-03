@@ -18,7 +18,7 @@ click_text Hidden
 wait 6
 key Escape
 wait 8
-click_text "Open example"
+open_starter_example
 wait 40
 shot bar-help-whats-new
 expect "Help"
