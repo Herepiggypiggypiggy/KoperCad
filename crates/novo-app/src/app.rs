@@ -373,6 +373,7 @@ mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod winch_scenarios;
+mod window_help;
 mod wire_it_export;
 mod wire_panel;
 #[cfg(test)]

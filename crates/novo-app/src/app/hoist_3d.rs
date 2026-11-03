@@ -564,18 +564,18 @@ impl NovoApp {
                     }
                 });
                 if axes.is_empty() {
-                    ui.weak(
+                    ui.weak("No travel axis");
+                    super::window_help::add(
+                        ui.ctx(),
                         "No travel axis in this project: enter a moving mass under Travel drive \
                          in a motor's property sheet, run it in Simulate > Drive run, then pick \
                          it here.",
                     );
                 } else if (g.bridge_axis.is_some() || g.trolley_axis.is_some()) && !drive_running {
-                    ui.horizontal(|ui| {
-                        ui.weak("The axes move while Drive run runs.");
-                        if ui.button("Drive run").clicked() {
-                            open_drive = true;
-                        }
-                    });
+                    super::window_help::add(ui.ctx(), "The axes move while Drive run runs.");
+                    if ui.button("Drive run").clicked() {
+                        open_drive = true;
+                    }
                 }
                 for status in [g.bridge_axis.as_deref(), g.trolley_axis.as_deref()]
                     .into_iter()
@@ -591,17 +591,22 @@ impl NovoApp {
                     if at_end {
                         ui.colored_label(
                             crate::theme::ui_palette().warning,
+                            format!("\u{2022} The {what} is at the end of the picture"),
+                        );
+                        super::window_help::add(
+                            ui.ctx(),
                             format!(
-                                "\u{2022} The {what} went past the end of the picture: it holds \
-                                 at the end (the drive does not know)"
+                                "The {what} went past the end of the picture: it holds at the end (the drive does not know)."
                             ),
                         );
                     }
                 }
                 if outside > 0 {
-                    ui.weak(format!(
-                        "\u{2022} {outside} end limit(s) lie outside the picture and are not drawn"
-                    ));
+                    ui.weak(format!("\u{2022} {outside} end limit(s) not drawn"));
+                    super::window_help::add(
+                        ui.ctx(),
+                        format!("{outside} end limit(s) lie outside the picture and are not drawn."),
+                    );
                 }
                 match &line {
                     Some(text) => {
@@ -612,11 +617,15 @@ impl NovoApp {
                     }
                     None => {
                         ui.horizontal(|ui| {
-                            ui.weak("No run: the hook stands at its start. Press Start in");
+                            ui.weak("No run");
                             if ui.button("Hoist run").clicked() {
                                 start = true;
                             }
                         });
+                        super::window_help::add(
+                            ui.ctx(),
+                            "No run: the hook stands at its start. Press Start in Hoist run.",
+                        );
                     }
                 }
                 let state = CraneState {
@@ -659,23 +668,20 @@ impl NovoApp {
                     );
                 });
                 ui.label(egui::RichText::new("Picture, not measurement").strong());
-                egui::ScrollArea::vertical()
-                    .id_salt("hoist3d_notes")
-                    .max_height(150.0)
-                    .show(ui, |ui| {
-                        let winch_notes: &[&str] = if g.follow >= hoist_count {
-                            WINCH_PICTURE_LEAVES_OUT
-                        } else {
-                            &[]
-                        };
-                        for line in CRANE_PICTURE_LEAVES_OUT
-                            .iter()
-                            .chain(SWING_MODEL_LEAVES_OUT)
-                            .chain(winch_notes)
-                        {
-                            ui.weak(format!("\u{2022} {line}"));
-                        }
-                    });
+                let winch_notes: &[&str] = if g.follow >= hoist_count {
+                    WINCH_PICTURE_LEAVES_OUT
+                } else {
+                    &[]
+                };
+                let mut notes = String::from("Picture, not measurement:");
+                for line in CRANE_PICTURE_LEAVES_OUT
+                    .iter()
+                    .chain(SWING_MODEL_LEAVES_OUT)
+                    .chain(winch_notes)
+                {
+                    notes.push_str(&format!("\n\u{2022} {line}"));
+                }
+                super::window_help::add(ui.ctx(), notes);
             });
         if !open {
             self.wb.hoist.three_d.open = false;

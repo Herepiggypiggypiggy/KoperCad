@@ -2216,10 +2216,9 @@ fn heat_strip_placeholder(ui: &mut egui::Ui) {
             ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
             ui.horizontal(|ui| {
                 ui.label("Heat");
-                ui.label(
-                    egui::RichText::new("Simulate (Heat panel, right) fills this strip.")
-                        .small()
-                        .color(pal.text_secondary),
+                super::window_help::mark(
+                    ui,
+                    "Simulate (Heat panel, right) fills this strip: the temperature and air speed scales and the layers you switch on.",
                 );
             });
             ui.horizontal(|ui| {
@@ -2233,7 +2232,7 @@ fn heat_strip_placeholder(ui: &mut egui::Ui) {
                         egui::StrokeKind::Inside,
                     );
                     ui.label(
-                        egui::RichText::new(format!("{unit}  {name}: after a run"))
+                        egui::RichText::new(format!("{unit}  {name}"))
                             .small()
                             .color(pal.text_secondary),
                     );
@@ -2268,6 +2267,7 @@ fn heat_controls(
             ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
             ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
+        heat_legend::help(ui, h, range, top_speed, top_flux);
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
         );
@@ -2369,7 +2369,7 @@ fn heat_controls(
             // does not change height when a point is picked.
             ui.end_row();
             let text = if probe.text.is_empty() {
-                "Probe: click the air to read its temperature and speed"
+                "Probe"
             } else {
                 probe.text.as_str()
             };

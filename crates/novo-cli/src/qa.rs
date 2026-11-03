@@ -243,6 +243,7 @@ const KNOWN_VERBS: &[&str] = &[
     "expect_enabled",
     "expect_disabled",
     "check_layout",
+    "check_text",
     "check_blank",
     "tree",
     "sweep_commands",
@@ -358,6 +359,51 @@ fn interactive(role: &str) -> bool {
 
 /// What the layout check found, as (severity, kind, title, detail).
 pub(crate) type Hit = (&'static str, &'static str, String, String);
+
+/// Longest plain label, in words, before it counts as explanation text. Explanations
+/// belong behind a window's "?" (`window_help`); a label, a value or a result is shorter.
+pub(crate) const TEXT_WORDS: usize = 8;
+
+/// Explanation text on screen: labels (not buttons, fields or menus) of more
+/// than `max_words` words, from the widget tree. One finding lists them all.
+pub(crate) fn text_hits(nodes: &[Value], max_words: usize) -> Vec<Hit> {
+    let mut long: Vec<(usize, String)> = Vec::new();
+    for n in nodes {
+        if !n["role"]
+            .as_str()
+            .is_some_and(|r| r.eq_ignore_ascii_case("label"))
+        {
+            continue;
+        }
+        let Some(r) = rect(n) else { continue };
+        if r[2] <= r[0] || r[3] <= r[1] {
+            continue;
+        }
+        let label = n["label"].as_str().unwrap_or("");
+        let words = label.split_whitespace().count();
+        if words > max_words && !long.iter().any(|(_, l)| l == label) {
+            long.push((words, label.to_owned()));
+        }
+    }
+    if long.is_empty() {
+        return Vec::new();
+    }
+    let total: usize = long.iter().map(|(w, _)| w).sum();
+    let list = long
+        .iter()
+        .map(|(w, l)| format!("[{w} words] {}", short(l)))
+        .collect::<Vec<_>>()
+        .join("; ");
+    vec![(
+        "S3",
+        "text",
+        format!(
+            "{} labels of more than {max_words} words on screen ({total} words)",
+            long.len()
+        ),
+        format!("Explanation text goes behind the window's ? icon: {list}"),
+    )]
+}
 
 /// Clipping, overlap, tiny targets and unlabelled buttons from the widget
 /// tree. `window` is the window size in points. Cheap and heuristic: it flags
@@ -827,6 +873,41 @@ impl Ctx<'_> {
         Ok(r["nodes"].as_array().cloned().unwrap_or_default())
     }
 
+    /// With `KOPERCAD_QA_TEXT_AUDIT=<file>` every screenshot also appends the
+    /// labels of more than [`TEXT_WORDS`] words on screen to that file (tab
+    /// separated: scenario, size, shot label, words, text): the program-wide
+    /// inventory of explanation text. Best effort; never a finding.
+    fn audit_text(&mut self, shot: &str) {
+        let Some(path) = std::env::var_os("KOPERCAD_QA_TEXT_AUDIT") else {
+            return;
+        };
+        let Ok(nodes) = self.tree() else { return };
+        let mut lines = String::new();
+        let mut seen: Vec<&str> = Vec::new();
+        for n in &nodes {
+            let role = n["role"].as_str().unwrap_or("");
+            let label = n["label"].as_str().unwrap_or("");
+            let words = label.split_whitespace().count();
+            if role.eq_ignore_ascii_case("label") && words > TEXT_WORDS && !seen.contains(&label) {
+                seen.push(label);
+                lines.push_str(&format!(
+                    "{}\t{}\t{shot}\t{words}\t{}\n",
+                    self.scenario.file,
+                    self.size,
+                    label.replace(['\t', '\n'], " ")
+                ));
+            }
+        }
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            use std::io::Write as _;
+            let _ = f.write_all(lines.as_bytes());
+        }
+    }
+
     fn window(&mut self) -> Result<(f64, f64), String> {
         let r = self.srv.send(json!({"cmd": "info"}))?;
         Ok((
@@ -916,7 +997,12 @@ impl Ctx<'_> {
                 self.srv.set_project(None);
                 self.srv.ensure()
             }
-            "shot" => self.take_shot(need(1, "a label")?).map(|_| ()),
+            "shot" => {
+                let label = need(1, "a label")?;
+                self.take_shot(label)?;
+                self.audit_text(label);
+                Ok(())
+            }
             "wait" => {
                 let frames = a(1).map_or(Ok(4.0), |_| num(1, "frames"))?;
                 self.srv
@@ -1303,6 +1389,26 @@ impl Ctx<'_> {
                         kind,
                         title,
                         "every control fully visible and not overlapped",
+                        detail,
+                    );
+                }
+                Ok(())
+            }
+            "check_text" => {
+                let max = a(1)
+                    .map(|v| {
+                        v.parse::<usize>()
+                            .map_err(|_| format!("bad word count {v}"))
+                    })
+                    .transpose()?
+                    .unwrap_or(TEXT_WORDS);
+                let nodes = self.tree()?;
+                for (sev, kind, title, detail) in text_hits(&nodes, max) {
+                    self.add(
+                        sev,
+                        kind,
+                        title,
+                        "no label longer than a few words; explanations behind the ? icon",
                         detail,
                     );
                 }

@@ -251,6 +251,7 @@ impl Panel {
                 add,
             );
         }
+        let add = |ui: &mut egui::Ui| super::window_help::scope(ctx, self.id, || add(ui));
         // A layout preset that was just opened puts the panel where that
         // layout left it, or back at its side when the layout never moved it.
         let taken = take_place(ctx, id);
@@ -444,7 +445,7 @@ impl Panel {
             let stopped = ctx
                 .read_response(id.with("__title_click"))
                 .is_some_and(|r| r.drag_stopped());
-            let slot = super::panel_dock::title_buttons(ctx, id, egui::Order::Middle)
+            let slot = super::panel_dock::title_buttons(ctx, id, self.id, egui::Order::Middle)
                 .or_else(|| super::panel_dock::snap_zones(ctx, self.canvas, pulled, stopped));
             if let Some(slot) = slot {
                 super::panel_dock::set(ctx, self.id, Some(slot));
@@ -760,7 +761,7 @@ impl<'a> Dialog<'a> {
             Some(open) => window.open(open),
             None => window,
         };
-        let shown = window.show(ctx, add);
+        let shown = window.show(ctx, |ui| super::window_help::scope(ctx, &name, || add(ui)));
         if shown.is_some() {
             dock_controls(ctx, id, &name, egui::Order::Middle);
         }
@@ -786,7 +787,7 @@ fn dock_controls(ctx: &egui::Context, id: egui::Id, name: &str, order: egui::Ord
         egui::pos2(screen.min.x, screen.min.y + TOP),
         egui::pos2(screen.max.x, screen.max.y - STATUS_BAR),
     );
-    let slot = super::panel_dock::title_buttons(ctx, id, order)
+    let slot = super::panel_dock::title_buttons(ctx, id, name, order)
         .or_else(|| super::panel_dock::snap_zones(ctx, canvas, pulled, stopped));
     if let Some(slot) = slot {
         super::panel_dock::set(ctx, name, Some(slot));

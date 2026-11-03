@@ -21,14 +21,14 @@ wait_s 100
 wait 60
 wait_s 100
 wait 60
-expect "Result for this layout"
+expect "Heat: "
 shot heat-result
 check_layout
 click_text "✔ Heat"
 wait 20
 expect_not "fills this strip"
 expect_not "Vents and fans"
-expect_not "Result for this layout"
+expect_not "Vents and fans"
 shot heat-off
 click_text EMC #1
 wait 30

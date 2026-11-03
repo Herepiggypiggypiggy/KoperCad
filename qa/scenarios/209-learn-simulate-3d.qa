@@ -44,7 +44,7 @@ wait 60
 wait_s 100
 wait 60
 expect "Coarse 3D"
-expect "Result for this layout"
+expect "Heat: Coarse 3D"
 shot 07-verdict-step-result
 check_layout
 try click_text "Next"

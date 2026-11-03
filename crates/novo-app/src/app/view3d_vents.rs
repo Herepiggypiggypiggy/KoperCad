@@ -89,24 +89,27 @@ fn body(
             .color(pal.text_secondary)
     };
     let Some(e) = enclosure else {
-        ui.label(muted(
+        ui.label(muted("Enclosure size not set"));
+        super::window_help::add(
+            ui.ctx(),
             "Set the enclosure size first (Cabinet, Size enclosure): the openings sit in its walls.",
-        ));
+        );
         return;
     };
-    ui.label(muted(
-        "Where air gets in (blue) and out (orange). Grey: the direction is known after a run.",
-    ));
-    ui.label(muted(
-        "Motion is only an illustration of direction; its speed is not the air speed.",
-    ));
+    super::window_help::add(
+        ui.ctx(),
+        "Where air gets in (blue) and out (orange). Grey: the direction is known after a run.\n\
+         Motion is only an illustration of direction; its speed is not the air speed.",
+    );
     if running {
         ui.label(
-            egui::RichText::new(
-                "A run is going on the openings as they were. A change here marks its result out of date; with auto re-solve on it restarts.",
-            )
+            egui::RichText::new("Run in progress")
                 .small()
                 .color(pal.warning),
+        );
+        super::window_help::add(
+            ui.ctx(),
+            "A run is going on the openings as they were. A change here marks its result out of date; with auto re-solve on it restarts.",
         );
     }
     if let Some(k) = settings.requested.take()
@@ -144,9 +147,11 @@ fn body(
     });
     if settings.vents.is_empty() {
         ui.add_space(4.0);
-        ui.label(muted(
-            "None: the enclosure is sealed. Add a grille low and another high, or a filter fan and an exhaust grille.",
-        ));
+        ui.label(muted("None: the enclosure is sealed"));
+        super::window_help::add(
+            ui.ctx(),
+            "Add a grille low and another high, or a filter fan and an exhaust grille.",
+        );
     }
     let mut remove = None;
     settings.hovered = None;
@@ -199,7 +204,7 @@ fn body(
                 ui.add(
                     egui::Label::new(
                         egui::RichText::new(format!(
-                            "Opening {} is a fan only {:.0} mm across: that is smaller than the cut-out of the smallest common cabinet fans (about 38 mm). Check its size and datasheet flow.",
+                            "Opening {}: fan only {:.0} mm across",
                             i + 1,
                             spec.width_mm.min(spec.height_mm)
                         ))
@@ -207,9 +212,20 @@ fn body(
                     )
                     .wrap(),
                 );
+                super::window_help::add(
+                    ui.ctx(),
+                    "A fan this small is below the cut-out of the smallest common cabinet fans (about 38 mm). Check its size and datasheet flow.",
+                );
             }
             if let Some(line) = operating_point(&spec, flow) {
-                ui.label(muted(&line));
+                let (shown, why) = line.split_once(" against").unwrap_or((&line, ""));
+                ui.label(muted(shown));
+                if !why.is_empty() {
+                    super::window_help::add(
+                        ui.ctx(),
+                        format!("Operating point: this run moves the air{why}"),
+                    );
+                }
             }
             let edited = edited.fitted(e);
             if edited != spec && remove.is_none() {
@@ -275,25 +291,31 @@ fn body(
     }
     if stale {
         ui.add_space(4.0);
-        ui.colored_label(
-            pal.warning,
+        ui.colored_label(pal.warning, "Result out of date");
+        super::window_help::add(
+            ui.ctx(),
             "The result shown is from before your last change: run Simulate again.",
         );
     }
     if let Some(line) = balance_line(flows, settings, running) {
         ui.add_space(4.0);
-        ui.label(muted(&line));
+        // The numbers stay; the sentence that explains them is behind the "?".
+        let (shown, why) = match line.find(". ") {
+            Some(at) => (&line[..=at - 1], &line[at + 2..]),
+            None => (line.as_str(), ""),
+        };
+        ui.label(muted(shown));
+        if !why.is_empty() {
+            super::window_help::add(ui.ctx(), why);
+        }
     }
-    egui::CollapsingHeader::new("What is this?")
-        .id_salt("view3d_vents_about")
-        .show(ui, |ui| {
-            ui.label(muted(
-                "Walls are named as seen from the front of the cabinet; the one you pick is tinted. \
-                 Openings are kept inside their wall and saved with the project. They apply to the \
-                 next run. A grille's flow is read from the solved air speed next to it: a model \
-                 value, not a measurement. Drag an opening's label in the cabinet to slide it.",
-            ));
-        });
+    super::window_help::add(
+        ui.ctx(),
+        "Walls are named as seen from the front of the cabinet; the one you pick is tinted. \
+         Openings are kept inside their wall and saved with the project. They apply to the \
+         next run. A grille's flow is read from the solved air speed next to it: a model \
+         value, not a measurement. Drag an opening's label in the cabinet to slide it.",
+    );
 }
 
 /// Where the shown run puts a fan against its datasheet: the flow the run

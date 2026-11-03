@@ -1,0 +1,33 @@
+@title Help icons: Hoist run and Hoist in 3D carry no explanation text
+@area Simulate
+@sizes 1366x768 1920x1080
+# The notes of Hoist run, Hoist in 3D and Drive run sit behind the ? of each window; check_text fails on any label of more than 8 words.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist run
+wait 4
+key Enter
+wait 30
+shot hoist-run
+check_text
+check_layout
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot hoist-3d
+check_text
+check_layout
+key ctrl+k
+wait 3
+text Drive run
+wait 4
+key Enter
+wait 30
+shot drive-run
+check_text
+check_layout

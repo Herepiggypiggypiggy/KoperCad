@@ -82,6 +82,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `keep_file "path"` | copy the file an export wrote (same path rules as `expect_file`, every `*` match) into `files/` beside the report and list it under "Files kept" in `report.md` and `files` in `results.json`, so auditors can open the real PDF, DXF or CSV |
 | `@env NAME=VALUE` (header) | start the app with this environment variable; Ask Claude scenarios use `KOPERCAD_AI_REPLAY=qa/replay/<file>.json` (a JSON list of Messages API replies used in order, nothing is sent) with a dummy `ANTHROPIC_API_KEY` |
 | `check_layout` | cheap layout checks, see below |
+| `check_text [max_words]` | finding S3 for every label of more than `max_words` words (default 8) in the widget tree: explanation text belongs behind the window's `?` icon, a label, value or result is shorter |
 | `check_blank [label]` | takes a screenshot; finding S2 when the window is one flat colour |
 | `tree [filter]` | write the labelled widgets to `logs/` (for authors: find the right label) |
 | `sweep_commands [Group]` | every command of the command field, by its own name (slow) |

@@ -1,0 +1,30 @@
+@title Help icons: the 3D Heat strip, Heat panel and Vents window carry no explanation text
+@area 3D
+@sizes 1366x768 1920x1080
+# The explanations of the Heat strip, the Heat panel and the Vents and fans window sit behind one ? icon per window; check_text fails on any label of more than 8 words.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+shot heat-clean
+check_text
+check_layout
+expect_not "What is this?"
+expect_not "Model estimate, not a measurement."

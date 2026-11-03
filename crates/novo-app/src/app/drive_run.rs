@@ -251,7 +251,8 @@ fn show_duty_result(ui: &mut egui::Ui, tag: &str, report: &DutyReport) {
         };
         line(&|c| c.1, ui.visuals().hyperlink_color);
         line(&|c| c.2, ui.visuals().text_color());
-        ui.weak(
+        super::window_help::add(
+            ui.ctx(),
             "Blue: winding rise, grey: brake rise (K over ambient), line: winding limit. \
              Time runs left to right.",
         );
@@ -829,8 +830,9 @@ fn duty_cycle_form(
     duty: &mut DutyUi,
     hoists: &[(String, BTreeMap<String, String>)],
 ) {
-    ui.weak(
-        "Lifts and lowers the chosen hoist again and again, faster than real time, with an \
+    super::window_help::add(
+        ui.ctx(),
+        "Duty cycle: lifts and lowers the chosen hoist again and again, faster than real time, with an \
          ideal operator and wiring (not the drawing), and shows how the motor winding and the \
          brake heat up. The heat numbers are generic (Drive hoist section, heat and brake \
          rows) until you enter the maker's.",
@@ -1027,23 +1029,22 @@ impl NovoApp {
             .order(egui::Order::Foreground)
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
-                ui.label(
+                super::window_help::add(
+                    ui.ctx(),
                     "Press the radio buttons of the drawing in the live view: the relays pull in, \
                      the drive ramps its frequency, the motor follows with its current fed back, \
                      and the end limits you bound open their contacts at their position.",
                 );
-                ui.add_space(4.0);
                 if names.is_empty() {
-                    ui.weak(
+                    ui.weak("No axis, drive hoist or winch yet");
+                    super::window_help::add(
+                        ui.ctx(),
                         "No travel axis, drive hoist or closed-loop winch yet. Select a motor and \
                          enter its moving mass under Travel drive, or its hook load under Drive \
                          hoist or Closed-loop winch, in the property sheet.",
                     );
                 } else {
-                    ui.label(format!(
-                        "Travel axes, drive hoists and closed-loop winches in this project: {}",
-                        names.join(", ")
-                    ));
+                    ui.label(format!("In this project: {}", names.join(", ")));
                 }
                 ui.horizontal(|ui| {
                     if !live_on && ui.button("Switch on Live").clicked() {
@@ -1058,7 +1059,8 @@ impl NovoApp {
                         start = true;
                     }
                     if !live_on {
-                        ui.weak("The run reads the live view (Shift+L).");
+                        ui.weak("Live is off");
+                        super::window_help::add(ui.ctx(), "The run reads the live view (Shift+L).");
                     }
                 });
                 // Solid behind the notes: marks of the drawing must not run through them.
@@ -1077,14 +1079,11 @@ impl NovoApp {
                         novo_theme::widgets::banner(ui, w, text, |_| {});
                     }
                     if !fit.is_empty() {
-                        ui.collapsing(
-                            format!("What the motor fit assumed ({})", fit.len()),
-                            |ui| {
-                                for line in &fit {
-                                    ui.weak(format!("\u{2022} {line}"));
-                                }
-                            },
-                        );
+                        let mut text = String::from("What the motor fit assumed:");
+                        for line in &fit {
+                            text.push_str(&format!("\n\u{2022} {line}"));
+                        }
+                        super::window_help::add(ui.ctx(), text);
                     }
                 });
                 if !rows.is_empty() {
@@ -1127,40 +1126,48 @@ impl NovoApp {
                 }
                 ui.separator();
                 ui.label(egui::RichText::new("Model, not measurement").strong());
-                ui.weak(
+                let mut model = String::from("Model, not measurement:");
+                model.push('\n');
+                model.push_str(
                     "\u{2022} The drive is a generic V/f drive (ramps, current limit, trip \
                      levels); its parameters are the ones you enter, not a vendor's.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} The motor is fitted from the plate (equivalent circuit, constant \
                      rotor resistance): it can underestimate the standstill torque of large \
                      deep-bar motors.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Travel: rolling resistance is one constant (no stiction); the wind \
                      is a uniform speed along the track with one drag coefficient and area; the \
                      travel brake has the delays and torque you enter, and its force is capped \
                      by one wheel-on-rail friction coefficient (no slip dynamics). No skew or \
                      sway of the crane. None of this is a safety function.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} The drive replaces the contactors: its output terminals are not \
                      traced through the drawing, its inputs and mains are.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Drive hoist: the brake sequence (magnetise, open the brake on \
                      current, close it at a low frequency) is a generic model with your numbers, \
                      not a maker's firmware or parameter set. The motor flux builds with one \
                      time constant; a stuck or missing brake contactor shows as a brake that \
                      never opens.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Rope (when a floor height is set): one spring and damper between \
                      the drum and the hook, with a stiffness and damping ratio you enter, not a \
                      measured rope. The load is taken up at the floor with a snatch; the model \
                      has no rope stretch history, no sway and no multi-fall reeving.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Closed-loop winch: an averaged encoder drive (speed loop around a \
                      first order torque loop, current limit, constant power above rated speed). \
                      Torque is proven before the brake opens and held at zero speed; the STO \
@@ -1171,7 +1178,8 @@ impl NovoApp {
                      against the command at the start is reported at once; 20 mm of movement \
                      with the drive off is a brake slip. Not a maker's firmware.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Two winches on one beam: a rigid beam hanging on two elastic ropes \
                      with the stiffness, damping, rope distance and centre of gravity you enter; \
                      a rope pulls only when taut, so a slack rope is modelled and flagged. The \
@@ -1182,7 +1190,8 @@ impl NovoApp {
                      winches. Start rollback, stop travel and brake slip are reported for a \
                      single winch only.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Rated load and overload: the load is the load cell reading, a number \
                      the drawing or you supply (weight plus the inertia of the hook mass on a rigid \
                      rope); the rated load (SWL) and the cut-out percent are numbers you enter. The \
@@ -1191,7 +1200,8 @@ impl NovoApp {
                      substitute for a rated capacity limiter to the applicable standard. A hard \
                      acceleration raises the reading, so a lift can cut out a few per cent below the cut-out.",
                 );
-                ui.weak(
+                model.push('\n');
+                model.push_str(
                     "\u{2022} Ground and slack rope (single winch): the ground height and the rope \
                      stiffness are numbers you enter. The rope is rigid while taut, so landing, \
                      slack and the paid-out length are geometry; the snatch peak is only an energy \
@@ -1201,7 +1211,8 @@ impl NovoApp {
                      friction of the hook on the ground, several falls. A slack drum keeps the \
                      inertia it has with the hook hanging.",
                 );
-                ui.weak("\u{2022} Not a safety or compliance statement.");
+                model.push_str("\n\u{2022} Not a safety or compliance statement.");
+                super::window_help::add(ui.ctx(), model);
             });
         self.wb.drive_run.duty = duty;
         if !open {
