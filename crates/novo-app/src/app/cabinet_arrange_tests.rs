@@ -166,3 +166,98 @@ fn auto_reconfigure_is_one_preview_and_one_undo_step() {
     let layout = novo_layout::model::load(project(&d), cab).unwrap();
     assert!(layout.placements.iter().all(|p| p.rail.is_none()));
 }
+
+#[test]
+fn autogroup_by_heat_previews_names_the_model_and_undoes_in_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let (cab, ids) = loose(&mut d);
+    // K2 gives off 40 W; K1 and K3 allow only 40 C around them.
+    let parts: Vec<(u64, novo_core::PartId)> = project(&d)
+        .all::<novo_core::Device>()
+        .filter_map(|dev| Some((dev.id.raw(), *dev.parts.first()?)))
+        .collect();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Heat data", |tx| {
+            for (device, part) in &parts {
+                let tag = project_tag(tx.project(), *device);
+                if tag.ends_with("K2") {
+                    tx.set_property(*part, "power_loss_w", Some(Value::Float(40.0)))?;
+                } else {
+                    tx.set_property(*part, "max_ambient_c", Some(Value::Float(40.0)))?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+    run(&mut d, cab, "cabinet.arrange_rails");
+    accept(&mut d, cab);
+    // Put the source between the two parts that mind heat.
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    let before: Vec<(u64, f64)> = layout.placements.iter().map(|p| (p.id, p.x)).collect();
+
+    run(&mut d, cab, "cabinet.arrange_group_heat");
+    let plan = d.app.cabinet.preview.clone().expect("a heat preview");
+    assert_eq!(plan.title.as_deref(), Some("Autogroup by heat"));
+    assert!(plan.notes.iter().any(|n| n.contains("not a temperature")));
+    // Preview first: nothing is stored.
+    let stored = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(
+        before,
+        stored
+            .placements
+            .iter()
+            .map(|p| (p.id, p.x))
+            .collect::<Vec<_>>()
+    );
+    d.app.cabinet_ask(Ask::Cancel, Some(cab), None, &[]);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_none());
+
+    // Accept, then one Undo takes it all back.
+    run(&mut d, cab, "cabinet.arrange_group_heat");
+    accept(&mut d, cab);
+    let moved = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_ne!(
+        before,
+        moved
+            .placements
+            .iter()
+            .map(|p| (p.id, p.x))
+            .collect::<Vec<_>>()
+    );
+    assert!(moved.report().collisions.is_empty());
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    let undone = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(
+        before,
+        undone
+            .placements
+            .iter()
+            .map(|p| (p.id, p.x))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(ids.len(), undone.placements.len());
+}
+
+#[test]
+fn autogroup_by_wiring_without_wires_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, _) = loose(&mut d);
+    run(&mut d, cab, "cabinet.arrange_rails");
+    accept(&mut d, cab);
+    run(&mut d, cab, "cabinet.arrange_group_wiring");
+    assert!(d.app.cabinet.preview.is_none());
+}
+
+fn project_tag(p: &Project, device: u64) -> String {
+    p.get::<novo_core::Device>(novo_core::DeviceId::from(device))
+        .map(|d| d.tag.to_string())
+        .unwrap_or_default()
+}

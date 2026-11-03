@@ -97,6 +97,7 @@ impl NovoApp {
                         "cabinet.arrange_all" => Some("All in one step"),
                         "cabinet.arrange_onto_rail" => Some("Rails and ducts"),
                         "cabinet.arrange_group" => Some("Order and distance"),
+                        "cabinet.arrange_group_wiring" => Some("Across rows"),
                         _ => None,
                     },
                 })

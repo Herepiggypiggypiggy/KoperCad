@@ -1,0 +1,76 @@
+@title Cabinet: Autogroup by wiring and heat previews first, names its estimates, Cancel stores nothing, one Undo
+@area Cabinet
+@sizes 1366x768 1920x1080
+# Where the user finds it: Cabinet workspace, Arrange; Ctrl K "group by heat", "autogroup wiring", "autogroup wiring and heat".
+# Part 1, the made-up heat cabinet (qa/fixtures/heat-place-all.novo, planning values, no wires): Place all puts the devices on rails.
+# Group by heat alone is refused there in words (it would break place rules); Group by wiring and heat has no wires so it runs as heat alone and is refused the same way; Group by wiring says there is no wiring.
+# Part 2, the cooler cabinet (qa/fixtures/cabinet-cooler-layout.novo): Group by wiring and heat shows a preview banner with its estimates ("not a temperature"); Esc stores nothing; Accept is one undo step.
+open qa/fixtures/heat-place-all.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+key Enter
+wait 20
+shot placed
+key ctrl+k
+wait 4
+text group by heat
+wait 6
+key Enter
+wait 20
+shot heat-refused
+check_layout
+key ctrl+k
+wait 4
+text autogroup wiring and heat
+wait 6
+key Enter
+wait 20
+expect "No wiring between these devices"
+shot both-refused-no-wires
+check_layout
+key ctrl+k
+wait 4
+text group by wiring
+wait 6
+key Enter
+wait 20
+expect "No wiring between these devices"
+shot wiring-refused
+check_layout
+open qa/fixtures/cabinet-cooler-layout.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 4
+text autogroup wiring and heat
+wait 6
+key Enter
+wait 20
+expect "Preview (Autogroup by wiring and heat)"
+expect "not a temperature"
+shot both-preview
+check_layout
+key Escape
+wait 5
+shot both-cancelled
+key ctrl+k
+wait 4
+text autogroup wiring and heat
+wait 6
+key Enter
+wait 20
+key Enter
+wait 20
+shot both-accepted
+check_layout
+key ctrl+z
+wait 10
+shot both-undone

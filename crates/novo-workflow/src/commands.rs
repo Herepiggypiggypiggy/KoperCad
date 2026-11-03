@@ -2898,6 +2898,41 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "cabinet.arrange_group_wiring",
+        "Autogroup by wiring (Cabinet)",
+        "View",
+        &[
+            "autogroup wiring",
+            "group by wiring",
+            "short wires",
+            "power signal rows",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "cabinet.arrange_group_heat",
+        "Autogroup by heat (Cabinet)",
+        "View",
+        &[
+            "autogroup heat",
+            "group by heat",
+            "spread heat",
+            "hot parts apart",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "cabinet.arrange_group_both",
+        "Autogroup by wiring and heat (Cabinet)",
+        "View",
+        &[
+            "autogroup wiring and heat",
+            "regroup",
+            "group by wiring and heat",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "cabinet.arrange_tight",
         "Close up the gaps on rails (Cabinet)",
         "View",
