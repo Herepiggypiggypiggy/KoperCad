@@ -10,7 +10,7 @@ text rules
 wait 10
 key Return
 wait 20
-scroll 680 400 -600
+scroll 1200 400 -600
 wait 10
 click_text "Load company file"
 wait 10

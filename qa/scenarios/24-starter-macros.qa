@@ -11,7 +11,7 @@ wait 10
 key Return
 wait 20
 shot 01-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 01-placed
 fresh
@@ -23,7 +23,7 @@ wait 10
 key Return
 wait 20
 shot 02-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 02-placed
 fresh
@@ -35,7 +35,7 @@ wait 10
 key Return
 wait 20
 shot 03-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 03-placed
 fresh
@@ -47,7 +47,7 @@ wait 10
 key Return
 wait 20
 shot 04-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 04-placed
 fresh
@@ -59,7 +59,7 @@ wait 10
 key Return
 wait 20
 shot 05-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 05-placed
 fresh
@@ -71,7 +71,7 @@ wait 10
 key Return
 wait 20
 shot 06-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 06-placed
 fresh
@@ -83,7 +83,7 @@ wait 10
 key Return
 wait 20
 shot 07-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 07-placed
 fresh
@@ -95,7 +95,7 @@ wait 10
 key Return
 wait 20
 shot 08-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 08-placed
 fresh
@@ -107,7 +107,7 @@ wait 10
 key Return
 wait 20
 shot 09-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 09-placed
 fresh
@@ -119,7 +119,7 @@ wait 10
 key Return
 wait 20
 shot 10-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 10-placed
 fresh
@@ -131,7 +131,7 @@ wait 10
 key Return
 wait 20
 shot 11-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 11-placed
 fresh
@@ -143,7 +143,7 @@ wait 10
 key Return
 wait 20
 shot 12-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 12-placed
 fresh
@@ -155,7 +155,7 @@ wait 10
 key Return
 wait 20
 shot 13-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 13-placed
 fresh
@@ -167,7 +167,7 @@ wait 10
 key Return
 wait 20
 shot 14-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 14-placed
 fresh
@@ -179,7 +179,7 @@ wait 10
 key Return
 wait 20
 shot 15-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 15-placed
 fresh
@@ -191,7 +191,7 @@ wait 10
 key Return
 wait 20
 shot 16-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 16-placed
 fresh
@@ -203,7 +203,7 @@ wait 10
 key Return
 wait 20
 shot 17-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 17-placed
 fresh
@@ -215,6 +215,6 @@ wait 10
 key Return
 wait 20
 shot 18-picked
-click_text Place #2
+click_text Place #1
 wait 20
 shot 18-placed

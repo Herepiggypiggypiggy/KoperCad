@@ -30,7 +30,7 @@ text rules
 wait 10
 key Return
 wait 20
-scroll 680 400 -600
+scroll 1200 400 -600
 wait 10
 shot rules-off
 click_text "Offer to rename a part's terminals after a part is assigned"
