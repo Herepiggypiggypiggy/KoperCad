@@ -1028,11 +1028,33 @@ fn write_door_wire_spec_fixtures() {
             Some((500.0, Some(20.0), Source::Step)),
         ),
         ("door-wire-spec-gap", Some((500.0, None, Source::Catalogue))),
+        (
+            "door-wire-long-names",
+            Some((300.0, Some(20.0), Source::Catalogue)),
+        ),
     ];
     for (name, spec) in cases {
         let mut doc = door_doc();
         if let Some((depth, setback, source)) = spec {
             set_spec(&mut doc, depth, setback, source);
+        }
+        if name.ends_with("long-names") {
+            // Long tags and potential names: the wire list must keep Length basis on screen.
+            doc.transact("Long names", |tx| {
+                let devices: Vec<_> = tx.project().devices().map(|d| d.id).collect();
+                for (i, id) in devices.into_iter().enumerate() {
+                    let tag = DeviceTag::parse(&format!("=A1+CAB-KLONGCONTACTOR{i}"))?;
+                    tx.update::<novo_core::Device>(id, |d| d.tag = tag)?;
+                }
+                let potentials: Vec<_> = tx.project().potentials().map(|p| p.id).collect();
+                for id in potentials {
+                    tx.update::<novo_core::Potential>(id, |p| {
+                        p.name = format!("{}-CONTROL-SUPPLY-LONG-NAME", p.name);
+                    })?;
+                }
+                Ok(())
+            })
+            .expect("names");
         }
         let path = dir.join(format!("{name}.novo"));
         let _ = std::fs::remove_file(&path);

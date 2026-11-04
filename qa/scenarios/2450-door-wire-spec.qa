@@ -74,3 +74,13 @@ wait 40
 expect "no plate setback"
 shot route-spec-gap
 check_layout
+# Long tags and potential names: Length basis still shows.
+open qa/fixtures/door-wire-long-names.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "~ door + depth (catalogue)"
+shot wire-list-long-names
+check_layout
