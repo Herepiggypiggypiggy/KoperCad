@@ -60,3 +60,17 @@ shot wire-list-spec-gap
 check_layout
 key Escape
 wait 5
+# The cabinet route view: the gap fixture shows the yellow spec gap line with the enclosure's missing number.
+open qa/fixtures/door-wire-spec-gap.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+expect "has no plate setback"
+shot route-spec-gap
+check_layout

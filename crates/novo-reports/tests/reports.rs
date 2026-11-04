@@ -1006,7 +1006,7 @@ fn a_wire_to_the_door_is_a_model_and_says_so() {
     assert_eq!(row[9], "~ door, spec has no depth", "{row:?}");
 }
 
-/// Writes the QA fixtures for scenario 1910:
+/// Writes the QA fixtures for scenario 2450:
 /// `cargo test -p novo-reports --test reports write_door_wire_spec_fixtures -- --ignored`.
 #[test]
 #[ignore = "writes qa/fixtures/door-wire-*.novo"]
