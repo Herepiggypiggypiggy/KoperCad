@@ -40,7 +40,7 @@ impl NovoApp {
         let layout: CardLayout = match text.parse() {
             Ok(layout) => layout,
             Err(e) => {
-                self.message(Level::Warning, format!("Not a card layout: {e}"));
+                self.refuse("Not a card layout", e.to_string());
                 return;
             }
         };

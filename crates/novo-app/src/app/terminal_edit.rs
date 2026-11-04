@@ -159,9 +159,9 @@ impl NovoApp {
     pub(super) fn terminal_edit_command(&mut self, id: &str, argument: Option<&str>) {
         self.sync_strip_follow();
         let Some(strip) = self.drawer_strip() else {
-            self.message(
-                Level::Warning,
-                "No terminal strip yet. Place a terminal (I, terminal) or accept a proposal.",
+            self.refuse(
+                "No terminal strip yet",
+                "Place a terminal (I, terminal) or accept a proposal.",
             );
             return;
         };
@@ -254,7 +254,7 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(Level::Error, format!("{label}: {e}"));
+                self.refuse_red(label, e);
                 false
             }
         }
@@ -262,8 +262,8 @@ impl NovoApp {
 
     fn set_kind(&mut self, targets: &[TerminalId], kind: TerminalKind) {
         if targets.is_empty() {
-            self.message(
-                Level::Warning,
+            self.refuse(
+                "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
             return;
@@ -292,8 +292,8 @@ impl NovoApp {
 
     fn set_level(&mut self, targets: &[TerminalId], level: u8) {
         if targets.is_empty() {
-            self.message(
-                Level::Warning,
+            self.refuse(
+                "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
             return;
@@ -311,14 +311,14 @@ impl NovoApp {
     /// that group.
     fn set_jumper(&mut self, targets: &[TerminalId], jumper: Option<u32>) {
         if targets.is_empty() {
-            self.message(
-                Level::Warning,
+            self.refuse(
+                "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
             return;
         }
         if jumper == Some(0) {
-            self.message(Level::Warning, "Jumper numbers start at 1");
+            self.refuse("Jumper number too low", "Jumper numbers start at 1.");
             return;
         }
         self.edit_strip("Set terminal jumper", |tx| {
@@ -328,8 +328,8 @@ impl NovoApp {
 
     fn move_in_strip(&mut self, strip: DeviceId, targets: &[TerminalId], up: bool) {
         if targets.is_empty() {
-            self.message(
-                Level::Warning,
+            self.refuse(
+                "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
             return;
@@ -443,14 +443,32 @@ impl NovoApp {
                             ui.weak("Nothing matches yet");
                         }
                         for c in &changes {
-                            let note = match c.problem {
-                                Some(RenameProblem::Empty) => "  empty name".to_owned(),
-                                Some(RenameProblem::Taken(o)) => {
-                                    format!("  already used by {}", name_of(o))
+                            let line = format!("{}  ->  {}", c.old, c.new);
+                            // A rename that cannot happen is red: the button
+                            // stays off until it is fixed.
+                            match c.problem {
+                                Some(RenameProblem::Empty) => {
+                                    super::flags_inline::note_row(
+                                        ui,
+                                        novo_flags::Severity::Red,
+                                        false,
+                                        &line,
+                                        &["The new name is empty".to_owned()],
+                                    );
                                 }
-                                None => String::new(),
-                            };
-                            ui.label(format!("{}  ->  {}{note}", c.old, c.new));
+                                Some(RenameProblem::Taken(o)) => {
+                                    super::flags_inline::note_row(
+                                        ui,
+                                        novo_flags::Severity::Red,
+                                        false,
+                                        &line,
+                                        &[format!("{} is already used by {}", c.new, name_of(o))],
+                                    );
+                                }
+                                None => {
+                                    ui.label(line);
+                                }
+                            }
                         }
                         ui.add_space(6.0);
                         if ui
@@ -1072,7 +1090,12 @@ mod tests {
         ] {
             d.app.wb.terminal_edit.rows.clear();
             d.app.terminal_edit_command(command, arg);
-            assert_eq!(d.app.messages().last().unwrap().text, said, "{command}");
+            // A refusal is a triangle chip now; its detail is the sentence.
+            if command == "terminal.restore_declined" {
+                assert_eq!(d.app.messages().last().unwrap().text, said, "{command}");
+            } else {
+                assert_eq!(d.app.wb.flags.refusals.detail(), [said], "{command}");
+            }
             assert!(lesson.contains(said), "the lesson does not quote: {said}");
         }
         assert!(

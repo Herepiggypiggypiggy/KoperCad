@@ -132,6 +132,7 @@ mod example_plc;
 mod example_pump;
 mod faults;
 mod flags;
+mod flags_inline;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -272,6 +273,8 @@ mod potentials;
 mod preferences;
 mod print_preview;
 mod probe;
+#[cfg(test)]
+mod problem_census_terminals;
 mod project_rules;
 mod project_settings;
 mod protection;
@@ -2100,6 +2103,7 @@ impl NovoApp {
         self.learn_overlay(&ctx, canvas_rect);
         self.build_mode(&ctx, canvas_rect);
         self.toasts(&ctx, canvas_rect);
+        self.refusal_chip(&ctx, canvas_rect);
 
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);

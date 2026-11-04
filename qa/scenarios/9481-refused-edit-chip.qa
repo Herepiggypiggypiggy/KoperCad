@@ -1,0 +1,23 @@
+@title A refused terminal edit is a triangle chip with the reason in it, not a toast
+@area Schematic
+# T8: Set terminal level with no strip yet. The edit does not happen; a yellow triangle chip at the bottom right names it, click it for the reason. The next key press clears it.
+click_text "New project"
+wait 20
+key ctrl+k
+text "set terminal level"
+wait 5
+key Enter
+wait 10
+expect "Warning: No terminal strip yet"
+shot refusal-chip
+click_text "No terminal strip yet"
+wait 5
+expect "Place a terminal"
+shot refusal-detail
+check_layout
+key Escape
+wait 5
+key Escape
+wait 5
+expect_not "Warning: No terminal strip yet"
+shot refusal-gone

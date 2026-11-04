@@ -29,6 +29,8 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// The refused edit shown as a chip (lane T8).
+    pub(super) refusals: super::flags_inline::Refusals,
 }
 
 impl Default for FlagUi {
@@ -38,6 +40,7 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            refusals: Default::default(),
         }
     }
 }

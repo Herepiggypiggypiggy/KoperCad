@@ -60,6 +60,8 @@ impl NovoApp {
         if !self.is_open() {
             return;
         }
+        // The rows read their triangles from the one flag store.
+        self.sync_flags();
         let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
         let selected = self.selection();
         self.sync_strip_follow();
@@ -201,7 +203,7 @@ impl NovoApp {
                                     project,
                                     &view,
                                     &screen,
-                                    &selected,
+                                    (&selected, &self.wb.flags.store),
                                     &mut ticked,
                                     &mut toolbar,
                                 ) {
@@ -235,6 +237,7 @@ impl NovoApp {
                             self.wb.drawer_cable,
                             (&cable_proposals, declined),
                             (&mut self.wb.cable_edit, &candidates),
+                            &self.wb.flags.store,
                             &mut actions,
                         );
                     }
@@ -340,6 +343,7 @@ fn cables_tab(
     picked: Option<CableId>,
     (proposals, declined): (&[novo_cables::CableProposal], usize),
     (edit, candidates): (&mut CableEdit, &[Candidate]),
+    flags: &novo_flags::FlagStore,
     actions: &mut Vec<DrawerAction>,
 ) {
     let overview = novo_cables::overview(project);
@@ -400,7 +404,7 @@ fn cables_tab(
                 });
                 let mut changes = Vec::new();
                 header_controls(ui, project, shown, edit, &mut changes);
-                cable_controls(ui, project, shown, edit, candidates, &mut changes);
+                cable_controls(ui, project, shown, edit, candidates, flags, &mut changes);
                 let wires = candidate_wires(project, shown);
                 let record = project.cable(shown);
                 egui::Grid::new("cable_cores")
