@@ -39,8 +39,8 @@ impl NovoApp {
             "New crane project",
             [novo_theme::dialog_width::MEDIUM, 0.0],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ctx,
                     "Starts a project with the crane structure, the cover pages and a circuit \
 from the library on each page. You can change all of it afterwards.",
                 );

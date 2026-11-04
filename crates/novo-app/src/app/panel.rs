@@ -632,9 +632,10 @@ const MODAL_QUESTIONS: &[&str] = &[
 #[cfg(test)]
 pub(super) const MODAL_QUESTIONS_FOR_TEST: &[&str] = MODAL_QUESTIONS;
 
-/// The height a docked form opens at the first time: room for the longest forms
-/// (Add PLC card) without leaving a short one mostly empty.
-const FORM_PANE_HEIGHT: f32 = 520.0;
+/// What a docked pane adds around its form: the header and the padding.
+const FORM_PANE_CHROME: f32 = 56.0;
+/// The least a docked form opens at.
+const FORM_PANE_MIN: f32 = 120.0;
 
 /// Dialogs wider than this open as floating windows; narrower ones dock at
 /// the right edge when they open (the strip is at most 520 points wide).
@@ -1176,11 +1177,14 @@ fn modal_impl<R: Default>(
         super::panel_dock::set(ctx, &dock_name, Some(super::panel_dock::Slot::Right));
     }
     if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, &dock_name) {
-        // A form docks at FORM_PANE_HEIGHT the first time (a height the person
-        // gave it stays): at the 340 pt default a long form such as Add PLC card
-        // had its Create button below the fold, and the whole slot left a short
-        // form with a wide gap above its button.
-        super::panel_dock::open_at(ctx, &dock_name, FORM_PANE_HEIGHT);
+        // A form docks as tall as its content the first time (a height the
+        // person gave it stays): the first frame measures it, the next one
+        // sets the height. A long form is kept to what the slot can give by
+        // the stack, which shares a shortage so a short form keeps its size.
+        let measure_id = egui::Id::new(("form_content_height", name));
+        if let Some(h) = ctx.data(|d| d.get_temp::<f32>(measure_id)) {
+            super::panel_dock::open_at(ctx, &dock_name, (h + FORM_PANE_CHROME).max(FORM_PANE_MIN));
+        }
         let shown = super::panel_dock::show_docked(
             ctx,
             self::id(&dock_name),
@@ -1195,7 +1199,12 @@ fn modal_impl<R: Default>(
                 // its footer out of a narrow strip.
                 scrolls: true,
             },
-            add,
+            |ui| {
+                let out = add(ui);
+                let h = ui.min_rect().height();
+                ui.ctx().data_mut(|d| d.insert_temp(measure_id, h));
+                out
+            },
         );
         let closed = take_closed(ctx, &dock_name);
         return ModalOut {
