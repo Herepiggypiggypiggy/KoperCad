@@ -243,6 +243,7 @@ impl LayoutSearch {
         let mut open = true;
         let pal = crate::theme::ui_palette();
         super::panel::dialog(ctx, "Cooler layout", [WIDTH, 0.0])
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
             .scroll([false, false])
             .default_pos(at)

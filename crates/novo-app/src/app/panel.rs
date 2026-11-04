@@ -662,6 +662,14 @@ pub(super) struct Dialog<'a> {
 }
 
 impl<'a> Dialog<'a> {
+    /// Docked, this window opens as tall as its slot (a window whose buttons sit
+    /// below a list: at the default pane height they were cut off and unreachable).
+    /// Floating, it keeps the size it was asked for.
+    pub(super) fn tall(mut self) -> Self {
+        self.tall = true;
+        self
+    }
+
     pub(super) fn id(mut self, id: egui::Id) -> Self {
         self.id = id;
         // A window with an id of its own keeps its dock place when its title
