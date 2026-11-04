@@ -152,6 +152,7 @@ impl WireList {
             })
             .collect();
         let lengths = lengths::cut_lengths(project, &measured);
+        let estimate_note = lengths.iter().any(|l| l.basis.is_spec_estimate());
         for (connection, length) in connections.into_iter().zip(lengths) {
             let members: Vec<&Wire> = connection.wires.clone();
             let mut numbers: Vec<&str> =
@@ -217,6 +218,9 @@ impl WireList {
         // other workshop reports (see [`WIRE_LIST_COUNT_TITLE`]).
         if !with_feeds {
             section.title = WIRE_LIST_COUNT_TITLE.replace("{n}", &section.rows.len().to_string());
+        }
+        if estimate_note {
+            section.title = format!("{}. {}", section.title, novo_layout::spec::ESTIMATE_NOTICE);
         }
         ReportOutput {
             report: Self::ID.into(),

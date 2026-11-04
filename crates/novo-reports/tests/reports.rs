@@ -924,6 +924,65 @@ fn a_wire_to_the_door_is_a_model_and_says_so() {
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(row[9], "door, no gap", "{row:?}");
     assert!(novo_reports::is_estimate(&row[9]), "marked ~ on the bench");
+
+    // A chosen enclosure with catalogue numbers: the depth is in, marked ~,
+    // and the sheet carries the shared estimate notice.
+    use novo_layout::spec::{EnclosureSpec, Field, Source};
+    let set_spec = |doc: &mut _, setback: Option<f64>| {
+        let doc: &mut novo_core::Document = doc;
+        doc.transact("spec", |tx| {
+            let cab = tx.project().structures().find(|s| s.enclosure).unwrap().id;
+            let spec = EnclosureSpec {
+                article: "T1".into(),
+                width: Some(Field::new(450.0, Source::Catalogue)),
+                height: Some(Field::new(450.0, Source::Catalogue)),
+                depth: Some(Field::new(300.0, Source::Catalogue)),
+                wall: Some(Field::new(2.0, Source::Catalogue)),
+                plate_setback: setback.map(|v| Field::new(v, Source::Catalogue)),
+                ..EnclosureSpec::default()
+            };
+            let mut props = novo_core::Properties::default();
+            spec.write(&mut props);
+            let old: Vec<String> = tx
+                .project()
+                .get::<novo_core::Structure>(cab)
+                .unwrap()
+                .properties
+                .keys()
+                .filter(|k| k.starts_with("encl."))
+                .cloned()
+                .collect();
+            for k in old {
+                tx.set_property(cab, &k, None)?;
+            }
+            for (k, v) in props {
+                tx.set_property(cab, &k, Some(v))?;
+            }
+            Ok(())
+        })
+        .expect("spec");
+    };
+    let mut doc = doc;
+    set_spec(&mut doc, Some(20.0));
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[9], "~ door + depth (catalogue)", "{row:?}");
+    assert!(
+        wires.sections[0]
+            .title
+            .contains(novo_layout::spec::ESTIMATE_NOTICE)
+    );
+    let cut = report(&doc, "wirecut");
+    assert!(
+        cut.sections[0]
+            .title
+            .contains(novo_layout::spec::ESTIMATE_NOTICE)
+    );
+    // A number missing: marked ~ and says so.
+    set_spec(&mut doc, None);
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[9], "~ door, spec has no depth", "{row:?}");
 }
 
 #[test]

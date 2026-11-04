@@ -212,6 +212,9 @@ fn the_enclosure_spec_changes_the_door_wire_length() {
     let a = run(&p);
     // Interior depth 296, minus setback 20.
     assert_eq!(a.surface_legs[&7].depth_mm, 276.0);
+    // Catalogue numbers: an estimate.
+    assert!(a.surface_legs[&7].estimate);
+    assert_eq!(a.surface_legs[&7].spec_gap, None);
     assert_eq!(
         a.surface_legs[&7].length_mm,
         none.surface_legs[&7].length_mm + 276.0
@@ -224,4 +227,23 @@ fn the_enclosure_spec_changes_the_door_wire_length() {
     let c = run(&p);
     assert_eq!(c.spec_gaps, vec![(cab, "plate setback")]);
     assert_eq!(c.surface_legs[&7].depth_mm, 0.0);
+    assert_eq!(c.surface_legs[&7].spec_gap, Some("plate setback"));
+    // Numbers read from the maker's STEP are not an estimate.
+    let mut exact = spec(400.0, Some(20.0));
+    for f in [
+        &mut exact.width,
+        &mut exact.height,
+        &mut exact.depth,
+        &mut exact.wall,
+        &mut exact.plate_setback,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        f.source = Source::Step;
+    }
+    set(&mut p, &exact);
+    let d = run(&p);
+    assert_eq!(d.surface_legs[&7].depth_mm, 376.0);
+    assert!(!d.surface_legs[&7].estimate);
 }
