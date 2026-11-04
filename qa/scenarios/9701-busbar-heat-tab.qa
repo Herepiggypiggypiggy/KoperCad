@@ -10,7 +10,7 @@ click_text "Busbar heat"
 wait 20
 shot busbar-default
 expect "Hottest point"
-expect "Model, not a measurement"
+expect "model, not validated"
 expect "At most"
 expect "From cold"
 check_layout
@@ -29,5 +29,6 @@ key Enter
 wait 20
 shot busbar-too-much
 expect "no steady state"
-expect "Model, not a measurement"
+expect_not "stays under"
+expect "model, not validated"
 check_layout

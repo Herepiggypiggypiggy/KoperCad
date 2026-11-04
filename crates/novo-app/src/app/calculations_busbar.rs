@@ -121,6 +121,20 @@ pub(super) fn report(form: &BusbarForm) -> BusbarReport {
     }
 }
 
+/// The explanation behind the "?" of the result.
+const HELP: &str = "Model, not a measurement: a planning estimate for the numbers typed here, not a pass or fail against a rating. Not covered: neighbouring phases, short-circuit heating, the standard's temperature limits.";
+
+/// What to say about the heat-up from cold. Nothing when the bar has no
+/// steady state: the heat-up curve is then not the answer to "does it stay
+/// under the limit".
+pub(super) fn time_line(r: &BusbarReport, limit_c: f64) -> Option<String> {
+    r.steady.as_ref().ok()?;
+    Some(match r.seconds_to_limit {
+        Some(s) => format!("From cold it reaches {limit_c} °C after {}", duration(s)),
+        None => format!("From cold it stays under {limit_c} °C"),
+    })
+}
+
 pub(super) fn duration(seconds: f64) -> String {
     if seconds < 90.0 {
         format!("{seconds:.0} s")
@@ -282,7 +296,6 @@ pub(super) fn tab(
             ui.colored_label(crate::theme::ui_palette().error, e.to_string());
         }
     }
-    ui.weak("Model, not a measurement. A planning estimate for the numbers typed here, not a pass or fail against a rating.");
     match r.max_current_a {
         Some(a) => ui.label(format!(
             "At most {a:.0} A keeps the hottest point at {} °C",
@@ -293,14 +306,9 @@ pub(super) fn tab(
             "The air or a cooled end is already above the limit.",
         ),
     };
-    match r.seconds_to_limit {
-        Some(s) => ui.label(format!(
-            "From cold it reaches {} °C after {}",
-            form.limit_c,
-            duration(s)
-        )),
-        None => ui.label(format!("From cold it stays under {} °C", form.limit_c)),
-    };
+    if let Some(line) = time_line(r, form.limit_c) {
+        ui.label(line);
+    }
     if let Ok(o) = &r.steady {
         profile(ui, o, form.limit_c);
     }
@@ -308,7 +316,8 @@ pub(super) fn tab(
         if ui.button("Copy as text").clicked() {
             *copy = Some(report_text(form, r));
         }
-        ui.weak("Not covered: neighbouring phases, short-circuit heating, the standard's temperature limits.");
+        badge(ui, Model::Heat);
+        super::dialog_ui::help(ui, HELP);
     });
 }
 
@@ -396,6 +405,19 @@ mod tests {
         assert_eq!(i.ends[0], End::Fixed(40.0));
         assert_eq!(i.joints.len(), 1);
         assert!(report(&f).steady.is_ok());
+    }
+
+    #[test]
+    fn no_steady_state_says_nothing_about_staying_under_the_limit() {
+        let f = BusbarForm {
+            current_a: 20000.0,
+            ..BusbarForm::default()
+        };
+        let r = report(&f);
+        assert!(r.steady.is_err());
+        assert_eq!(time_line(&r, f.limit_c), None);
+        let ok = report(&BusbarForm::default());
+        assert!(time_line(&ok, 105.0).unwrap().contains("stays under 105"));
     }
 
     #[test]
