@@ -6,16 +6,16 @@ click_text "New project"
 wait 20
 answer_dialog qa/fixtures/files/not-a-drawing.dxf
 key ctrl+k
-text import dxf as background
+text import automationml
 wait 5
 key Enter
 wait 20
 shot job-flag-triangle
 check_layout
-expect "DXF import failed"
+expect "AML import failed"
 answer_dialog qa/fixtures/files/not-a-drawing.dxf
 key ctrl+k
-text import automationml
+text import dxf as background
 wait 5
 key Enter
 wait 20
