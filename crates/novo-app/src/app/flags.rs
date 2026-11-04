@@ -31,6 +31,8 @@ pub(super) struct FlagUi {
     pub(super) open: Option<(FlagId, egui::Pos2)>,
     /// The transient flags of refused edits (lane T7).
     pub(super) edit: super::flags_edit::EditFlags,
+    /// The drafts each simulation window raised (lane T10), by window.
+    pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
 }
 
 impl Default for FlagUi {
@@ -41,6 +43,7 @@ impl Default for FlagUi {
             index: HashMap::new(),
             open: None,
             edit: Default::default(),
+            sim: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -302,11 +305,10 @@ impl NovoApp {
         ctx: &egui::Context,
     ) {
         match action {
-            Action::Locate => {
-                if let Some(i) = index {
-                    self.go_problem(i);
-                }
-            }
+            Action::Locate => match index {
+                Some(i) => self.go_problem(i),
+                None => self.locate_flag(flag),
+            },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
             Action::Fix(cmd) if cmd == FIX_PIN_NAMES => {
                 if let Some(i) = index {

@@ -1,0 +1,33 @@
+@title Cooling selection follows the enclosure record: catalogue size shows its source and the estimate notice
+@area 3D
+@sizes 1366x768 1920x1080
+# Synthetic enclosure record (catalogue, 1000 x 1500 x 400): the Cooling selection names the size source and the estimate notice.
+open qa/fixtures/cabinet-cooling-spec-catalogue.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+move 700 650
+wait 10
+click_text "Cooling selection"
+wait 10
+shot catalogue-size
+expect "Enclosure size: catalogue."
+expect "Estimate from catalogue data, not a measurement of your cabinet."
+check_layout
