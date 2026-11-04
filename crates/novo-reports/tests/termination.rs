@@ -210,7 +210,7 @@ fn a_project_without_the_new_keys_prints_the_same_bench_output() {
     assert!(project.wires().all(|w| {
         [TERMINATION_A_KEY, TERMINATION_B_KEY, SLEEVE_TEXT_KEY]
             .iter()
-            .all(|k| w.properties.get(*k).is_none())
+            .all(|k| !w.properties.contains_key(*k))
     }));
     let jobs = bench_jobs(project);
     let standard = FerruleStandard::default();
