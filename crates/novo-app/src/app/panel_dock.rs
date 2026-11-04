@@ -706,6 +706,7 @@ pub(super) fn show_docked<R>(
     let mut ask = None;
     let mut closed = false;
     let mut fold_clicked = false;
+    let add = |ui: &mut egui::Ui| super::window_help::scope(ctx, name, || add(ui));
     let mut out = egui::Area::new(id.with("docked"))
         .order(egui::Order::Background)
         .fixed_pos(sub.min)
@@ -746,8 +747,22 @@ pub(super) fn show_docked<R>(
                     )
                     .on_hover_text(if is_fold { "Unfold" } else { "Fold up" });
                 fold_clicked = fold.clicked();
+                let help = super::window_help::text(ctx, name);
+                let title_x = if let Some(help) = &help {
+                    super::window_help::header_button(
+                        ui,
+                        egui::Rect::from_center_size(
+                            header.left_center() + egui::vec2(4.0 + BUTTON * 1.5, 0.0),
+                            egui::vec2(BUTTON, BUTTON),
+                        ),
+                        help,
+                    );
+                    8.0 + BUTTON * 2.0
+                } else {
+                    8.0 + BUTTON
+                };
                 ui.painter().text(
-                    header.left_center() + egui::vec2(8.0 + BUTTON, 0.0),
+                    header.left_center() + egui::vec2(title_x, 0.0),
                     egui::Align2::LEFT_CENTER,
                     title,
                     egui::FontId::proportional(13.0),
@@ -862,7 +877,12 @@ pub(super) fn show_docked<R>(
 /// The dock buttons in the title bar of a floating panel: painted on the
 /// window's own layer and hit-tested by hand, since egui's title bar has no
 /// room for more buttons of ours. Returns the slot that was clicked.
-pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Order) -> Option<Slot> {
+pub(super) fn title_buttons(
+    ctx: &egui::Context,
+    id: egui::Id,
+    name: &str,
+    order: egui::Order,
+) -> Option<Slot> {
     let title = ctx.read_response(id.with("__title_click"))?;
     let layer = egui::LayerId::new(order, id);
     let pal = crate::theme::ui_palette();
@@ -871,6 +891,13 @@ pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Orde
     let clicked = ctx.input(|i| i.pointer.primary_clicked());
     let right = title.rect.right() - 4.0;
     let mut chosen = None;
+    if let Some(help) = super::window_help::text(ctx, name) {
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(right - BUTTON / 2.0 - 2.0 * BUTTON, title.rect.center().y),
+            egui::vec2(BUTTON, BUTTON),
+        );
+        super::window_help::title_button(ctx, layer, name, rect, &help);
+    }
     for (k, slot) in [Slot::Right, Slot::Left].into_iter().enumerate() {
         let rect = egui::Rect::from_center_size(
             egui::pos2(

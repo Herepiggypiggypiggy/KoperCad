@@ -87,16 +87,7 @@ impl NovoApp {
             super::dock::ToolHint::default()
         };
         let selection = self.selection_summary();
-        let values = self.status_values().map(|v| {
-            // The cursor readout carries the key that brings the drawing
-            // back into view, so a lost view is one key away.
-            match self.command_shortcut_text(ui.ctx(), "view.fit") {
-                Some(key) if self.workspace() == Workspace::Schematic => {
-                    format!("{v}   {key} zoom to fit")
-                }
-                _ => v,
-            }
-        });
+        let values = self.status_values();
         let chips = self.mode_chips();
         // The simulation status: a slot of the bar in the two cabinet views.
         let sim = matches!(self.workspace(), Workspace::Cabinet | Workspace::View3d)
@@ -293,16 +284,10 @@ impl NovoApp {
         texts
     }
 
-    /// What to say when nothing else is happening.
+    /// What to say when nothing else is happening: nothing. The keys are in the
+    /// shortcut sheet and the command search (Ctrl+K), not on the bar.
     fn workspace_hint(&self) -> &'static str {
-        if !self.is_open() {
-            return "";
-        }
-        match self.workspace() {
-            Workspace::Schematic => "Q or Space to place · Ctrl+K to search",
-            Workspace::Cabinet => "Drag a device onto the plate · Ctrl+K to search",
-            _ => "",
-        }
+        ""
     }
 
     /// "-K1" for one device, "3 selected" for several, `None` for none.
