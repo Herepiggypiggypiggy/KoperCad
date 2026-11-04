@@ -9,9 +9,11 @@ Question (Tadjiro 2026-11-04): does forced convection from internal fans cool co
 - Result: `ThermalResult::circulation` (flow, pressure, share of free flow).
 - Tests: `tests/circulation.rs`, `forced::tests`.
 
+- UI (same PR, `novo-app/src/app/heat_inside_fans.rs`): "Fans inside" section in the 3D view's Vents and fans panel (Cabinet, Heat layer): add, position, direction, off-plate height, diameter, datasheet ends, installed %. Saved as structure property `heat.inside_fans`; `HeatSettings::apply` adds them to `Params::circulation_fans`. Text behind "?".
+
 ## Next
-1. PR 2: UI. "Fans inside" section in the 3D view's Vents and fans panel (add, position, direction, datasheet ends, installed factor, height off the plate); stored as a structure property like the openings; Heat layer shows the jet arrows (coordinate with H7).
-2. PR 3: 3D CFD (`novo-cfd`): internal fan as a momentum/pressure-jump patch on an interior face pair; device films use the resolved jet; compare with the 2D jet speed field.
+1. Draw the fan and its jet in the Cabinet canvas and the 3D view; Heat layer jet arrows (coordinate with H7). Drag to move.
+2. 3D CFD PR (new branch from main after #1861 merges): 3D CFD (`novo-cfd`): internal fan as a momentum/pressure-jump patch on an interior face pair; device films use the resolved jet; compare with the 2D jet speed field.
 3. Hot-spot air speed check against a fan case with measured/known axial-fan jet data (needs a datasheet-grade source; none in repo yet).
 4. Heatsink data on parts (fins, gap) so `heatsinks` is filled from the catalog, not by hand.
 5. Wake turbulence in the 3D films (from the resolved turbulence kinetic energy when a turbulence model runs).

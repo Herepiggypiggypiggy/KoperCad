@@ -233,6 +233,7 @@ fn body(
             ),
         );
     }
+    super::heat_inside_fans::section(ui, settings, e);
     if let Some(sg) = suggestion {
         ui.add_space(4.0);
         egui::Frame::group(ui.style()).show(ui, |ui| {
