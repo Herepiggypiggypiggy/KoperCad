@@ -81,14 +81,32 @@ pub(crate) fn read_identity(path: &Path) -> CadIdentity {
     let mut id = CadIdentity::read(&name, &bytes);
     if id.kind == FileKind::Step {
         let text = String::from_utf8_lossy(&bytes);
-        if bytes.len() <= MAX_HEALTH_BYTES {
-            remember_health(path, novo_interop::part3d::health::step_health(&text));
+        // One read of the file serves both the health report and the size: the
+        // solid is measured from the report's box (same reader, same tolerance).
+        let health = (bytes.len() <= MAX_HEALTH_BYTES)
+            .then(|| novo_interop::part3d::health::step_health(&text));
+        let from_health = health.as_ref().and_then(|h| {
+            let ok = h.verdict != Health::Unreadable && !h.unit_unknown;
+            let size = h.size_mm().filter(|s| {
+                s.iter()
+                    .all(|v| v.is_finite() && *v > 0.0 && *v <= MAX_PART_EXTENT_MM)
+            })?;
+            ok.then_some(novo_parts::StepBox {
+                size_mm: size,
+                points: h.triangles as usize,
+                from_solid: true,
+            })
+        });
+        if let Some(h) = health {
+            remember_health(path, h);
         }
         // The real solid when it can be measured; else the box around all
         // points, which can only contradict a part, never confirm it.
-        let measured = novo_interop::part3d::measure_step(&text)
-            .ok()
-            .or_else(|| step_box(&text).ok());
+        let measured = from_health.or_else(|| {
+            novo_interop::part3d::measure_step(&text)
+                .ok()
+                .or_else(|| step_box(&text).ok())
+        });
         if let Some(b) = measured {
             id = id.with_size(SizeMeasure {
                 size_mm: b.size_mm,
@@ -103,7 +121,21 @@ pub(crate) fn read_identity(path: &Path) -> CadIdentity {
 const MAX_HEALTH_BYTES: usize = 32 * 1024 * 1024;
 const MAX_HEALTH_ENTRIES: usize = 256;
 
-type HealthCache = std::sync::Mutex<std::collections::HashMap<PathBuf, std::sync::Arc<StepHealth>>>;
+/// A report is valid for the file's size and modification time.
+type Stamp = (Option<u64>, Option<std::time::SystemTime>);
+type HealthCache =
+    std::sync::Mutex<std::collections::HashMap<PathBuf, (Stamp, std::sync::Arc<StepHealth>)>>;
+
+fn stamp_of(path: &Path) -> Stamp {
+    let m = std::fs::metadata(path).ok();
+    (
+        m.as_ref().map(std::fs::Metadata::len),
+        m.and_then(|m| m.modified().ok()),
+    )
+}
+
+/// Largest part extent that is believed (100 m, as the catalog measure).
+const MAX_PART_EXTENT_MM: f64 = 1e5;
 
 fn health_cache() -> &'static HealthCache {
     static CACHE: std::sync::OnceLock<HealthCache> = std::sync::OnceLock::new();
@@ -115,16 +147,14 @@ fn remember_health(path: &Path, h: StepHealth) {
     if c.len() >= MAX_HEALTH_ENTRIES {
         c.clear();
     }
-    c.insert(path.to_path_buf(), std::sync::Arc::new(h));
+    c.insert(path.to_path_buf(), (stamp_of(path), std::sync::Arc::new(h)));
 }
 
 /// The model health report made when the file was read (STEP files only).
 pub(crate) fn health_of(path: &Path) -> Option<std::sync::Arc<StepHealth>> {
-    health_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(path)
-        .cloned()
+    let c = health_cache().lock().unwrap_or_else(|e| e.into_inner());
+    let (stamp, h) = c.get(path)?;
+    (*stamp == stamp_of(path)).then(|| h.clone())
 }
 
 /// The text behind the "?" of a model health line.
@@ -141,6 +171,9 @@ pub(crate) fn health_help(h: &StepHealth) -> String {
     for n in &h.notes {
         t.push_str(&format!("{n}\n"));
     }
+    t.push_str(
+        "Reads cleanly means no face was approximated or skipped and no geometry kind outside KoperCAD's list was found; the list is by name, so it is a check, not a proof.\n",
+    );
     t.push_str("The same check for a whole folder: kopercad-cli parts step-health <folder>");
     t
 }
@@ -155,6 +188,8 @@ struct Row {
     /// Text of the "add another part" search.
     pick: String,
     flow: ImportFlow,
+    /// The model health report of a STEP file, taken once when the row is made.
+    health: Option<std::sync::Arc<StepHealth>>,
 }
 
 enum Event {
@@ -215,6 +250,7 @@ impl CadPanel {
                 notes: Vec::new(),
                 pick: String::new(),
                 flow,
+                health: health_of(path),
             })
             .collect();
         CadPanel {
@@ -255,6 +291,7 @@ impl CadPanel {
                 notes: reasons,
                 pick: String::new(),
                 flow,
+                health: health_of(path),
             }],
             links,
             job: None,
@@ -493,7 +530,7 @@ Nothing is stored until you press Import.",
                         }
                     });
                     let warn = ui.visuals().warn_fg_color;
-                    if let Some(h) = health_of(&row.path) {
+                    if let Some(h) = row.health.clone() {
                         ui.horizontal(|ui| {
                             if let Some(c) = h.style.dominant {
                                 let (r, _) =

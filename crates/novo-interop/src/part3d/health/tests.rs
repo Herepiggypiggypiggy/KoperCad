@@ -131,6 +131,29 @@ fn header_schema_and_originator() {
 }
 
 #[test]
+fn a_name_with_brackets_and_quotes_does_not_cut_the_header() {
+    let t = block_step().replace(
+        "HEADER;\nENDSEC;",
+        "HEADER;\nFILE_NAME('x.stp','2020',('a'),('b'),'pre','Maker (v1); it''s odd','');\nENDSEC;",
+    );
+    assert_eq!(
+        step_health(&t).originator.as_deref(),
+        Some("Maker (v1); it's odd")
+    );
+}
+
+#[test]
+fn a_header_with_comments_and_spaces_reads() {
+    let t = block_step().replace(
+        "HEADER;\nENDSEC;",
+        "HEADER;\n/* (a 'comment') */\nFILE_NAME(\n/* name */ 'x', 'y', ('a'), ('b'), 'p', 'PARTsolutions', ' ');\nFILE_SCHEMA (('AUTOMOTIVE_DESIGN {1 0}'));\nENDSEC;",
+    );
+    let h = step_health(&t);
+    assert_eq!(h.originator.as_deref(), Some("PARTsolutions"));
+    assert_eq!(h.schema.as_deref(), Some("AUTOMOTIVE_DESIGN {1 0}"));
+}
+
+#[test]
 fn the_committed_pack_gives_the_expected_verdicts() {
     let results = health_of_folder(Path::new(PACK));
     let by = |n: &str| {
@@ -174,6 +197,26 @@ fn folder_scan_finds_step_files_in_subfolders_only() {
     let found = step_files_in(dir.path());
     assert_eq!(found.len(), 2);
     assert!(health_of_folder(&dir.path().join("missing")).is_empty());
+}
+
+#[test]
+fn step_files_inside_a_zip_are_read_in_place() {
+    use std::io::Write;
+    let dir = tempfile::tempdir().unwrap();
+    let mut z =
+        zip::ZipWriter::new(std::fs::File::create(dir.path().join("RITTAL_x.zip")).unwrap());
+    let opts = zip::write::SimpleFileOptions::default();
+    z.start_file("part.stp", opts).unwrap();
+    z.write_all(block_step().as_bytes()).unwrap();
+    z.start_file("readme.txt", opts).unwrap();
+    z.write_all(b"terms").unwrap();
+    z.finish().unwrap();
+    let r = health_of_folder(dir.path());
+    assert_eq!(r.len(), 1);
+    assert!(
+        r[0].0.ends_with("RITTAL_x.zip/part.stp") || r[0].0.ends_with("RITTAL_x.zip\\part.stp")
+    );
+    assert_eq!(r[0].1.verdict, Verdict::Clean);
 }
 
 #[test]

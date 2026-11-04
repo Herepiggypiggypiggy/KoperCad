@@ -52,7 +52,7 @@ pub(crate) enum Parts {
         #[arg(long, value_name = "FILE")]
         catalog: Option<PathBuf>,
     },
-    /// Check how well KoperCAD reads STEP models: for every `.stp`/`.step` file in a
+    /// Check how well KoperCAD reads STEP models: for every `.stp`, `.step` or `.p21` file (also inside ZIPs) in a
     /// folder, say whether it reads cleanly, what is approximated or missing, its
     /// size, its product names and colours. Reads only; the files stay where they
     /// are. Exit 1 when a file cannot be read.

@@ -200,24 +200,45 @@ impl StepHealth {
 }
 
 fn header_text(text: &str, keyword: &str) -> Option<Vec<String>> {
-    let start = text.find(keyword)?;
-    let rest = &text[start + keyword.len()..];
-    let end = rest.find(");")?;
+    // Only the header, without its comments, and `NAME (` as well as `NAME(`.
+    let header = text.split("DATA;").next().unwrap_or(text);
+    let mut clean = String::with_capacity(header.len());
+    let mut rest = header;
+    while let Some(i) = rest.find("/*") {
+        clean.push_str(&rest[..i]);
+        rest = rest[i..].find("*/").map_or("", |e| &rest[i + e + 2..]);
+    }
+    clean.push_str(rest);
+    let start = clean.find(keyword)?;
+    let after = clean[start + keyword.len()..].trim_start();
+    let mut chars = after.strip_prefix('(')?.chars().peekable();
     let mut out = Vec::new();
     let mut cur = String::new();
-    let mut inq = false;
-    for ch in rest[..end].chars() {
+    let (mut inq, mut depth) = (false, 1u32);
+    while let Some(ch) = chars.next() {
         match (ch, inq) {
+            // A doubled quote inside a string is one quote.
+            ('\'', true) if chars.peek() == Some(&'\'') => {
+                chars.next();
+                cur.push('\'');
+            }
             ('\'', false) => inq = true,
             ('\'', true) => {
                 inq = false;
                 out.push(std::mem::take(&mut cur));
             }
             (c, true) => cur.push(c),
+            ('(', false) => depth += 1,
+            (')', false) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(out);
+                }
+            }
             _ => {}
         }
     }
-    Some(out)
+    None
 }
 
 /// Runs the reader on a STEP text and says how it went. Never panics: a file
@@ -231,9 +252,9 @@ pub fn step_health(text: &str) -> StepHealth {
             return h;
         }
     };
-    h.schema = header_text(text, "FILE_SCHEMA(").and_then(|v| v.into_iter().next());
+    h.schema = header_text(text, "FILE_SCHEMA").and_then(|v| v.into_iter().next());
     // FILE_NAME(name, time, author, org, preprocessor, originating system, auth)
-    h.originator = header_text(text, "FILE_NAME(")
+    h.originator = header_text(text, "FILE_NAME")
         .and_then(|v| v.get(5).cloned())
         .filter(|s| !s.is_empty());
 
@@ -439,15 +460,86 @@ pub fn step_files_in(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Health of every STEP file in a folder.
+/// Health of every STEP file in a folder, and of those inside its ZIP files
+/// (a maker's download is a ZIP; nothing is unpacked to disk). A file inside a
+/// ZIP is named `<zip>/<entry>`.
 pub fn health_of_folder(dir: &Path) -> Vec<(PathBuf, StepHealth)> {
-    step_files_in(dir)
+    let mut out: Vec<(PathBuf, StepHealth)> = step_files_in(dir)
         .into_iter()
         .map(|p| {
             let h = health_of_file(&p);
             (p, h)
         })
-        .collect()
+        .collect();
+    for z in files_with_extension(dir, "zip") {
+        out.extend(health_of_zip(&z));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+fn files_with_extension(dir: &Path, ext: &str) -> Vec<PathBuf> {
+    fn walk(dir: &Path, ext: &str, depth: u32, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if depth < 4 {
+                    walk(&p, ext, depth + 1, out);
+                }
+            } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case(ext)) {
+                out.push(p);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, ext, 0, &mut out);
+    out.sort();
+    out
+}
+
+/// Health of each STEP file inside one ZIP.
+pub fn health_of_zip(zip_path: &Path) -> Vec<(PathBuf, StepHealth)> {
+    use std::io::Read;
+    let Ok(file) = std::fs::File::open(zip_path) else {
+        return Vec::new();
+    };
+    let Ok(mut archive) = zip::ZipArchive::new(file) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for i in 0..archive.len() {
+        let Ok(entry) = archive.by_index(i) else {
+            continue;
+        };
+        let Ok(name) = entry.name().map(|n| n.into_owned()) else {
+            continue;
+        };
+        if !is_step_name(&name) {
+            continue;
+        }
+        let label = zip_path.join(&name);
+        if entry.size() > MAX_BYTES {
+            let mut h = StepHealth::empty();
+            h.error = Some("the file is too large to read".into());
+            out.push((label, h));
+            continue;
+        }
+        let mut bytes = Vec::new();
+        let read = entry.take(MAX_BYTES).read_to_end(&mut bytes);
+        let h = match read {
+            Ok(_) => step_health(&String::from_utf8_lossy(&bytes)),
+            Err(e) => {
+                let mut h = StepHealth::empty();
+                h.error = Some(format!("cannot read the file inside the ZIP: {e}"));
+                h
+            }
+        };
+        out.push((label, h));
+    }
+    out
 }
 
 fn dims(s: Option<[f64; 3]>) -> String {
