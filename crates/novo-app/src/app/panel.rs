@@ -1172,6 +1172,10 @@ fn modal_impl<R: Default>(
         super::panel_dock::set(ctx, &dock_name, Some(super::panel_dock::Slot::Right));
     }
     if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, &dock_name) {
+        // A form docks as tall as its slot the first time (a height the person
+        // gave it stays): at the 340 pt default a long form such as Add PLC card
+        // had its Create button below the fold.
+        super::panel_dock::open_tall(ctx, &dock_name);
         let shown = super::panel_dock::show_docked(
             ctx,
             self::id(&dock_name),
