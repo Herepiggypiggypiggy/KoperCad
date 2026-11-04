@@ -156,6 +156,7 @@ mod heat_live_tests;
 mod heat_modes;
 #[cfg(test)]
 mod heat_modes_tests;
+mod heat_numbers;
 mod heat_openings;
 mod heat_openings_store;
 #[cfg(test)]
