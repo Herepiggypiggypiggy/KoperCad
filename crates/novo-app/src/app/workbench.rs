@@ -162,6 +162,8 @@ pub(crate) struct Workbench {
     pub(super) options: Option<super::variants::OptionsWindow>,
     /// The Generate pages from a spec sheet window, while open.
     pub(super) generate: Option<super::variants::GenerateWindow>,
+    /// The Place from a list window, while open.
+    pub(super) place_list: Option<super::place_list::PlaceListWindow>,
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
@@ -301,6 +303,10 @@ pub(crate) struct Workbench {
     pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
     /// Part proposals waiting for Accept all or Cancel.
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
+    /// The Devices drawer filtered to devices without a part, while open.
+    pub(super) parts_pass: Option<super::parts_pass::PartsPass>,
+    /// The part last used per device class (`K`), for the parts pass.
+    pub(super) last_part_by_class: std::collections::HashMap<String, novo_parts::PartKey>,
     /// A rename of part terminals offered after a part was assigned.
     pub(super) pin_offer: Option<super::pin_offer::PinOffer>,
     /// The text of the company pin names file offered to a new project.
@@ -407,6 +413,7 @@ impl Default for Workbench {
             sheet: 0,
             options: None,
             generate: None,
+            place_list: None,
             nav: Navigator::default(),
             pending: None,
             deferred_jump: None,
@@ -470,6 +477,8 @@ impl Default for Workbench {
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
+            parts_pass: None,
+            last_part_by_class: Default::default(),
             pin_offer: None,
             company_pin_offer: None,
             describe: None,
@@ -786,6 +795,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "project.tie",
     "project.untie",
     "project.generate",
+    "place.list",
     "export.variant_pdf",
     "export.spec",
     "revision.issue",
@@ -1774,6 +1784,7 @@ impl NovoApp {
             "project.tie" => self.tie_command(argument),
             "project.untie" => self.untie_command(),
             "project.generate" => self.open_generate(),
+            "place.list" => self.open_place_list(),
             "export.variant_pdf" => {
                 self.export_variant_pdf(argument);
             }

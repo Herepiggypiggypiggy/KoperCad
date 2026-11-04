@@ -682,7 +682,7 @@ impl NovoApp {
     /// Where on `page` a macro can go: the part on screen, where the pointer
     /// last was on the drawing, the sheet and the grid step. Nothing is on
     /// screen when another page is shown.
-    fn macro_view(&self, page: Option<novo_core::PageId>) -> macro_place::PlaceView {
+    pub(super) fn macro_view(&self, page: Option<novo_core::PageId>) -> macro_place::PlaceView {
         let Some(view) = self.canvas.schematic_ref() else {
             return macro_place::PlaceView::default();
         };
@@ -848,6 +848,7 @@ impl NovoApp {
                     );
                 }
                 self.message(Level::Info, text);
+                self.offer_parts_pass();
                 self.wb.macro_place.open = false;
             }
             Err(e) => {

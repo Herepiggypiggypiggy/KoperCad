@@ -463,7 +463,8 @@ impl NovoApp {
         // (hoist, true = reset the overload relay, false = let the motors cool down)
         let mut heat_action: Option<(String, bool)> = None;
         let running = hoist.active.is_some();
-        let notice = hoist.notice.clone();
+        let sim_flags = self.sim_flags_of(super::sim_flags::HOIST);
+        let mut flag_click = None;
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
         // The Live card sits at the left edge and takes the buttons of the drawing: the window
         // opens at the right edge (the constraint pulls it inside) so neither covers the other.
@@ -503,12 +504,8 @@ impl NovoApp {
                         super::window_help::add(ui.ctx(), "The run reads the live view (Shift+L).");
                     }
                 });
-                for (level, text) in &notice {
-                    let w = match level {
-                        Level::Error => novo_theme::widgets::Level::Error,
-                        _ => novo_theme::widgets::Level::Warning,
-                    };
-                    novo_theme::widgets::banner(ui, w, text, |_| {});
+                if let Some(c) = super::sim_flags::strip(ui, &sim_flags) {
+                    flag_click = Some(c);
                 }
                 if !rows.is_empty() {
                     ui.separator();
@@ -597,6 +594,9 @@ impl NovoApp {
                 );
                 super::window_help::add(ui.ctx(), model);
             });
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
+        }
         if !open {
             self.wb.hoist.open = false;
         }
@@ -608,7 +608,10 @@ impl NovoApp {
             && let Some(m) = active.lp.hoists.iter_mut().find(|m| m.id == id)
             && let Err(why) = m.unit.set_faults(faults)
         {
-            self.wb.hoist.notice = vec![(Level::Warning, format!("{id}: {why}"))];
+            self.wb.hoist.notice = self.set_sim_notes(
+                super::sim_flags::HOIST,
+                vec![(Level::Warning, format!("{id}: {why}"))],
+            );
         }
         if let Some((id, reset)) = heat_action
             && let Some(active) = self.wb.hoist.active.as_mut()
@@ -629,7 +632,7 @@ impl NovoApp {
     }
 
     /// Builds the loop from the hoists of the project and checks their bindings.
-    fn start_hoist_run(&mut self) {
+    pub(super) fn start_hoist_run(&mut self) {
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -640,13 +643,23 @@ impl NovoApp {
                 Level::Warning,
                 "No hoist can run: see the notes above.".into(),
             ));
-            self.wb.hoist.notice = notes;
+            self.wb.hoist.notice = super::sim_flags::set_notes(
+                &mut self.wb.flags,
+                project,
+                super::sim_flags::HOIST,
+                notes,
+            );
             return;
         }
         let mut lp = match HoistLoop::new(StepConfig::default()) {
             Ok(lp) => lp,
             Err(why) => {
-                self.wb.hoist.notice = vec![(Level::Error, why.to_string())];
+                self.wb.hoist.notice = super::sim_flags::set_notes(
+                    &mut self.wb.flags,
+                    project,
+                    super::sim_flags::HOIST,
+                    vec![(Level::Error, why.to_string())],
+                );
                 return;
             }
         };
@@ -660,7 +673,12 @@ impl NovoApp {
                 .into_iter()
                 .map(|f| (Level::Warning, format!("{}: {}", f.module, f.message))),
         );
-        self.wb.hoist.notice = notes;
+        self.wb.hoist.notice = super::sim_flags::set_notes(
+            &mut self.wb.flags,
+            project,
+            super::sim_flags::HOIST,
+            notes,
+        );
         self.wb.hoist.active = Some(Active { lp, acc: 0.0 });
     }
 }

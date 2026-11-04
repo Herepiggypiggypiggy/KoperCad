@@ -884,3 +884,55 @@ fn ctrl_arrow_moves_the_selected_block_one_place() {
     key(&mut d, egui::Key::ArrowDown, egui::Modifiers::COMMAND);
     assert_eq!(order(&d), ids);
 }
+
+#[test]
+fn a_picked_enclosure_gives_the_cabinet_its_plate_and_a_record_with_sources() {
+    use novo_layout::spec::{EnclosureSpec, Source};
+    let (_dir, mut d) = drive();
+    d.app.perform(Act::NewCabinet { in_group: None });
+    d.frame();
+    d.frame();
+    let list = [novo_layout::sizing::EnclosureSize {
+        name: "Test box".into(),
+        width: 600.0,
+        height: 800.0,
+        depth: 300.0,
+        plate_width: 500.0,
+        plate_height: 700.0,
+        margin: 5.0,
+        material: novo_layout::sizing::Material::Steel,
+    }];
+    {
+        let form = d.app.ol.cabinet_form.as_mut().expect("window open");
+        form.choices = super::enclosure_pick::from_list(&list);
+        form.picker.picked = Some(0);
+    }
+    key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
+    d.frame();
+    let cab = d
+        .doc()
+        .project()
+        .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
+        .expect("cabinet +CAB1");
+    let plate = cab.plate.expect("plate");
+    assert_eq!(
+        (plate.width, plate.height, plate.margin),
+        (500.0, 700.0, 5.0)
+    );
+    let spec = EnclosureSpec::read(&cab.properties);
+    assert_eq!(spec.width.unwrap().value, 600.0);
+    assert_eq!(spec.depth.unwrap().source, Source::Typed);
+    assert_eq!(
+        cab.properties.get("depth_mm"),
+        Some(&novo_core::Value::Float(300.0))
+    );
+    // One undo removes the cabinet and its record together.
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert!(
+        d.doc()
+            .project()
+            .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
+            .is_none()
+    );
+}

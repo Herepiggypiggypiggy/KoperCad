@@ -328,3 +328,154 @@ fn an_enclosure_too_small_for_the_layout_is_refused_and_a_few_strays_are_listed(
     assert!(matches!(e, BridgeError::MostlyOutside { .. }), "{e}");
     assert!(e.to_string().contains("outside the enclosure"), "{e}");
 }
+
+mod spec {
+    use super::*;
+    use novo_layout::spec::{EnclosureSpec, Field, Missing, Source};
+
+    fn with_spec(p: &mut Project, cab: StructureId, spec: &EnclosureSpec) {
+        let old: Vec<String> = p
+            .get::<novo_core::Structure>(cab)
+            .unwrap()
+            .properties
+            .keys()
+            .filter(|k| k.starts_with("encl."))
+            .cloned()
+            .collect();
+        let mut fresh = novo_core::Properties::new();
+        spec.write(&mut fresh);
+        p.transact("spec", |tx| {
+            for k in old {
+                tx.set_property(cab, k, None)?;
+            }
+            for (k, v) in fresh {
+                tx.set_property(cab, k, Some(v))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn catalogue(w: f64, h: f64, d: f64, wall: f64) -> EnclosureSpec {
+        let c = |v| Some(Field::new(v, Source::Catalogue));
+        EnclosureSpec {
+            article: "TEST.001".into(),
+            series: "Synthetic".into(),
+            width: c(w),
+            height: c(h),
+            depth: c(d),
+            wall: c(wall),
+            ..EnclosureSpec::default()
+        }
+    }
+
+    fn air_c(b: &novo_thermal::bridge::Bridge) -> f64 {
+        let r = novo_thermal::simulate_steady_with(
+            &b.scenario,
+            novo_thermal::Options {
+                bands: false,
+                advice: false,
+            },
+        )
+        .unwrap();
+        r.devices.iter().map(|d| d.air_c).fold(f64::MIN, f64::max)
+    }
+
+    #[test]
+    fn the_spec_gives_outside_size_and_wall() {
+        let (mut p, cab) = fixture();
+        with_spec(&mut p, cab, &catalogue(520.0, 720.0, 270.0, 2.5));
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        let e = &b.scenario.enclosure;
+        assert_eq!((e.width_mm, e.height_mm, e.depth_mm), (520.0, 720.0, 270.0));
+        assert_eq!(e.wall_mm, 2.5);
+        assert_eq!(b.report.enclosure_source, Some(Source::Catalogue));
+        assert_eq!(b.report.enclosure_article, "TEST.001");
+    }
+
+    #[test]
+    fn a_larger_enclosure_runs_cooler() {
+        let (mut p, cab) = fixture();
+        with_spec(&mut p, cab, &catalogue(500.0, 700.0, 250.0, 2.0));
+        let small = air_c(&scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap());
+        with_spec(&mut p, cab, &catalogue(800.0, 1200.0, 400.0, 2.0));
+        let big = air_c(&scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap());
+        assert!(big < small, "big {big} should be cooler than small {small}");
+    }
+
+    #[test]
+    fn the_weakest_source_travels_into_the_report() {
+        let (mut p, cab) = fixture();
+        let mut s = catalogue(500.0, 700.0, 250.0, 2.0);
+        s.width = Some(Field::new(500.0, Source::Step));
+        s.wall = Some(Field::new(2.0, Source::Typed));
+        with_spec(&mut p, cab, &s);
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        assert_eq!(b.report.enclosure_source, Some(Source::Typed));
+    }
+
+    #[test]
+    fn the_estimate_notice_shows_when_any_number_is_catalogue() {
+        let (mut p, cab) = fixture();
+        let mut s = catalogue(500.0, 700.0, 250.0, 2.0);
+        s.wall = Some(Field::new(2.0, Source::Typed)); // weakest is typed, size is still catalogue
+        with_spec(&mut p, cab, &s);
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        assert_eq!(b.report.enclosure_source, Some(Source::Typed));
+        assert!(
+            b.report
+                .messages_with_enclosure()
+                .contains(&novo_layout::spec::ESTIMATE_NOTICE.to_owned())
+        );
+        let mut all_typed = catalogue(500.0, 700.0, 250.0, 2.0);
+        for f in [
+            &mut all_typed.width,
+            &mut all_typed.height,
+            &mut all_typed.depth,
+            &mut all_typed.wall,
+        ] {
+            *f = f.map(|f| Field::new(f.value, Source::Typed));
+        }
+        with_spec(&mut p, cab, &all_typed);
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        assert!(!b.report.enclosure_estimate);
+    }
+
+    #[test]
+    fn a_chosen_enclosure_with_a_missing_field_fails_loudly() {
+        let (mut p, cab) = fixture();
+        let mut s = catalogue(500.0, 700.0, 250.0, 2.0);
+        s.wall = None;
+        with_spec(&mut p, cab, &s);
+        assert_eq!(
+            scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap_err(),
+            BridgeError::SpecIncomplete(Missing("wall thickness"))
+        );
+    }
+
+    #[test]
+    fn a_project_without_a_record_behaves_as_before() {
+        let (p, cab) = fixture();
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        assert_eq!(b.report.enclosure_source, None);
+        assert_eq!(b.scenario.enclosure.width_mm, 504.0);
+    }
+}
+
+#[test]
+fn the_enclosure_line_names_article_and_weakest_source() {
+    use novo_layout::spec::ESTIMATE_NOTICE;
+    let (p, cab) = fixture();
+    let plain = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+    assert_eq!(
+        plain.report.messages_with_enclosure(),
+        plain.report.messages()
+    );
+    let mut b = plain;
+    b.report.enclosure_source = Some(novo_layout::spec::Source::Catalogue);
+    b.report.enclosure_article = "8455.600".into();
+    b.report.enclosure_estimate = true;
+    let m = b.report.messages_with_enclosure();
+    assert!(m.contains(&"Enclosure 8455.600: catalogue".to_owned()));
+    assert!(m.contains(&ESTIMATE_NOTICE.to_owned()));
+}

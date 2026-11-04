@@ -9,13 +9,13 @@ use novo_core::{
     RailKind, StructureId, Value, WireId,
 };
 use novo_layout::enclosure::{Enclosure, Hinge};
-use novo_layout::model::{enclosure_of, load};
+use novo_layout::model::{enclosure_of, load, spec_of, spec_problem};
 use novo_routing::Kind;
 use novo_routing::model::{route_project, wire_connections};
 
 use super::{
-    Depth, DoorSpec, DuctShape, HingeSide, Inputs, Options, Shell, WireColour, WireInput, WireKind,
-    from_layout,
+    Body, Depth, DoorSpec, DuctShape, HingeSide, Inputs, Options, Shell, WireColour, WireInput,
+    WireKind, from_layout,
 };
 use crate::appearance::{DeviceClass, KindHint};
 use crate::scene::Scene;
@@ -97,14 +97,34 @@ pub fn scene(project: &Project, id: StructureId, options: &Options) -> Option<Sc
 /// of the door and the door's hinge side, closed. The default shell while the
 /// enclosure has no interior yet.
 pub fn shell(project: &Project, id: StructureId) -> Shell {
-    match enclosure_of(project, id) {
-        Some(e) => shell_of(&e),
-        None => Shell::default(),
+    let Some(e) = enclosure_of(project, id) else {
+        return Shell::default();
+    };
+    let mut shell = shell_of(&e);
+    if let Some(spec) = spec_of(project, id)
+        && let (Ok(_), Some(setback), Some(wall)) = (spec.interior(), spec.plate_setback, spec.wall)
+        && let (Some(w), Some(h), Some(d)) = (spec.width, spec.height, spec.depth)
+    {
+        shell.body = Some(Body {
+            width: w.value,
+            height: h.value,
+            depth: d.value,
+            wall: wall.value,
+            setback: setback.value,
+        });
     }
+    shell
+}
+
+/// One line when the chosen enclosure lacks a number for its shell; the
+/// view then shows no body instead of a guessed size or depth.
+pub fn shell_problem(project: &Project, id: StructureId) -> Option<String> {
+    spec_problem(project, id)
 }
 
 fn shell_of(e: &Enclosure) -> Shell {
     Shell {
+        body: None,
         depth: (e.depth - e.plate_setback).max(0.0),
         door: e.door.map(|d| DoorSpec {
             hinge: match d.hinge {

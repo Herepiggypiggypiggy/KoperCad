@@ -187,3 +187,159 @@ fn insulation_colours_follow_the_iec_codes_and_bi_colours_have_a_stripe() {
     );
     assert!(Colour::parse("GNYE").is_some());
 }
+
+fn choose(p: &mut Project, cab: StructureId, spec: &novo_layout::spec::EnclosureSpec) {
+    p.transact("Choose enclosure", |tx| {
+        let mut props = std::collections::BTreeMap::new();
+        spec.write(&mut props);
+        for (k, v) in props {
+            tx.set_property(cab, &k, Some(v))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn catalogue_spec(w: f64, h: f64, d: f64) -> novo_layout::spec::EnclosureSpec {
+    use novo_layout::spec::{EnclosureSpec, Field, Source};
+    let c = |v| Some(Field::new(v, Source::Catalogue));
+    EnclosureSpec {
+        article: "TEST.1".into(),
+        series: "Synthetic".into(),
+        width: c(w),
+        height: c(h),
+        depth: c(d),
+        wall: c(2.0),
+        plate_setback: c(30.0),
+        door_inner_depth: c(10.0),
+        ..Default::default()
+    }
+}
+
+fn enclosure_bounds(p: &Project, cab: StructureId) -> (f32, f32, f32) {
+    let scene = model::scene(p, cab, &model::options(p, cab, false)).unwrap();
+    let item = scene
+        .items
+        .iter()
+        .find(|i| i.id.kind == ItemKind::Enclosure)
+        .unwrap();
+    (item.size.x, item.size.y, item.size.z)
+}
+
+#[test]
+fn the_body_and_door_follow_the_chosen_spec() {
+    let (mut p, cab, _) = project();
+    // The door dialog sets hinge and angle; the size comes from the record.
+    let hinge = Enclosure {
+        width: 1.0,
+        height: 1.0,
+        depth: 1.0,
+        plate_setback: 0.0,
+        door: Some(Door {
+            hinge: Hinge::Left,
+            max_angle: 100.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: None,
+        hinge_side_clearance: None,
+    };
+    p.transact("door", |tx| set_enclosure(tx, cab, &hinge))
+        .unwrap();
+
+    choose(&mut p, cab, &catalogue_spec(600.0, 800.0, 300.0));
+    let a = enclosure_bounds(&p, cab);
+    assert_eq!(a.0, 600.0);
+    assert_eq!(a.1, 800.0);
+    // Door inside at 300 - 4 - 30 = 266; body adds setback and wall.
+    assert_eq!(model::shell(&p, cab).depth, 266.0);
+    assert_eq!(a.2, 266.0 + 30.0 + 2.0);
+
+    choose(&mut p, cab, &catalogue_spec(800.0, 1000.0, 400.0));
+    let b = enclosure_bounds(&p, cab);
+    assert_eq!((b.0, b.1), (800.0, 1000.0));
+    assert!(b.2 > a.2, "a deeper enclosure gives a deeper body");
+    let scene = model::scene(&p, cab, &model::options(&p, cab, false)).unwrap();
+    let g = scene.group(novo_view3d::build::DOOR_HINGE).unwrap();
+    // Left hinge on the left edge of the box (800 wide, plate 400 wide).
+    assert_eq!(g.pivot.x, 200.0 - 400.0);
+    assert_eq!(model::door_limit_deg(&p, cab), Some(100.0));
+}
+
+#[test]
+fn a_chosen_enclosure_with_a_missing_number_is_reported() {
+    let (mut p, cab, _) = project();
+    assert_eq!(model::shell_problem(&p, cab), None, "old project: as now");
+    let mut spec = catalogue_spec(600.0, 800.0, 300.0);
+    spec.depth = None;
+    choose(&mut p, cab, &spec);
+    assert_eq!(
+        model::shell_problem(&p, cab).as_deref(),
+        Some("The enclosure has no outside depth.")
+    );
+    assert!(model::shell(&p, cab).body.is_none());
+}
+
+#[test]
+fn a_dialog_edit_marks_only_the_changed_number_typed() {
+    use novo_layout::model::{enclosure_of, spec_of};
+    use novo_layout::spec::Source;
+    let (mut p, cab, _) = project();
+    choose(&mut p, cab, &catalogue_spec(600.0, 800.0, 300.0));
+    let mut e = enclosure_of(&p, cab).unwrap();
+    e.depth = 280.0;
+    p.transact("dialog", |tx| set_enclosure(tx, cab, &e))
+        .unwrap();
+    let spec = spec_of(&p, cab).unwrap();
+    assert_eq!(spec.depth.unwrap().source, Source::Typed);
+    assert_eq!(spec.depth.unwrap().value, 284.0);
+    assert_eq!(spec.width.unwrap().source, Source::Catalogue);
+}
+
+#[test]
+fn the_door_is_flush_on_the_front_of_the_body_and_swings_clear() {
+    let (mut p, cab, _) = project();
+    let hinge = Enclosure {
+        width: 1.0,
+        height: 1.0,
+        depth: 1.0,
+        plate_setback: 0.0,
+        door: Some(Door {
+            hinge: Hinge::Left,
+            max_angle: 90.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: None,
+        hinge_side_clearance: None,
+    };
+    p.transact("door", |tx| set_enclosure(tx, cab, &hinge))
+        .unwrap();
+    for (w, h, d) in [(600.0, 800.0, 300.0), (800.0, 1000.0, 400.0)] {
+        choose(&mut p, cab, &catalogue_spec(w, h, d));
+        let scene = model::scene(&p, cab, &model::options(&p, cab, false)).unwrap();
+        let bounds = |kind| {
+            let i = scene.items.iter().find(|i| i.id.kind == kind).unwrap();
+            scene.world_bounds(i)
+        };
+        let body = bounds(ItemKind::Enclosure);
+        let door = bounds(ItemKind::Door);
+        let eps = 1e-3;
+        // Sizes straight from the record.
+        assert!((body.max.x - body.min.x - w as f32).abs() < eps);
+        assert!((body.max.y - body.min.y - h as f32).abs() < eps);
+        // Back wall at -(setback + wall); front at the door inside plane.
+        let inside = (d - 2.0 * 2.0 - 30.0) as f32;
+        assert!((body.min.z + 32.0).abs() < eps);
+        assert!((body.max.z - inside).abs() < eps);
+        // The door covers the same outline and stands in front of the body.
+        assert!((door.min.x - body.min.x).abs() < eps && (door.max.x - body.max.x).abs() < eps);
+        assert!((door.min.y - body.min.y).abs() < eps && (door.max.y - body.max.y).abs() < eps);
+        assert!(door.min.z > body.max.z, "no shared plane, no flicker");
+        // Opened 90 degrees it swings out in front, not into the body.
+        let open = scene
+            .bounds_with_group_angle(novo_view3d::build::DOOR_HINGE, -std::f32::consts::FRAC_PI_2);
+        assert!(
+            open.max.z > inside + w as f32 - 1.0,
+            "door opens out to its width"
+        );
+    }
+}
