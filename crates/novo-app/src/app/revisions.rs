@@ -230,7 +230,7 @@ impl NovoApp {
                     "revision.issue",
                     "Revision not issued",
                     Level::Error,
-                    e.to_string(),
+                    format!("{e}."),
                 );
             }
             Err(e) => {

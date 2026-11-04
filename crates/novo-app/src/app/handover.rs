@@ -459,7 +459,7 @@ impl NovoApp {
                 "Handover is empty",
                 Level::Warning,
                 forced.unwrap_or_else(|| {
-                    "Nothing to put in a handover package yet: draw something first".to_owned()
+                    "Nothing to put in a handover package yet: draw something first.".to_owned()
                 }),
             );
             return None;

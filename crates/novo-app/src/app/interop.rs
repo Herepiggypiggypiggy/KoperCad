@@ -493,7 +493,7 @@ impl NovoApp {
                 "import.dwg",
                 "No DWG converter",
                 Level::Warning,
-                format!("No DWG converter found. {}", dwg::guidance()),
+                format!("No DWG converter found. {}.", dwg::guidance()),
             );
             return false;
         };
@@ -575,7 +575,7 @@ impl NovoApp {
                     "import.dwg",
                     "Not a DWG converter",
                     Level::Warning,
-                    "That is not dwg2dxf or the ODA File Converter. Choose one of those programs",
+                    "That is not dwg2dxf or the ODA File Converter. Choose one of those programs.",
                 );
                 false
             }
