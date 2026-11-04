@@ -14,7 +14,7 @@ expect "Plate setback"
 expect "not known"
 check_layout
 key ctrl+f
-text Cabinet sheet
+text Estimate
 wait 5
 shot bom-cabinet-sheet
 expect "Estimate from catalogue data"

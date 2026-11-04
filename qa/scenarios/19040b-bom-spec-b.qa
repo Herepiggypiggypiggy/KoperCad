@@ -12,7 +12,7 @@ shot bom-top
 expect "Enclosure Synthetic, 800 x 1200 x 500 mm"
 check_layout
 key ctrl+f
-text Cabinet sheet
+text Estimate
 wait 5
 shot bom-cabinet-sheet
 expect "Estimate from catalogue data"

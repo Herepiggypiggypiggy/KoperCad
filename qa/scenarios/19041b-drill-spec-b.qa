@@ -17,7 +17,7 @@ shot b-placed
 key Enter
 wait 20
 shot b2-accepted
-click_text "Export"
+click_text "More"
 wait 6
 click_text "Drill plan (hand, PDF)"
 wait 3
