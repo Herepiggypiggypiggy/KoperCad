@@ -42,7 +42,7 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
             .filter(|p| p.kind == novo_layout::spec::PartKind::Duct);
         for (i, p) in factory.enumerate() {
             ducts.push(Duct {
-                id: SPEC_DUCT_BASE + i as u64,
+                id: spec_duct_id(structure, i),
                 a: Point::new(p.x, p.y),
                 b: if p.vertical {
                     Point::new(p.x, p.y + p.length)
@@ -61,6 +61,12 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
 /// Duct ids at or above this belong to the enclosure's spec, not to a rail
 /// of the model.
 pub const SPEC_DUCT_BASE: u64 = 1 << 40;
+
+/// The duct id of the `i`-th factory duct of an enclosure's spec: unique per
+/// enclosure (at most 1024 factory ducts each).
+pub fn spec_duct_id(structure: StructureId, i: usize) -> u64 {
+    SPEC_DUCT_BASE + structure.raw() * 1024 + i as u64
+}
 
 /// Ducts meet in a T or a corner with one ending against the side of the
 /// other (they never cross). The engine joins ducts where their centre lines

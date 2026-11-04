@@ -900,6 +900,28 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
             .title
             .contains(novo_layout::spec::ESTIMATE_NOTICE)
     );
+    // The factory duct has a real name on the cut sheets, not "duct ?".
+    let jobs = novo_reports::wire_cut_jobs(doc.project());
+    assert!(
+        jobs.iter().any(|j| j.track == "F1"),
+        "{:?}",
+        jobs.iter().map(|j| j.track.clone()).collect::<Vec<_>>()
+    );
+    assert!(jobs.iter().all(|j| !j.track.contains('?')));
+    let cut = report(&doc, "wirecut");
+    let ducts = cut.section("ducts").expect("duct summary").text_rows();
+    assert!(
+        ducts
+            .iter()
+            .any(|r| r[0].starts_with("F1 = +CAB factory duct at 50, 250")),
+        "{ducts:?}"
+    );
+    assert_eq!(
+        novo_reports::duct_names(doc.project())
+            .values()
+            .collect::<Vec<_>>(),
+        ["F1"]
+    );
     set(&mut doc, &factory(Source::Step));
     let row = wire_row(&report(&doc, "wires"), "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!((row[8].as_str(), row[9].as_str()), ("736", "routed"));
