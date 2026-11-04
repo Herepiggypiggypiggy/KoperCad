@@ -391,12 +391,10 @@ impl NovoApp {
         }
     }
 
-    pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
-        if !self.emc.open {
-            return;
-        }
+    /// The EMC report of the current project revision, worked out once and
+    /// shared by the EMC window and the triangle popovers.
+    pub(super) fn emc_cache(&mut self) {
         let Some(doc) = self.backend.document() else {
-            self.emc.open = false;
             return;
         };
         let project = doc.project();
@@ -414,6 +412,23 @@ impl NovoApp {
             };
             self.emc.cache = Some((revision, cached));
         }
+    }
+
+    pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
+        if !self.emc.open {
+            return;
+        }
+        let Some(doc) = self.backend.document() else {
+            self.emc.open = false;
+            return;
+        };
+        let project = doc.project();
+        let revision = project.revision();
+        self.emc_cache();
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let project = doc.project();
         let enabled = emc::is_enabled(project);
         let Some((_, cached)) = self.emc.cache.as_ref() else {
             return;
@@ -704,13 +719,13 @@ impl NovoApp {
     /// shows in the EMC check window; nothing changes until Apply there).
     /// `None` when the finding only has advice to follow by hand.
     pub(super) fn emc_fix_of(
-        &self,
+        &mut self,
         flag: &novo_flags::Flag,
         rule: Option<&'static str>,
     ) -> Option<Fix> {
-        let project = self.backend.document().map(|d| d.project())?;
-        let netlist = project.netlist();
-        let report = emc::analyse_with(project, &netlist);
+        self.emc_cache();
+        let (_, cached) = self.emc.cache.as_ref()?;
+        let report = &cached.report;
         let wanted: std::collections::BTreeSet<String> =
             flag.anchors.iter().map(novo_flags::Anchor::key).collect();
         report
@@ -729,7 +744,15 @@ impl NovoApp {
                     })
                     .filter(|k| !k.is_empty())
                     .collect();
-                keys.is_empty() || keys.is_subset(&wanted)
+                if keys.is_empty() {
+                    // A plate-only finding has no drawn anchor: its own sentence is the key.
+                    flag.detail
+                        .0
+                        .first()
+                        .is_some_and(|m| m.starts_with(&f.message))
+                } else {
+                    keys == wanted
+                }
             })
             .flat_map(|f| f.fixes.iter())
             .find(|x| x.applicable())
