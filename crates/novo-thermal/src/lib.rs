@@ -18,6 +18,7 @@ mod flow;
 mod linalg;
 pub mod lump;
 pub mod model;
+pub mod outside;
 pub mod placement;
 pub mod placement_project;
 mod report;
