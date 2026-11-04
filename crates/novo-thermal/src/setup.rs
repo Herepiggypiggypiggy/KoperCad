@@ -180,6 +180,8 @@ pub struct Setup {
     pub jet_speed_ms: f64,
     /// k times effective surface, W/K (IEC 60890 whole enclosure).
     pub k_ae: f64,
+    /// The shell in use (the user's or the default of the enclosure).
+    pub shell: crate::shell::ShellModel,
     pub on_plate: Vec<bool>,
     /// Heat capacity of an air cell, J/K, per cell (open volume).
     pub c_air: Vec<f64>,
@@ -388,6 +390,7 @@ impl Setup {
             e.height_mm / 1000.0,
             e.depth_mm / 1000.0,
         );
+        // IEC 60890 reference: material k times effective surface.
         let k_ae = k
             * (b[FRONT] * wo * ho
                 + b[REAR] * wo * ho
@@ -395,6 +398,10 @@ impl Setup {
                 + b[RIGHT] * do_ * ho
                 + b[TOP] * wo * do_
                 + b[BOTTOM] * wo * do_);
+        // What the solver uses: the layered shell (equal to the IEC value for
+        // the default shell, see `crate::shell`).
+        let shell = s.shell();
+        let gf = shell.conductances_w_per_k(e, p.wall_k_scale);
         let mut g_wall = vec![[0.0; 6]; n];
         let mut g_ap = vec![0.0; n];
         let mut g_pa = vec![0.0; n];
@@ -404,31 +411,34 @@ impl Setup {
             for c in 0..nx {
                 let i = r * nx + c;
                 let g = &mut g_wall[i];
-                g[FRONT] = k * b[FRONT] * wo * ho * cell_share;
-                let g_rear = k * b[REAR] * wo * ho * cell_share;
+                g[FRONT] = gf[FRONT] * cell_share;
+                let g_rear = gf[REAR] * cell_share;
                 if plate_frac[i] > 0.0 {
                     let f = plate_frac[i];
                     g[REAR] = g_rear * (1.0 - f);
                     // Air to plate and plate to outside in series equal the
-                    // rear coefficient of the covered part, exactly.
+                    // rear coefficient of the covered part, exactly. With a
+                    // setback the plate reaches the wall through the air gap
+                    // instead of the wall's inner film.
                     let kb = g_rear / (hx * hy);
                     let h_air = h_in.max(1.2 * kb);
                     g_ap[i] = h_air * hx * hy * f;
-                    g_pa[i] = (1.0 / (1.0 / kb - 1.0 / h_air)) * hx * hy * f;
+                    let g_plate_out = shell.plate_to_outside_or(kb, h_air);
+                    g_pa[i] = g_plate_out * hx * hy * f;
                 } else {
                     g[REAR] = g_rear;
                 }
                 if c == 0 {
-                    g[LEFT] = k * b[LEFT] * do_ * ho * (hy / (hy * ny as f64));
+                    g[LEFT] = gf[LEFT] / ny as f64;
                 }
                 if c == nx - 1 {
-                    g[RIGHT] = k * b[RIGHT] * do_ * ho * (hy / (hy * ny as f64));
+                    g[RIGHT] = gf[RIGHT] / ny as f64;
                 }
                 if r == 0 {
-                    g[TOP] = k * b[TOP] * wo * do_ * (hx / (hx * nx as f64));
+                    g[TOP] = gf[TOP] / nx as f64;
                 }
                 if r == ny - 1 {
-                    g[BOTTOM] = k * b[BOTTOM] * wo * do_ * (hx / (hx * nx as f64));
+                    g[BOTTOM] = gf[BOTTOM] / nx as f64;
                 }
             }
         }
@@ -610,16 +620,9 @@ impl Setup {
         // Heat capacities.
         let rho_cp = air.rho_cp();
         // The walls store heat too; their temperature is taken to follow the
-        // air next to them, so their capacity sits on the air cells.
-        let wall_rho_cp = match e.material {
-            novo_layout::sizing::Material::Steel | novo_layout::sizing::Material::Stainless => {
-                7850.0 * 490.0
-            }
-            novo_layout::sizing::Material::Aluminium => 2700.0 * 900.0,
-            novo_layout::sizing::Material::Plastic => 1500.0 * 1200.0,
-        };
-        let wall_area = 2.0 * (wo * ho + wo * do_ + ho * do_);
-        let wall_c = wall_rho_cp * e.wall_mm / 1000.0 * wall_area / n as f64;
+        // air next to them, so their capacity sits on the air cells. The
+        // layers of the shell give the capacity (lane H5 resolves it in time).
+        let wall_c = shell.capacity_j_per_k(e) / n as f64;
         let c_air: Vec<f64> = (0..n)
             .map(|i| rho_cp * hx * hy * depth * (1.0 - block[i]).max(0.02) + wall_c)
             .collect();
@@ -673,6 +676,7 @@ impl Setup {
             jet_mixing_m2s,
             jet_speed_ms,
             k_ae,
+            shell,
             on_plate,
             c_air,
             c_plate,

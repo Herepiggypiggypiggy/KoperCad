@@ -471,16 +471,17 @@ impl NovoApp {
             .default_pos([ctx.content_rect().max.x, 60.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
-                ui.label(
+                super::window_help::add(
+                    ui.ctx(),
                     "Press the buttons of the drawing in the live view: the contactors settle, \
                      the two-speed motor and its brake move the hook, and the limit switches you \
                      bound open their contacts at their height.",
                 );
-                ui.add_space(4.0);
                 if names.is_empty() {
-                    ui.weak(
-                        "No hoist yet. Select a motor and enter its hook load under \
-                         Mechanical load in the property sheet.",
+                    ui.weak("No hoist yet");
+                    super::window_help::add(
+                        ui.ctx(),
+                        "Select a motor and enter its hook load under Mechanical load in the property sheet.",
                     );
                 } else {
                     ui.label(format!("Hoists in this project: {}", names.join(", ")));
@@ -498,7 +499,8 @@ impl NovoApp {
                         start = true;
                     }
                     if !live_on {
-                        ui.weak("The run reads the live view (Shift+L).");
+                        ui.weak("Live is off");
+                        super::window_help::add(ui.ctx(), "The run reads the live view (Shift+L).");
                     }
                 });
                 for (level, text) in &notice {
@@ -576,24 +578,24 @@ impl NovoApp {
                     }
                 }
                 ui.separator();
-                ui.label(egui::RichText::new("Model, not measurement").strong());
+                ui.label(egui::RichText::new("Model, not measurement. Not a safety function.").strong());
+                let mut model = String::from("Model, not measurement:");
                 for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT
                     .iter()
                     .chain(novo_drive::brake_system::FAMILY_MODEL_LEAVES_OUT)
                     .chain(novo_drive::hoist_thermal::THERMAL_MODEL_LEAVES_OUT)
                 {
-                    ui.weak(format!("\u{2022} {line}"));
+                    model.push_str(&format!("\n\u{2022} {line}"));
                 }
-                ui.weak(
-                    "\u{2022} Brake delays and torque are the numbers you enter; \
-                     speeds follow the nameplate fit, not a measured curve.",
+                model.push_str(
+                    "\n\u{2022} Brake delays and torque are the numbers you enter; \
+                     speeds follow the nameplate fit, not a measured curve.\n\
+                     \u{2022} Assumed from the drawing: motor speed 0 is the fine winding, any \
+                     other is coarse, and forward is up.\n\
+                     \u{2022} Limit heights are measured from where the hook starts.\n\
+                     \u{2022} Not a safety or compliance statement.",
                 );
-                ui.weak(
-                    "\u{2022} Assumed from the drawing: motor speed 0 is the fine winding, any \
-                     other is coarse, and forward is up.",
-                );
-                ui.weak("\u{2022} Limit heights are measured from where the hook starts.");
-                ui.weak("\u{2022} Not a safety or compliance statement.");
+                super::window_help::add(ui.ctx(), model);
             });
         if !open {
             self.wb.hoist.open = false;

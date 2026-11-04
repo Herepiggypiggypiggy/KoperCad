@@ -138,6 +138,8 @@ pub(super) struct DoorView<'a, F> {
     pub state: &'a mut DoorState,
     pub layout: &'a CabinetLayout,
     pub tag_of: &'a F,
+    /// The maker plates of the catalog for the plate card.
+    pub plates: &'a mut super::cabinet_maker_plate::MakerPlates,
 }
 
 /// Where the inspector starts when other panels share the canvas edge: how far
@@ -350,6 +352,18 @@ fn show(
             widgets::field(ui, "Placed", &placed.to_string());
             widgets::field(ui, "Plate used", &format!("{used_percent:.0} %"));
             ui.add_space(6.0);
+            door.plates.ensure();
+            let current = project
+                .get::<novo_core::Structure>(*structure)
+                .and_then(|s| match s.properties.get(novo_layout::model::PLATE_PART) {
+                    Some(novo_core::Value::Text(t)) => Some(t.clone()),
+                    _ => None,
+                });
+            if let Some(a) =
+                super::cabinet_maker_plate::show(ui, door.plates, *structure, current.as_deref())
+            {
+                ask = Some(a);
+            }
             // Inside size, door and depth checks (open by default: this is
             // where they are edited).
             widgets::collapsing_section(

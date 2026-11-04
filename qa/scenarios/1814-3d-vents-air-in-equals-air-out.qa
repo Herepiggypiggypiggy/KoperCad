@@ -31,7 +31,7 @@ expect_not "Preliminary"
 expect "Through-flow"
 expect "air in"
 expect "m³/h (model)"
-expect "Model estimate, not a measurement"
+expect_not "Model estimate, not a measurement"
 shot 02-vents-and-fans-balance
 check_layout
 check_blank 02-vents-and-fans-balance

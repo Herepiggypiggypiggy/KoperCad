@@ -12,5 +12,5 @@ wait 30
 shot hook-at-start
 expect "Hoist in 3D"
 expect "Picture, not measurement"
-expect "No run: the hook stands at its start"
+expect "No run"
 check_layout
