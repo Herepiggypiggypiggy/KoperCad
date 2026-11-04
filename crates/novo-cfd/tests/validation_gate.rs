@@ -15,7 +15,7 @@ const KINDS: [&str; 6] = [
     "measured",
     "licensed",
 ];
-const STATUS: [&str; 3] = ["passed", "failed", "planned"];
+const STATUS: [&str; 4] = ["passed", "failed", "planned", "manual"];
 
 struct Reference {
     id: String,

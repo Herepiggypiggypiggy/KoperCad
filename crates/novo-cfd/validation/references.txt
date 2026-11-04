@@ -1,7 +1,7 @@
 # Reference register of the heat model (lane H6). One line per reference:
 #   id | kind | status | test file (under crates/*/tests) | what it checks
 # kind:   analytic | standard | third_party_model | model_vs_model | measured | licensed
-# status: passed | failed | planned
+# status: passed | failed | planned | manual (done by hand against private data, not reproducible here)
 # Only `measured` and `licensed` references with status `passed` can justify
 # ENCLOSURE_VALIDATED = true (see docs/thermal-validation.md, "When the
 # validated flag may change"). tests/validation_gate.rs enforces this.
@@ -16,5 +16,5 @@ sealed-iec-60890 | standard | passed | validation_enclosure.rs | sealed box mean
 device-vs-2d | model_vs_model | passed | validation_device.rs | housing rise and plate share against the 2D engine, mesh spread
 cabinet-vs-2d | model_vs_model | passed | validation_cabinet.rs | cabinet solver against the 2D engine and IEC 60890
 mesh-independence | model_vs_model | passed | validation_mesh_creep.rs | housing rise stays within a band from 1000 to 20000 cells
-ritherm-cross-check | third_party_model | passed | validation_iec.rs | RiTherm (IEC TR 60890:2022) mean air rise, nine cases: our IEC hand value 0.5 to 3 % below (6 % small box), 2D 11 to 20 % below; private data, never counts
+ritherm-cross-check | third_party_model | manual | validation_iec.rs | checked by hand against private RiTherm output (IEC TR 60890:2022, nine cases), not reproducible from the repository; validation_iec.rs pins our IEC hand values: 0.5 to 3 % below RiTherm's mean air rise, 6 % on the small box; never counts
 measured-cabinet | measured | planned | validation_gate.rs | one real cabinet with logged temperatures; needed to flip the flag
