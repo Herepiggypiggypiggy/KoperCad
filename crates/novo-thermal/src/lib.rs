@@ -16,9 +16,11 @@ pub mod bridge;
 pub mod busbar;
 pub mod cooling;
 mod flow;
+pub mod forced;
 mod linalg;
 pub mod lump;
 pub mod model;
+pub mod outside;
 pub mod placement;
 pub mod placement_project;
 mod report;
@@ -33,7 +35,7 @@ pub use model::*;
 pub use result::*;
 pub use setup::Error;
 /// Surface coefficient of a device, shared with the 3D engine (`novo-cfd`).
-pub use thermal::device_h;
+pub use thermal::{device_h, device_h_turbulent};
 
 use setup::Setup;
 

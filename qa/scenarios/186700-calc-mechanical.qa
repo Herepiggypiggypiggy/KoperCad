@@ -1,0 +1,44 @@
+@title Calculations > Mechanical shows a busbar, a rail and a plate result
+@area Calculations
+open_starter_example
+wait 20
+key ctrl+k
+wait 6
+text calculations
+wait 8
+key Enter
+wait 15
+shot circuits-tab
+click_text "Panel SCCR"
+wait 10
+shot panel-sccr-tab
+click_text "Motor starters"
+wait 10
+shot starters-tab
+click_text "Mechanical"
+wait 10
+shot mechanical-top
+expect "Estimate, not a verification of the busbar or support rating"
+expect "Not a safety function"
+expect "Bending stress"
+expect "Force on one support"
+expect "swings at"
+expect "at the supply"
+expect "Check > Calculations > Panel SCCR"
+check_layout
+scroll 400 450 -300
+wait 6
+shot mechanical-rail
+scroll 400 450 -400
+wait 6
+shot mechanical-rail-and-plate
+expect "Deflection"
+# The plate result.
+click_text "Mounting plate under device weight"
+wait 6
+scroll 400 450 -400
+wait 6
+shot mechanical-plate
+expect "at the centre"
+tree Mechanical
+check_layout

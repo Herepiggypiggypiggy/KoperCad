@@ -29,6 +29,8 @@ pub(super) struct CalcWindow {
     tab: usize,
     choice: StarterChoice,
     only_issues: bool,
+    /// Inputs of the Mechanical tab.
+    mech: super::calculations_mechanical::MechState,
     /// The sheet for a project revision and starter choice.
     cache: Option<(u64, StarterChoice, CalcSheet)>,
     busbar: super::calculations_busbar::BusbarForm,
@@ -46,7 +48,13 @@ impl CalcWindow {
     }
 }
 
-const TABS: [&str; 4] = ["Circuits", "Motor starters", "Panel SCCR", "Busbar heat"];
+const TABS: [&str; 5] = [
+    "Circuits",
+    "Motor starters",
+    "Panel SCCR",
+    "Mechanical",
+    "Busbar heat",
+];
 
 /// The warning every calculation view carries.
 pub(super) const PLANNING_NOTE: &str = "Ampacity tables and defaults are planning values, not checked against the standard. Read the clauses in your licensed copy before relying on a number.";
@@ -244,6 +252,12 @@ impl NovoApp {
                         0 => circuits(ui, &sheet, &mut win.only_issues, &mut go),
                         1 => starters(ui, &sheet, &mut win.choice),
                         2 => panel(ui, &sheet),
+                        3 => super::calculations_mechanical::mechanical(
+                            ui,
+                            &mut win.mech,
+                            sheet.panel.available_ka,
+                            &mut copy,
+                        ),
                         _ => super::calculations_busbar::tab(
                             ui,
                             &mut win.busbar,
