@@ -135,6 +135,7 @@ mod example_plc;
 mod example_pump;
 mod faults;
 mod flags;
+mod flags_edit;
 mod flags_jobs;
 mod handover;
 mod heat;
@@ -470,6 +471,8 @@ mod example_tests;
 mod faults_tests;
 #[cfg(test)]
 mod first_view_tests;
+#[cfg(test)]
+mod flags_edit_tests;
 #[cfg(test)]
 mod flags_jobs_tests;
 #[cfg(test)]
@@ -2130,6 +2133,7 @@ impl NovoApp {
                     self.after_canvas_frame();
                     self.flag_click();
                     self.wb.canvas_area = Some((ui.layer_id(), ui.min_rect()));
+                    self.flag_corner(ui.ctx());
                 } else {
                     self.start_screen(ui, &mut picked);
                 }
@@ -2137,6 +2141,7 @@ impl NovoApp {
             .response
             .rect;
 
+        self.expire_refusal(&ctx);
         self.flag_popover(&ctx);
         if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);

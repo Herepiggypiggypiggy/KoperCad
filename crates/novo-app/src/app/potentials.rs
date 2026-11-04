@@ -46,7 +46,7 @@ impl NovoApp {
                 let what = if n == 1 { "point" } else { "points" };
                 self.message(Level::Info, format!("Numbered {n} interruption {what}"));
             }
-            Err(e) => self.message(Level::Error, format!("Number interruption points: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Number interruption points: {e}")),
         }
     }
 
