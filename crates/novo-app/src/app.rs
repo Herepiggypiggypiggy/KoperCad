@@ -249,6 +249,7 @@ mod parts;
 mod parts_bulk;
 mod parts_bundle;
 mod parts_cad;
+mod parts_flags;
 mod parts_identity;
 mod parts_import;
 mod parts_pins;

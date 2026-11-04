@@ -1,0 +1,11 @@
+@title Problem triangles T9: columns that cannot be read show one triangle instead of red sentences
+@sizes 1366x768 1920x1080
+@area Parts
+# A list with an unmapped order number column: the mapping step shows a red triangle and the reason sits in its popover.
+open_starter_example
+wait 20
+import_table qa/fixtures/parts/odd-list.xlsx
+wait 20
+shot mapping
+check_layout
+check_text 12

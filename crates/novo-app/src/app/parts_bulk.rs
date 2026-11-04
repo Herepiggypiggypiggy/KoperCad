@@ -112,7 +112,7 @@ fn confidence_colour(p: &novo_theme::Palette, c: Confidence) -> egui::Color32 {
     match c {
         Confidence::Certain => p.success,
         Confidence::Likely => p.text_secondary,
-        Confidence::Unsure => p.warning,
+        Confidence::Unsure => p.text_secondary,
     }
 }
 
@@ -179,7 +179,12 @@ impl NovoApp {
         if let Some(dir) = &inbox
             && let Err(e) = prepare_inbox(dir)
         {
-            self.message(Level::Warning, format!("Parts inbox: {e}"));
+            self.parts_job_failed(
+                "inbox",
+                novo_flags::Severity::Yellow,
+                "Parts inbox",
+                e.to_string(),
+            );
         }
         let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Folder with catalog files (BMEcat, CSV, ZIP)");
@@ -203,10 +208,12 @@ impl NovoApp {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            self.message(
-                Level::Error,
+            self.parts_job_failed(
+                "import",
+                novo_flags::Severity::Red,
+                "Parts import",
                 format!(
-                    "Parts import: {name} is a file, not a folder. To import one CSV or Excel file use File > Import... > Import parts table."
+                    "{name} is a file, not a folder. To import one CSV or Excel file use File > Import... > Import parts table."
                 ),
             );
             return false;
@@ -225,7 +232,12 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(Level::Error, format!("Parts import: {e}"));
+                self.parts_job_failed(
+                    "import",
+                    novo_flags::Severity::Red,
+                    "Parts import",
+                    e.to_string(),
+                );
                 false
             }
         }
@@ -235,11 +247,21 @@ impl NovoApp {
     /// Parts window button and by a file dropped with no part selected.
     pub(super) fn import_catalog_files(&mut self, files: &[PathBuf]) {
         let Some(inbox) = default_inbox() else {
-            self.message(Level::Error, "No profile folder for the parts inbox");
+            self.parts_job_failed(
+                "inbox",
+                novo_flags::Severity::Red,
+                "Parts inbox",
+                "No profile folder for the parts inbox",
+            );
             return;
         };
         if let Err(e) = prepare_inbox(&inbox) {
-            self.message(Level::Error, format!("Parts inbox: {e}"));
+            self.parts_job_failed(
+                "inbox",
+                novo_flags::Severity::Red,
+                "Parts inbox",
+                e.to_string(),
+            );
             return;
         }
         for file in files {
@@ -256,8 +278,10 @@ impl NovoApp {
             // number (`parts (2).csv`).
             let target = free_name(&inbox, name);
             if let Err(e) = std::fs::copy(file, &target) {
-                self.message(
-                    Level::Error,
+                self.parts_job_failed(
+                    "inbox",
+                    novo_flags::Severity::Red,
+                    "File not copied",
                     format!("Could not copy {}: {e}", file.display()),
                 );
             }
@@ -270,7 +294,12 @@ impl NovoApp {
         if let Some(win) = self.wb.parts.as_mut() {
             match Catalog::load_default() {
                 Ok(c) => win.set_catalog(c),
-                Err(e) => self.message(Level::Error, format!("Parts catalog: {e}")),
+                Err(e) => self.parts_job_failed(
+                    "catalog",
+                    novo_flags::Severity::Red,
+                    "Parts catalog",
+                    e.to_string(),
+                ),
             }
         }
     }
@@ -284,13 +313,18 @@ impl NovoApp {
         let modal = super::panel::modal(ctx, "parts_bulk", "Parts import", [640.0, 540.0], |ui| {
             ui.weak(format!("Folder: {}", report.folder.display()));
             if report.rejected > 0 {
-                ui.colored_label(
-                    crate::theme::ui_palette().warning,
-                    format!(
+                let flag = super::parts_flags::RowFlag::new(
+                    novo_flags::Severity::Yellow,
+                    "Files without parts",
+                    [format!(
                         "{} file(s) held no parts, see the list below",
                         report.rejected
-                    ),
+                    )],
                 );
+                ui.horizontal(|ui| {
+                    super::parts_flags::inline(ui, &flag);
+                    ui.label(format!("{} without parts", report.rejected));
+                });
             }
             ui.add_space(4.0);
             egui::ScrollArea::vertical()
@@ -308,7 +342,7 @@ impl NovoApp {
             && let Some(dir) = default_inbox()
             && let Err(e) = open_folder(&dir)
         {
-            self.message(Level::Error, e);
+            self.parts_job_failed("import", novo_flags::Severity::Red, "Parts import", e);
         }
         if close || modal.should_close() {
             self.wb.parts_bulk = None;
@@ -321,7 +355,12 @@ impl NovoApp {
         let catalog = match Catalog::load_default() {
             Ok(c) => c,
             Err(e) => {
-                self.message(Level::Error, format!("Parts catalog: {e}"));
+                self.parts_job_failed(
+                    "catalog",
+                    novo_flags::Severity::Red,
+                    "Parts catalog",
+                    e.to_string(),
+                );
                 Catalog::starter()
             }
         };
@@ -401,7 +440,12 @@ impl NovoApp {
                 true
             }
             Some(Err(e)) => {
-                self.message(Level::Error, format!("Could not assign parts: {e}"));
+                self.parts_job_failed(
+                    "assign",
+                    novo_flags::Severity::Red,
+                    "Parts not assigned",
+                    e.to_string(),
+                );
                 false
             }
             None => false,
@@ -482,10 +526,20 @@ impl NovoApp {
                                         }
                                     });
                                 let o = &row.options[shown];
-                                ui.colored_label(
-                                    confidence_colour(palette, o.confidence),
-                                    o.confidence.label(),
-                                );
+                                ui.horizontal(|ui| {
+                                    if o.confidence == Confidence::Unsure {
+                                        let flag = super::parts_flags::RowFlag::new(
+                                            novo_flags::Severity::Yellow,
+                                            "Part not certain",
+                                            [o.reason.clone()],
+                                        );
+                                        super::parts_flags::inline(ui, &flag);
+                                    }
+                                    ui.colored_label(
+                                        confidence_colour(palette, o.confidence),
+                                        o.confidence.label(),
+                                    );
+                                });
                                 let why = if row.chosen.is_none() && several_sure(row) {
                                     format!("{} Several parts fit: pick one to tick.", o.reason)
                                 } else {
@@ -498,14 +552,19 @@ impl NovoApp {
                 });
                 if !preview.none.is_empty() {
                     ui.add_space(4.0);
-                    ui.colored_label(
-                        palette.warning,
-                        format!(
+                    let flag = super::parts_flags::RowFlag::new(
+                        novo_flags::Severity::Yellow,
+                        "No part fits",
+                        [format!(
                             "No part in the catalog fits {}: {}. Add one in the Parts window.",
                             preview.none.len(),
                             tag_list(&preview.none)
-                        ),
+                        )],
                     );
+                    ui.horizontal(|ui| {
+                        super::parts_flags::inline(ui, &flag);
+                        ui.label(format!("No part fits {}", preview.none.len()));
+                    });
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -553,7 +612,12 @@ impl NovoApp {
                 Level::Info,
                 format!("Removed the part from {} selected", devices.len()),
             ),
-            Some(Err(e)) => self.message(Level::Error, format!("Could not remove parts: {e}")),
+            Some(Err(e)) => self.parts_job_failed(
+                "remove",
+                novo_flags::Severity::Red,
+                "Parts not removed",
+                e.to_string(),
+            ),
             None => {}
         }
     }
@@ -570,7 +634,12 @@ impl NovoApp {
         };
         match self.execute(command) {
             Some(Ok(_)) => self.message(Level::Info, format!("Removed {n} unused part(s)")),
-            Some(Err(e)) => self.message(Level::Error, format!("Could not remove parts: {e}")),
+            Some(Err(e)) => self.parts_job_failed(
+                "remove",
+                novo_flags::Severity::Red,
+                "Parts not removed",
+                e.to_string(),
+            ),
             None => {}
         }
     }

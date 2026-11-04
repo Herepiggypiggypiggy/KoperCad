@@ -561,11 +561,9 @@ fn an_unrelated_download_is_left_alone_and_says_why() {
     }
     assert_eq!(b.win.import.as_ref().unwrap().phase, Phase::Waiting);
     let text = b.painted();
-    assert!(
-        text.contains("Arrived in Downloads but not taken"),
-        "{text}"
-    );
-    assert!(text.contains("LC1D09-18-DC"), "{text}");
+    // The reason is the triangle's popover; the strip names the file.
+    assert!(text.contains("Not taken"), "{text}");
+    assert!(text.contains("MCADPP0003371_3D-simplified.stp"), "{text}");
     assert!(!b.win.library.as_ref().unwrap().has(&k));
 }
 
@@ -589,7 +587,7 @@ fn a_file_dropped_on_the_wrong_part_opens_the_panel_and_stores_nothing() {
     assert!(!b.win.library.as_ref().unwrap().has(&right));
     let text = b.painted();
     assert!(text.contains("Add CAD files"), "{text}");
-    assert!(text.contains("LC1D09-18-DC"), "{text}");
+    assert!(text.contains("MCADPP0003371_3D-simplified.stp"), "{text}");
     assert!(text.contains("Import ticked"), "{text}");
 }
 

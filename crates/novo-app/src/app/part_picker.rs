@@ -203,15 +203,6 @@ fn match_color(fit: &Fit) -> egui::Color32 {
     }
 }
 
-/// The data tag is information, not an error: a thin catalog entry is
-/// amber at worst.
-fn data_color(grade: Grade) -> egui::Color32 {
-    match grade {
-        Grade::Good => crate::theme::ui_palette().success,
-        Grade::Fair | Grade::Poor => crate::theme::ui_palette().warning,
-    }
-}
-
 /// What the data tag means and what is missing for this part.
 fn data_tooltip(c: &Candidate) -> String {
     let mut text = format!(
@@ -274,9 +265,34 @@ pub(super) fn picker_ui(
                         );
                         ui.horizontal(|ui| {
                             if let Some(fit) = &c.fit {
+                                let p = crate::theme::ui_palette();
+                                let strong = match_color(fit) == p.success;
+                                if !strong {
+                                    let severity = if fit.percent < 55 {
+                                        novo_flags::Severity::Red
+                                    } else {
+                                        novo_flags::Severity::Yellow
+                                    };
+                                    let title = if fit.percent < 55 {
+                                        "Weak match"
+                                    } else {
+                                        "Match not certain"
+                                    };
+                                    let flag = super::parts_flags::RowFlag::new(
+                                        severity,
+                                        title,
+                                        [format!(
+                                            "Match {}% from {} check(s): {}",
+                                            fit.percent,
+                                            fit.checks,
+                                            fit.reasons.join(", ")
+                                        )],
+                                    );
+                                    super::parts_flags::inline(ui, &flag);
+                                }
                                 ui.small(
                                     egui::RichText::new(format!("Match {}%", fit.percent))
-                                        .color(match_color(fit)),
+                                        .color(if strong { p.success } else { p.text_secondary }),
                                 )
                                 .on_hover_text(format!(
                                     "How well the part suits this device, from {} check(s): {}",
@@ -284,13 +300,28 @@ pub(super) fn picker_ui(
                                     fit.reasons.join(", ")
                                 ));
                             }
+                            if c.grade != Grade::Good {
+                                let flag = super::parts_flags::RowFlag::new(
+                                    novo_flags::Severity::Yellow,
+                                    "Thin catalog data",
+                                    [data_tooltip(c)],
+                                )
+                                .unchecked();
+                                super::parts_flags::inline(ui, &flag);
+                            }
                             ui.small(
                                 egui::RichText::new(format!(
                                     "Data: {} {}%",
                                     c.grade.label(),
                                     c.percent
                                 ))
-                                .color(data_color(c.grade)),
+                                .color(
+                                    if c.grade == Grade::Good {
+                                        crate::theme::ui_palette().success
+                                    } else {
+                                        crate::theme::ui_palette().text_secondary
+                                    },
+                                ),
                             )
                             .on_hover_text(data_tooltip(c));
                             super::parts_quality::trust_badge(ui, &c.trust);
@@ -375,7 +406,12 @@ impl NovoApp {
                 Level::Info,
                 format!("{title} set for {} selected", devices.len()),
             ),
-            Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),
+            Some(Err(e)) => self.parts_job_failed(
+                "set",
+                novo_flags::Severity::Red,
+                "Part not set",
+                e.to_string(),
+            ),
             None => {}
         }
     }
@@ -422,7 +458,7 @@ mod tests {
             tip.contains("catalog entry") && tip.contains("Missing:"),
             "{tip}"
         );
-        assert_eq!(data_color(c.grade), crate::theme::ui_palette().warning);
+        assert_ne!(c.grade, Grade::Good);
     }
 
     #[test]

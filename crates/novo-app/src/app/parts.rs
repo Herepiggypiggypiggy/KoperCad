@@ -67,6 +67,10 @@ pub(crate) struct PartsWindow {
     /// The part whose Remove from library awaits a second click.
     confirm_remove: Option<PartKey>,
     focus_search: bool,
+    /// Triangles of catalogue actions that failed, shown beside More.
+    job_flags: Vec<novo_flags::Flag>,
+    /// The ones the person dismissed since the last frame.
+    job_dismissed: Vec<novo_flags::FlagId>,
     /// Whether a device is selected on the drawing, so "Use for selected
     /// device" has something to act on. Set every frame.
     pub(super) device_selected: bool,
@@ -192,6 +196,8 @@ impl PartsWindow {
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
+            job_flags: Vec::new(),
+            job_dismissed: Vec::new(),
             device_selected: false,
             geometry: None,
             quality: Default::default(),
@@ -1005,7 +1011,12 @@ impl NovoApp {
         let catalog = match Catalog::load_default() {
             Ok(c) => c,
             Err(e) => {
-                self.message(Level::Error, format!("Parts catalog: {e}"));
+                self.parts_job_failed(
+                    "catalog",
+                    novo_flags::Severity::Red,
+                    "Parts catalog",
+                    e.to_string(),
+                );
                 Catalog::starter()
             }
         };
@@ -1045,10 +1056,12 @@ impl NovoApp {
         let device_selected = self.backend.document().is_some_and(|d| {
             !super::part_picker::selected_devices(d.project(), &self.selection()).is_empty()
         });
+        let job_flags = self.parts_job_flags();
         let Some(win) = self.wb.parts.as_mut() else {
             return;
         };
         win.device_selected = device_selected;
+        win.job_flags = job_flags;
         let mut open = true;
         let mut actions = Vec::new();
         win.wake.get_or_insert_with(|| ctx.clone());
@@ -1068,6 +1081,11 @@ impl NovoApp {
             // scroll area would give them no height to fill.
             .scroll([false, false])
             .show(ctx, |ui| parts_ui(ui, win, dragging, &mut actions));
+        let dismissed = std::mem::take(&mut win.job_dismissed);
+        self.parts_job_dismiss(&dismissed);
+        let Some(win) = self.wb.parts.as_mut() else {
+            return;
+        };
         // A file dropped on the window, or one the watch found.
         let over = shown
             .as_ref()
@@ -1328,7 +1346,12 @@ impl NovoApp {
             }
         }
         if let Some(text) = error {
-            self.message(Level::Error, text);
+            self.parts_job_failed(
+                "window",
+                novo_flags::Severity::Red,
+                "Parts action failed",
+                text,
+            );
         }
         if let Some(text) = info {
             self.message(Level::Info, text);
@@ -1350,12 +1373,17 @@ impl NovoApp {
         match open_dir {
             Some((dir, true)) => {
                 if let Err(e) = super::parts_bulk::prepare_and_import_inbox(self, &dir) {
-                    self.message(Level::Error, e);
+                    self.parts_job_failed("inbox", novo_flags::Severity::Red, "Parts inbox", e);
                 }
             }
             Some((dir, false)) => {
                 if let Err(e) = super::parts_bulk::open_folder(&dir) {
-                    self.message(Level::Error, e);
+                    self.parts_job_failed(
+                        "folder",
+                        novo_flags::Severity::Red,
+                        "Folder not opened",
+                        e,
+                    );
                 }
             }
             None => {}
@@ -1467,7 +1495,12 @@ fn new_part_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
             }
         });
         if let Some(e) = &form.error {
-            ui.colored_label(crate::theme::ui_palette().warning, e);
+            super::parts_flags::labelled(
+                ui,
+                novo_flags::Severity::Yellow,
+                "Check the form",
+                [e.clone()],
+            );
         }
         ui.horizontal(|ui| {
             create = ui.button("Save to my catalog").clicked();
@@ -1532,6 +1565,8 @@ fn parts_ui(
                 }
             });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let dismissed = super::parts_flags::job_strip(ui, &win.job_flags);
+            win.job_dismissed.extend(dismissed);
             ui.menu_button("More", |ui| {
                 for (label, hint, action) in [
                     (
@@ -1857,25 +1892,34 @@ itself; Stop ends it now.",
                 ui.label(note);
             }
             for (name, why) in import.left_alone() {
-                ui.colored_label(
-                    ui.visuals().warn_fg_color,
-                    format!("Arrived in Downloads but not taken: {name}. {why}"),
+                super::parts_flags::labelled(
+                    ui,
+                    novo_flags::Severity::Yellow,
+                    &format!("Not taken: {name}"),
+                    [format!("Arrived in Downloads but not taken: {name}. {why}")],
                 );
             }
             let passed = import.passed_over();
             if !passed.is_empty() {
-                ui.colored_label(
-                    ui.visuals().warn_fg_color,
-                    format!(
+                super::parts_flags::labelled(
+                    ui,
+                    novo_flags::Severity::Yellow,
+                    &format!("Not taken: {}", passed.join(", ")),
+                    [format!(
                         "Arrived in Downloads but not taken, because the name does not mention {}: \
 {}. If one of them is the file, press Choose file\u{2026} and pick it.",
                         import.label,
                         passed.join(", ")
-                    ),
+                    )],
                 );
             }
             if let Some(w) = &import.order_warning {
-                ui.colored_label(ui.visuals().warn_fg_color, w);
+                super::parts_flags::labelled(
+                    ui,
+                    novo_flags::Severity::Yellow,
+                    "Check the order",
+                    [w.clone()],
+                );
             }
             for (i, step) in import.steps.iter().enumerate() {
                 ui.label(format!("{}. {step}", i + 1));
@@ -1942,9 +1986,11 @@ on the maker's site and drop the file here.",
             }
         }
         Phase::Failed(e) => {
-            ui.colored_label(
-                ui.visuals().error_fg_color,
-                format!("Could not import {}: {e}", import.label),
+            super::parts_flags::labelled(
+                ui,
+                novo_flags::Severity::Red,
+                &format!("Could not import {}", import.label),
+                [e.to_string()],
             );
             ui.horizontal(|ui| {
                 if ui.button("Try again").clicked() {

@@ -209,14 +209,21 @@ impl NovoApp {
             .unwrap_or_default();
         // Refuse before reading: a huge file would take the app down.
         if std::fs::metadata(path).is_ok_and(|m| m.len() > novo_parts::MAX_FILE_BYTES) {
-            self.message(Level::Error, novo_parts::too_large_file(&name).to_string());
+            self.parts_job_failed(
+                "table",
+                novo_flags::Severity::Red,
+                "Parts table not read",
+                novo_parts::too_large_file(&name).to_string(),
+            );
             return false;
         }
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => {
-                self.message(
-                    Level::Error,
+                self.parts_job_failed(
+                    "table",
+                    novo_flags::Severity::Red,
+                    "Parts table not read",
                     format!("Could not read {name}: {}", novo_parts::plain_io_error(&e)),
                 );
                 return false;
@@ -225,12 +232,18 @@ impl NovoApp {
         let table = match TableFile::read(&name, &bytes) {
             Ok(t) => t,
             Err(e) => {
-                self.message(Level::Error, format!("{name}: {e}"));
+                self.parts_job_failed(
+                    "table",
+                    novo_flags::Severity::Red,
+                    "Parts table not read",
+                    format!("{name}: {e}"),
+                );
                 return false;
             }
         };
         let existing = existing_catalog(catalog_path.as_deref());
         self.dismiss_toasts();
+        self.parts_job_ok("table");
         self.wb.parts_table = Some(PartsTableImport::new(
             name,
             table,
@@ -248,13 +261,23 @@ impl NovoApp {
             return false;
         };
         let Some(path) = import.catalog_path.clone().or_else(user_catalog_path) else {
-            self.message(Level::Error, "No profile folder to save the catalog in");
+            self.parts_job_failed(
+                "table",
+                novo_flags::Severity::Red,
+                "Catalog not saved",
+                "No profile folder to save the catalog in",
+            );
             return false;
         };
         let mut catalog = existing_catalog(Some(&path));
         let added = import.preview.apply(&mut catalog);
         if let Err(e) = catalog.save(&path) {
-            self.message(Level::Error, format!("Could not save the catalog: {e}"));
+            self.parts_job_failed(
+                "table",
+                novo_flags::Severity::Red,
+                "Catalog not saved",
+                format!("Could not save the catalog: {e}"),
+            );
             return false;
         }
         // Best effort: the report next to the catalog, and the mapping for
@@ -469,9 +492,7 @@ fn columns_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) -> 
             "The columns are set from your saved mapping for files with these headers.",
         );
     }
-    for problem in &import.preview.problems {
-        ui.colored_label(p.error, problem);
-    }
+    problems_flag(ui, &import.preview.problems);
     let samples: Vec<String> = (0..import.mapping.columns.len())
         .map(|i| import.samples(i))
         .collect();
@@ -560,18 +581,25 @@ fn columns_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) -> 
 
 fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
     let p = crate::theme::ui_palette();
-    for problem in &import.preview.problems {
-        ui.colored_label(p.error, problem);
-    }
     if !import.preview.problems.is_empty() {
-        ui.weak("Fix the columns first; the rows are read once the mapping is complete.");
+        // The triangle sits above the column list as well; the rows wait for
+        // a complete mapping.
+        problems_flag(ui, &import.preview.problems);
         return;
     }
     // What the notes above the list take comes off the list's own height, so
     // the buttons below it stay on a small window.
     let notes_top = ui.cursor().top();
-    for a in &import.preview.assumptions {
-        ui.colored_label(p.warning, a);
+    if !import.preview.assumptions.is_empty() {
+        let flag = super::parts_flags::RowFlag::new(
+            novo_flags::Severity::Yellow,
+            "Assumed while reading",
+            import.preview.assumptions.iter().cloned(),
+        );
+        ui.horizontal(|ui| {
+            super::parts_flags::inline(ui, &flag);
+            ui.label("Assumed while reading");
+        });
     }
     repeated_ui(ui, import);
     let height = (height - (ui.cursor().top() - notes_top)).max(90.0);
@@ -580,13 +608,10 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
         ui.label(egui::RichText::new("What the file tells").weak());
         for c in &import.preview.coverage {
             let price_note = c.label == "Price";
-            let full = c.total > 0 && c.have == c.total;
             let color = if c.have == 0 {
                 p.text_tertiary
-            } else if full {
-                p.success
             } else {
-                p.warning
+                p.text_secondary
             };
             ui.colored_label(color, format!("{} {}/{}", c.label, c.have, c.total))
                 .on_hover_text(if price_note && has_date {
@@ -627,41 +652,33 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                     break;
                 }
                 shown += 1;
-                let (text, color) = match row.status {
-                    RowStatus::New => ("New", p.success),
-                    RowStatus::Changed => ("Replaces entry", p.warning),
-                    RowStatus::Unchanged => ("Already there", p.text_secondary),
+                let (text, status_flag) = match row.status {
+                    RowStatus::New => ("New", None),
+                    RowStatus::Changed => (
+                        "Replaces entry",
+                        Some((Severity::Warning, "Replaces entry")),
+                    ),
+                    RowStatus::Unchanged => ("Already there", None),
                     // A row a repeated-number rule left out is a choice, not an error.
                     RowStatus::Skipped if row.worst() < Some(Severity::Error) => {
-                        ("Repeated", p.warning)
+                        ("Repeated", Some((Severity::Warning, "Repeated")))
                     }
-                    RowStatus::Skipped => ("Not imported", p.error),
+                    RowStatus::Skipped => ("Not imported", Some((Severity::Error, "Not imported"))),
                 };
+                let flag = row_flag(row, status_flag);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
-                    cell(ui, WIDTHS[0], egui::RichText::new(row.line.to_string()));
-                    cell(ui, WIDTHS[1], egui::RichText::new(text).color(color));
+                    super::parts_flags::slot(ui, flag.as_ref());
+                    cell(
+                        ui,
+                        WIDTHS[0] - 20.0,
+                        egui::RichText::new(row.line.to_string()),
+                    );
+                    cell(ui, WIDTHS[1], egui::RichText::new(text));
                     cell(ui, WIDTHS[2], egui::RichText::new(&row.manufacturer));
                     cell(ui, WIDTHS[3], egui::RichText::new(&row.order_number));
                     ui.add(egui::Label::new(&row.description).truncate());
                 });
-                for issue in &row.issues {
-                    let (mark, color) = match issue.severity {
-                        Severity::Error => ("\u{25cf}", p.error),
-                        Severity::Warning => ("\u{25cf}", p.warning),
-                        Severity::Note => ("\u{25cb}", p.text_secondary),
-                    };
-                    let text = if issue.column.is_empty() {
-                        issue.message.clone()
-                    } else {
-                        format!("{}: {}", issue.column, issue.message)
-                    };
-                    ui.horizontal_top(|ui| {
-                        ui.add_space(WIDTHS[0]);
-                        ui.colored_label(color, mark);
-                        ui.add(egui::Label::new(egui::RichText::new(text).small()).wrap());
-                    });
-                }
                 ui.add_space(2.0);
             }
             let total = import.preview.rows.len();
@@ -675,26 +692,73 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
         });
 }
 
+/// The columns could not be mapped: one red triangle, each reason a line of
+/// its popover.
+fn problems_flag(ui: &mut egui::Ui, problems: &[String]) {
+    if problems.is_empty() {
+        return;
+    }
+    let flag = super::parts_flags::RowFlag::new(
+        novo_flags::Severity::Red,
+        "Columns cannot be read",
+        problems.iter().cloned(),
+    );
+    ui.horizontal(|ui| {
+        super::parts_flags::inline(ui, &flag);
+        ui.label("Columns cannot be read");
+    });
+}
+
+/// The leading triangle of a preview row: the worst finding (or the status
+/// when it is worse), with every finding as a line of the popover, each
+/// starting with its column. Notes alone are not a flag.
+fn row_flag(
+    row: &novo_parts::PreviewRow,
+    status: Option<(Severity, &str)>,
+) -> Option<super::parts_flags::RowFlag> {
+    use super::parts_flags::{RowFlag, from_parts_severity};
+    let worst = row
+        .issues
+        .iter()
+        .map(|i| i.severity)
+        .chain(status.map(|(s, _)| s))
+        .max()
+        .and_then(from_parts_severity)?;
+    let title = status.map_or("Check this row", |(_, t)| t).to_owned();
+    let lines = row.issues.iter().map(|i| {
+        if i.column.is_empty() {
+            i.message.clone()
+        } else {
+            format!("{}: {}", i.column, i.message)
+        }
+    });
+    Some(RowFlag::new(worst, title, lines))
+}
+
 /// Order numbers that appear in more than one row: how many, which rows, and
 /// the choice of what the catalog gets. Nothing is dropped in silence.
 fn repeated_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) {
     if import.preview.repeated.is_empty() {
         return;
     }
-    let p = crate::theme::ui_palette();
     let rows: usize = import.preview.repeated.iter().map(|r| r.lines.len()).sum();
-    ui.colored_label(
-        p.warning,
-        format!(
-            "{} {} more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
-            import.preview.repeated.len(),
-            if import.preview.repeated.len() == 1 {
+    let n = import.preview.repeated.len();
+    let flag = super::parts_flags::RowFlag::new(
+        novo_flags::Severity::Yellow,
+        "Repeated order numbers",
+        [format!(
+            "{n} {} more than one row ({rows} rows). The catalog keeps one entry per maker and order number: choose what it gets.",
+            if n == 1 {
                 "order number appears in"
             } else {
                 "order numbers appear in"
             }
-        ),
+        )],
     );
+    ui.horizontal(|ui| {
+        super::parts_flags::inline(ui, &flag);
+        ui.label(format!("{n} repeated, {rows} rows"));
+    });
     let labels = [
         "Last row",
         "First row",
@@ -750,7 +814,6 @@ fn cell(ui: &mut egui::Ui, width: f32, text: egui::RichText) {
 
 /// Summary, remember and the two buttons. Returns whether Add was pressed.
 fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool) -> bool {
-    let p = crate::theme::ui_palette();
     let counts = import.preview.counts();
     let mut go = false;
     if import.preview.problems.is_empty() {
@@ -765,23 +828,28 @@ fn footer_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, cancel: &mut bool
                 String::new()
             }
         );
-        ui.colored_label(
-            if counts.skipped + counts.warned + counts.repeated > 0 {
-                p.warning
-            } else {
-                p.text_primary
-            },
-            text,
-        )
+        if counts.skipped + counts.warned + counts.repeated > 0 {
+            super::parts_flags::inline(
+                ui,
+                &super::parts_flags::RowFlag::new(
+                    novo_flags::Severity::Yellow,
+                    "Rows to check",
+                    [text.clone()],
+                ),
+            );
+        }
+        ui.label(text)
         .on_hover_text(
             "Not imported: rows that cannot be a part (no order number, no maker, a mangled order number). \
              Repeated: rows of an order number that appears more than once, left out by the rule chosen in the Rows step. \
              The Rows step says why for every row.",
         );
     } else {
-        ui.colored_label(
-            p.error,
-            "The columns need a change before anything can be added.",
+        super::parts_flags::labelled(
+            ui,
+            novo_flags::Severity::Red,
+            "Columns need a change",
+            ["The columns need a change before anything can be added.".to_owned()],
         );
     }
     ui.horizontal(|ui| {

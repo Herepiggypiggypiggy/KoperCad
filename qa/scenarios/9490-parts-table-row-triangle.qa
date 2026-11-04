@@ -1,0 +1,31 @@
+@title Problem triangles T9: a parts table row that cannot be imported has a triangle with the cell detail
+@sizes 1366x768 1920x1080
+@area Parts
+# The row used to carry a coloured bullet and a sentence under it; now a red triangle leads the row and the detail is in its popover.
+open_starter_example
+wait 20
+answer_dialog qa/fixtures/parts/price-list-de.csv
+click_text File
+wait 4
+click_text "Import..."
+wait 4
+text "table"
+wait 4
+click_text "Import parts table"
+wait 2
+click_text "Import" Button #1
+wait 20
+click_text Rows Button
+wait 10
+shot rows-with-triangles
+check_layout
+expect "Error: Not imported"
+expect_not "not a possible size"
+click_text "Error: Not imported" Button #1
+wait 6
+shot popover
+expect "not a possible size"
+key Escape
+wait 6
+expect_not "not a possible size"
+shot popover-closed
