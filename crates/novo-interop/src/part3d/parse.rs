@@ -188,6 +188,12 @@ impl<'a> StepFile<'a> {
         self.index.is_empty()
     }
 
+    /// Every entity name in the file with how many entities carry it
+    /// (a complex entity counts once under each of its parts), unordered.
+    pub fn name_counts(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.by_name.iter().map(|(n, v)| (n.as_str(), v.len()))
+    }
+
     /// Ids of every entity that has a part called `name` (upper case).
     pub fn ids_of(&self, name: &str) -> &[u32] {
         self.by_name.get(name).map_or(&[], Vec::as_slice)

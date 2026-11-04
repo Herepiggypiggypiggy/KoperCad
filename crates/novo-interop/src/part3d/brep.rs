@@ -587,7 +587,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn is_spline_surface(e: &Entity) -> bool {
+pub(crate) fn is_spline_surface(e: &Entity) -> bool {
     e.name() == "B_SPLINE_SURFACE_WITH_KNOTS" || e.has("B_SPLINE_SURFACE")
 }
 

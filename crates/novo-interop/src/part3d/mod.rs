@@ -17,6 +17,8 @@
 //!   view asks (`None`, `Pending`, `Ready`, `Failed`), with a time limit.
 //! - [`rotation`]: a stored per-part rotation (quarter turns) that fixes a
 //!   part that came out turned wrongly.
+//! - [`health`]: a plain-words report of whether a STEP file reads, what it
+//!   holds (units, products, colours) and what the reader does not handle.
 //! - [`generated`]: parts that have no model but a known shape (DIN rails,
 //!   wiring ducts) drawn from their dimensions.
 //! - [`instances`]: groups placements of identical parts for instanced
@@ -29,6 +31,7 @@ pub mod build;
 pub mod cache;
 pub mod decimate;
 pub mod generated;
+pub mod health;
 pub mod instances;
 pub mod math;
 pub mod mesh;
