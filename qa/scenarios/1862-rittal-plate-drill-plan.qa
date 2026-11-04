@@ -1,0 +1,29 @@
+@title Cabinet: Maker plate in the Plate setup card, then the drill plan shows factory holes
+@sizes 1920x1080
+@area Cabinet
+# Where the user finds it: Cabinet > Plate setup > Inspector > Maker plate; Drill plan from More.
+user_catalog qa/fixtures/rittal-parts.json
+open_starter_example
+wait 20
+key ctrl+k
+wait 4
+text Cabinet
+wait 6
+key Enter
+wait 30
+click_text "Plate setup"
+wait 10
+shot a-plate-card
+expect "Use 500 x 700 mm (5 holes)"
+click_text "Use 500 x 700 mm (5 holes)"
+wait 15
+shot c-plate-in-use
+expect "Rittal 8806500"
+click_text "Export"
+wait 6
+click_text "Drill plan (hand, PDF)"
+wait 20
+shot d-drill-plan-exported
+expect_file "~/Documents/KoperCAD/*drill plan.pdf" 1500
+keep_file "~/Documents/KoperCAD/*drill plan.pdf"
+check_layout
