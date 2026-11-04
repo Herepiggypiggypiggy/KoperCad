@@ -190,6 +190,18 @@ impl Params {
     }
 }
 
+/// Electrical facts of a cable that the drawing holds (EMC-21).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CableData {
+    pub id: u64,
+    /// Length in metres, when stated (the cable's length, not only the part
+    /// inside the cabinet).
+    pub length_m: Option<f64>,
+    /// Capacitance from one core to the shield in pF per metre, from the
+    /// maker (`emc.cable_pf_per_m`); `None` when not stated.
+    pub core_shield_pf_per_m: Option<f64>,
+}
+
 /// Everything the rules read.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Input {
@@ -197,5 +209,6 @@ pub struct Input {
     pub ducts: Vec<Duct>,
     pub devices: Vec<Device>,
     pub plates: Vec<Plate>,
+    pub cables: Vec<CableData>,
     pub params: Params,
 }

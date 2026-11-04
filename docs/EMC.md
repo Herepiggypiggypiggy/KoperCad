@@ -58,8 +58,7 @@ Both come from the same few physical mechanisms.
    360 degrees at both ends, the screen as the return path, output chokes or sine filters where the maker asks,
    an input filter bonded at its case to the plate right at the entry, short cables.
 5. **Shield termination.** A shield works by carrying current. A long "pigtail" at the end replaces a shield by a
-   wire and loses most of the benefit at high frequency (about 10 nH per centimetre of pigtail; 1 cm is
-   0.6 ohm at 10 MHz). 360 degree termination at the gland or on a shield bar, at both ends for noise
+   wire and loses most of the benefit at high frequency (1 cm of 2 mm wire is about 4 nH, 0.25 ohm at 10 MHz, computed in section 5.1; the older rule of thumb was 10 nH per cm). 360 degree termination at the gland or on a shield bar, at both ends for noise
    immunity of power and fast signals, is the default; one end only for slow analog signals where low-frequency
    ground loops are the worry. Shield through a terminal block interrupts it; use a shield terminal.
 6. **Segregation by cable class.** Group wires by what they do to each other: power and motor (aggressors),
@@ -250,3 +249,28 @@ Crate split:
 
 The lead thread owns this document, `handoff/emc/`, the lesson track and the manual page, the validation
 document, the wording of every honesty label, and the review of both sibling lanes against this plan.
+
+
+## 5.1 Computed inductance and cable capacitance (EMC-05, EMC-21)
+
+Own formulas from textbooks (Rosa and Grover for inductance, the coaxial and wire-over-plane capacitance
+formulas, I = 2 pi f C V); nothing is taken from FastHenry or FastCap, whose licences forbid it. They live in
+`novo-emc/src/geometry.rs` with hand-checked tests in `tests/engine.rs`.
+
+| Function | Formula | Used by |
+| --- | --- | --- |
+| `round_wire_nh(l, d)` | mu0 l / 2 pi (ln(2l/r) - 1), high frequency | `pigtail_nh` (EMC-05): replaces the old 1 nH per mm rule. 80 mm of 2 mm wire is 65 nH, not 80 nH |
+| `strap_nh(l, w, t)` | 0.2 l (ln(2l/(w+t)) + 0.5005 + (w+t)/3l) nH | Door and bonding strap numbers; a 100 x 20 mm braid is 57 nH against 86 nH for a round wire |
+| `loop_over_plane_nh(l, h, d)` | mu0 / 2 pi acosh(h/r) per metre | Wire over the plate, loop inductance |
+| `coax_pf_per_m`, `wire_over_plane_pf_per_m`, `two_wire_pf_per_m` | 2 pi eps / ln(D/d), 2 pi eps / acosh(h/r), pi eps / acosh(d/2r) | Cable capacitance |
+| `leakage_ma`, `charging_current_a` | 2 pi f C V, C dV/dt | EMC-21 |
+
+**EMC-21** (Estimate): for each shielded motor cable with a stated length it shows the capacitance of all
+cores to the shield, the leakage current to earth at 50 Hz and 230 V (what an RCD on the supply side sees) and
+the charging current per kV/us of output edge. It warns above 15 mA (half of a 30 mA RCD; clause to verify).
+The capacitance per metre is the maker's value when the cable states `emc.cable_pf_per_m`, else a coaxial formula
+with assumed insulation (D/d 2.2, eps 3, about 212 pF/m), and the finding says which. A cable without a length gets no
+number. Limits: leakage at the drive's carrier frequency and the motor's own winding capacitance are not modelled,
+a real filter or output choke changes it, and the result is a design aid, never compliance.
+Where to find it: Check > EMC findings (rule "Motor cable leakage"), set the cable length on the cable and the maker
+capacitance under the cable's properties.
