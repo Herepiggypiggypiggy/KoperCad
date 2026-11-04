@@ -325,3 +325,31 @@ fn a_saved_query_that_would_overflow_the_stack_prints_a_problem() {
     let mut presets = Presets::default();
     assert!(presets.upsert("Long", &"x".repeat(20_000)).is_err());
 }
+
+#[test]
+fn integer_edges_do_not_panic() {
+    let d = doc();
+    for sql in [
+        "SELECT (-9223372036854775807 - 1) / -1 FROM devices",
+        "SELECT (-9223372036854775807 - 1) * -1 FROM devices",
+        "SELECT -(-9223372036854775807 - 1) FROM devices",
+        "SELECT abs(-9223372036854775807 - 1) FROM devices",
+        "SELECT 9223372036854775807 + 1 FROM devices",
+        "SELECT -9223372036854775807 - 2 FROM devices",
+        "SELECT 9223372036854775807 * 9223372036854775807 FROM devices",
+        "SELECT 9223372036854775808 / 0 FROM devices",
+        "SELECT (-9223372036854775807 - 1) / 1 FROM devices",
+        "SELECT substr(tag, 99999999999999999999, 5), round(1e1, 99) FROM devices",
+        "SELECT sum(9223372036854775807) FROM devices",
+    ] {
+        // Some are errors (1e1 is not a number in this language); none panic.
+        let _ = query::run(d.project(), sql);
+    }
+    let r = text_rows(
+        &d,
+        "SELECT (-9223372036854775807 - 1) / -1 FROM devices LIMIT 1",
+    );
+    assert_eq!(r[0][0], "9223372036854775808");
+    let r = text_rows(&d, "SELECT 9223372036854775807 + 1 FROM devices LIMIT 1");
+    assert_eq!(r[0][0], "9223372036854775808");
+}

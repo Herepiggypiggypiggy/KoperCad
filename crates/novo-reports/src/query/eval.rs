@@ -378,7 +378,9 @@ fn eval(expr: &Expr, ctx: &Ctx<'_>) -> QValue {
             None => Null,
         },
         Expr::Neg(e) => match eval(e, ctx) {
-            QValue::Int(i) => QValue::Int(-i),
+            QValue::Int(i) => i
+                .checked_neg()
+                .map_or(QValue::Num(-(i as f64)), QValue::Int),
             other => other.as_f64().map_or(Null, |n| QValue::Num(-n)),
         },
         Expr::Bin(op, a, b) => {
@@ -467,7 +469,7 @@ fn arithmetic(op: BinOp, x: &QValue, y: &QValue) -> QValue {
             BinOp::Add => a.checked_add(*b),
             BinOp::Sub => a.checked_sub(*b),
             BinOp::Mul => a.checked_mul(*b),
-            _ if *b != 0 && a % b == 0 => a.checked_div(*b),
+            _ if *b != 0 && a.checked_rem(*b) == Some(0) => a.checked_div(*b),
             _ => None,
         };
         if let Some(n) = exact {
@@ -495,7 +497,9 @@ fn scalar(name: &str, v: &[QValue]) -> QValue {
         "trim" => text(0).map_or(QValue::Null, |t| QValue::text(t.trim())),
         "length" => text(0).map_or(QValue::Null, |t| QValue::from(t.chars().count())),
         "abs" => match &v[0] {
-            QValue::Int(i) => QValue::Int(i.abs()),
+            QValue::Int(i) => i
+                .checked_abs()
+                .map_or(QValue::Num((*i as f64).abs()), QValue::Int),
             other => other
                 .as_f64()
                 .map_or(QValue::Null, |n| QValue::Num(n.abs())),
