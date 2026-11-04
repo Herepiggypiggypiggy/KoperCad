@@ -21,5 +21,5 @@ expect "Place 4"
 click_text "Place 4"
 wait 12
 shot placed
-try expect_scene "-F3"
+expect_scene "-F3"
 check_layout

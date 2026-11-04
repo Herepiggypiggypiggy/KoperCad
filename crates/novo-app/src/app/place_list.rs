@@ -298,54 +298,9 @@ placed without one. Lines that name nothing are left out.",
                     ui.weak("Open a schematic page first.");
                     return;
                 };
-                egui::ScrollArea::vertical()
-                    .max_height(ui.available_height() - 44.0)
-                    .show(ui, |ui| {
-                        egui::Grid::new("place_list_rows")
-                            .num_columns(3)
-                            .striped(true)
-                            .show(ui, |ui| {
-                                for line in &preview.lines {
-                                    ui.label(format!("{}×", line.wanted.qty));
-                                    let name = match &line.wanted.tag {
-                                        Some(t) => format!("{t}  {}", line.wanted.text),
-                                        None => line.wanted.text.clone(),
-                                    };
-                                    ui.label(name);
-                                    match &line.outcome {
-                                        Outcome::Part { key, .. } => {
-                                            ui.colored_label(
-                                                p.success,
-                                                format!(
-                                                    "{} {}",
-                                                    key.manufacturer(),
-                                                    key.order_number()
-                                                ),
-                                            );
-                                        }
-                                        Outcome::Symbol { symbol, fitting } => {
-                                            let symbol = symbol_name.get(symbol).unwrap_or(symbol);
-                                            let note = match fitting {
-                                                0 => String::new(),
-                                                n => format!("  ({n} parts fit)"),
-                                            };
-                                            ui.colored_label(
-                                                p.text_primary,
-                                                format!("{symbol}{note}"),
-                                            );
-                                        }
-                                        Outcome::Unknown(why) => {
-                                            ui.colored_label(p.error, *why);
-                                        }
-                                    }
-                                    ui.end_row();
-                                }
-                            });
-                    });
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    let devices = place_list::device_count(&preview.lines);
-                    let left_out = preview.lines.iter().filter(|l| !l.placeable()).count();
+                let devices = place_list::device_count(&preview.lines);
+                let left_out = preview.lines.iter().filter(|l| !l.placeable()).count();
+                ui.horizontal_wrapped(|ui| {
                     match &preview.report {
                         Ok(r) => {
                             ui.label(format!("{devices} devices, {} with a part", r.with_part));
@@ -363,15 +318,44 @@ placed without one. Lines that name nothing are left out.",
                     if left_out > 0 {
                         ui.colored_label(p.warning, format!("{left_out} left out"));
                     }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let ready = devices > 0 && preview.report.is_ok();
-                        if ui
-                            .add_enabled(ready, egui::Button::new(format!("Place {devices}")))
-                            .clicked()
-                        {
-                            place = true;
-                        }
-                    });
+                });
+                let ready = devices > 0 && preview.report.is_ok();
+                let button =
+                    egui::Button::new(format!("Place {devices}")).min_size(egui::vec2(140.0, 28.0));
+                if ui.add_enabled(ready, button).clicked() {
+                    place = true;
+                }
+                ui.separator();
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for line in &preview.lines {
+                        let name = match &line.wanted.tag {
+                            Some(t) => format!("{}×  {t}  {}", line.wanted.qty, line.wanted.text),
+                            None => format!("{}×  {}", line.wanted.qty, line.wanted.text),
+                        };
+                        ui.add(egui::Label::new(name).wrap());
+                        let (color, text) = match &line.outcome {
+                            Outcome::Part { key, .. } => (
+                                p.success,
+                                format!("{} {}", key.manufacturer(), key.order_number()),
+                            ),
+                            Outcome::Symbol { symbol, fitting } => {
+                                let symbol = symbol_name.get(symbol).unwrap_or(symbol);
+                                let note = match fitting {
+                                    0 => String::new(),
+                                    n => format!("  ({n} parts fit)"),
+                                };
+                                (p.text_secondary, format!("{symbol}{note}"))
+                            }
+                            Outcome::Unknown(why) => (p.error, (*why).to_owned()),
+                        };
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("   {text}")).color(color),
+                            )
+                            .wrap(),
+                        );
+                        ui.add_space(2.0);
+                    }
                 });
             });
         if place
