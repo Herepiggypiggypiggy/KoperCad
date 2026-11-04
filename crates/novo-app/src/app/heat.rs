@@ -1164,11 +1164,19 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
     }
     super::heat_live::controls(ui, state, chip);
     if let Some(n) = &state.notice {
-        ui.label(
-            egui::RichText::new(n)
-                .small()
-                .color(crate::theme::ui_palette().warning),
-        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                egui::RichText::new(n)
+                    .small()
+                    .color(crate::theme::ui_palette().warning),
+            );
+            if n.starts_with("Cannot simulate: a side is over") {
+                super::window_help::mark(
+                    ui,
+                    "Change the enclosure size in Cabinet > Size enclosure.",
+                );
+            }
+        });
     }
 }
 

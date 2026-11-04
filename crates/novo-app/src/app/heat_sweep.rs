@@ -519,8 +519,8 @@ impl CoolingAdvice {
                             .small()
                             .color(pal.text_secondary),
                     );
-                    why(ui, FOOTER);
                 });
+                super::window_help::add(ctx, FOOTER);
             });
         if !open || close {
             self.close();
@@ -542,36 +542,22 @@ fn show_comparison(ui: &mut egui::Ui, compare: &[String]) {
         } else {
             text.color(pal.text_secondary)
         };
-        if i + 1 == compare.len() {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(text);
-                why(ui, COMPARE_WHY);
-            });
-        } else {
-            ui.label(text);
-        }
+        ui.label(text);
     }
+    super::window_help::add(ui.ctx(), COMPARE_WHY);
 }
 
 /// What the comparison is and is not, behind its "?".
 const COMPARE_WHY: &str = "The 2D model does not see the depth of the cabinet; the 3D run does. Both are models and neither is validated; where they differ by more than a few kelvin, trust neither without a measurement.";
 
-/// A small "?" that explains on hover: the sentence is not on screen.
-fn why(ui: &mut egui::Ui, text: &str) {
-    ui.label(egui::RichText::new("?").small().weak())
-        .on_hover_text(text);
-}
-
 fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
     let pal = crate::theme::ui_palette();
     let s = &found.sweep;
-    ui.horizontal_wrapped(|ui| {
-        ui.label(egui::RichText::new(headline(s)).strong());
-        why(
-            ui,
-            "A try is one run of the 2D model with a pair of openings added to the cabinet.",
-        );
-    });
+    ui.label(egui::RichText::new(headline(s)).strong());
+    super::window_help::add(
+        ui.ctx(),
+        "A try is one run of the 2D model with a pair of openings added to the cabinet.",
+    );
     ui.add_space(2.0);
     ui.label(format!(
         "Now: {} · {} · hottest air {:.0} °C",
