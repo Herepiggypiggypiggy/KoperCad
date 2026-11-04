@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use eframe::egui;
+use novo_interop::part3d::health::{StepHealth, Verdict as Health};
 use novo_parts::{
     CadIdentity, CadLinks, Candidate, Catalog, CatalogPart, FileKind, ImportFlow, LocalLibrary,
     Matcher, SizeMeasure, SourceTable, Verdict, assess_part, match_batch, step_box,
@@ -80,6 +81,9 @@ pub(crate) fn read_identity(path: &Path) -> CadIdentity {
     let mut id = CadIdentity::read(&name, &bytes);
     if id.kind == FileKind::Step {
         let text = String::from_utf8_lossy(&bytes);
+        if bytes.len() <= MAX_HEALTH_BYTES {
+            remember_health(path, novo_interop::part3d::health::step_health(&text));
+        }
         // The real solid when it can be measured; else the box around all
         // points, which can only contradict a part, never confirm it.
         let measured = novo_interop::part3d::measure_step(&text)
@@ -93,6 +97,52 @@ pub(crate) fn read_identity(path: &Path) -> CadIdentity {
         }
     }
     id
+}
+
+/// STEP files up to this size also get a model health report.
+const MAX_HEALTH_BYTES: usize = 32 * 1024 * 1024;
+const MAX_HEALTH_ENTRIES: usize = 256;
+
+type HealthCache = std::sync::Mutex<std::collections::HashMap<PathBuf, std::sync::Arc<StepHealth>>>;
+
+fn health_cache() -> &'static HealthCache {
+    static CACHE: std::sync::OnceLock<HealthCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+fn remember_health(path: &Path, h: StepHealth) {
+    let mut c = health_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if c.len() >= MAX_HEALTH_ENTRIES {
+        c.clear();
+    }
+    c.insert(path.to_path_buf(), std::sync::Arc::new(h));
+}
+
+/// The model health report made when the file was read (STEP files only).
+pub(crate) fn health_of(path: &Path) -> Option<std::sync::Arc<StepHealth>> {
+    health_cache()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(path)
+        .cloned()
+}
+
+/// The text behind the "?" of a model health line.
+pub(crate) fn health_help(h: &StepHealth) -> String {
+    use novo_interop::part3d::style::hex;
+    let mut t = format!("{}\n", h.summary());
+    t.push_str(&format!("{} entities of {} kinds.\n", h.entities, h.kinds));
+    if let Some(n) = h.style.part_name() {
+        t.push_str(&format!("Name in the file: {n}\n"));
+    }
+    if let Some(c) = h.style.dominant {
+        t.push_str(&format!("Colour in the file: {}\n", hex(c)));
+    }
+    for n in &h.notes {
+        t.push_str(&format!("{n}\n"));
+    }
+    t.push_str("The same check for a whole folder: kopercad-cli parts step-health <folder>");
+    t
 }
 
 struct Row {
@@ -443,6 +493,26 @@ Nothing is stored until you press Import.",
                         }
                     });
                     let warn = ui.visuals().warn_fg_color;
+                    if let Some(h) = health_of(&row.path) {
+                        ui.horizontal(|ui| {
+                            if let Some(c) = h.style.dominant {
+                                let (r, _) =
+                                    ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                                ui.painter()
+                                    .rect_filled(r, 2.0, egui::Color32::from_rgb(c[0], c[1], c[2]));
+                            }
+                            let color = match h.verdict {
+                                Health::Clean => crate::theme::ui_palette().success,
+                                Health::Partial => warn,
+                                Health::Unreadable => ui.visuals().error_fg_color,
+                            };
+                            ui.colored_label(color, h.verdict.word());
+                            if let Some(n) = h.style.part_name() {
+                                ui.weak(n);
+                            }
+                            super::dialog_ui::help(ui, &health_help(&h));
+                        });
+                    }
                     for n in &row.notes {
                         ui.colored_label(warn, n);
                     }
@@ -610,6 +680,19 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         changed
+    }
+
+    #[test]
+    fn reading_a_step_file_also_makes_its_health_report() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.stp");
+        fs::write(&p, STEP).unwrap();
+        assert!(health_of(&p).is_none());
+        read_identity(&p);
+        let h = health_of(&p).expect("a report");
+        // The fixture has points but no solid: said in words, not a crash.
+        assert_eq!(h.verdict, Health::Unreadable);
+        assert!(health_help(&h).contains("kopercad-cli parts step-health"));
     }
 
     #[test]

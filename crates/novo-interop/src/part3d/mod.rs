@@ -15,6 +15,8 @@
 //!   rebuilt from the imported files.
 //! - [`service`]: background loading behind the `GeometryProvider` shape the
 //!   view asks (`None`, `Pending`, `Ready`, `Failed`), with a time limit.
+//! - [`health`], [`style`]: a model health report for a STEP file (what reads,
+//!   what is approximated) and the colours and product names it carries.
 //! - [`rotation`]: a stored per-part rotation (quarter turns) that fixes a
 //!   part that came out turned wrongly.
 //! - [`generated`]: parts that have no model but a known shape (DIN rails,
@@ -29,6 +31,7 @@ pub mod build;
 pub mod cache;
 pub mod decimate;
 pub mod generated;
+pub mod health;
 pub mod instances;
 pub mod math;
 pub mod mesh;
@@ -38,6 +41,7 @@ pub mod parse;
 pub mod pins;
 pub mod rotation;
 pub mod service;
+pub mod style;
 pub mod tess;
 
 use std::sync::atomic::AtomicBool;
