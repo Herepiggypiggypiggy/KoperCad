@@ -455,4 +455,24 @@ mod tests {
         let project = d.app.backend.document().unwrap().project();
         assert_eq!(open_count(project), 3);
     }
+
+    #[test]
+    fn clicking_the_toast_button_shows_the_proposed_parts_in_the_drawer() {
+        let mut lv = crate::app::lesson_verify_cables::Lv::blank();
+        let doc = lv.d.app.backend.document_mut().unwrap();
+        doc.transact("Add", |tx| {
+            tx.add_device(DeviceTag::parse("-K1").unwrap(), "Pump")
+        })
+        .unwrap();
+        lv.d.app
+            .wb
+            .part_catalog
+            .set_for_test(two_contactors_catalog());
+        lv.d.app.offer_parts_pass();
+        lv.frames(2);
+        assert!(!lv.has_label("Accept all (1)"));
+        lv.click_label("Choose parts");
+        assert!(lv.has_label("Accept all (1)"), "the drawer lists the rows");
+        assert!(lv.has_label("-K1"));
+    }
 }

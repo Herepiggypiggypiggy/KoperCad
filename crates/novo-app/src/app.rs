@@ -2963,8 +2963,13 @@ impl NovoApp {
                         }
                     });
                     let response = frame.response.interact(egui::Sense::click());
+                    // The frame sits over its button and takes the click: a toast
+                    // with an action runs it, any other is dismissed.
                     if response.on_hover_text("Click to dismiss").clicked() {
-                        dismiss.push(i);
+                        match m.action {
+                            Some(action) => act = Some((i, action)),
+                            None => dismiss.push(i),
+                        }
                     }
                 }
             });
