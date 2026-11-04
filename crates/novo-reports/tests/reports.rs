@@ -1425,3 +1425,22 @@ fn a_column_wider_than_its_share_borrows_from_columns_that_do_not_need_theirs() 
         );
     }
 }
+
+/// The wire list's screen split is separate from its print split: pages and
+/// exports keep the wide From/To columns for long tags, the screen narrows
+/// them so Length basis is in view at 1366 px.
+#[test]
+fn wire_list_print_widths_are_not_the_screen_widths() {
+    let (doc, _) = starter();
+    let wires = report(&doc, "wires");
+    let cols = &wires.sections[0].columns;
+    let col = |key: &str| cols.iter().find(|c| c.key == key).unwrap();
+    for key in ["from", "to"] {
+        assert!(
+            col(key).width >= 28.0,
+            "{key} keeps room to print =A1+CAB-KM1:A1"
+        );
+        assert!(col(key).screen_width.unwrap() < col(key).width);
+    }
+    assert!(col("length_basis").width >= 22.0, "basis prints whole");
+}

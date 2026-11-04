@@ -622,7 +622,11 @@ impl NovoApp {
             .collect();
         // The vertical scroll bar of the rows takes room from the right edge.
         let bar = ui.spacing().scroll.allocated_width() + 4.0;
-        let weights: Vec<f64> = section.columns.iter().map(|c| c.width).collect();
+        let weights: Vec<f64> = section
+            .columns
+            .iter()
+            .map(|c| c.screen_width.unwrap_or(c.width))
+            .collect();
         let mut mins = header_min_widths(ui, &columns);
         let wide = columns.len() > WIDE_TABLE_COLUMNS;
         if wide {

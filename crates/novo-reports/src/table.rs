@@ -91,6 +91,10 @@ pub struct Column {
     /// Relative width. A page splits its usable width between the columns
     /// in proportion to these, so `10.0` next to `30.0` is a quarter.
     pub width: f64,
+    /// Relative width on screen, when the table needs another split there
+    /// than on a printed page (`None`: same as `width`). Pages and exports
+    /// ignore it.
+    pub screen_width: Option<f64>,
 }
 
 impl Column {
@@ -100,7 +104,14 @@ impl Column {
             header: header.to_owned(),
             align: Align::Left,
             width,
+            screen_width: None,
         }
+    }
+
+    /// The same column with its own width on screen.
+    pub fn on_screen(mut self, width: f64) -> Self {
+        self.screen_width = Some(width);
+        self
     }
 
     /// The same column, right-aligned (numbers).

@@ -110,16 +110,20 @@ impl WireList {
             "wires",
             "",
             vec![
-                Column::new("number", "Wire no.", 13.0),
-                Column::new("from", "From", 18.0),
-                Column::new("to", "To", 18.0),
-                Column::new("potential", "Potential", 10.0),
-                Column::new("color", "Colour", 8.0),
+                // Print weights first; `on_screen` is the split that fits a
+                // 1366 px window with Length basis in view.
+                Column::new("number", "Wire no.", 15.0).on_screen(13.0),
+                Column::new("from", "From", 28.0).on_screen(18.0),
+                Column::new("to", "To", 28.0).on_screen(18.0),
+                Column::new("potential", "Potential", 15.0).on_screen(10.0),
+                Column::new("color", "Colour", 12.0).on_screen(8.0),
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
-                Column::new("cable", "Cable", 12.0),
-                Column::new("location", "Location", 8.0),
-                Column::new("length_mm", "Route length mm", 12.0).right(),
-                Column::new("length_basis", "Length basis", 24.0),
+                Column::new("cable", "Cable", 20.0).on_screen(12.0),
+                Column::new("location", "Location", 15.0).on_screen(8.0),
+                Column::new("length_mm", "Route length mm", 14.0)
+                    .right()
+                    .on_screen(12.0),
+                Column::new("length_basis", "Length basis", 22.0).on_screen(24.0),
                 Column::new("torque", "Torque", 14.0),
             ],
         );
