@@ -203,6 +203,67 @@ pub fn element_to_polygon(p: V3, n: V3, poly: &Polygon) -> f64 {
     (sum.abs() / std::f64::consts::TAU).min(1.0)
 }
 
+/// True when the open segment `a`-`b` passes through the inside of the box
+/// (slab test on the box shrunk by a hair, so a segment that starts on a
+/// face of the box does not count as blocked by it).
+fn segment_hits_box(a: V3, b: V3, min: V3, max: V3) -> bool {
+    const EPS: f64 = 1e-6;
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    for k in 0..3 {
+        let (lo, hi) = (min[k] + EPS, max[k] - EPS);
+        if lo >= hi {
+            return false;
+        }
+        let d = b[k] - a[k];
+        if d.abs() < 1e-15 {
+            if a[k] <= lo || a[k] >= hi {
+                return false;
+            }
+        } else {
+            let (mut u, mut v) = ((lo - a[k]) / d, (hi - a[k]) / d);
+            if u > v {
+                std::mem::swap(&mut u, &mut v);
+            }
+            t0 = t0.max(u);
+            t1 = t1.min(v);
+            if t0 >= t1 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// View factor `F(a -> b)` with boxes `(min, max)` in the way: the exact
+/// unobstructed factor of each emitting point, times the share of
+/// sight lines to a 4 x 4 grid on `b` that no box cuts. A model, accurate
+/// to a few percent for shadows larger than the grid pitch.
+pub fn view_factor_blocked(a: &Polygon, b: &Polygon, div: usize, blockers: &[(V3, V3)]) -> f64 {
+    if blockers.is_empty() {
+        return view_factor(a, b, div);
+    }
+    let targets: Vec<V3> = sample_points(b, 2).into_iter().map(|(p, _)| p).collect();
+    let n = a.normal();
+    sample_points(a, div.max(1))
+        .into_iter()
+        .map(|(p, w)| {
+            let f = element_to_polygon(p, n, b);
+            if f == 0.0 {
+                return 0.0;
+            }
+            let seen = targets
+                .iter()
+                .filter(|&&q| {
+                    !blockers
+                        .iter()
+                        .any(|&(lo, hi)| segment_hits_box(p, q, lo, hi))
+                })
+                .count();
+            w * f * seen as f64 / targets.len() as f64
+        })
+        .sum()
+}
+
 /// 4-point Gauss-Legendre nodes and weights on `[0, 1]`.
 const GL: [(f64, f64); 4] = [
     (0.069_431_844_202_973_71, 0.173_927_422_568_726_93),
@@ -317,14 +378,32 @@ impl Enclosure {
     /// summation rule are enforced exactly by a symmetric scaling (the
     /// quadrature error, about 1e-4, is spread instead of kept).
     pub fn new(surfaces: Vec<Surface>, closed: bool, div: usize) -> Enclosure {
+        Enclosure::with_blockers(surfaces, &[], closed, div)
+    }
+
+    /// As [`Enclosure::new`] with boxes `(min, max)` that hide surfaces from
+    /// each other (devices on the plate). With blockers the rows still sum
+    /// to one for a closed set, because the blockers' own faces are
+    /// surfaces of the set; pass those too.
+    pub fn with_blockers(
+        surfaces: Vec<Surface>,
+        blockers: &[(V3, V3)],
+        closed: bool,
+        div: usize,
+    ) -> Enclosure {
         let n = surfaces.len();
         let areas: Vec<f64> = surfaces.iter().map(|s| s.polygon.area()).collect();
         let mut g = vec![0.0; n * n];
         for i in 0..n {
             for j in 0..n {
                 if i != j {
-                    g[i * n + j] =
-                        areas[i] * view_factor(&surfaces[i].polygon, &surfaces[j].polygon, div);
+                    g[i * n + j] = areas[i]
+                        * view_factor_blocked(
+                            &surfaces[i].polygon,
+                            &surfaces[j].polygon,
+                            div,
+                            blockers,
+                        );
                 }
             }
         }
@@ -667,6 +746,36 @@ mod tests {
             );
         }
         assert!((x.power_w[4] + x.power_w[5]).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_blocker_between_two_plates_hides_them_from_each_other() {
+        let lo = Polygon::rect([0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]).facing([0.5, 0.5, 1.0]);
+        let hi = Polygon::rect([0.0, 0.0, 0.4], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+            .facing([0.5, 0.5, 0.0]);
+        let open = view_factor_blocked(&lo, &hi, 4, &[]);
+        let full = view_factor_blocked(&lo, &hi, 4, &[([-1.0, -1.0, 0.1], [2.0, 2.0, 0.2])]);
+        assert!(open > 0.3 && full < 1e-9, "{open} {full}");
+        // A slab over the left half hides about the left half.
+        let half = view_factor_blocked(&lo, &hi, 4, &[([-1.0, -1.0, 0.1], [0.5, 2.0, 0.2])]);
+        assert!(half > 0.3 * open && half < 0.7 * open, "{half} vs {open}");
+    }
+
+    #[test]
+    fn a_device_on_the_plate_sees_less_wall_than_it_does_alone() {
+        // Device A (hot) next to a tall neighbour B: part of A's side view of
+        // the wall is hidden by B.
+        let (a_lo, a_hi) = ([0.2, 0.4, 0.0], [0.3, 0.6, 0.1]);
+        let (b_lo, b_hi) = ([0.32, 0.5, 0.0], [0.5, 0.8, 0.3]);
+        let room = box_inside([0.0; 3], [1.0, 1.0, 0.5]);
+        let wall = &room[1]; // x+ wall
+        let side = &box_outside(a_lo, a_hi)[1]; // A's x+ face
+        let free = view_factor(side, wall, 4);
+        let hidden = view_factor_blocked(side, wall, 4, &[(b_lo, b_hi)]);
+        assert!(
+            hidden < 0.8 * free && hidden > 0.1 * free,
+            "{hidden} {free}"
+        );
     }
 
     #[test]
