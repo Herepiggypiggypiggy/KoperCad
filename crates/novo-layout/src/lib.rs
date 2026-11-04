@@ -25,6 +25,7 @@ pub mod site;
 pub mod sizing;
 pub mod sizing_model;
 pub mod spec;
+pub mod spec_cooling;
 pub mod spec_fit;
 pub mod state;
 pub mod stock;

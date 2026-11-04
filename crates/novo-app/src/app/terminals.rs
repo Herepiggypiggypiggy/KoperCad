@@ -428,6 +428,7 @@ pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Ma
             } else {
                 String::new()
             },
+            key: 0,
         };
         // The texted mark goes first: of two marks on the same area the
         // canvas notes the first, and it skips marks without text.

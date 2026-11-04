@@ -52,6 +52,9 @@ impl TransientSolver for CabinetSolver {
         control: &Control,
         publish: &mut dyn FnMut(&TransientFrame),
     ) -> Result<TransientSummary, CfdError> {
+        scenario
+            .check_sources()
+            .map_err(|e| CfdError::Setup(e.to_string()))?;
         let lowered = scenario.lowered();
         let scenario = &*lowered;
         let lvl = self

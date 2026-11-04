@@ -228,11 +228,12 @@ fn a_chosen_enclosure_without_setback_fails_loudly() {
 }
 
 #[test]
-fn a_typed_size_that_disagrees_is_reported_and_the_record_wins() {
+fn a_typed_size_that_disagrees_loses_to_the_record() {
     let mut p = cabinet(Some(enclosure(300.0)), 300.0);
     with_spec(&mut p, 204.0, Some(0.0));
     let found = check(&p);
-    assert_eq!(of_kind(&found, ProblemKind::EnclosureSizeDiffers).len(), 1);
+    // Since #1901 the layout already reads the record's room, so the typed
+    // 300 mm depth is gone and the record's 200 mm decides.
     assert_eq!(of_kind(&found, ProblemKind::DeviceTooDeep).len(), 1);
 }
 

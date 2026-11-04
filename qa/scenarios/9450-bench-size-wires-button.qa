@@ -1,0 +1,30 @@
+@title Bench output: one primary pack button and a Size N wires fix on the blocking line
+@area Reports
+# Reports > Bench output shows "Print for the bench" as the one primary button, "More" for the single PDFs, "Calibrate printer" for the scale check, and a "Size" button on the "no cross-section" line that opens Autopilot.
+open_starter_example
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "Print for the bench"
+expect "Calibrate printer"
+expect "no cross-section"
+shot bench
+check_layout
+click_text More
+wait 3
+expect "Bench packet (PDF)"
+expect "Preview templates"
+shot more
+click_text More
+wait 3
+click_text "Calibrate printer"
+wait 3
+expect "Print scale check (PDF)"
+shot calibrate
+check_layout
+click_text "Size 21 wires"
+wait 10
+expect "Autopilot"
+shot autopilot

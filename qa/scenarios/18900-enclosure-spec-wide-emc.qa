@@ -10,6 +10,9 @@ key enter
 wait 10
 click_text "Run the EMC rules with the design checks"
 wait 10
+# The EMC-22 row sits below the fold in the small window.
+scroll 360 400 -600
+wait 5
 expect "EMC-22"
 expect "resonates first"
 expect "Estimate from catalogue data"
