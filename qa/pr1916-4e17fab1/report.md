@@ -1,12 +1,12 @@
-# PR 1916 evidence (source at git 4b4dcdfb1aefa6fd5b5a00dcc7b662ef6d6ea2db)
+# PR 1916 evidence (source at git 4e17fab18dd0662ac64da84e46f2343f070271e0)
 
-Pictures: /mnt/project-files/qa/pr1916-4b4dcdfb/shots/
+Pictures: /mnt/project-files/qa/pr1916-4e17fab1/shots/
 
 # KoperCAD QA run
 
 Platform linux, window sizes 1366x768, 1920x1080. 10 run(s): 10 passed, 0 failed; 0 finding(s) (0 blocking, S1 to S3).
 
-Program: `/tmp/claude-0/target/debug/kopercad`, built 1793808084 (unix time), source at git 4b4dcdfb1a.
+Program: `/tmp/claude-0/target/debug/kopercad`, built 1793821623 (unix time), source at git 4e17fab18d.
 
 App: 1366.0x768.0 points at scale 1.0.
 
