@@ -655,7 +655,11 @@ fn marks_keys_and_export_follow_the_design() {
         .filter(|m| m.kind == MarkKind::Warning || m.kind == MarkKind::Error)
         .collect();
     assert!(!problems.is_empty(), "problems are marked on the drawing");
-    assert!(problems.iter().all(|m| !m.text.is_empty()), "hover text");
+    // The reason shows in the popover that a click opens, not as hover text.
+    assert!(
+        problems.iter().all(|m| m.text.is_empty() && m.key != 0),
+        "a flag key, no hover text"
+    );
     let on = |s: SymbolId| MarkTarget::Item(novo_canvas::model::item_id(AnyId::Symbol(s)));
     assert!(
         problems
