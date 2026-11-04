@@ -20,7 +20,7 @@ mod value;
 
 pub use builder::{Builder, Filter, FilterOp};
 pub use eval::{MAX_ROWS, QueryResult, ResultColumn, check, run, run_query};
-pub use parse::{Query, QueryError, parse};
+pub use parse::{MAX_DEPTH, MAX_OPERATORS, MAX_QUERY_CHARS, Query, QueryError, parse};
 pub use preset::{
     EXAMPLES, MAX_NAME, Preset, Presets, STORE_ADDON, STORE_BLOCK, SavedQueries, to_section,
 };

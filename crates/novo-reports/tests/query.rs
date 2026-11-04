@@ -292,3 +292,36 @@ fn schema_lists_every_table_with_columns() {
             .all(|t| !t.columns.is_empty() && t.rows.is_empty())
     );
 }
+
+#[test]
+fn a_saved_query_that_would_overflow_the_stack_prints_a_problem() {
+    let mut d = doc();
+    // Written straight into the stored block, as a hostile file would be.
+    let deep = format!(
+        "SELECT {}1{} FROM devices",
+        "(".repeat(100_000),
+        ")".repeat(100_000)
+    );
+    let chain = format!("SELECT 1{} FROM devices", "+1".repeat(500_000));
+    let text = serde_json::json!({"presets": [
+        {"name": "Deep", "sql": deep},
+        {"name": "Chain", "sql": chain},
+        {"name": "Fine", "sql": "SELECT count(*) FROM devices"},
+    ]})
+    .to_string();
+    d.transact("Load", |tx| {
+        tx.set_addon_block(
+            "reports",
+            "presets",
+            novo_core::AddonBlock { format: 1, text },
+        )
+    })
+    .unwrap();
+    let out = SavedQueries.generate(d.project());
+    assert_eq!(out.sections.len(), 3);
+    assert!(out.sections[0].title.contains("does not run"));
+    assert!(out.sections[1].title.contains("does not run"));
+    assert_eq!(out.sections[2].rows[0].cells[0].to_string(), "8");
+    let mut presets = Presets::default();
+    assert!(presets.upsert("Long", &"x".repeat(20_000)).is_err());
+}

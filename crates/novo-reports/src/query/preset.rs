@@ -125,6 +125,12 @@ impl Presets {
         if name.chars().count() > MAX_NAME {
             return Err(format!("Keep the name under {MAX_NAME} characters"));
         }
+        if sql.chars().count() > super::parse::MAX_QUERY_CHARS {
+            return Err(format!(
+                "Keep the query under {} characters",
+                super::parse::MAX_QUERY_CHARS
+            ));
+        }
         let preset = Preset {
             name: name.to_owned(),
             sql: sql.trim().to_owned(),

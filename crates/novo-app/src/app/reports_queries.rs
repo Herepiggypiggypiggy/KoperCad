@@ -98,6 +98,7 @@ impl NovoApp {
                     {
                         load = Some(None);
                     }
+                    ui.weak("read-only");
                     help_mark(ui, HELP);
                 });
                 ui.horizontal(|ui| {

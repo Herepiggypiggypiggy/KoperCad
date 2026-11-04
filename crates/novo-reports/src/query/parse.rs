@@ -311,10 +311,21 @@ fn lex(sql: &str) -> Result<Vec<(Tok, usize)>, QueryError> {
     Ok(out)
 }
 
+/// The longest query text accepted (characters). A saved query comes from
+/// the project file, so it is untrusted input.
+pub const MAX_QUERY_CHARS: usize = 10_000;
+/// How deeply an expression may nest (brackets, `NOT`, unary minus, calls).
+pub const MAX_DEPTH: usize = 64;
+/// How many operators one query may chain. The evaluator and the drop of
+/// the tree recurse along a chain, so it is bounded well below the stack.
+pub const MAX_OPERATORS: usize = 1000;
+
 struct Parser<'a> {
     sql: &'a str,
     toks: Vec<(Tok, usize)>,
     pos: usize,
+    depth: usize,
+    operators: usize,
 }
 
 type PResult<T> = Result<T, QueryError>;
@@ -504,9 +515,36 @@ impl Parser<'_> {
         Ok(Item::Expr { expr, alias, text })
     }
 
+    /// Counts one operator against the chain limit.
+    fn operator(&mut self) -> PResult<()> {
+        self.operators += 1;
+        if self.operators > MAX_OPERATORS {
+            return Err(QueryError::new(
+                format!("the query chains more than {MAX_OPERATORS} operators; split it up"),
+                self.at(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Runs `f` one level deeper, refusing past [`MAX_DEPTH`].
+    fn nested<T>(&mut self, f: impl FnOnce(&mut Self) -> PResult<T>) -> PResult<T> {
+        if self.depth >= MAX_DEPTH {
+            return Err(QueryError::new(
+                format!("the expression nests deeper than {MAX_DEPTH} levels"),
+                self.at(),
+            ));
+        }
+        self.depth += 1;
+        let out = f(self);
+        self.depth -= 1;
+        out
+    }
+
     fn expr(&mut self) -> PResult<Expr> {
         let mut left = self.and()?;
         while self.eat_word("or") {
+            self.operator()?;
             let right = self.and()?;
             left = Expr::Bin(BinOp::Or, Box::new(left), Box::new(right));
         }
@@ -516,6 +554,7 @@ impl Parser<'_> {
     fn and(&mut self) -> PResult<Expr> {
         let mut left = self.not()?;
         while self.eat_word("and") {
+            self.operator()?;
             let right = self.not()?;
             left = Expr::Bin(BinOp::And, Box::new(left), Box::new(right));
         }
@@ -524,7 +563,8 @@ impl Parser<'_> {
 
     fn not(&mut self) -> PResult<Expr> {
         if self.eat_word("not") {
-            Ok(Expr::Not(Box::new(self.not()?)))
+            self.operator()?;
+            Ok(Expr::Not(Box::new(self.nested(Self::not)?)))
         } else {
             self.comparison()
         }
@@ -599,6 +639,7 @@ impl Parser<'_> {
                 Tok::Sym("||") => BinOp::Concat,
                 _ => return Ok(left),
             };
+            self.operator()?;
             self.bump();
             let right = self.multiplicative()?;
             left = Expr::Bin(op, Box::new(left), Box::new(right));
@@ -613,6 +654,7 @@ impl Parser<'_> {
                 Tok::Sym("/") => BinOp::Div,
                 _ => return Ok(left),
             };
+            self.operator()?;
             self.bump();
             let right = self.unary()?;
             left = Expr::Bin(op, Box::new(left), Box::new(right));
@@ -621,9 +663,10 @@ impl Parser<'_> {
 
     fn unary(&mut self) -> PResult<Expr> {
         if self.eat_sym("-") {
-            Ok(Expr::Neg(Box::new(self.unary()?)))
+            self.operator()?;
+            Ok(Expr::Neg(Box::new(self.nested(Self::unary)?)))
         } else {
-            self.primary()
+            self.nested(Self::primary)
         }
     }
 
@@ -723,8 +766,21 @@ impl Parser<'_> {
 
 /// Reads a query. Fails with the place of the first problem.
 pub fn parse(sql: &str) -> Result<Query, QueryError> {
+    if sql.len() > MAX_QUERY_CHARS * 4 || sql.chars().count() > MAX_QUERY_CHARS {
+        return Err(QueryError::new(
+            format!("the query is longer than {MAX_QUERY_CHARS} characters"),
+            0,
+        ));
+    }
     let toks = lex(sql)?;
-    Parser { sql, toks, pos: 0 }.query()
+    Parser {
+        sql,
+        toks,
+        pos: 0,
+        depth: 0,
+        operators: 0,
+    }
+    .query()
 }
 
 #[cfg(test)]
@@ -761,6 +817,37 @@ mod tests {
         let e = parse("SELECT FROM devices").unwrap_err();
         assert!(e.message.contains("expected"), "{e}");
         assert!(parse("SELECT 'open FROM devices").is_err());
+    }
+
+    #[test]
+    fn deep_and_long_queries_are_refused_not_crashed() {
+        let deep = format!(
+            "SELECT {}1{} FROM devices",
+            "(".repeat(200),
+            ")".repeat(200)
+        );
+        let e = parse(&deep).unwrap_err();
+        assert!(e.message.contains("nests deeper"), "{e}");
+        let nots = format!("SELECT * FROM devices WHERE {}1", "NOT ".repeat(500));
+        assert!(parse(&nots).unwrap_err().message.contains("nests deeper"));
+        let minus = format!("SELECT {}1 FROM devices", "- ".repeat(500));
+        assert!(parse(&minus).is_err());
+        // A flat chain is long, not deep, until it passes the operator limit.
+        let chain = format!("SELECT 1{} FROM devices", "+1".repeat(2000));
+        assert!(parse(&chain).unwrap_err().message.contains("operators"));
+        let ok = format!("SELECT 1{} FROM devices", "+1".repeat(500));
+        assert!(parse(&ok).is_ok());
+        let huge = format!("SELECT 1{} FROM devices", "+1".repeat(500_000));
+        assert!(parse(&huge).unwrap_err().message.contains("longer than"));
+        let megabyte = format!("SELECT '{}' FROM devices", "x".repeat(1_000_000));
+        assert!(
+            parse(&megabyte)
+                .unwrap_err()
+                .message
+                .contains("longer than")
+        );
+        let depth_ok = format!("SELECT {}1{} FROM devices", "(".repeat(30), ")".repeat(30));
+        assert!(parse(&depth_ok).is_ok());
     }
 
     #[test]
