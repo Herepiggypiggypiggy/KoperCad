@@ -397,7 +397,7 @@ fn store_vents(
     cab: novo_core::StructureId,
     vents: &[super::heat_settings::VentSpec],
 ) {
-    let held = super::heat_openings_store::text(vents);
+    let held = super::heat_openings_store::text(vents, None);
     d.app
         .backend
         .document_mut()

@@ -17,6 +17,7 @@ pub mod busbar;
 pub mod cooling;
 mod flow;
 pub mod forced;
+pub mod gaps;
 mod linalg;
 pub mod lump;
 pub mod model;

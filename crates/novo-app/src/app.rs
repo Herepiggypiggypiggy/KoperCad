@@ -1611,7 +1611,7 @@ impl NovoApp {
         // Row counts are keyed by revision, which two projects can share.
         self.reports_view.forget_counts();
         // The openings of the Heat panel belong to the project's enclosure.
-        self.cabinet.heat.settings.load(Vec::new());
+        self.cabinet.heat.settings.load(Vec::new(), None);
         self.cabinet.heat.settings.stored = None;
         // A what-if answer is for the cabinet it was run on: its Apply would move
         // the devices of another file, and a run in flight would land there.
