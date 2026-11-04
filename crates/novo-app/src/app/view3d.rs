@@ -2409,8 +2409,7 @@ fn heat_controls(
         }
         if probe.line_on {
             let profile = heat_numbers::profile(probe, &sol.snapshot);
-            let mut copied = false;
-            if !heat_numbers::plot_window(ui.ctx(), profile.as_ref(), sol.ambient, &mut copied) {
+            if !heat_numbers::plot_window(ui.ctx(), profile.as_ref(), sol.ambient) {
                 probe.line_on = false;
                 probe.clear_line();
             }

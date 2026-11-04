@@ -100,7 +100,10 @@ pub(crate) fn menu(ui: &mut egui::Ui, probe: &mut ProbeState, snap: &CfdSnapshot
         ui.separator();
         ui.label(egui::RichText::new("Pinned probes").small());
         if probe.pins.is_empty() {
-            ui.label(egui::RichText::new("None. Turn on Probe, click the air, press Pin.").small());
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("None").small());
+                ui.label("?").on_hover_text("Turn on Probe, click the air, press Pin");
+            });
         }
         let mut drop = None;
         for (n, at) in probe.pins.iter().enumerate() {
@@ -144,60 +147,62 @@ fn histogram(ui: &mut egui::Ui, snap: &CfdSnapshot, level_c: f64) {
     resp.on_hover_text("Air volume at each temperature, coldest to hottest air; bars above the level are the warm colour");
 }
 
-/// The floating plot of the line. Returns false when the user closed it.
-pub(crate) fn plot_window(
-    ctx: &egui::Context,
-    profile: Option<&Profile>,
-    ambient: f64,
-    copied: &mut bool,
-) -> bool {
-    let mut open = true;
-    egui::Window::new("Plot along line")
-        .anchor(egui::Align2::LEFT_BOTTOM, [8.0, -8.0])
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            let Some(p) = profile else {
-                ui.label("Click the air twice: start and end of the line.");
-                return;
-            };
-            plot(ui, p, ambient);
-            if let Some(s) = p.stats() {
-                ui.label(
-                    egui::RichText::new(format!(
-                        "Along {:.0} mm: {:.1} to {:.1} °C, mean {:.1} °C, fastest air {:.2} m/s{}",
-                        p.length_mm(),
-                        s.min_c,
-                        s.max_c,
-                        s.mean_c,
-                        s.max_speed,
-                        if s.solid_share > 0.0 {
-                            format!(", {:.0} % inside solids", s.solid_share * 100.0)
-                        } else {
-                            String::new()
-                        }
-                    ))
-                    .small(),
-                );
-            } else {
-                ui.label("The whole line lies inside solids.");
-            }
+/// The plot of the line, a card that can be docked like the other tool
+/// panes. Returns false when the user closed it.
+pub(crate) fn plot_window(ctx: &egui::Context, profile: Option<&Profile>, ambient: f64) -> bool {
+    super::panel::Panel::new(
+        "heat_line_plot",
+        "Plot along line",
+        ctx.content_rect(),
+        super::panel::Side::BottomLeft,
+        370.0,
+    )
+    .closable()
+    .dockable()
+    .fit()
+    .show(ctx, |ui| {
+        let Some(p) = profile else {
             ui.horizontal(|ui| {
-                if ui
-                    .small_button("Copy as CSV")
-                    .on_hover_text("Distance, temperature and speed per point, for a spreadsheet")
-                    .clicked()
-                {
-                    ui.ctx().copy_text(p.csv());
-                    *copied = true;
-                }
-                ui.label("?").on_hover_text(
-                    "Temperature along the line you clicked, in the solved air. Grey stretches run through a device or wall and show its own temperature. The dashed line is the ambient air. A model result, not a measurement",
-                );
+                ui.label("Pick two points");
+                ui.label("?").on_hover_text("Click the air twice: the start and the end of the line");
             });
+            return;
+        };
+        plot(ui, p, ambient);
+        if let Some(s) = p.stats() {
+            ui.label(
+                egui::RichText::new(format!(
+                    "Along {:.0} mm: {:.1} to {:.1} °C, mean {:.1} °C, fastest air {:.2} m/s{}",
+                    p.length_mm(),
+                    s.min_c,
+                    s.max_c,
+                    s.mean_c,
+                    s.max_speed,
+                    if s.solid_share > 0.0 {
+                        format!(", {:.0} % inside solids", s.solid_share * 100.0)
+                    } else {
+                        String::new()
+                    }
+                ))
+                .small(),
+            );
+        } else {
+            ui.label("The whole line lies inside solids.");
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .small_button("Copy as CSV")
+                .on_hover_text("Distance, temperature and speed per point, for a spreadsheet")
+                .clicked()
+            {
+                ui.ctx().copy_text(p.csv());
+            }
+            ui.label("?").on_hover_text(
+                "Temperature along the line you clicked, in the solved air. Grey stretches run through a device or wall and show its own temperature. The dashed line is the ambient air. Model, not measurement",
+            );
         });
-    open
+    });
+    !super::panel::take_closed(ctx, "heat_line_plot")
 }
 
 fn plot(ui: &mut egui::Ui, p: &Profile, ambient: f64) {
