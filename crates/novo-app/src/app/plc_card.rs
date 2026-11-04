@@ -299,7 +299,7 @@ impl NovoApp {
                     ui,
                     novo_flags::Severity::Yellow,
                     false,
-                    "Not a card layout",
+                    "Card not added",
                     std::slice::from_ref(p),
                 );
             }
