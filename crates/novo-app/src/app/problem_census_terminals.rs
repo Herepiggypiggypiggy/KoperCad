@@ -38,7 +38,16 @@ fn count(patterns: &[&str]) -> usize {
             let text = std::fs::read_to_string(dir.join(f)).unwrap_or_default();
             // Tests and comments do not put sentences in front of anyone.
             let code = text.split("#[cfg(test)]").next().unwrap_or_default();
-            code.lines()
+            // A refusal (`refuse_titled(Level::Warning, ...)`) is a triangle,
+            // not a toast: it names the level only to pick the colour.
+            let mut kept = String::new();
+            let mut rest = code;
+            while let Some(at) = rest.find("refuse_titled(") {
+                kept.push_str(&rest[..at]);
+                rest = rest[at..].split_once(");").map_or("", |(_, tail)| tail);
+            }
+            kept.push_str(rest);
+            kept.lines()
                 .filter(|l| !l.trim_start().starts_with("//"))
                 .map(|l| patterns.iter().filter(|p| l.contains(*p)).count())
                 .sum::<usize>()
