@@ -11,3 +11,4 @@
 - `novo-theme`: `widgets::flag_triangle` (painted glyph), Issues pill draws triangles.
 - `novo-app` `app/flags.rs`: `draft(&Problem)` -> `FlagDraft` for all 76 kinds (Info is no flag; DepthUnknown, GuessedWire, UnsizedDuct dashed), `FlagUi` in `wb.flags` filled from `wb.problems` by revision, `flag_marks` (replaces the old marks), `flag_popover` (title, badge, detail, Locate / Fix / Waive / Explain / Copy; Esc or click away closes), Issues list rows lead with the triangle. Qa scenario 9400.
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
+2026-11-04 T14 Shell flags: job chip, control flags, inline flags; shell sites migrated (see t14/HANDOFF.md); scenarios 9540/9541; census ceiling 2

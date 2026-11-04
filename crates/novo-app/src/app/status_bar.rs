@@ -99,6 +99,9 @@ impl NovoApp {
         let recent = self.recent_messages();
         let unsaved = matches!(saved, "Not saved yet" | "Not saved");
         let mut run = None;
+        // Jobs that did not work (problem triangles, lane T14).
+        let shell = self.shell_chip();
+        let mut shell_open = None;
         // Where the hint and the proposal count are, for the lessons.
         let mut spots: Vec<(&'static str, egui::Rect, &'static str)> = Vec::new();
         egui::Panel::bottom("status_bar")
@@ -121,6 +124,9 @@ impl NovoApp {
                     let small = egui::TextStyle::Small.resolve(ui.style());
                     let mono = egui::FontId::monospace(small.size);
                     let mut right = measure(saved, small.clone()) + 24.0;
+                    if shell.is_some() {
+                        right += 48.0;
+                    }
                     if let Some(values) = &values {
                         right += measure(values, mono) + 24.0;
                     }
@@ -186,6 +192,9 @@ impl NovoApp {
                         ui.label(selection);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some(c) = shell {
+                            shell_open = super::flags_shell::chip(ui, c);
+                        }
                         if !saved.is_empty() {
                             let label = ui.add(egui::Label::new(saved).sense(if unsaved {
                                 egui::Sense::click()
@@ -240,6 +249,9 @@ impl NovoApp {
             });
         for (id, rect, label) in spots {
             self.anchor(id, rect, label);
+        }
+        if let Some(open) = shell_open {
+            self.wb.flags.open = Some(open);
         }
         if let Some(ask) = sim_ask {
             super::sim_chip::apply(&mut self.cabinet.heat, ask);

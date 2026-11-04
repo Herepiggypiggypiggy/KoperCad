@@ -242,6 +242,7 @@ impl NovoApp {
         };
         let index = self.wb.flags.index.get(&id).copied();
         let mut chosen: Option<Action> = None;
+        let mut dismiss = false;
         let mut close = ctx.input(|i| i.key_pressed(egui::Key::Escape));
         let area = egui::Area::new(egui::Id::new("flag_popover"))
             .order(egui::Order::Foreground)
@@ -269,6 +270,9 @@ impl NovoApp {
                                 Action::Locate => "Locate",
                                 Action::Fix(c) if c == FIX_ASSIGN_PARTS => "Assign parts",
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
+                                a if super::flags_shell::shell_command(a).is_some() => {
+                                    super::flags_shell::shell_command(a).map_or("Fix", |c| c.1)
+                                }
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
                                 Action::Copy => "Copy",
@@ -280,6 +284,12 @@ impl NovoApp {
                             if ui.button(label).clicked() {
                                 chosen = Some(action.clone());
                             }
+                        }
+                        if flag.life == Life::Until
+                            && flag.source == Source::Shell
+                            && ui.button("Dismiss").clicked()
+                        {
+                            dismiss = true;
                         }
                     });
                 });
@@ -299,6 +309,10 @@ impl NovoApp {
         if let Some(action) = chosen {
             close = true;
             self.run_flag_action(&flag, index, action, ctx);
+        }
+        if dismiss {
+            close = true;
+            self.wb.flags.store.clear(id);
         }
         if close {
             self.wb.flags.open = None;
@@ -336,7 +350,11 @@ impl NovoApp {
                 }
             }
             Action::Copy => ctx.copy_text(flag.detail.0.join("\n")),
-            _ => {}
+            other => {
+                if let Some((command, _)) = super::flags_shell::shell_command(&other) {
+                    self.wb.queued.push(command);
+                }
+            }
         }
     }
 }

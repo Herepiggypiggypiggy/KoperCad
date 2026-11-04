@@ -132,6 +132,7 @@ mod example_plc;
 mod example_pump;
 mod faults;
 mod flags;
+mod flags_shell;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -456,6 +457,8 @@ mod example_tests;
 mod faults_tests;
 #[cfg(test)]
 mod first_view_tests;
+#[cfg(test)]
+mod flags_shell_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]

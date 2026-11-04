@@ -1,0 +1,27 @@
+@title A job that did not work is a triangle on the status bar with Retry and Dismiss (1920x1080)
+@area Shell
+@sizes 1920x1080
+@env PATH=/nonexistent
+# T14: Help > Open log folder cannot start a file manager (PATH is empty): the toast becomes a yellow triangle chip.
+click_text "New project"
+wait 20
+key ctrl+k
+wait 4
+text open log folder
+wait 6
+key Enter
+wait 10
+expect "click for details"
+shot chip
+check_layout
+click_text "click for details" Button
+wait 6
+expect "Log folder did not open"
+expect "Dismiss"
+shot popover
+check_layout
+click_text "Dismiss" Button
+wait 6
+expect_not "Log folder did not open"
+expect_not "click for details"
+shot dismissed
