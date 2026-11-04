@@ -36,10 +36,6 @@ click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 120
-click_text "Cooling selection"
-wait 10
-scroll 1190 560 -500
-wait 10
 click_text "Cooler layout"
 wait_s 120
 expect "Apply the moves"
