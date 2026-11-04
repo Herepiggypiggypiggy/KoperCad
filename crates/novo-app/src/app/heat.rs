@@ -159,6 +159,8 @@ pub(super) struct HeatState {
     pub(super) layout: super::heat_layout::LayoutSearch,
     /// The cooling what-if wizard (`heat.cooling_whatif`).
     pub(super) whatif: super::heat_whatif::Wizard,
+    /// Commands the panel asks the app to run (the panel has no file access).
+    pub(super) app_commands: Vec<&'static str>,
 }
 
 /// See [`HeatState::no_data`].
@@ -247,6 +249,7 @@ impl HeatState {
             advice: Default::default(),
             layout: Default::default(),
             whatif: Default::default(),
+            app_commands: Vec::new(),
         }
     }
 
@@ -1150,6 +1153,14 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         }
         heat_up_controls(ui, state);
         compare_controls(ui, state);
+        if state.solution.is_some() {
+            let export = ui.button("ParaView").on_hover_text(
+                "Save this result as a ParaView file (.vtr, or .pvd for a heat-up) and open it in ParaView if it is installed. A model result: the file says so",
+            );
+            if export.clicked() {
+                state.app_commands.push("heat.open_paraview");
+            }
+        }
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
             let validated = sol.snapshot.accuracy.validated;

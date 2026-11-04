@@ -139,3 +139,47 @@ fn default_shell_gives_the_iec_wall_films() {
     b.params.shell = Some(ShellModel::from_enclosure(&b.enclosure));
     assert_eq!(wall_conductances(&a).h, wall_conductances(&b).h);
 }
+
+#[test]
+fn an_extra_heat_source_heats_the_3d_cabinet_and_its_walls() {
+    use novo_cfd::shell_view::shell_report;
+    let plain = scenario(false);
+    let base = solve(&plain);
+    let mut sc = scenario(false);
+    sc.params.sources.push(HeatSource {
+        id: 9,
+        rect: Rect {
+            x: 60.0,
+            y: 100.0,
+            w: 300.0,
+            h: 30.0,
+        },
+        power_w: 40.0,
+        blockage: None,
+    });
+    let snap = solve(&sc);
+    assert!(snap.progress.converged);
+    let r = shell_report(&sc, &snap);
+    let walls: f64 = r.faces.iter().map(|f| f.heat_w).sum();
+    // 50 W device + 40 W source leave through the walls (3D balance within a few %)
+    assert!((walls / 90.0 - 1.0).abs() < 0.08, "walls {walls} W of 90 W");
+    assert!(snap.devices[0].air_c > base.devices[0].air_c);
+}
+
+#[test]
+fn the_3d_solver_refuses_a_bad_heat_source() {
+    let mut sc = scenario(false);
+    sc.params.sources.push(HeatSource {
+        id: 9,
+        rect: Rect {
+            x: 60.0,
+            y: 100.0,
+            w: 300.0,
+            h: 30.0,
+        },
+        power_w: f64::NAN,
+        blockage: None,
+    });
+    let r = small().solve(&sc, Fidelity::Coarse, &Control::new(), &mut |_| {});
+    assert!(r.is_err());
+}

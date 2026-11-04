@@ -785,6 +785,16 @@ pub const TABLE: &[Presentation] = &[
         "Cooling what-if wizard",
     ),
     row(
+        "heat.export_vtk",
+        p(icons::SNOWFLAKE),
+        "Export heat for ParaView",
+    ),
+    row(
+        "heat.open_paraview",
+        p(icons::SNOWFLAKE),
+        "Open heat in ParaView",
+    ),
+    row(
         "heat.cooler_layout",
         p(icons::SNOWFLAKE),
         "Suggest cooler layout",

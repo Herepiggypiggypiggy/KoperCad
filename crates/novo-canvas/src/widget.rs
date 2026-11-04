@@ -385,6 +385,25 @@ pub struct CanvasOutput {
 }
 
 /// `a` to `b` cut into dashes of length `dash` with `gap` between them.
+/// The corners of a problem triangle of half-size `h` centred on `c`.
+fn triangle(c: egui::Pos2, h: f32) -> Vec<egui::Pos2> {
+    vec![
+        c + egui::vec2(0.0, -h),
+        c + egui::vec2(h, h * 0.8),
+        c + egui::vec2(-h, h * 0.8),
+    ]
+}
+
+/// The "!" inside a problem triangle: a stem and a dot.
+fn bang(painter: &egui::Painter, c: egui::Pos2, h: f32, color: egui::Color32) {
+    let stroke = egui::Stroke::new(1.4, color);
+    painter.line_segment(
+        [c + egui::vec2(0.0, -h * 0.35), c + egui::vec2(0.0, h * 0.2)],
+        stroke,
+    );
+    painter.circle_filled(c + egui::vec2(0.0, h * 0.5), 0.8, color);
+}
+
 fn dashes(a: Vec2, b: Vec2, dash: f32, gap: f32) -> Vec<[Vec2; 2]> {
     let len = a.distance(b);
     if len <= 0.0 || dash <= 0.0 {
@@ -1332,16 +1351,25 @@ impl CanvasView {
                     let c = at(*pos);
                     let h = marks::GLYPH_SIZE * 0.5;
                     match kind {
-                        MarkKind::Warning => {
+                        MarkKind::Warning | MarkKind::Unchecked => {
+                            // Yellow: hollow, a thick outline round the
+                            // sheet's own colour, the "!" in the outline
+                            // colour. Dashed when it could not be judged.
+                            let pts = triangle(c, h);
                             painter.add(egui::Shape::convex_polygon(
-                                vec![
-                                    c + egui::vec2(0.0, -h),
-                                    c + egui::vec2(h, h * 0.8),
-                                    c + egui::vec2(-h, h * 0.8),
-                                ],
-                                c32(st.warning),
+                                pts.clone(),
+                                c32(st.background),
                                 egui::Stroke::NONE,
                             ));
+                            let stroke = egui::Stroke::new(2.0, c32(st.warning));
+                            if *kind == MarkKind::Unchecked {
+                                let mut ring = pts;
+                                ring.push(ring[0]);
+                                painter.extend(egui::Shape::dashed_line(&ring, stroke, 3.0, 2.0));
+                            } else {
+                                painter.add(egui::Shape::closed_line(pts, stroke));
+                            }
+                            bang(&painter, c, h, c32(st.warning));
                         }
                         MarkKind::Note => {
                             // A bubble with a tail at the bottom left.
@@ -1361,17 +1389,13 @@ impl CanvasView {
                             painter.rect_filled(r, 2.0, c32(st.note));
                         }
                         MarkKind::Error => {
-                            let pts = (0..8)
-                                .map(|i| {
-                                    let a = std::f32::consts::TAU * (i as f32 + 0.5) / 8.0;
-                                    c + egui::vec2(a.cos(), a.sin()) * h
-                                })
-                                .collect();
+                            // Red: solid, thick outline, white "!".
                             painter.add(egui::Shape::convex_polygon(
-                                pts,
+                                triangle(c, h),
                                 c32(st.error),
-                                egui::Stroke::NONE,
+                                egui::Stroke::new(2.0, c32(st.error)),
                             ));
+                            bang(&painter, c, h, egui::Color32::WHITE);
                         }
                         _ => {
                             let pts = vec![

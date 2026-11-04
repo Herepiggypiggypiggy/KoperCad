@@ -96,7 +96,8 @@ fn nothing_is_missing_for_the_standard_reports() {
             output.report
         );
     }
-    assert_eq!(standard_reports().len(), motor_reports().len());
+    // "My reports" is only generated for a project that has saved reports.
+    assert_eq!(standard_reports().len() - 1, motor_reports().len());
     for title in FIXED_SECTION_TITLES {
         assert!(tr.knows(title), "section title {title}");
     }
