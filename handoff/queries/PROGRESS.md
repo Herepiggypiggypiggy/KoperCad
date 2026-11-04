@@ -7,3 +7,4 @@
 2026-11-04 11:20 UTC empty state keeps a visible short title beside ?
 2026-11-04 14:26 UTC saved report columns use content widths at any column count; QA scenarios 19030-19032 added (unrun here)
 2026-11-04 14:32 UTC review: +12 padding only for fit_content sections (typed Section flag), wide-minimum unit tests
+2026-11-04 14:40 UTC scenario 19032: Delete clicked on the saved report

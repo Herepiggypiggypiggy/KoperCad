@@ -21,17 +21,7 @@ wait 8
 expect "Devices without a part"
 shot saved-result
 check_layout
-# Delete the saved report: write a new query over it so the name is cleared first.
-click_text "+ New report"
-wait 4
-click_text "Start from example"
-wait 4
-click_text "Wires without a size"
-wait 4
-click_text "Build by choosing"
-wait 4
-click_text "Write query"
-wait 4
+# Delete the report just saved (its tab is the open one; Delete only exists on a saved report).
 click_text "Delete"
 wait 5
 expect_not "Devices without a part (does not run)"
