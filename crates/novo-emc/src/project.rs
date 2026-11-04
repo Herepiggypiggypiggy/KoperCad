@@ -9,6 +9,7 @@
 //! | `emc.class` | wire, cable | `motor`, `power`, `control`, `analog`, `fieldbus`, `safety`, `earth` |
 //! | `emc.shield_a`, `emc.shield_b` | cable | shield end: `360`, `pigtail:<mm>`, `open` |
 //! | `emc.twisted` | cable | the cores are twisted pairs |
+//! | `emc.cable_pf_per_m` | cable | capacitance core to shield in pF per metre, from the maker's data sheet (EMC-21); the cable's own length is the cable length (`length_m`) |
 //! | `emc.leaves` | wire | the wire leaves the cabinet |
 //! | `emc.role` | device | `drive`, `filter`, `sensitive`, `noisy` |
 //! | `emc.filter` | device, part | `built-in` or `external`: a drive's mains filter |
@@ -32,7 +33,8 @@ use novo_core::{
 use crate::class::{EmcClass, Shield, Termination};
 use crate::field::{Current, FieldParams, FieldSetup};
 use crate::input::{
-    Device as EmcDevice, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run,
+    CableData, Device as EmcDevice, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role,
+    Run,
 };
 use crate::report::{Fix, Report, Subject};
 
@@ -784,11 +786,31 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             leaves_cabinet: leaves,
         });
     }
+    let mut cables: Vec<CableData> = Vec::new();
+    for r in &runs {
+        let Some(id) = r.cable else { continue };
+        if cables.iter().any(|c| c.id == id) {
+            continue;
+        }
+        let Some(c) = project.cables().find(|c| c.id.raw() == id) else {
+            continue;
+        };
+        cables.push(CableData {
+            id,
+            length_m: c.length_m.filter(|l| l.is_finite() && *l > 0.0),
+            core_shield_pf_per_m: c
+                .properties
+                .get("emc.cable_pf_per_m")
+                .and_then(as_f64)
+                .filter(|v| v.is_finite() && *v > 0.0),
+        });
+    }
     Input {
         runs,
         ducts,
         devices,
         plates,
+        cables,
         params,
     }
 }
