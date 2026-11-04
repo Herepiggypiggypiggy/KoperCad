@@ -13,9 +13,11 @@
 
 mod advice;
 pub mod bridge;
+pub mod busbar;
 pub mod cooling;
 mod flow;
 pub mod forced;
+pub mod gaps;
 mod linalg;
 pub mod lump;
 pub mod model;
@@ -47,6 +49,7 @@ pub(crate) fn run_steady_from(
     scn: &Scenario,
     init: Option<&thermal::State>,
 ) -> Result<(Setup, thermal::State), Error> {
+    scn.check_sources()?;
     let lowered = scn.lowered();
     let s = Setup::new(&lowered)?;
     let st = thermal::steady_from(&s, 1.0, init);
@@ -161,6 +164,7 @@ pub fn simulate_transient(
             "a transient run needs a duration and steps".into(),
         ));
     }
+    scn.check_sources()?;
     let resolved = outside::resolve(scn)?;
     let lowered = resolved.lowered();
     let s = Setup::new(&lowered)?;

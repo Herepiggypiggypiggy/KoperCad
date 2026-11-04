@@ -848,6 +848,7 @@ impl NovoApp {
                     );
                 }
                 self.message(Level::Info, text);
+                self.offer_parts_pass();
                 self.wb.macro_place.open = false;
             }
             Err(e) => {

@@ -282,6 +282,19 @@ impl Window {
     }
 }
 
+/// Heat that bypasses the door panel along its frame: the gasket, hinges and
+/// the door's edge flange. Modelled as a linear thermal bridge, the usual
+/// way a window or door frame is counted: conductance = `psi_w_per_mk` times
+/// the door perimeter. **Conduction only**: air leaking through the seal is
+/// lane H4.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DoorEdge {
+    /// Linear transmittance, W per metre of door edge and kelvin. A foam
+    /// gasket on a steel frame is of the order of 0.05 to 0.2 (planning value,
+    /// not measured).
+    pub psi_w_per_mk: f64,
+}
+
 /// The two surface films, W/m2K. `h_in` is convection plus radiation of the
 /// inner surface to the air and the contents, `h_out` of the outer surface to
 /// the surroundings. Lane H3 replaces `h_out` by a temperature dependent value.
@@ -387,6 +400,8 @@ pub struct ShellModel {
     /// [`TOP`], [`BOTTOM`].
     pub faces: [FaceSpec; 6],
     pub window: Option<Window>,
+    /// Thermal bridge along the door frame. `None` = no extra path.
+    pub door_edge: Option<DoorEdge>,
     /// Air gap between the mounting plate and the rear wall, mm. `None` = the
     /// plate lies on the wall (the plate path is the rear coefficient, as in
     /// the IEC calibration).
@@ -454,6 +469,7 @@ impl ShellModel {
         ShellModel {
             faces: std::array::from_fn(|_| face.clone()),
             window: None,
+            door_edge: None,
             plate_setback_mm: None,
             plate_emissivity: 0.3,
             films,
@@ -574,7 +590,21 @@ impl ShellModel {
     pub fn conductances_w_per_k(&self, e: &Enclosure, scale: f64) -> [f64; 6] {
         let a = FaceAreas::of(e);
         let b = self.b_factors(e);
-        std::array::from_fn(|f| self.u_face(f) * scale * b[f] * a.outer[f])
+        std::array::from_fn(|f| {
+            self.u_face(f) * scale * b[f] * a.outer[f]
+                + if f == FRONT {
+                    self.door_edge_w_per_k(e) * scale
+                } else {
+                    0.0
+                }
+        })
+    }
+
+    /// Conductance of the door frame bridge, W/K (0 without one).
+    pub fn door_edge_w_per_k(&self, e: &Enclosure) -> f64 {
+        self.door_edge.map_or(0.0, |d| {
+            d.psi_w_per_mk.max(0.0) * 2.0 * (e.width_mm + e.height_mm) / 1000.0
+        })
     }
 
     /// Heat capacity of the wall of each face, J/K.
@@ -694,6 +724,8 @@ pub struct FaceTemps {
     /// outer film).
     pub outer_radiation_w: f64,
     pub outer_convection_w: f64,
+    /// Part of `heat_w` that goes through the door frame bridge, W (door only).
+    pub edge_heat_w: f64,
 }
 
 /// Whether a value is a model or an exact result.
@@ -823,6 +855,11 @@ pub fn report(
             window,
             outer_radiation_w: heat_w * rad_share,
             outer_convection_w: heat_w * (1.0 - rad_share),
+            edge_heat_w: if f == FRONT {
+                model.door_edge_w_per_k(e) * scale * (t_mean - ambient_c)
+            } else {
+                0.0
+            },
         }
     });
     ShellReport {
@@ -1124,6 +1161,24 @@ mod tests {
         let sheet_kg = 7850.0 * 0.002 * a.outer.iter().sum::<f64>();
         s.mass_kg = Some(sheet_kg);
         assert!((s.mass_check(&e).unwrap() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn door_edge_bridge_adds_psi_times_perimeter() {
+        let e = enclosure(Material::Steel, Installation::FreeStanding);
+        let mut s = ShellModel::from_enclosure(&e);
+        let base = s.conductances_w_per_k(&e, 1.0);
+        s.door_edge = Some(DoorEdge { psi_w_per_mk: 0.1 });
+        let with = s.conductances_w_per_k(&e, 1.0);
+        // perimeter 2 * (0.8 + 1.0) = 3.6 m
+        assert!((with[FRONT] - base[FRONT] - 0.36).abs() < 1e-12);
+        for f in [REAR, LEFT, RIGHT, TOP, BOTTOM] {
+            assert_eq!(with[f], base[f]);
+        }
+        let samples: [FaceSamples; 6] = std::array::from_fn(|_| vec![(with[FRONT], 50.0)]);
+        let r = report(&s, &e, 30.0, 1.0, &samples, None);
+        assert!((r.faces[FRONT].edge_heat_w - 0.36 * 20.0).abs() < 1e-9);
+        assert_eq!(r.faces[LEFT].edge_heat_w, 0.0);
     }
 
     #[test]

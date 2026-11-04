@@ -165,3 +165,38 @@ fn an_extra_heat_source_heats_the_3d_cabinet_and_its_walls() {
     assert!((walls / 90.0 - 1.0).abs() < 0.08, "walls {walls} W of 90 W");
     assert!(snap.devices[0].air_c > base.devices[0].air_c);
 }
+
+#[test]
+fn the_3d_solver_refuses_a_bad_heat_source() {
+    let mut sc = scenario(false);
+    sc.params.sources.push(HeatSource {
+        id: 9,
+        rect: Rect {
+            x: 60.0,
+            y: 100.0,
+            w: 300.0,
+            h: 30.0,
+        },
+        power_w: f64::NAN,
+        blockage: None,
+    });
+    let r = small().solve(&sc, Fidelity::Coarse, &Control::new(), &mut |_| {});
+    assert!(r.is_err());
+}
+
+#[test]
+fn the_door_bridge_raises_the_3d_door_film() {
+    use novo_cfd::solids::wall_conductances;
+    use novo_thermal::shell::{DoorEdge, ShellModel};
+    let a = scenario(false);
+    let mut b = scenario(false);
+    let mut shell = ShellModel::from_enclosure(&b.enclosure);
+    shell.door_edge = Some(DoorEdge { psi_w_per_mk: 0.2 });
+    b.params.shell = Some(shell);
+    let (wa, wb) = (wall_conductances(&a), wall_conductances(&b));
+    // z max is the door; every other face is unchanged
+    assert!(wb.h[5] > wa.h[5]);
+    for f in 0..5 {
+        assert_eq!(wa.h[f], wb.h[f]);
+    }
+}

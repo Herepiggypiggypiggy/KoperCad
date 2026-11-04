@@ -442,6 +442,7 @@ impl NovoApp {
                             Vec2::new(x + 1.5, y + 1.5),
                         )),
                         text,
+                        key: 0,
                     });
                 }
                 _ => {}

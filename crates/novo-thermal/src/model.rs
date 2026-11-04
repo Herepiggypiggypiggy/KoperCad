@@ -278,10 +278,42 @@ pub struct Params {
 }
 
 impl Scenario {
+    /// Refuses a heat source with a negative or non-finite power, a
+    /// non-finite blockage or a footprint that is not a number. Run before
+    /// [`Scenario::lowered`], which would otherwise hide the source from the
+    /// solver's own checks.
+    pub fn check_sources(&self) -> Result<(), crate::Error> {
+        for h in &self.params.sources {
+            if !(h.power_w.is_finite() && h.power_w >= 0.0) {
+                return Err(crate::Error::Invalid(
+                    "a heat source is negative or not a number".into(),
+                ));
+            }
+            if h.blockage.is_some_and(|b| !b.is_finite()) {
+                return Err(crate::Error::Invalid(
+                    "a heat source blockage is not a number".into(),
+                ));
+            }
+            let r = &h.rect;
+            if !(r.x.is_finite() && r.y.is_finite() && r.w.is_finite() && r.h.is_finite())
+                || r.w <= 0.0
+                || r.h <= 0.0
+            {
+                return Err(crate::Error::Invalid(
+                    "a heat source has no footprint".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// The scenario with `Params::sources` turned into obstacles that carry
     /// their heat, which is the form both engines solve (a porous body, like a
-    /// duct with wires). Borrowed unchanged
-    /// when there are no sources. Call it once at the entry of a solver.
+    /// duct with wires). Borrowed unchanged when there are no sources.
+    ///
+    /// **Call [`Scenario::check_sources`] and then this once at the entry of
+    /// every solver.** A caller that skips it silently drops the sources: the
+    /// engines below it only see obstacles.
     pub fn lowered(&self) -> std::borrow::Cow<'_, Scenario> {
         if self.params.sources.is_empty() {
             return std::borrow::Cow::Borrowed(self);
@@ -293,7 +325,10 @@ impl Scenario {
             s.obstacles.push(Obstacle {
                 kind: ObstacleKind::Duct,
                 rect: h.rect,
-                blockage: Some(h.blockage.unwrap_or(0.15).clamp(0.0, 1.0)),
+                blockage: Some(match h.blockage {
+                    Some(b) if b.is_finite() => b.clamp(0.0, 1.0),
+                    _ => 0.15,
+                }),
                 loss_w: h.power_w,
             });
         }

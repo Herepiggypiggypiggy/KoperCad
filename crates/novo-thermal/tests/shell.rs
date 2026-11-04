@@ -170,3 +170,66 @@ fn a_negative_source_is_refused() {
     });
     assert!(simulate_steady(&sc).is_err());
 }
+
+fn source(power_w: f64, blockage: Option<f64>, w: f64) -> HeatSource {
+    HeatSource {
+        id: 1,
+        rect: novo_layout::Rect {
+            x: 100.0,
+            y: 100.0,
+            w,
+            h: 30.0,
+        },
+        power_w,
+        blockage,
+    }
+}
+
+#[test]
+fn bad_heat_sources_are_refused_by_every_entry() {
+    for bad in [
+        source(f64::NAN, None, 100.0),
+        source(-1.0, None, 100.0),
+        source(10.0, Some(f64::NAN), 100.0),
+        source(10.0, None, 0.0),
+    ] {
+        let mut sc = base();
+        sc.params.sources.push(bad);
+        assert!(sc.check_sources().is_err());
+        assert!(simulate_steady(&sc).is_err());
+        assert!(
+            simulate_transient(&sc, &TransientSettings::default()).is_err(),
+            "transient must refuse too"
+        );
+    }
+}
+
+#[test]
+fn an_infinite_blockage_cannot_reach_the_solver_as_nan() {
+    let mut sc = base();
+    sc.params
+        .sources
+        .push(source(10.0, Some(f64::INFINITY), 100.0));
+    assert!(sc.check_sources().is_err());
+    // lowering on its own (a caller that skipped the check) still gives a finite blockage
+    let low = sc.lowered();
+    assert!(low.obstacles.iter().all(|o| o.blockage().is_finite()));
+}
+
+#[test]
+fn a_door_frame_bridge_loses_more_heat_through_the_door() {
+    let plain = quick(base());
+    let mut sc = base();
+    let mut shell = ShellModel::from_enclosure(&sc.enclosure);
+    shell.add_insulation(LayerMaterial::Foam, 20.0, true);
+    sc.params.shell = Some(shell.clone());
+    let closed = quick(sc.clone());
+    shell.door_edge = Some(DoorEdge { psi_w_per_mk: 0.5 });
+    sc.params.shell = Some(shell);
+    let bridged = quick(sc);
+    assert!(bridged.balance.front_w > closed.balance.front_w + 1.0);
+    let f = bridged.shell.door();
+    assert!(f.edge_heat_w > 0.0 && f.edge_heat_w < f.heat_w);
+    // no bridge: nothing reported, and the default is untouched
+    assert_eq!(plain.shell.door().edge_heat_w, 0.0);
+}
