@@ -258,7 +258,7 @@ pub(super) fn draw(
         let key = c.ids.first().map_or(0, |i| i.0);
         let response = ui.interact(
             hit,
-            egui::Id::new(("plate_flag", key)),
+            egui::Id::new(("plate_flag", key, c.spot)),
             egui::Sense::click(),
         );
         response.widget_info(|| {
