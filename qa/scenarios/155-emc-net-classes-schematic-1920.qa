@@ -30,7 +30,7 @@ click_text "Motor and drive output" #1
 wait 10
 
 # Picking a guessed wire opens its card: class, why, the buttons to set it.
-click 1300 379
+click 1341 440
 wait 12
 expect "Set the class"
 expect "guessed"
@@ -43,7 +43,7 @@ expect "Back to automatic"
 shot wire-card-set
 check_layout
 # The panel rolls up to its title with the overlay on.
-click 1640 112
+click 1640 128
 wait 10
 shot panel-rolled-up
 check_layout

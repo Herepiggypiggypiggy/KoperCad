@@ -1,0 +1,26 @@
+@title Place macro: the PLC input card says it is symbols only and where to get a card (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# Critical audit C-59: the macro registered no card, so the I/O list stayed empty with no explanation.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+# The Place macro window docks at the right edge: its search field is at x 1205 at 1366 wide and x 1759 at 1920 wide (a click outside the window would take the keyboard away, so each size has its own file).
+click 1759 103
+wait 4
+text plc input card
+wait 5
+click_text "PLC input card" Label
+wait 10
+expect "Symbols only"
+shot macro-picked
+click_text Place Button
+wait 20
+expect_scene "-A2"
+expect "Symbols only"
+shot macro-placed
+check_layout

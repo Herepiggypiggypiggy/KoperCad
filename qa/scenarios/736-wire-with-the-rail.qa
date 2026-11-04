@@ -20,7 +20,7 @@ wait 10
 shot rail-still
 key w
 wait 3
-click 754 260
+click 390 312
 wait 5
 shot wire-started-rail-stays
 expect "Esc or right-click cancels"

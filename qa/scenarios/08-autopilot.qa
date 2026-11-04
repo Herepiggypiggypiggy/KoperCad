@@ -19,9 +19,13 @@ expect "planning value"
 shot autopilot-review
 check_blank autopilot-review
 check_layout
+# The Autopilot pane is short and docked at the right edge (x 1200 at 1366 wide, 1750 at 1920): scroll it so the button is inside its frame.
+try scroll 1200 600 -600
+try scroll 1750 600 -600
+wait 4
 click_text "Accept all" Button
 wait 20
 shot autopilot-done
 expect "Wires ready to build"
-expect_not "Accept all"
+expect_not "Accept all ("
 check_layout

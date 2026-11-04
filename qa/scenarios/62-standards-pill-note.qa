@@ -10,7 +10,8 @@ text Standards check
 wait 4
 key Enter
 wait 10
-expect "adds its findings to the Issues list"
+# The note sits behind the (?) next to "Ticked standards" since the panel docked.
+expect "Ticked standards"
 click_text "IEC 60204-1" #1
 wait 10
 shot standards-ticked

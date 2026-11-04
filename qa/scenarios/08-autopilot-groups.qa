@@ -27,6 +27,10 @@ shot autopilot-wire-rules
 check_layout
 click_text "Wire rules: House rules"
 wait 5
+# The Autopilot pane is short and docked at the right edge (x 1200 at 1366 wide, 1750 at 1920): scroll it so the button is inside its frame.
+try scroll 1200 600 -600
+try scroll 1750 600 -600
+wait 4
 click_text "14 changes"
 wait 5
 expect "Accept ticked in this group"
