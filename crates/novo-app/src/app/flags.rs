@@ -181,6 +181,8 @@ impl NovoApp {
         let project = doc.project();
         let mut marks = Vec::new();
         for flag in self.wb.flags.store.list(false) {
+            // A refusal says its reason in the popover only: no second line on the canvas.
+            let quiet = flag.source == Source::Edit;
             let hover = std::iter::once(flag.title.clone())
                 .chain(flag.detail.0.iter().cloned())
                 .collect::<Vec<_>>()
@@ -189,7 +191,7 @@ impl NovoApp {
                 marks.push(Mark {
                     kind: mark_kind(flag),
                     target,
-                    text: hover.clone(),
+                    text: if quiet { String::new() } else { hover.clone() },
                     key: flag.id.0,
                 });
             }

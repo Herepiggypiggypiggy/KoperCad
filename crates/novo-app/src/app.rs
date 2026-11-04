@@ -1187,6 +1187,31 @@ impl NovoApp {
         self.raise_with(Level::Info, text, None, Some(action));
     }
 
+    /// Writes a message to the log and the history without a toast: for a
+    /// refusal that is a triangle. Returns the plain text the person reads.
+    /// A toast with the same text that is still on screen is left alone.
+    pub(super) fn log_only(&mut self, level: Level, text: String) -> String {
+        match level {
+            Level::Info => log::info!("{text}"),
+            Level::Warning => log::warn!("{text}"),
+            Level::Error => log::error!("{text}"),
+        }
+        let text = error_words::plain(&text);
+        self.messages.push(Message {
+            level,
+            text: text.clone(),
+            at: Instant::now(),
+            dismissed: true,
+            count: 1,
+            file: None,
+        });
+        if self.messages.len() > MESSAGE_HISTORY {
+            let excess = self.messages.len() - MESSAGE_HISTORY;
+            self.messages.drain(..excess);
+        }
+        text
+    }
+
     fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
         self.raise_with(level, text, file, None);
     }

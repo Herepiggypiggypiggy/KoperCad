@@ -161,7 +161,8 @@ pub(super) fn split_refusal(level: Level, text: &str) -> (String, String) {
 }
 
 fn draft(level: Level, text: &str, anchors: Vec<Anchor>) -> FlagDraft {
-    let (title, detail) = split_refusal(level, text);
+    // The engines quote with backticks; the popover quotes with plain marks.
+    let (title, detail) = split_refusal(level, &text.replace('`', "\""));
     FlagDraft {
         severity: if level == Level::Error {
             Severity::Red
@@ -205,12 +206,7 @@ impl NovoApp {
 
     fn refuse_at(&mut self, level: Level, text: String, anchors: Vec<Anchor>) {
         // The log keeps it (and the person's Messages list); no toast.
-        self.raise(level, text, None);
-        let Some(logged) = self.messages.last_mut() else {
-            return;
-        };
-        logged.dismissed = true;
-        let (level, shown) = (logged.level, logged.text.clone());
+        let shown = self.log_only(level, text);
         let edit = &mut self.wb.flags.edit;
         let born = edit.frame;
         if let Some((old, _)) = edit.transient.take() {

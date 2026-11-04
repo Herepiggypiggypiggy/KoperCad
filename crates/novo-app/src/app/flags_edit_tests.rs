@@ -66,14 +66,19 @@ fn a_refused_edit_is_a_triangle_on_the_selection_and_not_a_toast() {
     d.frame();
     d.frame();
     let marks = &d.app.canvas.schematic_ref().unwrap().canvas.marks.list;
+    assert!(
+        marks.iter().all(|m| !m.text.contains("tag is taken")),
+        "the reason is not written on the canvas"
+    );
     let mark = marks
         .iter()
-        .find(|m| m.text.contains("tag is taken"))
+        .find(|m| m.kind == MarkKind::Warning && m.key != 0)
         .expect("a triangle on the selected symbol");
     assert_eq!(mark.kind, MarkKind::Warning);
     let id = novo_flags::FlagId(mark.key);
     let flag = d.app.wb.flags.store.get(id).unwrap();
     assert_eq!(flag.source, Source::Edit);
+    assert!(flag.detail.0[0].contains("tag is taken"));
     assert_eq!(flag.title, "Rename");
     // It is not an Issues problem: the pill's count does not move.
     assert!(
@@ -213,4 +218,37 @@ fn problem_census_schematic_edits() {
         "{} warning or error toasts, ceiling {CEILING} (lower it, never raise it): {found:?}",
         found.len()
     );
+}
+
+#[test]
+fn backticks_in_a_reason_become_plain_quotes() {
+    let (_dir, mut d) = open();
+    d.app
+        .refuse(Level::Error, "Could not rename: tag `-x!` is bad");
+    let flag = d.app.wb.flags.store.list(false)[0].clone();
+    assert_eq!(flag.detail.0[0], "tag \"-x!\" is bad");
+}
+
+#[test]
+fn a_refusal_leaves_the_toasts_on_screen_alone() {
+    let (_dir, mut d) = open();
+    // The same text as a visible toast, and another toast that is not dismissed.
+    d.app
+        .message(Level::Error, "Could not paste: nothing there");
+    d.app.message(Level::Warning, "Something else");
+    d.app.refuse(Level::Error, "Could not paste: nothing there");
+    let up: Vec<&str> = d
+        .app
+        .messages()
+        .iter()
+        .filter(|m| !m.dismissed)
+        .map(|m| m.text.as_str())
+        .collect();
+    assert_eq!(
+        up,
+        ["Could not paste: nothing there", "Something else"],
+        "the toasts stay as they were"
+    );
+    let flag = d.app.wb.flags.store.list(false)[0].clone();
+    assert_eq!(flag.detail.0[0], "nothing there");
 }
