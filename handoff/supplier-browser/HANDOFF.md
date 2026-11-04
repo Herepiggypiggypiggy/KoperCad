@@ -23,3 +23,6 @@ Branch `claude/project-thread-k9oxaa`, one PR (see PROGRESS.md for number and he
 ## Traps
 - wry download handler: `path` starts as the default Downloads path + suggested name; we replace it. Unverified that every portal uses a real file name (blob/POST downloads).
 - Closing the window ends nothing in Parts; the strip stays 30 min or until Stop.
+
+## Personal marker (2026-11-04)
+A file imported from a landing folder is recorded with the source `supplier-window:<id>` (`supplier_site::landed_source_url`), and `bundle::is_personal_model` matches that marker, independent of the supplier list: custom, edited or removed suppliers stay personal and out of Share bundles. Test `a_file_landed_from_a_supplier_window_stays_out_of_a_share_bundle` uses an id in no list.

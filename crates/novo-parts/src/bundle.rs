@@ -197,10 +197,9 @@ pub fn is_personal_model(r: &SourceRecord) -> bool {
     cadenas(&r.terms_url)
         || r.url.as_deref().is_some_and(|u| {
             u.to_ascii_lowercase().contains("partcommunity")
-                // A download from a supplier window (see `supplier_site`): the
-                // user's own sign-in and terms, so personal whichever supplier.
-                || crate::supplier_site::supplier_for_url(&crate::supplier_site::builtin(), u)
-                    .is_some()
+                // A download from a supplier window: the user's own sign-in and
+                // terms, so personal. The marker does not depend on the supplier list.
+                || crate::supplier_site::is_window_source(u)
         })
 }
 
@@ -837,7 +836,12 @@ mod tests {
         use crate::import::{ImportJob, ImportState, ScriptedFetcher, SourceTable};
         use std::fs;
         let dir = tempfile::tempdir().unwrap();
-        let landing = dir.path().join("browser").join("landing").join("siemens");
+        // A supplier id that is in no list: a custom or a removed supplier.
+        let landing = dir
+            .path()
+            .join("browser")
+            .join("landing")
+            .join("my-own-shop");
         fs::create_dir_all(&landing).unwrap();
         let file = landing.join("1-3RT2016.step");
         fs::write(&file, b"STEP from the supplier window").unwrap();

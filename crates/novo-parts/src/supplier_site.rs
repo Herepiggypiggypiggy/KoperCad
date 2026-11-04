@@ -340,11 +340,14 @@ pub fn forget_profile(root: &Path, id: &str) -> io::Result<()> {
     }
 }
 
-/// The supplier a file in a landing folder came from, as the address kept
-/// in its source record: `<...>/browser/landing/<id>/<file>` gives that
-/// supplier's start page. `None` for any other file. Every window download
-/// is recorded this way, so the personal-model rule (`is_personal_model`)
-/// keeps it out of Share bundles whatever the file says about itself.
+/// Prefix of the address kept in the source record of a window download.
+pub const WINDOW_SOURCE_PREFIX: &str = "supplier-window:";
+
+/// The marker kept in the source record of a file in a landing folder:
+/// `<...>/browser/landing/<id>/<file>` gives `supplier-window:<id>`. It does
+/// not depend on the supplier list, so a supplier the user added, edited,
+/// hid or removed later is still marked, and `is_personal_model` keeps the
+/// file out of Share bundles. `None` for any other file.
 pub fn landed_source_url(path: &Path) -> Option<String> {
     let id_dir = path.parent()?;
     let id = id_dir.file_name()?.to_str()?;
@@ -353,8 +356,13 @@ pub fn landed_source_url(path: &Path) -> Option<String> {
     if landing.file_name()? != "landing" || browser.file_name()? != "browser" {
         return None;
     }
-    let (list, _) = load(Some(&user_list_path(browser)));
-    list.into_iter().find(|s| s.id == id).map(|s| s.start_url)
+    Supplier::id_is_safe(id).then(|| format!("{WINDOW_SOURCE_PREFIX}{id}"))
+}
+
+/// Whether a record's address is the marker of a window download.
+pub fn is_window_source(url: &str) -> bool {
+    url.strip_prefix(WINDOW_SOURCE_PREFIX)
+        .is_some_and(Supplier::id_is_safe)
 }
 
 /// The suffix a download is written under until it is complete; the watcher
@@ -687,21 +695,24 @@ mod tests {
     }
 
     #[test]
-    fn a_landed_file_names_its_supplier() {
-        let p = Path::new("/u/KoperCAD/browser/landing/siemens/1-a.step");
-        assert_eq!(
-            landed_source_url(p).as_deref(),
-            Some("https://mall.industry.siemens.com/")
-        );
+    fn a_landed_file_is_marked_with_its_supplier_id_whatever_the_list_says() {
+        for id in ["siemens", "my-own-shop", "removed-supplier"] {
+            let p = PathBuf::from(format!("/u/KoperCAD/browser/landing/{id}/1-a.step"));
+            let marker = landed_source_url(&p).unwrap();
+            assert_eq!(marker, format!("supplier-window:{id}"));
+            assert!(is_window_source(&marker));
+        }
         assert_eq!(landed_source_url(Path::new("/u/Downloads/a.step")), None);
-        assert_eq!(
-            landed_source_url(Path::new("/u/browser/landing/nobody/a.step")),
-            None
-        );
         assert_eq!(
             landed_source_url(Path::new("/u/other/landing/siemens/a.step")),
             None
         );
+        assert_eq!(
+            landed_source_url(Path::new("/u/browser/landing/Bad Id/a.step")),
+            None
+        );
+        assert!(!is_window_source("https://example.org/supplier-window:x"));
+        assert!(!is_window_source("supplier-window:../x"));
     }
 
     #[test]
