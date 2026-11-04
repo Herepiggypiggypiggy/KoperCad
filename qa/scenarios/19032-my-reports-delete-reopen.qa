@@ -4,7 +4,9 @@
 # Written without a GUI box: adjust coordinates if a click misses. A typed query error is not covered:
 # the SQL box has no label to click, so QA needs to add that step with a coordinate (error text is the
 # parser message, e.g. expect "Did you mean").
-open qa/fixtures/door-wire-spec-a.novo
+# A new project, so Ctrl+S asks for a file (answered below) and the saved project can be reopened.
+fresh
+key ctrl+n
 wait 20
 key ctrl+k
 text my reports
