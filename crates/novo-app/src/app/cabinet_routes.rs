@@ -238,12 +238,17 @@ fn rows(
                     )
                 })
                 .unwrap_or_default();
-            let to_door = routed
+            let door_leg = routed
                 .surface_legs
                 .get(&r.job)
-                .is_some_and(|leg| leg.opening.is_some());
+                .filter(|leg| leg.opening.is_some());
             let basis = match r.kind {
-                _ if to_door => "door, no gap",
+                _ if door_leg.is_some_and(|l| l.spec_gap.is_some()) => "~ door, spec has no depth",
+                _ if door_leg.is_some_and(|l| l.depth_mm > 0.0 && l.estimate) => {
+                    "~ door + depth (catalogue)"
+                }
+                _ if door_leg.is_some_and(|l| l.depth_mm > 0.0) => "door + depth (spec)",
+                _ if door_leg.is_some() => "door, no gap",
                 _ if routed.entry_legs.contains_key(&r.job) => "to entry, outside not included",
                 Kind::FreeAir => "no duct path, estimate",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
@@ -377,6 +382,26 @@ fn chips(
             if estimated == 1 { "s" } else { "" }
         ),
         Some(("Detect pins", FixKind::DetectPins)),
+    );
+    let gap = routed.spec_gaps.iter().find(|(s, _)| *s == structure);
+    add(
+        usize::from(gap.is_some()),
+        match gap.map(|(_, f)| *f) {
+            Some("outside width") => "no outside width",
+            Some("outside height") => "no outside height",
+            Some("outside depth") => "no outside depth",
+            Some("wall thickness") => "no wall thickness",
+            _ => "no plate setback",
+        },
+        format!(
+            "Enclosure {} has no {}: door wires are cut without the plate-to-door distance (~)",
+            project
+                .get::<novo_core::Structure>(structure)
+                .map(|s| s.tag.to_string())
+                .unwrap_or_default(),
+            gap.map_or("", |(_, field)| *field)
+        ),
+        None,
     );
     let flat = rows
         .iter()

@@ -14,3 +14,5 @@
 
 ## 2026-11-04 Lane T13 (commissioning)
 - `novo-flags` gets `Source::Commissioning`. New `app/commissioning_flags.rs` (builder, job flags with Retry, panel strip) and `app/flag_rows.rs` (`triangle_slot`, `problem_row`). Punch, check and redline rows lead with the triangle, schematic marks come from the flags, the Defects card draws triangle rows. Census `problem_census_commissioning` = 0. Details: `t13-commissioning/`.
+## 2026-11-04 Lane T12 (import, export, reports): job flags
+- `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9522, 9523.

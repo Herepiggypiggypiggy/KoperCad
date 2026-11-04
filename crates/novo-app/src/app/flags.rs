@@ -29,6 +29,12 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// Failed jobs: what Retry and Open folder need (lane T12).
+    pub(super) jobs: HashMap<FlagId, super::flags_jobs::JobInfo>,
+    /// The failed jobs, oldest first.
+    pub(super) job_order: Vec<FlagId>,
+    /// The drafts each simulation window raised (lane T10), by window.
+    pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
 }
 
 impl Default for FlagUi {
@@ -38,6 +44,9 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            jobs: HashMap::new(),
+            job_order: Vec::new(),
+            sim: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -270,9 +279,14 @@ impl NovoApp {
                                 Action::Fix(c) if c == FIX_ASSIGN_PARTS => "Assign parts",
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
                                 Action::Fix(_) => "Fix",
-                                Action::Open(_) => "Open",
-                                Action::Retry => "Retry",
                                 Action::Waive => "Waive…",
+                                Action::Retry => "Retry",
+                                Action::Open(k) if k == super::flags_jobs::OPEN_FOLDER => {
+                                    "Open folder"
+                                }
+                                Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
+                                Action::Open(_) => "Open",
+                                Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
                                     "Explain with Claude"
@@ -314,11 +328,18 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
-        if flag.source == Source::Commissioning || flag.source == Source::Job {
+        // Retry of a commissioning job is run here; Dismiss and the rest are the job path's.
+        if super::commissioning_flags::is_commissioning_job(flag) && action == Action::Retry {
+            self.retry_commissioning_job(flag);
+            return;
+        }
+        if self.run_job_action(flag.id, &action) {
+            return;
+        }
+        if flag.source == Source::Commissioning {
             match action {
                 Action::Locate => self.locate_commissioning_flag(flag),
                 Action::Open(panel) => self.open_commissioning_panel(&panel),
-                Action::Retry => self.retry_commissioning_job(flag),
                 Action::Copy => {
                     ctx.copy_text(format!("{}\n{}", flag.title, flag.detail.0.join("\n")))
                 }
@@ -327,11 +348,10 @@ impl NovoApp {
             return;
         }
         match action {
-            Action::Locate => {
-                if let Some(i) = index {
-                    self.go_problem(i);
-                }
-            }
+            Action::Locate => match index {
+                Some(i) => self.go_problem(i),
+                None => self.locate_flag(flag),
+            },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
             Action::Fix(cmd) if cmd == FIX_PIN_NAMES => {
                 if let Some(i) = index {

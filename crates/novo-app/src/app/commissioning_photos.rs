@@ -53,10 +53,10 @@ impl NovoApp {
     /// Copies each picture into the photos folder under its content name and
     /// records it on item `id`. Returns how many were new to the item.
     pub(super) fn attach_photo_files(&mut self, id: u64, paths: &[PathBuf]) -> usize {
-        let key = format!("{}.{id}", job::PHOTO);
+        let key = job::PHOTO;
         let Some(dir) = self.field_photos_dir() else {
             self.job_error(
-                &key,
+                key,
                 "Photo not kept",
                 super::commissioning::NO_DOCUMENTS,
                 false,
@@ -72,7 +72,7 @@ impl NovoApp {
                 Err(e) => {
                     failed = true;
                     self.job_error(
-                        &key,
+                        key,
                         "Photo not read",
                         &format!("{}: {e}", path.display()),
                         true,
@@ -89,7 +89,7 @@ impl NovoApp {
                     .and_then(|()| write_replacing(&target, &bytes).map_err(|e| e.to_string()))
             {
                 failed = true;
-                self.job_error(&key, "Photo not kept", &e, true);
+                self.job_error(key, "Photo not kept", &e, true);
                 continue;
             }
             let Some(mode) = self.wb.commissioning.as_mut() else {
@@ -106,7 +106,7 @@ impl NovoApp {
             }
         }
         if !failed {
-            self.job_ok(&key);
+            self.job_ok(key);
         }
         added
     }

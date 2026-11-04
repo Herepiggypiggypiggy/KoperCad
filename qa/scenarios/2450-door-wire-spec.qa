@@ -1,0 +1,76 @@
+@title Door wire lengths follow the enclosure spec
+@area Reports
+# Five copies of one cabinet with a wire from the plate to a device on the door: no spec, spec A (depth 300, catalogue), spec B (depth 500, catalogue), spec from the maker's STEP, and a spec without plate setback. The wire list length changes with the spec (B is 200 mm longer than A); catalogue numbers are marked ~ and the sheet says it is an estimate; the STEP spec has no ~; the gap says the spec has no depth.
+# Fixtures: qa/fixtures/door-wire-*.novo (cargo test -p novo-reports --test reports write_door_wire_spec_fixtures -- --ignored)
+open qa/fixtures/door-wire-no-spec.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "door, no gap"
+shot wire-list-no-spec
+check_layout
+key Escape
+wait 5
+open qa/fixtures/door-wire-spec-a.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "~ door + depth (catalogue)"
+expect "Estimate from catalogue data"
+shot wire-list-spec-a
+check_layout
+key Escape
+wait 5
+open qa/fixtures/door-wire-spec-b.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "~ door + depth (catalogue)"
+expect "Estimate from catalogue data"
+shot wire-list-spec-b
+check_layout
+key Escape
+wait 5
+open qa/fixtures/door-wire-spec-step.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "door + depth (spec)"
+shot wire-list-spec-step
+check_layout
+key Escape
+wait 5
+open qa/fixtures/door-wire-spec-gap.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "~ door, spec has no depth"
+expect "Estimate from catalogue data"
+shot wire-list-spec-gap
+check_layout
+key Escape
+wait 5
+# The cabinet route view: the gap fixture shows the yellow spec gap line with the enclosure's missing number.
+open qa/fixtures/door-wire-spec-gap.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+expect "no plate setback"
+shot route-spec-gap
+check_layout

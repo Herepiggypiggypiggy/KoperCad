@@ -141,9 +141,15 @@ fn the_flags_follow_the_data_and_a_failed_job_keeps_its_triangle_until_it_works(
         .clone();
     assert!(marks.iter().any(|m| m.key == mine[0].id.0), "{marks:?}");
 
-    // A job fails: a red job flag with Retry, then it works and the flag goes.
+    // A commissioning job and a file job fail: both live in one store, on the one pill.
     d.app
         .job_error(job::PUNCH_PDF, "Punch list not exported", "disk full", true);
+    d.app.job_fail(
+        "export.pdf",
+        "PDF not exported",
+        crate::app::Level::Error,
+        "disk full",
+    );
     let jobs = |d: &Drive| {
         d.app
             .wb
@@ -154,20 +160,18 @@ fn the_flags_follow_the_data_and_a_failed_job_keeps_its_triangle_until_it_works(
             .filter(|f| f.source == Source::Job)
             .count()
     };
+    assert_eq!(jobs(&d), 2);
+    assert_eq!(d.app.job_flags().len(), 2, "one pill lists both");
+    let mine = super::flags_jobs::job_flag_id(job::PUNCH_PDF);
+    let flag = d.app.wb.flags.store.get(mine).unwrap();
+    assert!(flag.actions.contains(&novo_flags::Action::Retry));
+    // Dismiss goes through the job path for ours too; the file job stays.
+    assert!(d.app.run_job_action(
+        mine,
+        &novo_flags::Action::Open(super::flags_jobs::DISMISS.into())
+    ));
     assert_eq!(jobs(&d), 1);
-    assert_eq!(
-        d.app
-            .wb
-            .commissioning
-            .as_ref()
-            .unwrap()
-            .panel_flags
-            .flags
-            .len(),
-        2,
-        "the panel draws the check and the job"
-    );
-    d.app.job_ok(job::PUNCH_PDF);
+    d.app.job_ok("export.pdf");
     assert_eq!(jobs(&d), 0);
 
     // Leaving the mode takes its flags away.
@@ -179,6 +183,33 @@ fn the_flags_follow_the_data_and_a_failed_job_keeps_its_triangle_until_it_works(
             .flags
             .store
             .list(false)
+            .iter()
+            .all(|f| f.source != Source::Commissioning)
+    );
+}
+
+#[test]
+fn a_new_project_takes_the_commissioning_flags_and_jobs_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenStarterExample);
+    d.frame();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    d.app
+        .job_error(job::REPORT, "Report not exported", "disk full", true);
+    assert_eq!(d.app.job_flags().len(), 1);
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.frame();
+    assert!(d.app.job_flags().is_empty());
+    assert!(
+        d.app
+            .wb
+            .flags
+            .store
+            .list(true)
             .iter()
             .all(|f| f.source != Source::Commissioning)
     );

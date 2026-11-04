@@ -210,6 +210,11 @@ pub(super) fn drafts(store: &CommissioningStore, all: &[TargetInfo]) -> Vec<Flag
     out
 }
 
+/// Whether a job flag belongs to this lane.
+pub(super) fn is_commissioning_job(flag: &Flag) -> bool {
+    flag.source == Source::Job && job_key(flag).is_some_and(|k| k.starts_with(JOB_PREFIX))
+}
+
 /// The flag on `anchor`, if any.
 pub(super) fn at<'a>(flags: &'a [Flag], anchor: &Anchor) -> Option<&'a Flag> {
     flags.iter().find(|f| f.anchors.contains(anchor))
@@ -236,27 +241,6 @@ impl PanelFlags {
         }
         true
     }
-
-    /// The jobs that failed, as a strip of triangles with their titles.
-    pub(super) fn job_strip(&mut self, ui: &mut egui::Ui, prefix: &str) {
-        let jobs: Vec<Flag> = self
-            .flags
-            .iter()
-            .filter(|f| {
-                f.source == Source::Job && job_key(f).is_some_and(|k| k.starts_with(prefix))
-            })
-            .cloned()
-            .collect();
-        for flag in jobs {
-            ui.horizontal(|ui| {
-                let response = flag_slot(ui, &flag);
-                let title = ui.add(egui::Label::new(&flag.title).sense(egui::Sense::click()));
-                if response.clicked() || title.clicked() {
-                    self.clicked = Some((flag.id, response.rect.center()));
-                }
-            });
-        }
-    }
 }
 
 fn job_key(flag: &Flag) -> Option<&str> {
@@ -280,82 +264,51 @@ pub(super) mod job {
 }
 
 impl NovoApp {
-    /// A job failed with `err`: the triangle, the plain words in its popover, and a line in
-    /// the log. Away from the Commissioning panel the status line says where to look.
+    /// A commissioning job failed with `err`: a job flag on #1910's path (the top bar pill, Dismiss,
+    /// Copy), plus Retry when the job can be run again from here.
     pub(super) fn job_error(
         &mut self,
-        key: &str,
-        title: &str,
+        job: &'static str,
+        title: &'static str,
         err: &(impl std::fmt::Display + ?Sized),
         retry: bool,
     ) {
-        let raw = err.to_string();
-        log::error!("{title}: {raw}");
-        let plain = super::error_words::plain(&raw);
-        self.job_failed(key, title, vec![plain], retry);
-        if self.outline_mode != super::OutlineMode::Commissioning {
-            self.message(
-                Level::Info,
-                format!("{title}: see the triangle in Commissioning"),
-            );
+        self.job_fail(job, title, Level::Error, err.to_string());
+        if retry {
+            self.add_retry(job);
         }
     }
 
-    /// A job failed: a triangle on its control, until the same job works. The plain-words
-    /// advice for the error is in `detail`.
-    pub(super) fn job_failed(&mut self, key: &str, title: &str, detail: Vec<String>, retry: bool) {
-        let mut actions = Vec::new();
-        if retry {
-            actions.push(Action::Retry);
-        }
-        actions.push(Action::Copy);
+    /// A commissioning job went on but not fully (a redline refused): yellow.
+    pub(super) fn job_doubtful(
+        &mut self,
+        job: &'static str,
+        title: &'static str,
+        detail: Vec<String>,
+    ) {
+        self.job_fail(job, title, Level::Warning, detail.join("\n"));
+    }
+
+    /// Puts Retry first in the actions of the job's flag.
+    fn add_retry(&mut self, job: &'static str) {
+        let id = super::flags_jobs::job_flag_id(job);
+        let Some(f) = self.wb.flags.store.get(id).cloned() else {
+            return;
+        };
+        let mut actions = f.actions;
+        actions.insert(0, Action::Retry);
         self.wb.flags.store.set(FlagDraft {
-            severity: FlagSeverity::Red,
-            unchecked: false,
-            source: Source::Job,
-            rule: key.to_owned(),
-            anchors: vec![Anchor::Job(key.to_owned())],
-            title: title.to_owned(),
-            detail: Detail::new(detail),
+            severity: f.severity,
+            unchecked: f.unchecked,
+            source: f.source,
+            rule: job.to_owned(),
+            anchors: f.anchors,
+            title: f.title,
+            detail: f.detail,
             actions,
             waiver_key: None,
-            life: Life::Until,
+            life: f.life,
         });
-        self.sync_commissioning_panel_flags();
-    }
-
-    /// A job could not be fully done but went on (a redline refused): yellow.
-    pub(super) fn job_doubtful(&mut self, key: &str, title: &str, detail: Vec<String>) {
-        self.wb.flags.store.set(FlagDraft {
-            severity: FlagSeverity::Yellow,
-            unchecked: false,
-            source: Source::Job,
-            rule: key.to_owned(),
-            anchors: vec![Anchor::Job(key.to_owned())],
-            title: title.to_owned(),
-            detail: Detail::new(detail),
-            actions: vec![Action::Copy],
-            waiver_key: None,
-            life: Life::Until,
-        });
-        self.sync_commissioning_panel_flags();
-    }
-
-    /// The same job worked: its triangle goes.
-    pub(super) fn job_ok(&mut self, key: &str) {
-        let ids: Vec<FlagId> = self
-            .wb
-            .flags
-            .store
-            .list(true)
-            .into_iter()
-            .filter(|f| f.source == Source::Job && job_key(f) == Some(key))
-            .map(|f| f.id)
-            .collect();
-        for id in ids {
-            self.wb.flags.store.clear(id);
-        }
-        self.sync_commissioning_panel_flags();
     }
 
     /// Brings the store up to the commissioning data and copies what the panel draws.
@@ -385,11 +338,7 @@ impl NovoApp {
             .store
             .list(false)
             .into_iter()
-            .filter(|f| {
-                f.source == Source::Commissioning
-                    || (f.source == Source::Job
-                        && job_key(f).is_some_and(|k| k.starts_with(JOB_PREFIX)))
-            })
+            .filter(|f| f.source == Source::Commissioning)
             .cloned()
             .collect();
         if let Some(mode) = self.wb.commissioning.as_mut() {
@@ -466,15 +415,7 @@ impl NovoApp {
             job::TEST_SHEET => {
                 self.export_test_sheet();
             }
-            other => {
-                if let Some(id) = other
-                    .strip_prefix(job::PHOTO)
-                    .and_then(|s| s.strip_prefix('.'))
-                    .and_then(|s| s.parse().ok())
-                {
-                    self.add_punch_photos(id);
-                }
-            }
+            _ => {}
         }
     }
 }

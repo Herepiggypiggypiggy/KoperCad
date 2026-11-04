@@ -688,7 +688,13 @@ impl NovoApp {
                 .chain(flag.detail.0.iter().cloned())
                 .collect::<Vec<_>>()
                 .join(": ");
-            for target in flag.anchors.iter().filter_map(cflags::anchor_target) {
+            // Wires are drawn by the general flag marks (`flag_marks`); a second mark would stack.
+            for target in flag
+                .anchors
+                .iter()
+                .filter_map(cflags::anchor_target)
+                .filter(|t| !matches!(t, Target::Wire(_)))
+            {
                 if !index.on_page(page).any(|i| i.target == target) {
                     continue;
                 }
@@ -787,7 +793,6 @@ impl NovoApp {
                 mode.large = large;
                 self.settings.large_buttons = large;
             }
-            mode.panel_flags.job_strip(ui, cflags::JOB_PREFIX);
             ui.add_space(space::M);
             // The Test tab counts its own wires in words; the bars count every
             // check of wires, terminals and devices, a second total beside it.
