@@ -1,0 +1,21 @@
+@title A handover package with nothing in it is a job flag with a popover
+@area Files
+@env KOPERCAD_QA_FAIL=export.handover
+# T12: the refusal is forced (QA-only variable, debug builds); a new project always has a contents page to write.
+open_starter_example
+wait 20
+key ctrl+k
+text Export handover package
+wait 5
+key Enter
+wait 10
+click_text "Hand over anyway" Button
+wait 25
+click_text "Warning:" Button
+wait 8
+expect "Forced for the QA picture"
+expect "Dismiss"
+shot handover-flag-popover
+check_layout
+key Escape
+wait 6

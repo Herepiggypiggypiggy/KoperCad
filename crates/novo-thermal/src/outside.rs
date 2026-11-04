@@ -18,6 +18,9 @@
 //!
 //! Units: metres, kelvin or degrees C as named, watts.
 
+use crate::model::{Params, Scenario};
+use crate::shell::OutsideFilm;
+
 const G: f64 = 9.81;
 /// Stefan-Boltzmann constant, W/(m2 K4).
 pub const SIGMA: f64 = 5.670_374e-8;
@@ -288,6 +291,123 @@ pub fn overall_u(f: &OuterFace, u_in: f64, ti_c: f64) -> f64 {
 /// (Swinbank: Tsky = 0.0552 Ta^1.5, kelvin; clear sky).
 pub fn sky_temperature_c(ambient_c: f64) -> f64 {
     0.0552 * k_of(ambient_c).powf(1.5) - 273.15
+}
+
+/// Outer film of every face, resolved against the cabinet's own heat (lane H3).
+///
+/// With [`OutsideFilm::Iec`] (the default) the scenario is returned as it is.
+/// With [`OutsideFilm::Physical`] this runs the steady solve a few times:
+/// each pass reads the mean inside temperature of every face, solves the
+/// outer surface balance of [`solve_outer_surface`] (natural convection, wind,
+/// radiation to room or sky, gap to a wall or neighbour, sun) and stores the
+/// resulting film `h_out` and the sun's rise of the surrounding air in the
+/// shell. The returned scenario carries them, so every later run (steady,
+/// transient, advice, 3D walls) uses the same films without iterating again.
+/// A scenario that is already resolved is returned unchanged.
+pub fn resolve(scn: &Scenario) -> Result<Scenario, crate::Error> {
+    let mut shell = scn.shell();
+    if shell.outside.film != OutsideFilm::Physical || shell.outside.h_out_face.is_some() {
+        return Ok(scn.clone());
+    }
+    let e = &scn.enclosure;
+    let scale = scn.params.wall_k_scale;
+    let b = shell.b_factors(e);
+    let (wo, ho, d) = (
+        e.width_mm / 1000.0,
+        e.height_mm / 1000.0,
+        e.depth_mm / 1000.0,
+    );
+    // Face width and height (along and across the face), m.
+    let dims = [(wo, ho), (wo, ho), (d, ho), (d, ho), (wo, d), (wo, d)];
+    let mut h = [shell.films.h_out; 6];
+    shell.outside.sun_offset_k = [0.0; 6];
+    for _ in 0..12 {
+        shell.outside.h_out_face = Some(h);
+        let trial = Scenario {
+            params: Params {
+                shell: Some(shell.clone()),
+                ..scn.params.clone()
+            },
+            ..scn.clone()
+        };
+        let (s, st) = crate::run_steady_from(&trial, None)?;
+        let mut worst: f64 = 0.0;
+        let mut next = h;
+        let mut offset = [0.0; 6];
+        for f in 0..6 {
+            if b[f] <= 0.0 {
+                continue;
+            }
+            let (mut gs, mut gt) = (0.0, 0.0);
+            for i in 0..s.n() {
+                let g = s.g_wall[i][f];
+                gs += g;
+                gt += g * st.t_air[i];
+                if f == crate::shell::REAR && s.plate_idx[i].is_some() {
+                    gs += s.g_pa[i];
+                    gt += s.g_pa[i] * st.t_plate[i];
+                }
+            }
+            if gs <= 0.0 {
+                continue;
+            }
+            let ti = gt / gs;
+            // Series of the inner film and the layers = 1/u_in.
+            let u_total = (shell.u_face(f) * scale).max(1.0e-9);
+            let r_in = (1.0 / u_total - 1.0 / h[f]).max(1.0e-6);
+            let o = &shell.outside;
+            let amb = scn.ambient_c;
+            let sky = o.sky_c.unwrap_or(amb);
+            let (facing, radiant) = match f {
+                crate::shell::TOP => (Facing::Up, sky),
+                crate::shell::BOTTOM => (Facing::Down, amb),
+                _ => (Facing::Vertical, 0.5 * (amb + sky)),
+            };
+            let surroundings = match shell.gap_of(e, f) {
+                Some((g, _)) => Surroundings::Parallel {
+                    gap_m: g / 1000.0,
+                    other_eps: 0.9,
+                },
+                None => Surroundings::Open { radiant_c: radiant },
+            };
+            let share = o.sun_share[f].clamp(0.0, 1.0);
+            let face = OuterFace {
+                facing,
+                w_m: dims[f].0,
+                h_m: dims[f].1,
+                eps: shell.faces[f].emissivity_out,
+                ambient_c: amb,
+                surroundings,
+                wind_m_s: if f == crate::shell::BOTTOM {
+                    0.0
+                } else {
+                    o.wind_m_s
+                },
+                sun: (share > 0.0 && o.sun_w_m2 > 0.0).then_some(Sun {
+                    irradiance_w_m2: o.sun_w_m2 * share,
+                    absorptance: shell.faces[f].absorptance_solar,
+                }),
+            };
+            let r = solve_outer_surface(&face, 1.0 / r_in, ti);
+            let h_new = (r.h_conv + r.h_rad).max(1.0e-6);
+            worst = worst.max(((h_new - h[f]) / h[f]).abs());
+            next[f] = 0.5 * (h[f] + h_new);
+            offset[f] = r.q_sun_w_m2 / h_new;
+        }
+        shell.outside.sun_offset_k = offset;
+        h = next;
+        if worst < 0.01 {
+            break;
+        }
+    }
+    shell.outside.h_out_face = Some(h);
+    Ok(Scenario {
+        params: Params {
+            shell: Some(shell),
+            ..scn.params.clone()
+        },
+        ..scn.clone()
+    })
 }
 
 #[cfg(test)]

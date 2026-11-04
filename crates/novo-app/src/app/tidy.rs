@@ -91,7 +91,7 @@ impl NovoApp {
                 };
                 self.message(Level::Info, text);
             }
-            Err(e) => self.message(Level::Error, format!("Tidy routes: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Tidy routes: {e}")),
         }
     }
 }

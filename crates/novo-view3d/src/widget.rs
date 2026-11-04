@@ -717,6 +717,21 @@ impl View3d {
         self.animate_to(to, now, reduced);
     }
 
+    /// A standard view framing `bounds` instead of the whole scene (a crane without its floor).
+    pub fn go_to_bounds(
+        &mut self,
+        preset: ViewPreset,
+        bounds: &crate::math::Aabb,
+        now: f64,
+        reduced: bool,
+    ) {
+        let mut to = self.camera;
+        feel::enter_standard(&mut to, preset);
+        to.fit_between(bounds, self.last_aspect, self.top_inset, self.bottom_inset);
+        self.auto_ortho = to.projection == Projection::Orthographic;
+        self.animate_to(to, now, reduced);
+    }
+
     /// Eases the camera to `to` (a saved view).
     pub fn go_to_camera(&mut self, to: Camera, now: f64, reduced: bool) {
         self.auto_ortho = to.projection == Projection::Orthographic;
@@ -816,6 +831,21 @@ impl View3d {
             rect.min.x + (ndc.x * 0.5 + 0.5) * rect.width(),
             rect.min.y + (0.5 - ndc.y * 0.5) * rect.height(),
         ))
+    }
+
+    /// Whether something opaque lies between the camera and the world point
+    /// `p` (so a marker drawn there is behind a part). `own` is the item the
+    /// point belongs to; it never hides its own point.
+    pub fn hidden_behind(&self, rect: Rect, scene: &Scene, p: Vec3, own: Option<ItemId>) -> bool {
+        let Some(at) = self.project(rect, scene, p) else {
+            return true;
+        };
+        let aspect = rect.width() / rect.height().max(1.0);
+        let ray = self.camera.ray(Self::ndc(rect, at), aspect);
+        let reach = (p - ray.origin).dot(ray.dir);
+        pick::pick_all(scene, &self.state, &ray)
+            .iter()
+            .any(|h| !h.translucent && Some(h.id) != own && h.t < reach - 3.0)
     }
 
     fn ndc(rect: Rect, p: Pos2) -> glam::Vec2 {

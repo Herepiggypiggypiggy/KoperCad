@@ -33,7 +33,12 @@ impl NovoApp {
             }
             None => {
                 let Some(dir) = projects_dir() else {
-                    self.message(Level::Error, "Could not find the Documents folder");
+                    self.job_fail(
+                        "export.spreadsheet",
+                        "Spreadsheet export failed",
+                        Level::Error,
+                        "Could not find the Documents folder",
+                    );
                     return None;
                 };
                 let stem = Path::new(&super::project_file_name(&name))
@@ -71,12 +76,15 @@ impl NovoApp {
             Ok(h) => {
                 self.wb.sheet_exports.insert(path.to_owned(), h);
                 let verb = if replaced { "Replaced" } else { "Exported" };
+                self.job_ok("export.spreadsheet");
                 self.message_file(format!("{verb} {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "export.spreadsheet",
+                    "Spreadsheet export failed",
                     Level::Error,
                     format!("Could not export the spreadsheet: {e}"),
                 );
@@ -113,9 +121,12 @@ impl NovoApp {
                     written.push(path);
                 }
                 Err(e) => {
-                    self.message(
+                    self.job_fail_at(
+                        "export.spreadsheet",
+                        "Spreadsheet export failed",
                         Level::Error,
                         format!("Could not write {}: {e}", path.display()),
+                        &path,
                     );
                     return written;
                 }

@@ -45,6 +45,8 @@ pub(crate) struct WinchScenarios {
     params: Params,
     pre: PreChoice,
     result: Option<Result<Trace, String>>,
+    /// The result changed since its flags were last built.
+    flags_dirty: bool,
 }
 
 impl Default for WinchScenarios {
@@ -55,6 +57,7 @@ impl Default for WinchScenarios {
             params: Params::default(),
             pre: PreChoice::LoadCell,
             result: None,
+            flags_dirty: true,
         };
         s.run();
         s
@@ -77,6 +80,25 @@ impl WinchScenarios {
     fn run(&mut self) {
         self.params.pre_torque = self.pre_torque();
         self.result = Some(run(self.id, &self.params).map_err(|e| e.to_string()));
+        self.flags_dirty = true;
+    }
+
+    /// The flags of the result: failed run, problems and warnings of the trace.
+    fn drafts(&self) -> Vec<novo_flags::FlagDraft> {
+        use super::sim_flags::{WINCH, failure_draft, finding_draft};
+        match &self.result {
+            Some(Ok(t)) => t
+                .findings
+                .iter()
+                .filter_map(|f| match f.severity {
+                    Severity::Problem => Some(finding_draft(WINCH, true, &f.text)),
+                    Severity::Warning => Some(finding_draft(WINCH, false, &f.text)),
+                    Severity::Info => None,
+                })
+                .collect(),
+            Some(Err(why)) => vec![failure_draft(WINCH, why)],
+            None => Vec::new(),
+        }
     }
 
     fn trace(&self) -> Option<&Trace> {
@@ -185,14 +207,6 @@ fn chart(ui: &mut egui::Ui, trace: &Trace, channels: &[usize]) {
             font,
             pal.text_strong,
         );
-    }
-}
-
-fn level(s: Severity) -> novo_theme::widgets::Level {
-    match s {
-        Severity::Problem => novo_theme::widgets::Level::Error,
-        Severity::Warning => novo_theme::widgets::Level::Warning,
-        Severity::Info => novo_theme::widgets::Level::Info,
     }
 }
 
@@ -317,8 +331,12 @@ fn controls(ui: &mut egui::Ui, w: &mut WinchScenarios) -> bool {
 }
 
 fn result(ui: &mut egui::Ui, trace: &Trace) {
-    for f in &trace.findings {
-        novo_theme::widgets::banner(ui, level(f.severity), &f.text, |_| {});
+    for f in trace
+        .findings
+        .iter()
+        .filter(|f| f.severity == Severity::Info)
+    {
+        novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, &f.text, |_| {});
     }
     ui.add_space(4.0);
     for chart_channels in &trace.charts {
@@ -385,6 +403,13 @@ impl super::NovoApp {
             return;
         }
         let mut open = true;
+        if self.wb.winches.flags_dirty {
+            self.wb.winches.flags_dirty = false;
+            let drafts = self.wb.winches.drafts();
+            super::sim_flags::set_flags(&mut self.wb.flags, super::sim_flags::WINCH, drafts);
+        }
+        let sim_flags = self.sim_flags_of(super::sim_flags::WINCH);
+        let mut flag_click = None;
         let state = &mut self.wb.winches;
         panel::dialog(ctx, "Winch scenarios", [680.0, 720.0])
             .open(panel::esc(ctx, &mut open))
@@ -408,25 +433,18 @@ impl super::NovoApp {
                         }
                     });
                     ui.separator();
-                    match &state.result {
-                        Some(Ok(_)) => {
-                            if let Some(t) = state.trace() {
-                                result(ui, t);
-                            }
-                        }
-                        Some(Err(why)) => {
-                            novo_theme::widgets::banner(
-                                ui,
-                                novo_theme::widgets::Level::Error,
-                                why,
-                                |_| {},
-                            );
-                        }
-                        None => {}
+                    if let Some(c) = super::sim_flags::strip(ui, &sim_flags) {
+                        flag_click = Some(c);
+                    }
+                    if let Some(t) = state.trace() {
+                        result(ui, t);
                     }
                     honesty(ui);
                 });
             });
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
+        }
         if !open {
             self.wb.winches.open = false;
         }

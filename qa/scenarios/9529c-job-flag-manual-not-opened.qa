@@ -1,0 +1,17 @@
+@title A manual that cannot be opened is a job flag with a popover
+@area Files
+@env KOPERCAD_QA_FAIL=manual.open
+@env KOPERCAD_NO_BROWSER=1
+open_starter_example
+wait 20
+click_text Help
+wait 5
+click_text "User manual"
+wait 15
+click_text "Manual not opened" Button
+wait 8
+expect "No place for the manual"
+shot manual-flag-popover
+check_layout
+key Escape
+wait 6

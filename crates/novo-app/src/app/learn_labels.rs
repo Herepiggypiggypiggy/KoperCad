@@ -20,6 +20,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("dock.hint", "Hint line"),
     ("dock.proposals", "Proposals"),
     ("issue.pill", "Issues"),
+    ("job.pill", "Failed jobs"),
     ("whats_new.pill", "What's new"),
     ("help.button", "Help button"),
     ("drawer.terminals", "Terminals drawer"),
@@ -156,6 +157,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("calc.tab.circuits", "Circuits tab"),
     ("calc.tab.starters", "Motor starters tab"),
     ("calc.tab.sccr", "Panel SCCR tab"),
+    ("calc.tab.busbar_impedance", "Busbar impedance tab"),
     ("autopilot.window", "Autopilot"),
     ("autopilot.accept_all", "Accept all button"),
 ];

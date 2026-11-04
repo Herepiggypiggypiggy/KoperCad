@@ -14,9 +14,22 @@ expect "Demo TS-600x1800x500"
 shot a-cards
 click_text "Demo TS-600x1800x500"
 wait 6
-expect "Estimate from catalogue data"
+expect "(estimate)"
 shot b-picked
 check_layout
 key Enter
 wait 20
 shot c-created
+click_text Cabinet #1
+wait 20
+shot d-cabinet-view
+key ctrl+z
+wait 10
+shot e-after-undo
+expect "No panel yet"
+expect "Undone"
+key ctrl+shift+z
+wait 10
+shot f-after-redo
+expect "Redone"
+expect "CAB1"

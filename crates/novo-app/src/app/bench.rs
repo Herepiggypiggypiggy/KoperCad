@@ -155,20 +155,30 @@ impl NovoApp {
         ))
     }
 
-    pub(super) fn bench_write(&mut self, path: &Path, bytes: &[u8], what: &str) -> Option<PathBuf> {
+    pub(super) fn bench_write(
+        &mut self,
+        job: &'static str,
+        path: &Path,
+        bytes: &[u8],
+        what: &str,
+    ) -> Option<PathBuf> {
         let replaced = path.exists();
         match write_replacing(path, bytes) {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
+                self.job_ok(job);
                 self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    job,
+                    "Bench file not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }
@@ -204,7 +214,9 @@ impl NovoApp {
     pub fn export_bench_cut_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.bench_cut",
+                "Cut list not written",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -233,7 +245,7 @@ impl NovoApp {
                 jobs.len()
             )
         };
-        self.bench_write(path, &bytes, &what)
+        self.bench_write("export.bench_cut", path, &bytes, &what)
     }
 
     /// The machine job file (CSV) under the window's draft standard, so it
@@ -247,7 +259,9 @@ impl NovoApp {
     pub fn export_machine_csv_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.machine_csv",
+                "Machine file not written",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -264,7 +278,12 @@ impl NovoApp {
             ..novo_reports::CsvOptions::default()
         };
         let text = novo_reports::wire_cut_csv(&jobs, &options);
-        self.bench_write(path, text.as_bytes(), &format!("{} wires", jobs.len()))
+        self.bench_write(
+            "export.machine_csv",
+            path,
+            text.as_bytes(),
+            &format!("{} wires", jobs.len()),
+        )
     }
 
     pub(super) fn export_ferrules(&mut self) -> Option<PathBuf> {
@@ -276,7 +295,9 @@ impl NovoApp {
     pub fn export_ferrules_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.ferrules",
+                "Ferrule list not written",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -299,7 +320,12 @@ impl NovoApp {
             } else {
                 "No ferrules to crimp yet".to_owned()
             };
-            self.message(Level::Warning, why);
+            self.job_fail(
+                "export.ferrules",
+                "Ferrule list not written",
+                Level::Warning,
+                why,
+            );
             return None;
         }
         let options = pdf_options(
@@ -308,7 +334,7 @@ impl NovoApp {
             self.report_translator(),
         );
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
-        self.bench_write(path, &bytes, "ferrule table")
+        self.bench_write("export.ferrules", path, &bytes, "ferrule table")
     }
 
     /// The label run for the current settings.
@@ -329,7 +355,9 @@ impl NovoApp {
     pub fn export_labels_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.labels.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.labels",
+                "Labels not written",
                 Level::Warning,
                 "The label stock does not fit its sheet: check the sizes",
             );
@@ -361,7 +389,7 @@ impl NovoApp {
                 run.too_small
             ));
         }
-        self.bench_write(path, &bytes, &what)
+        self.bench_write("export.labels", path, &bytes, &what)
     }
 
     /// The chosen label kinds as Brother P-touch Editor database files, one
@@ -403,7 +431,12 @@ impl NovoApp {
                 "csv",
                 &self.wb.sheet_exports,
             );
-            if let Some(p) = self.bench_write(&path, text.as_bytes(), &format!("{kind} labels")) {
+            if let Some(p) = self.bench_write(
+                "export.labels",
+                &path,
+                text.as_bytes(),
+                &format!("{kind} labels"),
+            ) {
                 out.push(p);
             }
         }
@@ -687,6 +720,24 @@ pub(super) struct Gap {
 }
 
 impl Gap {
+    /// The short name the triangle chip carries; the sentence is in its popover.
+    pub(super) fn title(&self) -> &'static str {
+        let t = &self.text;
+        if t.starts_with("No mounting plate") {
+            "No mounting plate"
+        } else if t.contains("no number") {
+            "Wires without number"
+        } else if t.contains("no cross-section") {
+            "Wires without size"
+        } else if t.contains("no ferrule") {
+            "Ferrules switched off"
+        } else if t.contains("estimates") {
+            "Lengths estimated"
+        } else {
+            "Not ready to print"
+        }
+    }
+
     /// The fix as `(button label, command)` with the label borrowed.
     pub(super) fn fix_pair(&self) -> Option<(&str, &'static str)> {
         self.fix
@@ -775,14 +826,15 @@ fn readiness_strip(ui: &mut egui::Ui, gaps: &[Gap], act: &mut Option<Act>) {
     novo_theme::widgets::section_label(ui, "Before you print");
     for gap in gaps {
         ui.horizontal_wrapped(|ui| {
-            ui.label(&gap.text);
+            let detail = match gap.detail {
+                Some(more) => format!("{}\n\n{more}", gap.text),
+                None => gap.text.clone(),
+            };
+            novo_theme::widgets::flag_chip(ui, false, gap.title(), &detail);
             if let Some((label, command)) = gap.fix_pair()
                 && novo_theme::widgets::primary_button(ui, label).clicked()
             {
                 *act = Some(Act::Run(command));
-            }
-            if let Some(detail) = gap.detail {
-                novo_theme::widgets::help_mark(ui, detail);
             }
         });
     }
@@ -796,11 +848,11 @@ fn cut_tab(
     act: &mut Option<Act>,
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            "Ferrule standard invalid",
             "The ferrule standard is not valid: fix it on the Ferrules tab",
-            |_| {},
         );
         return;
     };
@@ -835,20 +887,13 @@ fn cut_tab(
         ));
     }
     if estimates > 0 {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            &format!("{estimates} lengths estimated"),
             &format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
-            |_| {},
-        );
-    } else {
-        novo_theme::widgets::banner(
-            ui,
-            novo_theme::widgets::Level::Success,
-            "Every length comes from a routed wire",
-            |_| {},
         );
     }
     ui.add_space(4.0);
@@ -887,12 +932,6 @@ fn defaults_row(
     act: &mut Option<Act>,
 ) {
     if unset.is_complete() {
-        novo_theme::widgets::banner(
-            ui,
-            novo_theme::widgets::Level::Success,
-            "Every wire has a size and a colour",
-            |_| {},
-        );
         return;
     }
     let mut missing = Vec::new();
@@ -908,11 +947,11 @@ fn defaults_row(
             lacking(unset.connections_no_colour, unset.connections)
         ));
     }
-    novo_theme::widgets::banner(
+    novo_theme::widgets::flag_chip(
         ui,
-        novo_theme::widgets::Level::Warning,
+        false,
+        "Wire size or colour not set",
         &format!("Not set: {}.", missing.join("; ")),
-        |_| {},
     );
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
@@ -1162,11 +1201,11 @@ fn ferrule_tab(
     });
     let valid = state.standard.is_valid();
     if !valid {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            "Ferrule sizes invalid",
             "Each size must be listed once, above zero, with a contact length above zero and an overall length (if set) at least as long as the contact length",
-            |_| {},
         );
     }
     ui.add_space(8.0);
@@ -1317,11 +1356,11 @@ fn label_tab(
     });
     let valid = state.labels.is_valid();
     if !valid {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            "Labels do not fit the sheet",
             "The label sizes do not fit the sheet: check the sheet fields",
-            |_| {},
         );
     }
     if let (Some(cache), true) = (&state.cache, valid) {
@@ -1342,14 +1381,14 @@ fn label_tab(
             ));
         }
         if run.too_small > 0 {
-            novo_theme::widgets::banner(
+            novo_theme::widgets::flag_chip(
                 ui,
-                novo_theme::widgets::Level::Warning,
+                false,
+                &format!("{} labels under 2 mm", run.too_small),
                 &format!(
                     "{} labels have text under 2 mm: choose bigger labels or wider tape",
                     run.too_small
                 ),
-                |_| {},
             );
         }
     }

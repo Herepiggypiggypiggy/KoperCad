@@ -7,6 +7,16 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+# Heat starts a run by itself (Thorough, Auto on): stop it, switch Auto off so it neither restarts nor re-solves after an edit, stop again.
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
 expect "Vents and fans"
 shot panel-empty
 click_text "Add opening"
@@ -53,7 +63,7 @@ wait_s 150
 # Undo and the cooling card wait for the finished run: no "Preliminary" left.
 expect_not "Preliminary"
 shot airflow-result
-expect "Airflow: lines and arrows are coloured by air speed"
+expect "Streamlines"
 check_blank airflow-result
 check_layout
 wait_s 5
@@ -76,11 +86,9 @@ wait 20
 shot cooling-card
 click_text "Cooling selection"
 wait 10
-click_text Auto
-wait 10
 click_text Undo
 wait 10
-expect "from before your last change"
+expect "Result out of date"
 shot stale-after-edit
 check_layout
 key ctrl+k

@@ -1,0 +1,24 @@
+@title Winch scenario warning is a triangle with a popover (1920x1080)
+@area Simulate
+@sizes 1920x1080
+# T10: a finding of a simulation run is a triangle with a short title on the run; the sentence is in the popover.
+click_text "New project"
+wait 20
+key ctrl+k
+wait 3
+text winch scenarios
+wait 4
+key Enter
+wait 20
+expect "Scenario warning"
+shot winch-triangle
+check_layout
+click_text "Warning: Scenario warning" Button
+wait 8
+expect "Copy"
+expect "Run"
+shot winch-popover
+check_layout
+key Escape
+wait 6
+expect_not "Copy"
