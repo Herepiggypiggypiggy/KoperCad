@@ -16,3 +16,12 @@ wait 10
 expect "Carries"
 shot list-before
 check_layout
+click 573 321
+wait 5
+text signal
+wait 5
+key Tab
+wait 10
+expect "signal"
+shot list-after
+check_layout

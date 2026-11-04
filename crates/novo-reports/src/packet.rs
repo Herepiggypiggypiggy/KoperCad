@@ -252,7 +252,7 @@ pub fn signoff_sheet(project: &Project, jobs: &[WireCutJob]) -> Option<ReportOut
     }
     let mut pages = Section::new(
         SIGNOFF_PAGES_KEY,
-        "Wiring sign-off · tick each circuit sheet when it is wired and tested",
+        "Tick each circuit sheet when it is wired and tested",
         vec![
             Column::new("wired", "Wired", 14.0),
             Column::new("tested", "Tested", 14.0),
