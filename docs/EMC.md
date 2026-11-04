@@ -267,7 +267,7 @@ formulas, I = 2 pi f C V); nothing is taken from FastHenry or FastCap, whose lic
 
 **EMC-21** (Estimate): for each shielded motor cable with a stated length it shows the capacitance of all
 cores to the shield, the leakage current to earth at 50 Hz and 230 V (what an RCD on the supply side sees) and
-the charging current per kV/us of output edge. It warns above 15 mA (half of a 30 mA RCD; clause to verify).
+the charging current per kV/us of output edge. It warns above 15 mA (half of a 30 mA RCD, a common rule of thumb not checked against the standard text).
 The capacitance per metre is the maker's value when the cable states `emc.cable_pf_per_m`, else a coaxial formula
 with assumed insulation (D/d 2.2, eps 3, about 212 pF/m), and the finding says which. A cable without a length gets no
 number. Limits: leakage at the drive's carrier frequency and the motor's own winding capacitance are not modelled,
