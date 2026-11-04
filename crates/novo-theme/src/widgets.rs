@@ -643,6 +643,12 @@ pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
     let height = runs.iter().map(|(_, g)| g.size().y).fold(0.0_f32, f32::max);
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(width, height) + pad * 2.0, egui::Sense::click());
+    let label = runs
+        .iter()
+        .map(|(_, g)| g.text().trim().to_owned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     if ui.is_rect_visible(rect) {
         ui.painter().rect_filled(rect, radius::PILL, p.raised);
         ui.painter().rect_stroke(
