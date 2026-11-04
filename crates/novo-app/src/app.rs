@@ -251,6 +251,7 @@ mod parts_pins;
 #[cfg(test)]
 mod parts_pins_tests;
 mod parts_quality;
+mod parts_suppliers;
 mod parts_table;
 mod pdf;
 mod pdf_options;
