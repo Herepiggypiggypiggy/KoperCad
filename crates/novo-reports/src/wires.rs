@@ -113,12 +113,12 @@ impl WireList {
                 // Print weights first; `on_screen` is the split that fits a
                 // 1366 px window with Length basis in view.
                 Column::new("number", "Wire no.", 15.0).on_screen(13.0),
-                Column::new("from", "From", 28.0).on_screen(16.0),
-                Column::new("to", "To", 28.0).on_screen(16.0),
+                Column::new("from", "From", 28.0).on_screen(14.0),
+                Column::new("to", "To", 28.0).on_screen(14.0),
                 Column::new("potential", "Potential", 15.0).on_screen(10.0),
                 Column::new("color", "Colour", 12.0).on_screen(8.0),
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
-                Column::new("cable", "Cable", 20.0).on_screen(15.0),
+                Column::new("cable", "Cable", 20.0).on_screen(19.0),
                 Column::new("location", "Location", 15.0).on_screen(8.0),
                 Column::new("length_mm", "Route length mm", 14.0)
                     .right()
