@@ -1972,27 +1972,33 @@ fn suppliers_strip(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<P
     if name.is_none() && win.suppliers.note.is_none() && win.suppliers.problem.is_none() {
         return;
     }
-    ui.horizontal(|ui| {
-        if let Some(name) = &name {
+    if let Some(name) = &name {
+        ui.horizontal(|ui| {
             ui.spinner();
+            let how = if win.suppliers.source() == Some(super::parts_suppliers::Source::Window) {
+                "sign in and download there"
+            } else {
+                "sign in and download in your browser"
+            };
             ui.label(format!(
-                "{name}: sign in and download there. Files taken: {}",
+                "{name}: {how}. Files taken: {}",
                 win.suppliers.handed_over()
             ));
             if ui.button("Stop").clicked() {
                 actions.push(PartsAction::StopSupplier);
             }
-        }
-        if let Some(note) = &win.suppliers.note {
-            ui.colored_label(ui.visuals().warn_fg_color, note);
-        }
-        if let Some(problem) = &win.suppliers.problem {
-            ui.colored_label(
-                ui.visuals().warn_fg_color,
-                format!("suppliers.json: {problem}"),
-            );
-        }
-    });
+        });
+    }
+    let warn = ui.visuals().warn_fg_color;
+    if let Some(note) = &win.suppliers.note {
+        ui.add(egui::Label::new(egui::RichText::new(note).color(warn)).wrap());
+    }
+    if let Some(problem) = &win.suppliers.problem {
+        ui.add(
+            egui::Label::new(egui::RichText::new(format!("suppliers.json: {problem}")).color(warn))
+                .wrap(),
+        );
+    }
 }
 
 /// The strip under the list: what the import is waiting for, or its result.
