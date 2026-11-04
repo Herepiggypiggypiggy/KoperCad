@@ -9,10 +9,10 @@ text "motor starter"
 wait 5
 key Enter
 wait 10
-move 700 300
+move 560 160
 wait 5
 shot ghost-on-pointer
-click 700 300
+click 560 160
 wait 20
-expect "Placed Motor starter DOL"
+expect_scene "-K1"
 shot placed-by-click

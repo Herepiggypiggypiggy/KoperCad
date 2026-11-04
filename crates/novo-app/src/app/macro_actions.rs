@@ -790,8 +790,12 @@ impl NovoApp {
             self.open_macro_place(Some(name));
             return;
         };
-        view.editor
-            .begin_paste(symbols, paths, novo_core::Point::ZERO);
+        // The pointer holds the top-left of what the circuit draws, so the
+        // ghost sits under the cursor.
+        let bounds = macro_place::definition_bounds(&definition);
+        let reach = macro_place::SYMBOL_REACH;
+        let anchor = novo_core::Point::new(bounds.min.x + reach, bounds.min.y + reach);
+        view.editor.begin_paste(symbols, paths, anchor);
         self.wb.clip.pending = None;
         self.wb.macro_place.ghost = Some(Ghost {
             path: entry.path,
@@ -834,7 +838,15 @@ impl NovoApp {
                     if size.is_some_and(|(w, h)| at.x < 0.0 || at.y < 0.0 || at.x > w || at.y > h) {
                         return true;
                     }
-                    self.place_definition(ghost.definition, ghost.options, Some(at));
+                    // The click puts the top-left of what the circuit draws
+                    // there, kept on the sheet and clear of the title block.
+                    let bounds = macro_place::definition_bounds(&ghost.definition);
+                    let reach = macro_place::SYMBOL_REACH;
+                    let at = novo_core::Point::new(at.x - reach, at.y - reach);
+                    let top_left = macro_place::fit_on_sheet(at, bounds.size, size, 0.0);
+                    let origin =
+                        novo_core::Point::new(top_left.x - bounds.min.x, top_left.y - bounds.min.y);
+                    self.place_definition(ghost.definition, ghost.options, Some(origin));
                 }
             }
             None if !pasting => self.wb.macro_place.ghost = None,

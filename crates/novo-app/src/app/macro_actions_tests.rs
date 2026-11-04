@@ -208,9 +208,28 @@ fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
     d.frame();
     assert!(d.app.wb.macro_place.ghost.is_none());
     assert_eq!(d.doc().project().symbols().count(), 0);
-    // A click places it at the click, as one undo step.
+    // A click places it at the click, as one undo step, and the ghost sits
+    // under the pointer: what it showed is where the circuit lands.
     d.app.run_target(&ctx, target.clone());
     d.frame();
+    let page = d.app.current_page.unwrap();
+    let ghost_left = {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().unwrap();
+        let doc = app.backend.document_mut().unwrap();
+        view.editor
+            .hover(doc, page, novo_core::Point::new(200.0, 60.0), 2.0);
+        let preview = view.editor.preview(doc, page);
+        preview
+            .symbols
+            .iter()
+            .map(|s| s.placement.origin.x)
+            .fold(f64::INFINITY, f64::min)
+    };
+    assert!(
+        (200.0..=225.0).contains(&ghost_left),
+        "the ghost starts at the pointer, not at the circuit's own origin: {ghost_left}"
+    );
     d.click(novo_core::Point::new(200.0, 60.0));
     d.frame();
     assert!(d.app.wb.macro_place.ghost.is_none());
@@ -221,8 +240,8 @@ fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
         .map(|s| s.placement.origin.x)
         .fold(f64::INFINITY, f64::min);
     assert!(
-        d.doc().project().symbols().count() > 1 && (195.0..=260.0).contains(&left),
-        "the circuit starts at the click: {left}"
+        d.doc().project().symbols().count() > 1 && (left - ghost_left).abs() < 0.01,
+        "the circuit lands where the ghost was: {left} against {ghost_left}"
     );
     d.app.undo_redo(false);
     d.frame();
