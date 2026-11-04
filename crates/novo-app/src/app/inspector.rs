@@ -438,7 +438,7 @@ impl NovoApp {
         if self.wb.inspector.picker.open
             && let Some(problem) = self.wb.part_catalog.ensure()
         {
-            self.message(Level::Error, problem);
+            self.refuse(Level::Error, problem);
         }
         let candidates = match (
             self.wb.part_catalog.get(),
@@ -518,7 +518,7 @@ impl NovoApp {
                 InspectorAction::Rename(tag) => {
                     let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
                     if let Some(Err(reason)) = result {
-                        self.message(Level::Warning, reason);
+                        self.refuse_titled(Level::Warning, "Could not rename", reason);
                     }
                 }
                 InspectorAction::Describe(text) => self.describe(device, text),
@@ -628,7 +628,7 @@ impl NovoApp {
         let value = match parse_device_input(key, text) {
             Ok(v) => v,
             Err(why) => {
-                self.message(Level::Warning, why);
+                self.refuse(Level::Warning, why);
                 return;
             }
         };
@@ -641,7 +641,7 @@ impl NovoApp {
         let label = format!("Set {key} of {}", old.tag);
         match doc.transact(label, |tx| tx.set_property(device, key, value)) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -663,7 +663,7 @@ impl NovoApp {
             match text.replace(',', ".").parse::<f64>() {
                 Ok(v) if v.is_finite() => Some(Value::Float(v)),
                 _ => {
-                    self.message(Level::Warning, format!("\"{text}\" is not a number"));
+                    self.refuse(Level::Warning, format!("\"{text}\" is not a number"));
                     return;
                 }
             }
@@ -677,7 +677,7 @@ impl NovoApp {
         let label = format!("Set {key} of {}", old.tag);
         match doc.transact(label, |tx| tx.set_property(device, key, value)) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -693,7 +693,7 @@ impl NovoApp {
         let label = format!("Reset {key} of {}", old.tag);
         match doc.transact(label, |tx| tx.set_property(device, key, None)) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -714,7 +714,7 @@ impl NovoApp {
         if tag != old.0 {
             let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
             if let Some(Err(reason)) = result {
-                self.message(Level::Warning, reason);
+                self.refuse_titled(Level::Warning, "Could not rename", reason);
             }
         }
         if description != old.1 {
@@ -742,7 +742,7 @@ impl NovoApp {
                 self.remember_part(&[device], key);
                 self.offer_part_terminals(device);
             }
-            Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),
+            Some(Err(e)) => self.refuse(Level::Error, format!("Could not set the part: {e}")),
             None => {}
         }
     }
@@ -759,7 +759,7 @@ impl NovoApp {
         let value = Value::Text(format!("{seconds} s"));
         match doc.transact(label, |tx| tx.set_property(device, "delay", Some(value))) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -773,7 +773,7 @@ impl NovoApp {
         } else if DeviceTag::parse(tag).is_ok() {
             Some(Value::Text(tag.to_owned()))
         } else {
-            self.message(Level::Warning, format!("\"{tag}\" is not a device tag"));
+            self.refuse(Level::Warning, format!("\"{tag}\" is not a device tag"));
             return;
         };
         let Some(doc) = self.backend.document_mut() else {
@@ -785,7 +785,7 @@ impl NovoApp {
         let label = format!("Set the other half of {}", old.tag);
         match doc.transact(label, |tx| tx.set_property(device, "plug.mate", value)) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -805,7 +805,7 @@ impl NovoApp {
             tx.update::<novo_core::Device>(device, |d| d.description = text)
         }) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
