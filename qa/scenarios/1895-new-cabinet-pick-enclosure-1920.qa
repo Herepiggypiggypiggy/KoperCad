@@ -27,3 +27,4 @@ key ctrl+z
 wait 10
 shot e-after-undo
 expect "No panel yet"
+expect "Undone"
