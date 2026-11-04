@@ -29,6 +29,8 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// What Retry runs for each job flag (wiring lane).
+    pub(super) retry: HashMap<FlagId, super::flags_wiring::JobRetry>,
 }
 
 impl Default for FlagUi {
@@ -38,6 +40,7 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            retry: HashMap::new(),
         }
     }
 }
@@ -155,7 +158,16 @@ impl NovoApp {
             return;
         }
         let revision = *revision;
-        let built = drafts(problems);
+        let mut built = drafts(problems);
+        if let Some(doc) = self.backend.document() {
+            // Wire-end checks sit on the pin the wire lands on.
+            for (i, d) in &mut built {
+                let pins = super::flags_wiring::pin_anchors(doc.project(), &problems[*i]);
+                if !pins.is_empty() {
+                    d.anchors = pins;
+                }
+            }
+        }
         let flags = &mut self.wb.flags;
         flags.index.clear();
         for (i, d) in &built {
@@ -196,6 +208,22 @@ impl NovoApp {
                         .map(novo_core::WireId)
                         .filter(|w| project.wire(*w).is_some_and(|w| w.page == page))
                         .map(AnyId::Wire),
+                    Anchor::Pin(raw, pin) => {
+                        if let Some((at, area)) = super::flags_wiring::pin_area(project, raw, *pin)
+                            && at == page
+                        {
+                            marks.push(
+                                Mark {
+                                    kind: mark_kind(flag),
+                                    target: novo_canvas::MarkTarget::Area(area),
+                                    text: hover.clone(),
+                                    key: 0,
+                                }
+                                .with_key(flag.id.0),
+                            );
+                        }
+                        None
+                    }
                     _ => None,
                 };
                 if let Some(id) = id {
@@ -272,6 +300,7 @@ impl NovoApp {
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
                                 Action::Copy => "Copy",
+                                Action::Retry => "Try again",
                                 Action::Explain if self.settings.ai.enabled => {
                                     "Explain with Claude"
                                 }
@@ -280,6 +309,9 @@ impl NovoApp {
                             if ui.button(label).clicked() {
                                 chosen = Some(action.clone());
                             }
+                        }
+                        if flag.life == Life::Until && ui.button("Dismiss").clicked() {
+                            chosen = Some(Action::Open("dismiss".into()));
                         }
                     });
                 });
@@ -336,6 +368,20 @@ impl NovoApp {
                 }
             }
             Action::Copy => ctx.copy_text(flag.detail.0.join("\n")),
+            Action::Retry => {
+                if let Some(retry) = self.wb.flags.retry.get(&flag.id).cloned() {
+                    self.retry_job(retry);
+                }
+            }
+            Action::Open(what) if what == "dismiss" => {
+                self.wb.flags.retry.remove(&flag.id);
+                self.wb.flags.store.clear(flag.id);
+                for (field, id) in self.wb.wire_panel.errors.clone() {
+                    if id == flag.id {
+                        self.wire_field_clear(field);
+                    }
+                }
+            }
             _ => {}
         }
     }

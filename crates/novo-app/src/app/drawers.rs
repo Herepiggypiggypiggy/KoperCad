@@ -96,6 +96,7 @@ impl NovoApp {
             Drawer::Devices => None,
         };
         let mut actions = Vec::new();
+        let mut flag_open: Option<(novo_flags::FlagId, egui::Pos2)> = None;
         // Controls for lessons to point at, registered after the panel.
         let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
         let panel = egui::Panel::bottom("drawer")
@@ -204,6 +205,8 @@ impl NovoApp {
                                     &selected,
                                     &mut ticked,
                                     &mut toolbar,
+                                    &self.wb.flags.store,
+                                    &mut flag_open,
                                 ) {
                                     actions.push(DrawerAction::Go(Place {
                                         page: o.page,
@@ -255,6 +258,9 @@ impl NovoApp {
             if clicked {
                 self.learn_event(novo_learn::Event::Clicked(id));
             }
+        }
+        if flag_open.is_some() {
+            self.wb.flags.open = flag_open;
         }
         for action in actions {
             match action {

@@ -198,6 +198,7 @@ impl NovoApp {
             self.show_issues(true);
         }
         self.punch_pill(ui);
+        self.job_roll_up(ui);
     }
 
     /// In the Commissioning workspace, the pill above counts design checks

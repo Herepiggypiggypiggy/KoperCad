@@ -1,0 +1,30 @@
+@title Wiring: a Wire-it export that cannot be written is a triangle on the job, with Try again
+@area Reports
+# T5: no red toast. The failed job is a red triangle in the top bar beside the Issues pill; its popover names the file and offers Try again and Dismiss. The same export to a good place clears it.
+open qa/fixtures/connection-points.novo
+wait 30
+# A folder below a file cannot be created.
+answer_dialog /dev/null/wire-it-list.pdf
+key ctrl+k
+text "Export the Wire-it list"
+key Enter
+wait 20
+expect "Error: Wire-it list not exported"
+shot job-flag-top-bar
+check_layout
+click_text "Error: Wire-it list not exported" Button
+wait 6
+expect "Try again"
+expect "Dismiss"
+shot job-flag-popover
+check_layout
+key Escape
+wait 4
+answer_dialog ~/wire-it-list.pdf
+key ctrl+k
+text "Export the Wire-it list"
+key Enter
+wait 30
+expect_not "Error: Wire-it list not exported"
+shot job-flag-gone
+check_layout
