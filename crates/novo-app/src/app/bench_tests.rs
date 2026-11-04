@@ -316,3 +316,23 @@ fn the_blocking_line_carries_a_size_button_with_the_count() {
         "no explanation on the line"
     );
 }
+
+#[test]
+fn an_invalid_ferrule_standard_makes_the_packet_a_job_flag_not_a_toast() {
+    let (dir, mut d) = app_with_wires();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.bench", None);
+    d.frame();
+    d.app.wb.bench.as_mut().unwrap().standard.sizes[3].length_mm = 0.0;
+    let shown = |d: &Drive| d.app.messages().iter().filter(|m| !m.dismissed).count();
+    let before = shown(&d);
+    assert!(
+        d.app
+            .export_bench_packet_to(&dir.path().join("p.pdf"), &[])
+            .is_none()
+    );
+    let flags = d.app.job_flags();
+    assert_eq!(flags.len(), 1);
+    assert_eq!(flags[0].title, "Ferrule standard invalid");
+    assert_eq!(shown(&d), before, "no toast");
+}
