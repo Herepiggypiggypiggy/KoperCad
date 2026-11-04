@@ -457,7 +457,9 @@ fn curves_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
                         ui.checkbox(&mut state.show_cables, "Cable damage curves");
                         ui.checkbox(&mut state.show_motors, "Motor starts");
                         ui.add_space(8.0);
-                        novo_theme::widgets::section_label(ui, "AGAINST CABLE AND MOTOR");
+                        novo_theme::widgets::section_label(ui, "AGAINST CABLE AND MOTOR (BAND LIMITS, NOT MAKER CURVES)");
+                        ui.weak("Estimate from typical values, not a protection design or a safety function.");
+                        ui.weak("Cable time: heating formula on the section in the diagram, not a maker curve.");
                         for c in &data.checks {
                             let Some(d) = study.devices.get(c.device) else {
                                 continue;
@@ -729,7 +731,7 @@ fn plot(
         }
     }
     // Cable damage: dashed, in the colour of the device that protects it.
-    for (cable, color) in &overlay.cables {
+    for (n, (cable, color)) in overlay.cables.iter().enumerate() {
         let (from, to) = cable.range_a();
         let (from, to) = (from.max(lo_a), to.min(hi_a));
         if to <= from {
@@ -745,9 +747,12 @@ fn plot(
             plot_painter.add(shape);
         }
         plot_painter.text(
-            Pos2::new(points[0].x + 4.0, points[0].y - 3.0),
+            Pos2::new(points[0].x + 4.0, points[0].y - 3.0 - 13.0 * n as f32),
             egui::Align2::LEFT_BOTTOM,
-            format!("cable {} mm\u{b2}", trim(cable.section_mm2)),
+            format!(
+                "cable {} mm\u{b2}, heating formula",
+                trim(cable.section_mm2)
+            ),
             font.clone(),
             *color,
         );
@@ -766,7 +771,15 @@ fn plot(
         plot_painter.text(
             Pos2::new(points[1].x + 5.0, points[1].y),
             egui::Align2::LEFT_CENTER,
-            format!("{} start", motor.tag),
+            format!(
+                "{} start{}",
+                motor.tag,
+                if motor.ratio_assumed || motor.time_assumed {
+                    " (assumed)"
+                } else {
+                    ""
+                }
+            ),
             font.clone(),
             *color,
         );
