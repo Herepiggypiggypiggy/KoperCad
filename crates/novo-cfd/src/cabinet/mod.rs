@@ -301,6 +301,9 @@ impl Solver for CabinetSolver {
         control: &Control,
         publish: &mut dyn FnMut(&CfdSnapshot),
     ) -> Result<CfdSnapshot, CfdError> {
+        scenario
+            .check_sources()
+            .map_err(|e| CfdError::Setup(e.to_string()))?;
         let lowered = scenario.lowered();
         let scenario = &*lowered;
         control.set_phase("Planning the grid");
