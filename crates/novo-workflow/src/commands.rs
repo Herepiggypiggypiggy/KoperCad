@@ -3819,6 +3819,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "Export",
             &[
                 "workshop",
+                "print for the bench",
                 "drilling template",
                 "drill template",
                 "cut-out",
@@ -3835,6 +3836,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &[
             "export workshop",
+            "print for the bench",
             "workshop pack",
             "drilling template",
             "drill template",

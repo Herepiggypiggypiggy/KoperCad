@@ -57,6 +57,7 @@ mod search;
 mod sheet;
 mod stated;
 mod step;
+pub mod supplier_site;
 mod table;
 mod tablefile;
 mod tablemap;

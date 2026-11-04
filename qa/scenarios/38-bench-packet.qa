@@ -7,9 +7,11 @@ click_text Reports
 wait 5
 click_text "Bench output..."
 wait 20
-expect "Bench packet (PDF)"
+expect "Print for the bench"
 shot window
 check_layout
+click_text More
+wait 3
 click_text "Bench packet (PDF)"
 wait 30
 expect_file "~/Documents/KoperCAD/*bench packet.pdf" 1500

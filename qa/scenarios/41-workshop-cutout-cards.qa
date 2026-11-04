@@ -8,7 +8,7 @@ click_text Reports
 wait 5
 click_text "Bench output..."
 wait 20
-click_text "Workshop pack (folder)"
+click_text "Print for the bench"
 wait 60
 expect_file "/tmp/kopercad-qa-open-*/door-cutouts workshop/1 Cut-out cards*.pdf" 1500
 keep_file "/tmp/kopercad-qa-open-*/door-cutouts workshop/1 Cut-out cards*.pdf"

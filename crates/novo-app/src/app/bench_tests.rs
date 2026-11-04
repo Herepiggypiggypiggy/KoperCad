@@ -235,7 +235,7 @@ fn the_readiness_strip_names_what_is_missing_and_clears_when_fixed() {
     assert!(gaps.iter().any(|g| g.text.starts_with("No mounting plate")));
     assert!(
         gaps.iter()
-            .any(|g| g.fix == Some(("Number wires", "wires.number")))
+            .any(|g| g.fix_pair() == Some(("Number wires", "wires.number")))
     );
     d.app.run_command(&ctx, "wires.number", None);
     d.frame();
@@ -287,5 +287,32 @@ fn the_default_size_is_filled_in_for_unsized_wires_in_one_undo_step() {
     assert_eq!(
         novo_reports::unset_wires(d.doc().project()).no_size.len(),
         before.no_size.len()
+    );
+}
+
+#[test]
+fn the_blocking_line_carries_a_size_button_with_the_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenStarterExample);
+    d.frame();
+    let p = d.doc().project();
+    let jobs = novo_reports::wire_cut_jobs_with(p, &FerruleStandard::of(p));
+    let gaps = super::bench::readiness(&jobs, true);
+    let gap = gaps
+        .iter()
+        .find(|g| g.text.ends_with("no cross-section"))
+        .expect("wires without a size");
+    let (label, command) = gap.fix_pair().expect("a fix");
+    assert!(
+        label.starts_with("Size ") && label.ends_with(" wires"),
+        "{label}"
+    );
+    assert_eq!(command, "wires.autopilot");
+    assert!(gap.detail.is_some(), "the reasoning sits behind the ?");
+    assert!(
+        !gap.text.contains("Autopilot"),
+        "no explanation on the line"
     );
 }

@@ -630,29 +630,13 @@ fn workshop_strip(
 ) {
     use novo_layout::template::Paper;
     ui.horizontal_wrapped(|ui| {
-        if novo_theme::widgets::primary_button(ui, "Workshop pack (folder)")
-            .on_hover_text(super::WORKSHOP_HINT)
-            .clicked()
+        if novo_theme::widgets::primary_button(ui, "Print for the bench").clicked()
         {
             *act = Some(Act::ExportWorkshop);
         }
-        ui.label("Template on");
         for p in [Paper::A4, Paper::A3] {
-            ui.selectable_value(paper, p, p.name());
-        }
-        if ui
-            .button("Preview")
-            .on_hover_text("See how each mounting plate is cut into template pages")
-            .clicked()
-        {
-            *act = Some(Act::PreviewWorkshop);
-        }
-        if ui
-            .button("Bench packet (PDF)")
-            .on_hover_text(super::BENCH_PACKET_HINT)
-            .clicked()
-        {
-            *act = Some(Act::ExportPacket);
+            ui.selectable_value(paper, p, p.name())
+                .on_hover_text("Paper for the drilling templates");
         }
         if ui
             .button("Work cards (PDF)")
@@ -661,6 +645,28 @@ fn workshop_strip(
         {
             *act = Some(Act::Run("export.workpack"));
         }
+        ui.menu_button("More", |ui| {
+            if ui
+                .button("Bench packet (PDF)")
+                .on_hover_text(super::BENCH_PACKET_HINT)
+                .clicked()
+            {
+                *act = Some(Act::ExportPacket);
+                ui.close();
+            }
+            if ui
+                .button("Preview templates")
+                .on_hover_text("See how each mounting plate is cut into template pages")
+                .clicked()
+            {
+                *act = Some(Act::PreviewWorkshop);
+                ui.close();
+            }
+        });
+        novo_theme::widgets::help_mark(
+            ui,
+            "Print for the bench writes one folder next to the project, in working order: print scale check, drilling templates and drill plans, work cards, labels, kitting list, and the bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans). More has the single PDFs.",
+        );
     });
     if let Some(note) = stale {
         ui.label(
@@ -669,12 +675,9 @@ fn workshop_strip(
                 .color(crate::theme::ui_palette().warning),
         );
     }
-    print_check(ui, check, act);
-    super::dialog_ui::explained(
-        ui,
-        "Workshop pack",
-        "The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the print scale check, the 1:1 drilling templates, the labels, the kitting list and the work cards in one folder next to the project.",
-    );
+    egui::CollapsingHeader::new("Calibrate printer")
+        .default_open(!check[0].trim().is_empty() || !check[1].trim().is_empty())
+        .show(ui, |ui| print_check(ui, check, act));
 }
 
 /// One thing the printed bench output cannot be trusted on yet.
@@ -682,7 +685,18 @@ fn workshop_strip(
 pub(super) struct Gap {
     pub(super) text: String,
     /// Button label and the command that starts the fix, if one exists.
-    pub(super) fix: Option<(&'static str, &'static str)>,
+    pub(super) fix: Option<(String, &'static str)>,
+    /// Longer reasoning, shown behind a "?" and not on the line.
+    pub(super) detail: Option<&'static str>,
+}
+
+impl Gap {
+    /// The fix as `(button label, command)` with the label borrowed.
+    pub(super) fn fix_pair(&self) -> Option<(&str, &'static str)> {
+        self.fix
+            .as_ref()
+            .map(|(label, command)| (label.as_str(), *command))
+    }
 }
 
 /// `1 of 1 wire to cut has`, `3 of 25 wires to cut have`: the start of a
@@ -704,7 +718,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if !has_plate {
         out.push(Gap {
             text: "No mounting plate: nothing is routed, every length is an estimate".into(),
-            fix: Some(("Open Cabinet", "view.cabinet")),
+            fix: Some(("Open Cabinet".into(), "view.cabinet")),
+            detail: None,
         });
     }
     let unnumbered = count(&|j| j.number.trim().is_empty());
@@ -714,17 +729,24 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
                 "{} no number, so their labels and flags are blank",
                 lacking(unnumbered, jobs.len())
             ),
-            fix: Some(("Number wires", "wires.number")),
+            fix: Some(("Number wires".into(), "wires.number")),
+            detail: None,
         });
     }
     let no_size = count(&|j| j.cross_section_mm2.is_none());
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{} no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
+                "{} no cross-section",
                 lacking(no_size, jobs.len())
             ),
-            fix: Some(("Autopilot", "wires.autopilot")),
+            fix: Some((
+                format!("Size {}", novo_reports::count_text(no_size, "wires")),
+                "wires.autopilot",
+            )),
+            detail: Some(
+                "Wires without a cross-section get no ferrule and sit in one group. Autopilot proposes the sizes from the protective devices and the ampacity tables (planning values), with a reason each; you accept or change them.",
+            ),
         });
     }
     let (_, off) = novo_reports::ends_without_ferrule(jobs);
@@ -732,6 +754,7 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
         out.push(Gap {
             text: format!("{off} wire ends are set to have no ferrule"),
             fix: None,
+            detail: None,
         });
     }
     if has_plate {
@@ -741,7 +764,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
                 text: format!(
                     "{estimates} lengths are estimates (~): route the wires through ducts"
                 ),
-                fix: Some(("Open Cabinet", "view.cabinet")),
+                fix: Some(("Open Cabinet".into(), "view.cabinet")),
+                detail: None,
             });
         }
     }
@@ -756,10 +780,13 @@ fn readiness_strip(ui: &mut egui::Ui, gaps: &[Gap], act: &mut Option<Act>) {
     for gap in gaps {
         ui.horizontal_wrapped(|ui| {
             ui.label(&gap.text);
-            if let Some((label, command)) = gap.fix
-                && ui.small_button(label).clicked()
+            if let Some((label, command)) = gap.fix_pair()
+                && novo_theme::widgets::primary_button(ui, label).clicked()
             {
                 *act = Some(Act::Run(command));
+            }
+            if let Some(detail) = gap.detail {
+                novo_theme::widgets::help_mark(ui, detail);
             }
         });
     }

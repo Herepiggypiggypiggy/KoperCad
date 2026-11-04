@@ -303,6 +303,10 @@ pub(crate) struct Workbench {
     pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
     /// Part proposals waiting for Accept all or Cancel.
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
+    /// The Devices drawer filtered to devices without a part, while open.
+    pub(super) parts_pass: Option<super::parts_pass::PartsPass>,
+    /// The part last used per device class (`K`), for the parts pass.
+    pub(super) last_part_by_class: std::collections::HashMap<String, novo_parts::PartKey>,
     /// A rename of part terminals offered after a part was assigned.
     pub(super) pin_offer: Option<super::pin_offer::PinOffer>,
     /// The text of the company pin names file offered to a new project.
@@ -473,6 +477,8 @@ impl Default for Workbench {
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
+            parts_pass: None,
+            last_part_by_class: Default::default(),
             pin_offer: None,
             company_pin_offer: None,
             describe: None,
