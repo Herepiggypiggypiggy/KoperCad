@@ -338,6 +338,9 @@ mod view3d_controls;
 mod view3d_drag_gaps;
 mod view3d_duct_fill;
 mod view3d_duplicate;
+mod view3d_flags;
+#[cfg(test)]
+mod view3d_flags_tests;
 mod view3d_heat;
 mod view3d_heat_labels;
 mod view3d_hints;

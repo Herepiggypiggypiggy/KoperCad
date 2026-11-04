@@ -113,7 +113,22 @@ pub(super) fn show(ctx: &egui::Context, landing: &Landing, gaps: &[SideGap]) {
                 ));
                 for g in gaps {
                     let colour = if g.ok() { p.success } else { p.error };
-                    ui.label(egui::RichText::new(line(g)).color(colour).monospace());
+                    ui.horizontal(|ui| {
+                        // Too close leads with the triangle: colour is not the only cue.
+                        if !g.ok() {
+                            let (slot, _) = ui
+                                .allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+                            novo_theme::widgets::flag_triangle(
+                                ui.painter(),
+                                slot.center(),
+                                super::view3d_flags::SIZE,
+                                true,
+                                false,
+                                p,
+                            );
+                        }
+                        ui.label(egui::RichText::new(line(g)).color(colour).monospace());
+                    });
                 }
             });
         });

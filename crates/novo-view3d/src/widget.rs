@@ -818,6 +818,21 @@ impl View3d {
         ))
     }
 
+    /// Whether something opaque lies between the camera and the world point
+    /// `p` (so a marker drawn there is behind a part). `own` is the item the
+    /// point belongs to; it never hides its own point.
+    pub fn hidden_behind(&self, rect: Rect, scene: &Scene, p: Vec3, own: Option<ItemId>) -> bool {
+        let Some(at) = self.project(rect, scene, p) else {
+            return true;
+        };
+        let aspect = rect.width() / rect.height().max(1.0);
+        let ray = self.camera.ray(Self::ndc(rect, at), aspect);
+        let reach = (p - ray.origin).dot(ray.dir);
+        pick::pick_all(scene, &self.state, &ray)
+            .iter()
+            .any(|h| !h.translucent && Some(h.id) != own && h.t < reach - 3.0)
+    }
+
     fn ndc(rect: Rect, p: Pos2) -> glam::Vec2 {
         glam::Vec2::new(
             (p.x - rect.min.x) / rect.width() * 2.0 - 1.0,

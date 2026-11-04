@@ -316,6 +316,8 @@ impl NovoApp {
             Action::Locate => {
                 if let Some(i) = index {
                     self.go_problem(i);
+                } else {
+                    self.locate_flag_in_3d(flag);
                 }
             }
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
