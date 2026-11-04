@@ -1706,7 +1706,6 @@ fn parts_ui(
                     ui.close();
                 }
             });
-            supplier_menu(ui, win, actions);
             if ui
                 .button("Import table\u{2026}")
                 .on_hover_text(
@@ -1969,11 +1968,9 @@ const SUPPLIER_HELP: &str = "The supplier's site opens in its own window. You si
 /// One line while a supplier's site is open: who, how many files were taken.
 fn suppliers_strip(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAction>) {
     let name = win.suppliers.open_name().map(str::to_owned);
-    if name.is_none() && win.suppliers.note.is_none() && win.suppliers.problem.is_none() {
-        return;
-    }
-    if let Some(name) = &name {
-        ui.horizontal(|ui| {
+    ui.horizontal(|ui| {
+        supplier_menu(ui, win, actions);
+        if let Some(name) = &name {
             ui.spinner();
             let how = if win.suppliers.source() == Some(super::parts_suppliers::Source::Window) {
                 "sign in and download there"
@@ -1987,8 +1984,8 @@ fn suppliers_strip(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<P
             if ui.button("Stop").clicked() {
                 actions.push(PartsAction::StopSupplier);
             }
-        });
-    }
+        }
+    });
     let warn = ui.visuals().warn_fg_color;
     if let Some(note) = &win.suppliers.note {
         ui.add(egui::Label::new(egui::RichText::new(note).color(warn)).wrap());
