@@ -31,6 +31,9 @@ const WIDE_TABLE_COLUMNS: usize = 8;
 /// Pixels per unit of column weight, and the widest a column's minimum gets.
 const WIDE_PX_PER_WEIGHT: f32 = 5.5;
 const WIDE_MAX_COLUMN: f32 = 230.0;
+/// A saved report's column: pixels per character of its longest text, and the widest it gets.
+const SAVED_PX_PER_CHAR: f32 = 7.5;
+const SAVED_MAX_COLUMN: f32 = 340.0;
 
 use super::learn_ui::chip_button;
 use super::workspace::Workspace;
@@ -632,12 +635,21 @@ impl NovoApp {
         let bar = ui.spacing().scroll.allocated_width() + 4.0;
         let weights: Vec<f64> = section.columns.iter().map(|c| c.width).collect();
         let mut mins = header_min_widths(ui, &columns);
-        let wide = columns.len() > WIDE_TABLE_COLUMNS;
+        // A saved report ("My reports") has whatever columns the person asked
+        // for, with widths worked out from its longest text: those get a
+        // readable width at any column count (tags and part numbers in full).
+        let saved = section.key.starts_with("preset-");
+        let wide = saved || columns.len() > WIDE_TABLE_COLUMNS;
         if wide {
             // Many columns would be squeezed until the cells are cut: give
             // each a readable width and scroll sideways when they do not fit.
+            let (per_weight, widest) = if saved {
+                (SAVED_PX_PER_CHAR, SAVED_MAX_COLUMN)
+            } else {
+                (WIDE_PX_PER_WEIGHT, WIDE_MAX_COLUMN)
+            };
             for (min, weight) in mins.iter_mut().zip(&weights) {
-                *min = min.max((*weight as f32 * WIDE_PX_PER_WEIGHT).min(WIDE_MAX_COLUMN));
+                *min = min.max((*weight as f32 * per_weight + 12.0).min(widest));
             }
         }
         let available = ui.available_width() - bar;
