@@ -1213,6 +1213,7 @@ impl SchematicView {
         };
         let out = self.canvas.show(ui, scene.scene());
         self.band_count = out.band_count;
+        let mut on_flag = false;
         if out.response.clicked()
             && !out.hovered_marks.is_empty()
             && let Some(pos) = ui.input(|i| i.pointer.interact_pos())
@@ -1226,6 +1227,7 @@ impl SchematicView {
                 .collect();
             if !keys.is_empty() {
                 self.mark_click = Some((keys, pos));
+                on_flag = true;
             }
         }
         let response = out.response.clone();
@@ -1451,6 +1453,7 @@ impl SchematicView {
             }
         } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
+            && !on_flag
             && !on_text
             && let Some(w) = out.cursor_raw
         {
