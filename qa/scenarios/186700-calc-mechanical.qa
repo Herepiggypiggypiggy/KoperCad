@@ -23,7 +23,6 @@ expect "Not a safety function"
 expect "Bending stress"
 expect "Force on one support"
 expect "swings at"
-expect "Deflection"
 expect "at the supply"
 expect "Check > Calculations > Panel SCCR"
 check_layout
@@ -33,5 +32,22 @@ shot mechanical-rail
 scroll 400 450 -400
 wait 6
 shot mechanical-rail-and-plate
+expect "Deflection"
+# Bad input: the rail with no load is not calculated.
+double_click 329 489
+wait 4
+key ctrl+a
+text 0
+key Enter
+wait 6
+shot rail-no-load
+expect "Not calculated"
+# The plate result.
+click_text "Mounting plate under device weight"
+wait 6
+scroll 400 450 -400
+wait 6
+shot mechanical-plate
+expect "at the centre"
 tree Mechanical
 check_layout
