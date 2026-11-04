@@ -252,3 +252,29 @@ stated tolerance; "model" means a planning value with no measured case behind it
 | Fan effect on a device film | a device in the stream gets a higher film and a lower surface temperature; further away, less | model (2D flow has no momentum, the jet is added analytically) |
 
 Not yet checked against a measured fan case. ENCLOSURE_VALIDATED is unchanged.
+
+## H8 in the 3D solver: a fan inside the domain (`novo-cfd`, `flow::InteriorFan`)
+
+A circulation fan is a disk of faces on the grid plane nearest its centre. The
+maker's straight-line curve acts as a momentum source (the pressure jump,
+spread over the width of the face control volume) and an implicit linear drag
+(the slope of the curve), so the steady state meets the curve at any step size.
+`interior_fans_from_scenario` maps `Params::circulation_fans` (installed factor
+applied) into the grid; the 3D scenario setup does it with the openings.
+
+Exact (reproduced by hand in `crates/novo-cfd/tests/interior_fan.rs`):
+- Fan across a channel with a free inlet and a louvre outlet: the operating
+  point `p_max (1 - Q/Q_free) = rho/2 (1 + K) (Q/A)^2` is met to 0.01 %
+  (0.11373 against 0.11374 m3/s at K = 6; also 0.09088 at K = 50 with slip walls).
+- A fan the other way moves the same flow the other way; the outlet carries what
+  the fan moves; a closed box has zero net flow across a plane.
+
+Model, not measurement:
+- A disk of faces is a momentum patch, not a rotor: no swirl, no hub, no stall
+  region (the curve is a straight line), a block-shaped exit.
+- With the laminar solver the jet barely spreads: on a 25 mm grid the axis
+  speed 0.1 to 0.4 m behind a 150 mm fan stays about 1.4 times the exit speed,
+  where the turbulent free jet of the 2D model falls. So the 3D jet is at least as
+  long as the 2D one. With the turbulence model the jet will spread; that case
+  is not tested yet.
+- The device films do not read the resolved jet yet (next step).

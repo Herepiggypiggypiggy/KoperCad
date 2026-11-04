@@ -129,6 +129,8 @@ pub struct FlowConfig {
     /// to 0) and the solver refreshes the radiative heat every
     /// [`RAD_EVERY`] steps or iterations.
     pub radiation: Option<std::sync::Arc<crate::rad::RadPlan>>,
+    /// Fans inside the domain (see [`super::InteriorFan`]). Empty = none.
+    pub interior_fans: Vec<super::InteriorFan>,
 }
 
 /// Steps (or steady iterations) between refreshes of the device films.
@@ -162,6 +164,7 @@ impl FlowConfig {
             device_emissivity: 0.85,
             device_view: 0.5,
             radiation: None,
+            interior_fans: Vec::new(),
         }
     }
 }
@@ -528,8 +531,8 @@ impl FlowSolver {
             .as_ref()
             .filter(|md| md.has_drag())
             .map(|md| md.drag.clone());
-        let drag_rate =
-            std::array::from_fn(|c| vec![0.0; if drag_cell.is_some() { mesh.len(c) } else { 0 }]);
+        let has_drag = drag_cell.is_some() || !cfg.interior_fans.is_empty();
+        let drag_rate = std::array::from_fn(|c| vec![0.0; if has_drag { mesh.len(c) } else { 0 }]);
         let pressure = PressureSolver::with_openness(&mesh, Some(&open.afrac));
         let t_in = cfg
             .openings
@@ -925,7 +928,7 @@ impl FlowSolver {
         // In a closed box a uniform temperature offset is a pure pressure
         // gradient, so the Boussinesq term uses the volume mean as reference.
         self.t_buoyancy_ref = self.cfg.t_ref.unwrap_or_else(|| self.mean_temperature());
-        let rhs: [Vec<f64>; 3] = std::array::from_fn(|c| self.momentum_rhs(c));
+        let rhs: [Vec<f64>; 3] = std::array::from_fn(|c| self.momentum_rhs(c, dt));
         for (c, r) in rhs.iter().enumerate() {
             self.diffuse_velocity(c, r, dt);
         }
@@ -958,7 +961,7 @@ impl FlowSolver {
 
     /// Convection (negative) plus buoyancy of velocity component `c`, at the
     /// interior faces. Zero on the faces of the walls.
-    fn momentum_rhs(&self, c: usize) -> Vec<f64> {
+    fn momentum_rhs(&self, c: usize, dt: f64) -> Vec<f64> {
         let m = &self.mesh;
         let mut out = vec![0.0; m.len(c)];
         let d = m.dims(c);
@@ -1053,7 +1056,45 @@ impl FlowSolver {
                 }
             }
         });
+        self.add_interior_fans(c, dt, &mut out);
         out
+    }
+
+    /// The pressure jump of the fans inside the domain as a momentum source
+    /// on velocity component `c`: the intercept `sign p_max / (rho width)` of
+    /// the curve. Its slope is the implicit drag of [`Self::add_fan_drag_rate`].
+    fn add_interior_fans(&self, c: usize, _dt: f64, out: &mut [f64]) {
+        for fan in self.cfg.interior_fans.iter().filter(|f| f.axis == c) {
+            let Some(ff) = fan.resolve(&self.mesh) else {
+                continue;
+            };
+            if fan.free_flow_m3s <= 0.0 || fan.max_pressure_pa <= 0.0 {
+                continue;
+            }
+            let a0 = fan.sign * fan.max_pressure_pa / self.cfg.rho / ff.width;
+            for &(id, _) in &ff.faces {
+                if self.open.afrac[c][id] != 0.0 {
+                    out[id] += a0;
+                }
+            }
+        }
+    }
+
+    /// Flow through fan `i` of [`FlowConfig::interior_fans`] along its
+    /// blowing direction, m3/s (negative = backwards), and the pressure the
+    /// curve gives at that flow, Pa. `None` for a fan that does not fit the
+    /// grid.
+    pub fn interior_fan_state(&self, i: usize) -> Option<(f64, f64)> {
+        let fan = self.cfg.interior_fans.get(i)?;
+        let ff = fan.resolve(&self.mesh)?;
+        let q: f64 = ff
+            .faces
+            .iter()
+            .map(|&(id, a)| self.vel[fan.axis][id] * a)
+            .sum::<f64>()
+            * fan.sign;
+        let p = fan.max_pressure_pa * (1.0 - q / fan.free_flow_m3s);
+        Some((q, p))
     }
 
     /// Solves `u/dt - nu L u = u_old/dt + rhs` by Gauss-Seidel.
@@ -1155,7 +1196,7 @@ impl FlowSolver {
         // Porous drag acts inside the projection: the velocity correction of
         // a face is dt / (1 + dt d) times the pressure gradient, so a steady
         // state balances the drag exactly, however large dt d is.
-        let porous = self.drag_cell.is_some();
+        let porous = self.drag_cell.is_some() || !self.cfg.interior_fans.is_empty();
         if porous {
             let m = &self.mesh;
             let coupling: [Vec<f64>; 3] = std::array::from_fn(|a| {
@@ -1222,6 +1263,35 @@ impl FlowSolver {
 
     /// `F |u|` on every interior face from the cells either side.
     fn update_drag_rate(&mut self) {
+        if self.drag_cell.is_none() && !self.cfg.interior_fans.is_empty() {
+            for r in &mut self.drag_rate {
+                r.fill(0.0);
+            }
+        }
+        self.update_cell_drag_rate();
+        self.add_fan_drag_rate();
+    }
+
+    /// The linear drag of the fans inside the domain: the slope of the maker
+    /// curve on the faces of the disk, taken implicitly (diffusion and
+    /// projection) so the steady state meets the curve at any step size.
+    fn add_fan_drag_rate(&mut self) {
+        for fan in &self.cfg.interior_fans {
+            let Some(ff) = fan.resolve(&self.mesh) else {
+                continue;
+            };
+            if fan.free_flow_m3s <= 0.0 || fan.max_pressure_pa <= 0.0 {
+                continue;
+            }
+            let pk = fan.max_pressure_pa / self.cfg.rho;
+            let k = pk / ((fan.free_flow_m3s / ff.area) * ff.width);
+            for &(id, _) in &ff.faces {
+                self.drag_rate[fan.axis][id] += k;
+            }
+        }
+    }
+
+    fn update_cell_drag_rate(&mut self) {
         let Some(f) = &self.drag_cell else {
             return;
         };
