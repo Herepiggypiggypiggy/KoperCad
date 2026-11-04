@@ -26,8 +26,8 @@ impl NovoApp {
             plant.window_title(),
             [novo_theme::dialog_width::MEDIUM, 0.0],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ctx,
                     "Starts a project with the structure, the cover pages and a circuit from the \
 library on each page. You can change all of it afterwards.",
                 );
@@ -51,7 +51,7 @@ library on each page. You can change all of it afterwards.",
                 }
                 ui.checkbox(&mut options.extra, plant.extra_label());
                 ui.add_space(8.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     create = widgets::primary_button(ui, "Create project").clicked();
                 });
             },

@@ -386,6 +386,20 @@ const PANE_DEFAULT_HEIGHT: f32 = 340.0;
 /// The most height a pane can be dragged to.
 const PANE_MAX_HEIGHT: f32 = 4000.0;
 
+fn fit_id(name: &str) -> egui::Id {
+    egui::Id::new(("dock_fit", name))
+}
+
+/// Asks that the pane `name` opens at the height of its content (a form), until
+/// the person gives it a height. Call it every frame the pane is shown.
+pub(super) fn fit_content(ctx: &egui::Context, name: &str) {
+    ctx.data_mut(|d| d.insert_temp(fit_id(name), true));
+}
+
+fn measured_id(name: &str) -> egui::Id {
+    egui::Id::new(("dock_measured", name))
+}
+
 fn heights_id() -> egui::Id {
     egui::Id::new("dock_pane_heights")
 }
@@ -396,9 +410,18 @@ fn pane_height(ctx: &egui::Context, name: &str) -> f32 {
     let all: Vec<(String, f32)> = ctx
         .data_mut(|d| d.get_persisted(heights_id()))
         .unwrap_or_default();
-    all.into_iter()
-        .find(|(n, _)| n == name)
-        .map_or(PANE_DEFAULT_HEIGHT, |(_, h)| h)
+    if let Some((_, h)) = all.into_iter().find(|(n, _)| n == name) {
+        return h;
+    }
+    if ctx
+        .data(|d| d.get_temp::<bool>(fit_id(name)))
+        .unwrap_or(false)
+        && let Some(content) = ctx.data(|d| d.get_temp::<f32>(measured_id(name)))
+    {
+        // Header, the body's margin and the grip below the content.
+        return (content + HEADER + 1.0 + 12.0 + DIVIDER).clamp(PANE_MIN_HEIGHT, PANE_MAX_HEIGHT);
+    }
+    PANE_DEFAULT_HEIGHT
 }
 
 /// A pane that asked for the whole height of its slot (a long form with a
@@ -409,17 +432,6 @@ pub(super) fn open_tall(ctx: &egui::Context, name: &str) {
         .unwrap_or_default();
     if !all.iter().any(|(n, _)| n == name) {
         set_pane_height(ctx, name, Some(PANE_MAX_HEIGHT));
-    }
-}
-
-/// A pane gets `height` the first time it docks (a height the person gave it
-/// stays). For forms that need more than the default but not the whole slot.
-pub(super) fn open_at(ctx: &egui::Context, name: &str, height: f32) {
-    let all: Vec<(String, f32)> = ctx
-        .data_mut(|d| d.get_persisted(heights_id()))
-        .unwrap_or_default();
-    if !all.iter().any(|(n, _)| n == name) {
-        set_pane_height(ctx, name, Some(height.min(PANE_MAX_HEIGHT)));
     }
 }
 
@@ -457,19 +469,28 @@ fn stack_layout(total: f32, items: &[(f32, bool)]) -> (Vec<(f32, f32)>, f32) {
     let fixed: f32 = items.iter().filter(|(_, f)| *f).count() as f32 * header;
     let asked: f32 = items.iter().filter(|(_, f)| !*f).map(|(h, _)| *h).sum();
     let room = (total - fixed).max(0.0);
-    let scale = if asked > room && asked > 0.0 {
-        room / asked
-    } else {
-        1.0
-    };
+    // When the panes do not all fit, the last ones give up room first (down to
+    // their minimum), so the first form keeps the space it asked for.
+    let mut heights: Vec<f32> = items
+        .iter()
+        .map(|(h, folded)| if *folded { header } else { *h })
+        .collect();
+    let mut excess = asked - room;
+    for (i, (h, folded)) in items.iter().enumerate().rev() {
+        if excess <= 0.0 {
+            break;
+        }
+        if *folded {
+            continue;
+        }
+        let floor = PANE_MIN_HEIGHT.min(*h);
+        let take = (heights[i] - floor).min(excess).max(0.0);
+        heights[i] -= take;
+        excess -= take;
+    }
     let mut top = 0.0;
     let mut out = Vec::with_capacity(items.len());
-    for (h, folded) in items {
-        let height = if *folded {
-            header
-        } else {
-            (h * scale).max(PANE_MIN_HEIGHT.min(*h))
-        };
+    for height in heights {
         out.push((top, height));
         top += height;
     }
@@ -836,12 +857,18 @@ pub(super) fn show_docked<R>(
                             // not built (a hidden window costs nothing).
                             None
                         } else if scrolls {
-                            Some(
-                                egui::ScrollArea::both()
-                                    .auto_shrink([false, false])
-                                    .show(ui, add)
-                                    .inner,
-                            )
+                            let out = egui::ScrollArea::both()
+                                .auto_shrink([false, false])
+                                .show(ui, add);
+                            let fit = ctx
+                                .data(|d| d.get_temp::<bool>(fit_id(name)))
+                                .unwrap_or(false);
+                            if fit {
+                                ctx.data_mut(|d| {
+                                    d.insert_temp(measured_id(name), out.content_size.y)
+                                });
+                            }
+                            Some(out.inner)
                         } else {
                             ui.set_clip_rect(body);
                             Some(add(ui))
@@ -1617,13 +1644,22 @@ mod tests {
     }
 
     #[test]
-    fn a_form_opens_at_its_height_once_and_keeps_one_the_person_set() {
+    fn a_form_opens_at_its_content_height_and_keeps_one_the_person_set() {
         let ctx = egui::Context::default();
-        open_at(&ctx, "modal:plc_card", 520.0);
-        assert_eq!(pane_height(&ctx, "modal:plc_card"), 520.0);
+        fit_content(&ctx, "modal:plc_card");
+        assert_eq!(pane_height(&ctx, "modal:plc_card"), PANE_DEFAULT_HEIGHT);
+        ctx.data_mut(|d| d.insert_temp(measured_id("modal:plc_card"), 200.0_f32));
+        let h = pane_height(&ctx, "modal:plc_card");
+        assert!(h > 200.0 && h < 260.0, "{h}");
         set_pane_height(&ctx, "modal:plc_card", Some(400.0));
-        open_at(&ctx, "modal:plc_card", 520.0);
         assert_eq!(pane_height(&ctx, "modal:plc_card"), 400.0);
+    }
+
+    #[test]
+    fn the_first_pane_keeps_its_room_when_a_second_does_not_fit() {
+        let (rects, _) = stack_layout(700.0, &[(560.0, false), (330.0, false)]);
+        assert!((rects[0].1 - 560.0).abs() < 0.01, "{rects:?}");
+        assert!(rects[1].1 >= PANE_MIN_HEIGHT - 0.01, "{rects:?}");
     }
 
     #[test]

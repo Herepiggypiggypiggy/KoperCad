@@ -632,10 +632,6 @@ const MODAL_QUESTIONS: &[&str] = &[
 #[cfg(test)]
 pub(super) const MODAL_QUESTIONS_FOR_TEST: &[&str] = MODAL_QUESTIONS;
 
-/// The height a docked form opens at the first time: room for the longest forms
-/// (Add PLC card) without leaving a short one mostly empty.
-const FORM_PANE_HEIGHT: f32 = 520.0;
-
 /// Dialogs wider than this open as floating windows; narrower ones dock at
 /// the right edge when they open (the strip is at most 520 points wide).
 const WIDE_DIALOG: f32 = 640.0;
@@ -1176,11 +1172,10 @@ fn modal_impl<R: Default>(
         super::panel_dock::set(ctx, &dock_name, Some(super::panel_dock::Slot::Right));
     }
     if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, &dock_name) {
-        // A form docks at FORM_PANE_HEIGHT the first time (a height the person
-        // gave it stays): at the 340 pt default a long form such as Add PLC card
-        // had its Create button below the fold, and the whole slot left a short
-        // form with a wide gap above its button.
-        super::panel_dock::open_at(ctx, &dock_name, FORM_PANE_HEIGHT);
+        // A form docks at the height of its content (a height the person gave
+        // it stays): a short form has no gap above its button, a long one no
+        // hidden Create button.
+        super::panel_dock::fit_content(ctx, &dock_name);
         let shown = super::panel_dock::show_docked(
             ctx,
             self::id(&dock_name),

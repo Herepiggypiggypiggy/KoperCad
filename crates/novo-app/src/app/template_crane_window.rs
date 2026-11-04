@@ -39,11 +39,12 @@ impl NovoApp {
             "New crane project",
             [novo_theme::dialog_width::MEDIUM, 0.0],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ctx,
                     "Starts a project with the crane structure, the cover pages and a circuit \
 from the library on each page. You can change all of it afterwards.",
                 );
+                super::window_help::add(ctx, "Each hoist unit gets its own cabinets and a page.");
                 super::dialog_ui::section(ui, "Hoist units", true);
                 let mut units = usize::from(options.hoist_units) - 1;
                 let labels: Vec<String> = (1..=MAX_HOIST_UNITS).map(|n| n.to_string()).collect();
@@ -51,7 +52,6 @@ from the library on each page. You can change all of it afterwards.",
                 if widgets::segmented(ui, &mut units, &labels) {
                     options.hoist_units = units as u8 + 1;
                 }
-                super::dialog_ui::help(ui, "Each hoist unit gets its own cabinets and a page.");
                 super::dialog_ui::section(ui, "Hoist drive", false);
                 let mut hoist = drive_index(options.hoist_drive);
                 if widgets::segmented(ui, &mut hoist, &DRIVES) {
@@ -63,7 +63,7 @@ from the library on each page. You can change all of it afterwards.",
                     options.travel_drive = drive_of(travel);
                 }
                 ui.add_space(8.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     create = widgets::primary_button(ui, "Create project").clicked();
                 });
             },

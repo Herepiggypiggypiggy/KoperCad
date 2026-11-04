@@ -21,6 +21,8 @@ wait 6
 key Enter
 wait 30
 shot b-short-form-new-crane-project
+expect "Create project"
+expect_not "Starts a project"
 key ctrl+k
 wait 4
 text add plc card
@@ -28,4 +30,7 @@ wait 6
 key Enter
 wait 30
 shot c-two-docked-at-once
+expect "Create project"
+expect "Add card"
+expect_not "Starts a project"
 check_layout
