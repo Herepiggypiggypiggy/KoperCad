@@ -157,7 +157,7 @@ impl HeatState {
                     (
                         Some(Arc::new(b.scenario)),
                         [p.x, p.y, p.w, p.h],
-                        b.report.messages(),
+                        b.report.messages_with_enclosure(),
                     )
                 }
                 None => (None, [0.0; 4], Vec::new()),
