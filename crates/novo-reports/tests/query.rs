@@ -345,11 +345,19 @@ fn integer_edges_do_not_panic() {
         // Some are errors (1e1 is not a number in this language); none panic.
         let _ = query::run(d.project(), sql);
     }
-    let r = text_rows(
-        &d,
+    // Past the integer range a result becomes a decimal number instead of wrapping.
+    for sql in [
         "SELECT (-9223372036854775807 - 1) / -1 FROM devices LIMIT 1",
-    );
-    assert_eq!(r[0][0], "9223372036854775808");
-    let r = text_rows(&d, "SELECT 9223372036854775807 + 1 FROM devices LIMIT 1");
-    assert_eq!(r[0][0], "9223372036854775808");
+        "SELECT 9223372036854775807 + 1 FROM devices LIMIT 1",
+        "SELECT -(-9223372036854775807 - 1) FROM devices LIMIT 1",
+        "SELECT abs(-9223372036854775807 - 1) FROM devices LIMIT 1",
+    ] {
+        let r = text_rows(&d, sql);
+        let n: f64 = r[0][0].parse().unwrap();
+        assert!(
+            (n - 9.223_372_036_854_776e18).abs() < 1e4,
+            "{sql}: {}",
+            r[0][0]
+        );
+    }
 }
