@@ -302,7 +302,37 @@ pub struct Outside {
     pub sun_w_m2: f64,
 }
 
-/// The whole shell.
+/// Where a group of shell values comes from, for the honest label in the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Provenance {
+    /// Today's defaults, not from the chosen enclosure.
+    #[default]
+    Assumed,
+    /// From the maker's catalogue or CAD data of the chosen enclosure.
+    Catalogue,
+    /// Measured on the real enclosure.
+    Measured,
+}
+
+/// Provenance of each group of values in [`ShellModel`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ShellProvenance {
+    /// Sheet material, thickness and layers (walls and door).
+    pub walls: Provenance,
+    /// Paint / finish (emissivity, absorptance).
+    pub finish: Provenance,
+    /// Door window and gasket.
+    pub door: Provenance,
+    /// Plate setback and plate emissivity.
+    pub plate: Provenance,
+    /// Enclosure mass.
+    pub mass: Provenance,
+}
+
+/// The whole shell. This is the single record the enclosure feed fills: when
+/// an enclosure is chosen at cabinet start, the catalogue record is mapped
+/// into `Params::shell` and `provenance` says which groups are real. No heat
+/// lane keeps private enclosure defaults beside it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShellModel {
     /// Order of [`FRONT`] (the door panel), [`REAR`], [`LEFT`], [`RIGHT`],
@@ -317,6 +347,10 @@ pub struct ShellModel {
     pub plate_emissivity: f64,
     pub films: Films,
     pub outside: Outside,
+    pub provenance: ShellProvenance,
+    /// Enclosure weight from the catalogue, kg, to cross-check the wall heat
+    /// capacity ([`ShellModel::mass_check`]).
+    pub mass_kg: Option<f64>,
 }
 
 /// What the shell can show, so a UI hides rows the engine cannot fill.
@@ -376,6 +410,8 @@ impl ShellModel {
             plate_emissivity: 0.3,
             films,
             outside: Outside::default(),
+            provenance: ShellProvenance::default(),
+            mass_kg: None,
         }
     }
 
@@ -462,6 +498,17 @@ impl ShellModel {
                 .map_or(0.0, |w| w.layers.iter().map(Layer::capacity).sum::<f64>());
             ((1.0 - wf) * panel + wf * win) * a.outer[f]
         })
+    }
+
+    /// Ratio of the catalogue mass to the mass of the modelled layers
+    /// (steel-density equivalent of the capacity); about 1 when the layers
+    /// match the real enclosure, well above 1 when the catalogue lists
+    /// ribs, doors or fittings the layers do not carry. `None` without a mass.
+    pub fn mass_check(&self, e: &Enclosure) -> Option<f64> {
+        let m = self.mass_kg?;
+        let cap = self.capacity_j_per_k(e);
+        let modelled_kg = cap / (7850.0 * 490.0) * 7850.0;
+        (modelled_kg > 0.0).then(|| m / modelled_kg)
     }
 
     /// Heat capacity of the whole shell, J/K.
@@ -577,6 +624,8 @@ pub struct ShellReport {
     pub capacity_per_face_j_per_k: [f64; 6],
     pub capacity_j_per_k: f64,
     pub caps: ShellCaps,
+    pub provenance: ShellProvenance,
+    pub mass_check: Option<f64>,
     /// Always `Model` until lane H6 has a measured or exact case for the
     /// terms; the IEC total is in `ThermalResult::balance`.
     pub status: ModelStatus,
@@ -681,6 +730,8 @@ pub fn report(
         capacity_per_face_j_per_k: caps_j,
         capacity_j_per_k: caps_j.iter().sum(),
         caps: model.caps(),
+        provenance: model.provenance,
+        mass_check: model.mass_check(e),
         status: ModelStatus::Model,
     }
 }
@@ -959,6 +1010,18 @@ mod tests {
         assert!(painted.faces[LEFT].outer_radiation_w > 2.0 * bright.faces[LEFT].outer_radiation_w);
         let f = &painted.faces[LEFT];
         assert!((f.outer_radiation_w + f.outer_convection_w - f.heat_w).abs() < 1e-9);
+    }
+
+    #[test]
+    fn provenance_defaults_to_assumed_and_mass_checks_against_layers() {
+        let e = enclosure(Material::Steel, Installation::FreeStanding);
+        let mut s = ShellModel::from_enclosure(&e);
+        assert_eq!(s.provenance.walls, Provenance::Assumed);
+        assert!(s.mass_check(&e).is_none());
+        let a = FaceAreas::of(&e);
+        let sheet_kg = 7850.0 * 0.002 * a.outer.iter().sum::<f64>();
+        s.mass_kg = Some(sheet_kg);
+        assert!((s.mass_check(&e).unwrap() - 1.0).abs() < 1e-9);
     }
 
     #[test]
