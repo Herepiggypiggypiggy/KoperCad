@@ -12,6 +12,7 @@ click_text "Run the EMC rules with the design checks"
 wait 10
 expect "EMC-22"
 expect "resonates first"
+expect "Estimate from catalogue data"
 shot emc-wide-box
 check_layout
 key Escape

@@ -27,6 +27,8 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
         // it lacks is reported, never replaced by a default.
         let spec = EnclosureSpec::read(&structure.properties);
         let mut origin = String::new();
+        // Shown while any number is a catalogue or default value.
+        let notice = spec.notice().map_or_else(String::new, |n| format!(" {n}"));
         if !spec.is_empty() {
             let at = vec![AnyId::Structure(structure.id)];
             match spec_fit::fit(&spec, layout.enclosure.as_ref()) {
@@ -37,16 +39,17 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
                             ProblemKind::EnclosureSizeDiffers,
                             at,
                             format!(
-                                "The inside of {name} is typed as {w:.0} x {h:.0} x {d:.0} mm but the enclosure {} gives {:.0} x {:.0} x {:.0} mm ({}); the checks use the enclosure",
+                                "The inside of {name} is typed as {w:.0} x {h:.0} x {d:.0} mm but the enclosure {} gives {:.0} x {:.0} x {:.0} mm ({}); the checks use the enclosure{}",
                                 spec.article,
                                 e.width,
                                 e.height,
                                 e.depth,
-                                fit.weakest.words()
+                                fit.weakest.words(),
+                                notice
                             ),
                         ));
                     }
-                    origin = format!(" (enclosure data: {})", fit.weakest.words());
+                    origin = format!(" (enclosure data: {}){notice}", fit.weakest.words());
                     layout.enclosure = Some(fit.enclosure);
                 }
                 Err(missing) => out.push(Problem::new(

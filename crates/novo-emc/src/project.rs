@@ -529,6 +529,7 @@ fn shell_of(s: &Structure) -> Option<crate::input::Shell> {
     Some(crate::input::Shell {
         article: spec.article.clone(),
         source: inside.as_ref().map_or("", |(_, w)| w),
+        notice: spec.notice(),
         inside: inside.map(|(d, _)| d),
     })
 }

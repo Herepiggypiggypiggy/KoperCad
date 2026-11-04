@@ -783,6 +783,7 @@ fn the_enclosure_record_on_the_structure_reaches_the_shell_rule() {
     );
     let big = run(&c, 1000.0, 800.0).expect("a big box is flagged");
     assert!(big.contains("MHz"), "{big}");
+    assert!(big.ends_with(novo_layout::spec::ESTIMATE_NOTICE), "{big}");
     assert!(run(&c, 400.0, 300.0).is_none());
     let _ = &mut c;
 }

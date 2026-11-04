@@ -148,6 +148,9 @@ pub struct Shell {
     pub inside: Result<(f64, f64, f64), String>,
     /// Where the weakest number came from, in words (`catalogue`, ...).
     pub source: &'static str,
+    /// The estimate notice of the record, while any number is a catalogue
+    /// or default value; appended to every message about the shell.
+    pub notice: Option<&'static str>,
 }
 
 /// Thresholds and assumptions. Every field is shown next to the results it

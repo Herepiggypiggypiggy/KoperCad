@@ -1255,13 +1255,14 @@ fn shell(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
         if sources == 0 {
             continue;
         }
+        let notice = shell.notice.map_or_else(String::new, |n| format!(" {n}"));
         let (message, severity, metrics) = match &shell.inside {
             Err(why) => (
                 format!(
                     "{} ({}) has no usable inside size, so its shielding was not estimated. {why}",
                     cx.plate(plate.id),
                     shell.article
-                ),
+                ) + &notice,
                 Severity::Warning,
                 Vec::new(),
             ),
@@ -1272,13 +1273,14 @@ fn shell(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                 }
                 (
                     format!(
-                        "The empty box of {} resonates first at about {:.0} MHz ({:.0} x {:.0} x {:.0} mm inside, {}): drive edges carry energy there; devices and wiring lower it further. Keep the door and plate bonded and the seams short, and check by measurement.",
+                        "The empty box of {} resonates first at about {:.0} MHz ({:.0} x {:.0} x {:.0} mm inside, {}): drive edges carry energy there; devices and wiring lower it further. Keep the door and plate bonded and the seams short, and check by measurement.{}",
                         cx.plate(plate.id),
                         f / 1.0e6,
                         inside.0,
                         inside.1,
                         inside.2,
-                        shell.source
+                        shell.source,
+                        notice
                     ),
                     Severity::Info,
                     vec![Metric {

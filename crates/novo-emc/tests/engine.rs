@@ -836,6 +836,7 @@ fn with_shell(inside: Result<(f64, f64, f64), String>) -> Input {
         article: "T-1".into(),
         inside,
         source: "catalogue",
+        notice: Some(novo_layout::spec::ESTIMATE_NOTICE),
     });
     i.devices = vec![dev(1, "-T1", Role::Drive, (0.0, 0.0, 100.0, 200.0))];
     i
@@ -869,4 +870,27 @@ fn a_chosen_enclosure_without_a_size_is_flagged_not_guessed() {
     // No enclosure record, no finding, rule not applicable.
     let none = analyse(&input(vec![], vec![]));
     assert_eq!(none.of_rule("EMC-22").count(), 0);
+}
+
+#[test]
+fn the_estimate_notice_ends_the_shell_message_only_while_the_record_is_an_estimate() {
+    let est = analyse(&with_shell(Ok((1000.0, 800.0, 300.0))));
+    assert!(
+        est.of_rule("EMC-22")
+            .next()
+            .unwrap()
+            .message
+            .ends_with(novo_layout::spec::ESTIMATE_NOTICE)
+    );
+    let mut i = with_shell(Ok((1000.0, 800.0, 300.0)));
+    i.plates[0].shell.as_mut().unwrap().notice = None;
+    let measured = analyse(&i);
+    assert!(
+        !measured
+            .of_rule("EMC-22")
+            .next()
+            .unwrap()
+            .message
+            .contains("Estimate from catalogue data")
+    );
 }

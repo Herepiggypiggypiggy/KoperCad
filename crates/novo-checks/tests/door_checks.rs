@@ -4,6 +4,7 @@ use novo_checks::{Problem, ProblemKind, Severity, check};
 use novo_core::*;
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::{device_depth, set_enclosure};
+use novo_layout::spec::EnclosureSpec;
 
 fn tag(text: &str) -> DeviceTag {
     DeviceTag::parse(text).unwrap()
@@ -233,4 +234,36 @@ fn a_typed_size_that_disagrees_is_reported_and_the_record_wins() {
     let found = check(&p);
     assert_eq!(of_kind(&found, ProblemKind::EnclosureSizeDiffers).len(), 1);
     assert_eq!(of_kind(&found, ProblemKind::DeviceTooDeep).len(), 1);
+}
+
+#[test]
+fn a_measured_record_carries_no_estimate_notice() {
+    use novo_layout::spec::{Field, Source};
+    let mut p = cabinet(None, 300.0);
+    with_spec(&mut p, 254.0, Some(0.0));
+    let cab = p.structures().find(|s| s.enclosure).unwrap().id;
+    let mut spec = EnclosureSpec::read(&p.get::<Structure>(cab).unwrap().properties);
+    for f in [
+        &mut spec.width,
+        &mut spec.height,
+        &mut spec.depth,
+        &mut spec.wall,
+        &mut spec.plate_setback,
+    ] {
+        *f = f.map(|f| Field::new(f.value, Source::Measured));
+    }
+    let mut props = p.get::<Structure>(cab).unwrap().properties.clone();
+    spec.write(&mut props);
+    p.transact("measured", |tx| {
+        for (k, v) in props {
+            tx.set_property(cab, k, Some(v))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let found = check(&p);
+    let gap = of_kind(&found, ProblemKind::DoorGapTight);
+    assert_eq!(gap.len(), 1);
+    assert!(gap[0].message.contains("enclosure data: measured by you"));
+    assert!(!gap[0].message.contains("Estimate from catalogue data"));
 }

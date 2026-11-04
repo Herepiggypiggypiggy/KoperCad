@@ -21,5 +21,6 @@ key enter
 wait 10
 expect "too deep"
 expect "enclosure data: catalogue"
+expect "Estimate from catalogue data"
 shot problems-small-box
 check_layout
