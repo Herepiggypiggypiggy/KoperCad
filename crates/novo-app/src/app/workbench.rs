@@ -1256,7 +1256,7 @@ impl NovoApp {
             "view.override_marks" => self.wb.override_marks ^= true,
             "view.left_out" => self.wb.ghost_left_out ^= true,
             "macro.save" => self.open_macro_save(argument),
-            "macro.place" => self.open_macro_place(argument),
+            "macro.place" => self.macro_place_command(argument),
             "macro.edit" => self.open_macro_editor(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),

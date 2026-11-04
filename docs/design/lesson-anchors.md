@@ -136,7 +136,6 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `issues.waive`: {ui:issues.waive} shows **Waive**
 - `issues.restore`: {ui:issues.restore} shows **Restore**
 - `macro.place`: {ui:macro.place} shows **Place macro**
-- `macro.ghost`: {ui:macro.ghost} shows **Circuit ghost**
 - `macros.window`: {ui:macros.window} shows **Macros**
 - `standards.iec60204`: {ui:standards.iec60204} shows **IEC 60204-1 tick**
 - `standards.nfpa79`: {ui:standards.nfpa79} shows **NFPA 79 tick**

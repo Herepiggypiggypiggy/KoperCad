@@ -71,6 +71,8 @@ pub(crate) struct Ghost {
     pub(super) name: String,
     definition: BlockDefinition,
     options: PlaceOptions,
+    /// Where the pointer last rested on a page before the ghost began.
+    prior_pointer: Option<(novo_core::PageId, novo_core::Point)>,
 }
 
 impl PlaceWindow {
@@ -768,6 +770,7 @@ impl NovoApp {
             return;
         };
         let options = win.options();
+        let prior_pointer = self.wb.last_pointer;
         let outline = self
             .backend
             .document()
@@ -784,6 +787,7 @@ impl NovoApp {
             name: entry.name,
             definition,
             options,
+            prior_pointer,
         });
     }
 
@@ -828,40 +832,26 @@ impl NovoApp {
         true
     }
 
-    /// The strip beside a circuit ghost: its name and a way to the full
-    /// Place macro window. Detail is behind the question mark.
-    pub(super) fn macro_ghost_strip(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
-        let Some(ghost) = &self.wb.macro_place.ghost else {
+    /// `macro.place`: the form. While a circuit is on the pointer (the
+    /// status bar chip runs this command) the form opens on that circuit.
+    pub(super) fn macro_place_command(&mut self, argument: Option<&str>) {
+        let Some(ghost) = self.wb.macro_place.ghost.take() else {
+            self.open_macro_place(argument);
             return;
         };
-        let (name, path) = (ghost.name.clone(), ghost.path.clone());
-        let palette = crate::theme::ui_palette();
-        let mut options = false;
-        let area = egui::Area::new(egui::Id::new("macro_ghost_strip"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(canvas.right_top() + egui::vec2(-12.0, 12.0))
-            .pivot(egui::Align2::RIGHT_TOP)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(&name).color(palette.text_primary));
-                        options = novo_theme::widgets::ghost_button(ui, "Options\u{2026}").clicked();
-                        novo_theme::widgets::help_mark(
-                            ui,
-                            "Click places it, Esc cancels. Options opens the form for parameters, parts and wire numbers.",
-                        );
-                    });
-                });
-            });
-        self.anchor("macro.ghost", area.response.rect, "Circuit ghost");
-        if options {
-            if let Some(view) = self.canvas.schematic() {
-                view.editor.leave_tool();
-            }
-            self.wb.macro_place.ghost = None;
-            self.open_macro_place(Some(&name));
-            self.wb.macro_place.select(&path);
+        if let Some(view) = self.canvas.schematic() {
+            view.editor.leave_tool();
         }
+        // The form places where the pointer rested before the ghost, as it
+        // always did; the chip in the status bar is not the drawing.
+        self.wb.last_pointer = ghost.prior_pointer;
+        self.open_macro_place(Some(&ghost.name));
+        self.wb.macro_place.select(&ghost.path);
+    }
+
+    /// The name of the circuit on the pointer, for the status bar chip.
+    pub(super) fn macro_ghost_name(&self) -> Option<&str> {
+        self.wb.macro_place.ghost.as_ref().map(|g| g.name.as_str())
     }
 
     /// Places what the window previewed, as one undo step, and selects it.
@@ -891,14 +881,9 @@ impl NovoApp {
         // A macro never lands on a generated page (contents, lists): the
         // first drawing page takes it, and the canvas goes there.
         let moved = self.current_page != Some(page);
-        let shown = Shown {
-            key: (String::new(), 0, false, false, Vec::new()),
-            definition,
-            report: Err(String::new()),
-        };
         let view = self.macro_view(Some(page));
-        let name = shown.definition.name.clone();
-        let plc_note = draws_plc_channels(&shown.definition);
+        let name = definition.name.clone();
+        let plc_note = draws_plc_channels(&definition);
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
@@ -907,7 +892,7 @@ impl NovoApp {
             None => macro_place::origin_in_view(
                 doc.project(),
                 page,
-                macro_place::definition_bounds(&shown.definition),
+                macro_place::definition_bounds(&definition),
                 &view,
                 PLACE_GAP,
             ),
@@ -918,7 +903,7 @@ impl NovoApp {
         let mut fed = 0;
         let mut joined = 0;
         let result = doc.transact("Place macro", |tx| {
-            let placed = macro_place::place_macro(tx, shown.definition, page, origin, &options)?;
+            let placed = macro_place::place_macro(tx, definition, page, origin, &options)?;
             if feed_supply {
                 fed = supply_feeds::feed_open_points(tx, page, placed.instance)?;
             }

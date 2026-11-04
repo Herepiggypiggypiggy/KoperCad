@@ -2076,7 +2076,6 @@ impl NovoApp {
             self.sync_menu_keys();
             self.sync_catalog();
             self.empty_sheet_ghost(&ctx, canvas_rect);
-            self.macro_ghost_strip(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
             self.emc_schematic(&ctx, canvas_rect);

@@ -191,7 +191,6 @@ pub(crate) const ANCHORS: &[&str] = &[
     "issues.waive",
     "issues.restore",
     "macro.place",
-    "macro.ghost",
     "macros.window",
     "standards.iec60204",
     "standards.nfpa79",

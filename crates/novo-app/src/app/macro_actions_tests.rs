@@ -239,6 +239,20 @@ fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
     d.frame();
     d.frame();
     assert!(d.app.wb.macro_place.ghost.is_some());
+    assert_eq!(d.app.macro_ghost_name(), Some("Motor starter DOL"));
+    assert!(
+        d.app
+            .mode_chips()
+            .iter()
+            .any(|c| c.label.contains("Options") && c.command == "macro.place"),
+        "the status bar chip offers the form"
+    );
+    d.app.run_command(&ctx, "macro.place", None);
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    assert!(d.app.wb.macro_place.open, "the form opens on the circuit");
+    assert!(d.app.wb.macro_place.selected.is_some());
+    assert!(!d.app.canvas.schematic_ref().unwrap().editor.pasting());
 }
 
 /// Audit C-59: the PLC input card macro only draws symbols, so placing it says

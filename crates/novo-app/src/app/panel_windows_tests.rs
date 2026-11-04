@@ -403,10 +403,6 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
         ("toasts", "messages that fade away"),
         ("refusal_card_id()", "a refusal that fades away"),
         ("empty_sheet_ghost", "a hint drawn on the empty sheet"),
-        (
-            "macro_ghost_strip",
-            "name and Options beside a circuit on the pointer; Esc drops it",
-        ),
         ("lesson_note", "lesson note beside a highlighted control"),
         ("lesson_demo_keys", "lesson demo key caps"),
         ("view3d_wire_hover", "hover tip by the pointer"),
