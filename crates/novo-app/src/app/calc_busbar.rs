@@ -31,7 +31,38 @@ pub(super) struct BusbarState {
     line_volts: f64,
     cache: Option<(Setup, Option<Solution>)>,
     sweep: Option<(Setup, Vec<Solution>)>,
-    pending: Option<(Setup, std::sync::mpsc::Receiver<Option<Solution>>)>,
+    pending: Option<(Setup, Worker<Option<Solution>>)>,
+    sweep_pending: Option<(Setup, Worker<Vec<Solution>>)>,
+    /// Why the last solve or sweep failed (a panic in the worker).
+    error: Option<String>,
+}
+
+/// The answer of a worker thread: its result, or the text of its panic.
+type Worker<T> = std::sync::mpsc::Receiver<Result<T, String>>;
+
+/// Run `job` on a worker thread. A panic comes back as text instead of
+/// leaving the window waiting for an answer that never arrives.
+fn spawn<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -> Worker<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(job)).map_err(|e| {
+            e.downcast_ref::<&str>()
+                .map(|s| (*s).to_owned())
+                .or_else(|| e.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "the worker panicked".to_owned())
+        });
+        let _ = tx.send(r);
+    });
+    rx
+}
+
+/// What a worker has to say now: nothing yet, a result or a failure text.
+fn poll<T>(rx: &Worker<T>) -> Option<Result<T, String>> {
+    match rx.try_recv() {
+        Ok(r) => Some(r),
+        Err(std::sync::mpsc::TryRecvError::Empty) => None,
+        Err(_) => Some(Err("the worker stopped without a result".to_owned())),
+    }
 }
 
 impl Default for BusbarState {
@@ -52,6 +83,8 @@ impl Default for BusbarState {
             cache: None,
             sweep: None,
             pending: None,
+            sweep_pending: None,
+            error: None,
         }
     }
 }
@@ -80,17 +113,33 @@ impl BusbarState {
 
     /// Solve again when an input changed, on a worker thread so the window
     /// never waits for a large run. While a field is being dragged (`busy`)
-    /// nothing new starts and the last result stays.
+    /// nothing new starts and the last result stays. A run that failed is
+    /// not started again until an input changes or "Try again" is pressed.
     fn refresh(&mut self, busy: bool) {
         if let Some((_, rx)) = &self.pending {
-            match rx.try_recv() {
-                Ok(solved) => {
-                    if let Some((setup, _)) = self.pending.take() {
+            let Some(done) = poll(rx) else {
+                return;
+            };
+            if let Some((setup, _)) = self.pending.take() {
+                match done {
+                    Ok(solved) => {
+                        self.error = None;
                         self.cache = Some((setup, solved));
                     }
+                    Err(why) => {
+                        self.error = Some(why);
+                        self.cache = Some((setup, None));
+                    }
                 }
-                Err(std::sync::mpsc::TryRecvError::Empty) => return,
-                Err(_) => self.pending = None,
+            }
+        }
+        if let Some((_, rx)) = &self.sweep_pending
+            && let Some(done) = poll(rx)
+            && let Some((setup, _)) = self.sweep_pending.take()
+        {
+            match done {
+                Ok(sols) => self.sweep = Some((setup, sols)),
+                Err(why) => self.error = Some(format!("The sweep failed: {why}")),
             }
         }
         let setup = self.setup();
@@ -98,17 +147,24 @@ impl BusbarState {
         if !stale || (busy && self.cache.is_some()) {
             return;
         }
-        let (tx, rx) = std::sync::mpsc::channel();
         let job = setup.clone();
-        std::thread::spawn(move || {
-            let _ = tx.send(busbar::solve(&job));
-        });
-        self.pending = Some((setup, rx));
+        self.pending = Some((setup, spawn(move || busbar::solve(&job))));
+    }
+
+    /// Start the frequency sweep for these inputs on a worker thread.
+    fn start_sweep(&mut self, setup: &Setup) {
+        let mut s = setup.clone();
+        s.mesh = busbar::Mesh {
+            max_per_side: 8,
+            ..s.mesh
+        };
+        self.error = None;
+        self.sweep_pending = Some((setup.clone(), spawn(move || busbar::sweep(&s, &SWEEP_HZ))));
     }
 
     /// Whether a solve is running.
     fn solving(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.sweep_pending.is_some()
     }
 
     /// The solution for the current inputs, solved here and now (tests).
@@ -183,11 +239,10 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         let hover = NOT_MODELLED.join("\n");
         ui.label("?")
             .on_hover_text(format!(
-                "{}\n\nCables are solid conductors here: the AC factor of a stranded cable is a little lower.\n\nNot modelled:\n{hover}",
+                "{}\n\nStraight parallel bars, no steel nearby, no joints or bends. Planning numbers.\n\nCables are solid conductors here: the AC factor of a stranded cable is a little lower.\n\nNot modelled:\n{hover}",
                 busbar::MODEL_LABEL
             ));
     });
-    ui.weak("Straight parallel bars, no steel nearby, no joints or bends. Planning numbers.");
     egui::Grid::new("busbar_inputs")
         .num_columns(4)
         .spacing([12.0, 4.0])
@@ -281,6 +336,15 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         }
     }
     ui.separator();
+    if let Some(why) = st.error.clone() {
+        ui.horizontal_wrapped(|ui| {
+            ui.colored_label(p.error, format!("The calculation failed: {why}"));
+            if ui.button("Try again").clicked() {
+                st.cache = None;
+                st.error = None;
+            }
+        });
+    }
     let Some((setup, sol)) = st.cache.clone() else {
         return;
     };
@@ -361,26 +425,32 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         .iter()
         .map(|c| c.r_dc_ohm * c.current.norm_sq())
         .sum();
-    ui.label(format!(
-        "Total loss {:.1} W ({:.1} W/m), {:.3} times the loss at DC resistance. Skin depth {} mm.",
-        sol.total_loss_w,
-        sol.total_loss_w / setup.length_mm * 1000.0,
-        if dc > 0.0 { sol.total_loss_w / dc } else { 1.0 },
-        if skin.is_finite() {
-            format!("{skin:.1}")
+    ui.horizontal(|ui| {
+        ui.label(format!(
+            "Total loss {:.1} W ({:.1} W/m)",
+            sol.total_loss_w,
+            sol.total_loss_w / setup.length_mm * 1000.0
+        ));
+        let ratio = if dc > 0.0 { sol.total_loss_w / dc } else { 1.0 };
+        let skin_text = if skin.is_finite() {
+            format!("{skin:.1} mm")
         } else {
             "infinite".to_owned()
-        }
-    ));
+        };
+        ui.label("?").on_hover_text(format!(
+            "{ratio:.3} times the loss at DC resistance. Skin depth {skin_text}."
+        ));
+    });
     ui.horizontal(|ui| {
-        if ui.button("Frequency sweep").clicked() {
-            let mut s = setup.clone();
-            s.mesh = busbar::Mesh {
-                max_per_side: 8,
-                ..s.mesh
-            };
-            let sols = busbar::sweep(&s, &SWEEP_HZ);
-            st.sweep = Some((setup.clone(), sols));
+        let sweeping = st.sweep_pending.is_some();
+        if ui
+            .add_enabled(!sweeping, egui::Button::new("Frequency sweep"))
+            .clicked()
+        {
+            st.start_sweep(&setup);
+        }
+        if sweeping {
+            ui.weak("Sweeping...");
         }
         if ui.button("Copy as text").clicked() {
             ui.ctx().copy_text(text_of(&setup, &sol));
@@ -408,7 +478,9 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
                         ui.end_row();
                     }
                 });
-            ui.weak("Sweep uses a coarser mesh (8 per side) and the inputs shown when it was run.");
+            ui.label("?").on_hover_text(
+                "The sweep uses a coarser mesh (8 per side) and the inputs shown when it was run.",
+            );
         }
     }
 }
@@ -450,6 +522,57 @@ mod tests {
         }
         let setup = st.setup();
         assert!(text_of(&setup, &sol).contains("Total loss"));
+    }
+
+    fn wait_for<T>(rx: &Worker<T>) -> Result<T, String> {
+        for _ in 0..600 {
+            if let Some(r) = poll(rx) {
+                return r;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("the worker did not answer");
+    }
+
+    #[test]
+    fn a_panicking_worker_comes_back_as_text_not_silence() {
+        let rx = spawn(|| -> u32 { panic!("boom") });
+        assert_eq!(wait_for(&rx), Err("boom".to_owned()));
+        let ok = spawn(|| 7u32);
+        assert_eq!(wait_for(&ok), Ok(7));
+    }
+
+    #[test]
+    fn a_finished_refresh_and_a_sweep_arrive_without_blocking() {
+        let mut st = BusbarState::default();
+        st.refresh(false);
+        assert!(st.solving());
+        for _ in 0..600 {
+            st.refresh(false);
+            if !st.solving() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(st.cache.as_ref().is_some_and(|(_, s)| s.is_some()));
+        // the same inputs do not start another solve
+        st.refresh(false);
+        assert!(!st.solving());
+        let setup = st.setup();
+        st.start_sweep(&setup);
+        assert!(st.solving());
+        for _ in 0..1500 {
+            st.refresh(false);
+            if !st.solving() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(
+            st.sweep.as_ref().map(|(_, v)| v.len()),
+            Some(SWEEP_HZ.len())
+        );
+        assert!(st.error.is_none());
     }
 
     #[test]

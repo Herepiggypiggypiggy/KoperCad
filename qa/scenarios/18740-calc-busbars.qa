@@ -9,7 +9,6 @@ wait 10
 click_text Busbars
 wait 20
 expect model, quasi-static
-expect Planning numbers
 shot busbars-one-bar
 check_layout
 # Two bars per phase: the share of each bar appears.
