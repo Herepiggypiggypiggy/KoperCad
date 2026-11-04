@@ -111,8 +111,6 @@ pub fn shell(project: &Project, id: StructureId) -> Shell {
             depth: d.value,
             wall: wall.value,
             setback: setback.value,
-            inner_width: e.width,
-            inner_height: e.height,
         });
     }
     shell

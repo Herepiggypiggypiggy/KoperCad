@@ -103,9 +103,11 @@ pub struct Body {
     pub wall: f64,
     /// Back wall to plate surface.
     pub setback: f64,
-    pub inner_width: f64,
-    pub inner_height: f64,
 }
+
+/// A door on a real body stands this far off the body's front face, so the
+/// two translucent faces never share a plane (they would flicker).
+pub const BODY_DOOR_GAP_MM: f64 = 0.5;
 
 impl Default for Shell {
     fn default() -> Shell {
@@ -231,7 +233,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         Some(b) => Item::new(
             ItemId::new(ItemKind::Enclosure, 0),
             Shape::Box,
-            Pose::at(centre((depth - b.setback - b.wall) / 2.0)),
+            Pose::at(centre(-(b.setback + b.wall))),
             Vec3::new(
                 b.width as f32,
                 b.height as f32,
@@ -361,9 +363,14 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
     }
 
     if let Some(door) = options.shell.door {
-        let (door_w, door_h) = options.shell.body.map_or((plate.width, plate.height), |b| {
-            (b.inner_width, b.inner_height)
-        });
+        // On a real body the door covers the whole front, flush with the
+        // outside of the box.
+        let (door_w, door_h, gap) = options
+            .shell
+            .body
+            .map_or((plate.width, plate.height, 0.0), |b| {
+                (b.width, b.height, BODY_DOOR_GAP_MM)
+            });
         let left = plate.width / 2.0 - door_w / 2.0;
         let (pivot_x, angle) = match door.hinge {
             // Seen from the front +X is to the right. A left-hinged door
@@ -374,7 +381,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         let mut item = Item::new(
             ItemId::new(ItemKind::Door, 0),
             Shape::Box,
-            Pose::at(centre(depth)),
+            Pose::at(centre(depth + gap)),
             Vec3::new(door_w as f32, door_h as f32, DOOR_THICKNESS_MM as f32),
         );
         item.translucent = true;
@@ -382,7 +389,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         scene.push(item);
         scene.groups.push(Group {
             id: DOOR_HINGE,
-            pivot: Vec3::new(pivot_x as f32, 0.0, depth as f32),
+            pivot: Vec3::new(pivot_x as f32, 0.0, (depth + gap) as f32),
             axis: Vec3::Y,
             angle: angle as f32,
         });
