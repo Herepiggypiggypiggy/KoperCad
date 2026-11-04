@@ -192,7 +192,7 @@ impl NovoApp {
                     presets.remove(old);
                 }
                 if let Err(e) = presets.upsert(&name, &sql) {
-                    self.message(Level::Warning, e);
+                    self.job_fail("report.query_save", "Report not saved", Level::Warning, e);
                     return;
                 }
             }

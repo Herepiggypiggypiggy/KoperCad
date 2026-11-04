@@ -11,3 +11,6 @@
 - `novo-theme`: `widgets::flag_triangle` (painted glyph), Issues pill draws triangles.
 - `novo-app` `app/flags.rs`: `draft(&Problem)` -> `FlagDraft` for all 76 kinds (Info is no flag; DepthUnknown, GuessedWire, UnsizedDuct dashed), `FlagUi` in `wb.flags` filled from `wb.problems` by revision, `flag_marks` (replaces the old marks), `flag_popover` (title, badge, detail, Locate / Fix / Waive / Explain / Copy; Esc or click away closes), Issues list rows lead with the triangle. Qa scenario 9400.
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
+
+## 2026-11-04 Lane T12 (import, export, reports): job flags
+- `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9522, 9523.

@@ -155,7 +155,12 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not import {name}: {e}"));
+                self.job_fail(
+                    "import.eplan",
+                    "EPLAN import failed",
+                    Level::Error,
+                    format!("Could not import {name}: {e}"),
+                );
                 false
             }
         }
@@ -216,7 +221,9 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "import.eplan",
+                    "EPLAN import failed",
                     Level::Error,
                     format!("Could not import {}: {e}", path.display()),
                 );
@@ -253,7 +260,9 @@ impl NovoApp {
                 false
             }
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "import.eplan",
+                    "EPLAN import failed",
                     Level::Error,
                     format!("Could not import {}: {e}", import.file),
                 );
