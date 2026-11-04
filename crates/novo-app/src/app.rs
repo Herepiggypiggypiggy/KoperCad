@@ -154,6 +154,7 @@ mod heat_export;
 mod heat_flow;
 #[cfg(test)]
 mod heat_flow_tests;
+mod heat_inside_fans;
 mod heat_layout;
 #[cfg(test)]
 mod heat_layout_tests;
