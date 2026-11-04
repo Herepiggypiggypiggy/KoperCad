@@ -114,6 +114,7 @@ mod emc_stub;
 #[cfg(test)]
 mod emc_tests;
 mod emc_view;
+mod enclosure_pick;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
