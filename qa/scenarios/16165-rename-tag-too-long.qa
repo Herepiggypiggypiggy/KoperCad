@@ -5,7 +5,7 @@
 # SB-04 / SB-02: the long tag used to be taken (its label then vanished); the refusal now shows in the rename box.
 open_starter_example
 wait 20
-click 353 228
+click 341 247
 wait 5
 key F2
 wait 5

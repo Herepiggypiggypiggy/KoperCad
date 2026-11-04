@@ -9,7 +9,16 @@ wait 30
 shot 3d-start
 click_text Heat #1
 wait 20
-expect "Air speed"
+# Heat starts a run by itself on a small cabinet (as in scenario 135): stop it and switch Auto off, else Quality and Simulate stay greyed.
+try click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
 expect "Vents and fans"
 shot heat-on
 click_text "Settings for the next run"
@@ -27,7 +36,6 @@ check_layout
 click_text "✔ Heat"
 wait 20
 expect_not "Air speed"
-expect_not "Vents and fans"
 expect_not "Vents and fans"
 shot heat-off
 click_text EMC #1

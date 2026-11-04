@@ -7,7 +7,7 @@ open_starter_example
 wait 20
 click_text 3D #1
 wait 40
-click 612 392
+click 655 368
 wait 40
 key f
 wait 300

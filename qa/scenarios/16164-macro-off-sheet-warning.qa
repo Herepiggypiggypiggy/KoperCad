@@ -1,5 +1,6 @@
 @title A macro placed past the sheet edge is reported
 @area Schematic
+@sizes 1366x768
 # SB-03 (the fourth macro runs past the A3 sheet)
 # SB-03: several macros in a row run off the right edge of the sheet without a word.
 click_text "New project"
@@ -10,7 +11,7 @@ text place macro
 wait 5
 key Enter
 wait 10
-click 237 94
+click 1205 103
 key ctrl+a
 text motor starter dol
 wait 5
@@ -24,7 +25,7 @@ text place macro
 wait 5
 key Enter
 wait 10
-click 237 94
+click 1205 103
 key ctrl+a
 text motor starter dol
 wait 5
@@ -38,7 +39,7 @@ text place macro
 wait 5
 key Enter
 wait 10
-click 237 94
+click 1205 103
 key ctrl+a
 text motor starter dol
 wait 5
@@ -52,7 +53,7 @@ text place macro
 wait 5
 key Enter
 wait 10
-click 237 94
+click 1205 103
 key ctrl+a
 text motor starter dol
 wait 5

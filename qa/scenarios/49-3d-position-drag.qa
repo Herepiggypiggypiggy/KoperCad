@@ -1,14 +1,14 @@
 @title 3D view: type a position, then drag a device across the plate, undo both
 @area 3D
 @sizes 1366x768
-# Fixed 1366x768 window points: the cube (1296,108), K1 (522,436, then 630,413 once it is at X 150) and the Position X box (1081,647) are where the front view puts them at that size.
+# Fixed 1366x768 window points: the cube front face (1295,124), K1 (550,393, then 640,410 once it is at X 150) and the Position X box (1081,647) are where the front view puts them at that size.
 open_starter_example
 wait 20
 click_text 3D #1
 wait 30
-click 1296 108
+click 1295 124
 wait 40
-click 522 436
+click 550 393
 wait 20
 expect "Top left from the plate"
 click 1081 647
@@ -18,7 +18,9 @@ key Enter
 wait 30
 expect "150, 210 mm"
 shot typed-position
-drag 630 413 750 413
+click 24 118
+wait 10
+drag 640 410 740 410
 wait 30
 expect_not "150, 210 mm"
 shot dragged

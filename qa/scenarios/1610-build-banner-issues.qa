@@ -13,7 +13,9 @@ expect "Check the plate"
 expect "The cabinet layout has no open problems"
 shot build-first-step
 check_layout
-expect "The design has 2 errors and 8 warnings in Issues"
+# 7 errors = 2 older ones plus 5 "Duct over duct" crossings (ducts 96..100 cross duct 101 in this fixture)
+# from the duct-over-duct check that landed in eae9026 (#1780); the fixture really has those crossings.
+expect "The design has 7 errors and 8 warnings in Issues"
 expect "Show issues"
 click_text "Show issues"
 wait 10

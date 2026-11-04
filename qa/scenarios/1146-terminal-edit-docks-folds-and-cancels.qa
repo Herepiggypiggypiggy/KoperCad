@@ -29,11 +29,11 @@ key Enter
 wait 30
 expect "Nothing matches yet"
 shot rename-docked
-click 1063 54
+click 1061 72
 wait 30
 expect_not "Nothing matches yet"
 shot rename-folded
-click 1063 54
+click 1061 72
 wait 30
 expect "Nothing matches yet"
 shot rename-unfolded
@@ -43,7 +43,7 @@ wait 4
 text "1"
 wait 10
 shot typed-not-applied
-click 1351 54
+click 1351 72
 wait 30
 expect_not "Nothing matches yet"
 expect_not "Renamed"

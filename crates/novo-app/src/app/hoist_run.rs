@@ -578,7 +578,7 @@ impl NovoApp {
                     }
                 }
                 ui.separator();
-                ui.label(egui::RichText::new("Model, not measurement").strong());
+                ui.label(egui::RichText::new("Model, not measurement. Not a safety function.").strong());
                 let mut model = String::from("Model, not measurement:");
                 for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT
                     .iter()

@@ -3,7 +3,7 @@
 //! [`model`] reads the project into the inputs. Contract and axes:
 //! `docs/design/3d-view.md` sections 4 and 5.
 //!
-//! Heights (mm, off the plate surface): a 35 x 7.5 rail stands 7.5; a device
+//! Heights (mm, off the plate surface): a 35 x 7.5 rail stands 7.5 (crown on the plate, open side out); a device
 //! on a rail has its back on the rail's top, 7.5, and off a rail at 0. A
 //! missing device depth is 60 mm and a missing duct section 40 x 60 mm; both
 //! are marked `GuessedSize` instead of being drawn as zero.

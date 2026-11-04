@@ -732,6 +732,9 @@ pub(super) fn travel_detail(module: &TravelModule) -> String {
 }
 
 /// Badges on the motors of the axes, on the page shown.
+/// Width of the device tag column in the Drive run window's rows.
+const ROW_TAG_WIDTH: f32 = 110.0;
+
 pub(super) fn paint_badges(
     ctx: &egui::Context,
     canvas: egui::Rect,
@@ -1088,23 +1091,23 @@ impl NovoApp {
                 });
                 if !rows.is_empty() {
                     ui.separator();
-                    egui::Grid::new("drive_run_rows")
-                        .striped(true)
-                        .show(ui, |ui| {
-                            for (tag, text) in &rows {
-                                ui.strong(tag);
-                                ui.vertical(|ui| {
-                                    ui.label(text);
-                                    if let Some(list) = drivers.get(tag) {
-                                        ui.weak(format!(
-                                            "Controller: {}",
-                                            super::controller_machine::driver_line(list)
-                                        ));
-                                    }
-                                });
-                                ui.end_row();
-                            }
+                    // Rows, not a Grid: a Grid column takes the width its text had last
+                    // frame, and these texts change every frame while the run goes, so a
+                    // wrapping value collapsed to a one-word-wide column.
+                    for (tag, text) in &rows {
+                        ui.horizontal_top(|ui| {
+                            ui.add_sized([ROW_TAG_WIDTH, 0.0], egui::Label::new(egui::RichText::new(tag).strong()));
+                            ui.vertical(|ui| {
+                                ui.label(text);
+                                if let Some(list) = drivers.get(tag) {
+                                    ui.weak(format!(
+                                        "Controller: {}",
+                                        super::controller_machine::driver_line(list)
+                                    ));
+                                }
+                            });
                         });
+                    }
                 }
                 if !findings.is_empty() {
                     ui.separator();
@@ -1125,7 +1128,7 @@ impl NovoApp {
                         });
                 }
                 ui.separator();
-                ui.label(egui::RichText::new("Model, not measurement").strong());
+                ui.label(egui::RichText::new("Model, not measurement. Not a safety function.").strong());
                 let mut model = String::from("Model, not measurement:");
                 model.push('\n');
                 model.push_str(
