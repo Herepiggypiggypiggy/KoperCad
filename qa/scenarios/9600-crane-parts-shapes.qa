@@ -1,0 +1,23 @@
+@title Crane in 3D is drawn with real shapes: box girder, walkway, wheels, drum, hook block and hook
+@area Simulate
+@sizes 1366x768 1920x1080
+# The Hoist in 3D picture from three sides and close on the hook block.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot iso
+click_text "Front"
+wait 60
+shot front
+click_text "Side"
+wait 60
+shot side
+click_text "Hook"
+wait 250
+shot hook
+check_layout

@@ -722,6 +722,8 @@ impl Hoist3d {
         self.revision += 1;
         let mut scene = build(&self.layout, state);
         scene.revision = self.revision;
+        // The crane parts are meshes: make the ones this scene asks for and the library lacks.
+        novo_view3d::crane_parts::ensure(Arc::make_mut(&mut self.library), &scene);
         let scene = Arc::new(scene);
         self.built = Some((self.layout, state.clone(), scene.clone()));
         scene
