@@ -184,3 +184,24 @@ What this says:
 - At 120 m3/h (3D over 2D; not pinned by a test, seen once): near the vent 1.11 / 1.12 / 0.86 / (not run for the fourth box), middle 0.99 / 0.20 / 0.71, near the fan 1.26 / 1.27 / 0.86, beside the line 0.76 / 0.67 (first box), 0.63 / 0.71 (tall box), 0.68 / 0.59 (deep box); boxes in the order of the table. So beside the line the 3D solver gave a third to three quarters of the 2D gain (0.33 to 0.76).
 
 A position weight was tried (the code was not kept: it was a throwaway test and the numbers below are not reproducible from the repository): the jet speed times a lateral Gaussian around the fan-to-vent line and an axial fall-off from either opening, with a depth exponent (five parameters, fitted on 48 cases of this sweep and the previous one, `rms ln` of the 3D/2D ratio 0.47 before, 0.29 after). It was not kept: the fit ran the depth exponent to its upper bound, made the cases of the previous section worse (the tall box rose to 1.4 to 1.7), and on the held-out box it helped near the vent (1.01 against 1.32) but made the middle and the fan end worse (0.70 and 0.62 where the merged term gives 0.82 and 0.83) while the beside-the-line cases still read far too high. A fit like that would be tuned to this sweep. What is kept is the finding and the wording: the what-if says a device beside the stream between fan and vent may gain much less than shown. `tests/fan_position.rs` pins this (on the line the median 3D/2D within 0.8 to 1.2; beside it below 0.85) so a change that moves it is noticed. The 3D solver is itself a reduced model, so which side is closer to a real cabinet is not known.
+
+## Forced convection and internal fans (lane H8, `novo-thermal`)
+
+Pure functions in `crates/novo-thermal/src/forced.rs`, checked in its unit tests and in
+`crates/novo-thermal/tests/circulation.rs`. "Exact" means a textbook formula reproduced to the
+stated tolerance; "model" means a planning value with no measured case behind it yet.
+
+| Piece | Check | Status |
+| --- | --- | --- |
+| Flat plate laminar (Blasius) | Nu(Re 1e5) = 187.3 by hand, 0.2 % | exact |
+| Plate laminar to mixed at Re 5e5 | the two forms meet within 1.2 % | exact |
+| Impinging round jet (Martin, Incropera) | Nu(Re 2e4, r/D 5, H/D 6) = 56.2 by hand, 1 %; refuses values outside the fitted range | exact in range |
+| Elenbaas parallel plates | tends to Ra'/24 (small) and 0.60 Ra'^1/4 (large) | exact limits |
+| Fin efficiency tanh(mL)/mL | mL = 1 gives 0.7616 | exact |
+| Heatsink forced film | long channel tends to Nu 7.54 on D_h | exact limit; developing term and cube blend are model |
+| Free round jet | axis law 5.8/(10+3.8) at 10 D; half-width gives half speed; far momentum within 20 % of the exit momentum (0.857 with the literature constants) | constants from literature; core length 2 D for an axial fan is model |
+| Turbulence lift of the plate film | clean end exact; lift up to 1.5x at Tu 25 %, wake level (x/d)^-1/2 | model |
+| Circulation fan in the 2D flow | operating point sits on the straight fan curve; flow through a cut across the fan nets to zero in a closed box; reversing the fan reverses the air; weaker installation delivers less | exact properties of the solved field |
+| Fan effect on a device film | a device in the stream gets a higher film and a lower surface temperature; further away, less | model (2D flow has no momentum, the jet is added analytically) |
+
+Not yet checked against a measured fan case. ENCLOSURE_VALIDATED is unchanged.
