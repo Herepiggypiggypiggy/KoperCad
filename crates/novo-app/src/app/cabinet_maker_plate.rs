@@ -112,7 +112,7 @@ pub(super) fn show(
         "cabinet_maker_plate",
         "Maker plate",
         &plates.list.len().to_string(),
-        current.is_some(),
+        current.is_some() || !plates.list.is_empty(),
         |ui| {
             if let Some(c) = current {
                 widgets::field(ui, "In use", c);
