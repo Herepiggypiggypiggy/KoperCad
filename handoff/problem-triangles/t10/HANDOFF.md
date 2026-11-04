@@ -12,4 +12,4 @@ Traps
 - Marks on the schematic draw only Symbol/Wire anchors, so the Device anchor of a sim flag is used by Locate only.
 - Controller card flags clear while the Bindings fold is closed (drafts come from drawing the rows).
 
-Tests: `cargo test -p novo-app --lib sim_flags`; QA scenarios 9500 (1366x768) and 9501 (1920x1080).
+Tests: `cargo test -p novo-app --lib sim_flags`; QA scenarios 9505 (1366x768) and 9506 (1920x1080).

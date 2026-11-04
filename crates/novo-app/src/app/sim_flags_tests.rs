@@ -263,3 +263,69 @@ fn problem_census_sim() {
         );
     }
 }
+
+#[test]
+fn the_strings_the_runs_really_produce_land_on_the_right_device_and_title() {
+    use super::drive_run::drive_hoists_of;
+    use novo_core::{DeviceTag, Value};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let mut id = None;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("A hoist with a bad number", |tx| {
+            let device = tx.add_device(DeviceTag::parse("=A1+CAB1-M1").unwrap(), "")?;
+            tx.set_property(
+                device,
+                novo_machine::drive_hoist_spec::DRIVE_HOIST_KEY,
+                Some(Value::Text("not a number".into())),
+            )?;
+            id = Some(device);
+            Ok(())
+        })
+        .unwrap();
+    let project = d.app.backend.document().unwrap().project();
+    let (_, notes) = drive_hoists_of(project);
+    assert!(
+        notes
+            .iter()
+            .any(|(l, t)| *l == Level::Warning && t.contains(" is left out: ")),
+        "the production note keeps the shape the adapter reads: {notes:?}"
+    );
+    let drafts = note_drafts(DRIVE, &notes, &|t| super::sim_flags::device_raw(project, t));
+    assert_eq!(drafts.len(), 1, "{notes:?}");
+    assert_eq!(drafts[0].title, "Left out of the run");
+    assert_eq!(
+        drafts[0].anchors,
+        vec![Anchor::Device(id.unwrap().raw().to_string())],
+        "the tag the run prints finds its device again"
+    );
+    // The two fixed sentences and the binding finding format of start_*_run.
+    let fixed = vec![
+        (
+            Level::Warning,
+            "No axis can run: see the notes above.".to_owned(),
+        ),
+        (
+            Level::Warning,
+            "No hoist can run: see the notes above.".to_owned(),
+        ),
+        (
+            Level::Warning,
+            format!(
+                "{}: {}",
+                "=A1+CAB1-M1", "the brake feed device -K9 is not in the circuit"
+            ),
+        ),
+    ];
+    let d2 = note_drafts(HOIST, &fixed, &|t| super::sim_flags::device_raw(project, t));
+    assert_eq!(d2[0].title, "Nothing can run");
+    assert_eq!(d2[1].title, "Nothing can run");
+    assert_eq!(d2[2].title, "Binding problem");
+    assert!(matches!(d2[2].anchors[0], Anchor::Device(_)));
+}
