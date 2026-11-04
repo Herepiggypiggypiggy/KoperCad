@@ -32,9 +32,35 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
             height: r.height,
         })
         .collect();
+    // Ducts fitted at delivery, from the enclosure's spec (ids start at
+    // `SPEC_DUCT_BASE`, past any model id).
+    if let Some(st) = project.get::<novo_core::Structure>(structure) {
+        let spec = novo_layout::spec::EnclosureSpec::read(&st.properties);
+        let factory = spec
+            .parts
+            .iter()
+            .filter(|p| p.kind == novo_layout::spec::PartKind::Duct);
+        for (i, p) in factory.enumerate() {
+            ducts.push(Duct {
+                id: SPEC_DUCT_BASE + i as u64,
+                a: Point::new(p.x, p.y),
+                b: if p.vertical {
+                    Point::new(p.x, p.y + p.length)
+                } else {
+                    Point::new(p.x + p.length, p.y)
+                },
+                width: p.width,
+                height: p.height,
+            });
+        }
+    }
     join_ducts_at_sides(&mut ducts);
     ducts
 }
+
+/// Duct ids at or above this belong to the enclosure's spec, not to a rail
+/// of the model.
+pub const SPEC_DUCT_BASE: u64 = 1 << 40;
 
 /// Ducts meet in a T or a corner with one ending against the side of the
 /// other (they never cross). The engine joins ducts where their centre lines
@@ -634,6 +660,10 @@ pub struct Routed {
     /// per enclosure. Enclosures without a spec are not listed (old projects
     /// behave as before).
     pub spec_gaps: Vec<(StructureId, &'static str)>,
+    /// Routed connections whose path uses a duct or the cabinet entry from
+    /// an enclosure's spec while a number of that spec is a catalogue or
+    /// default value: the length is an estimate, not a measurement.
+    pub spec_estimate: std::collections::BTreeSet<u64>,
 }
 
 /// The part of a wire that runs on a surface other than the mounting plate.
@@ -968,7 +998,20 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         .collect();
     for (structure, jobs) in jobs {
         let p = plan_constrained(&network(project, structure), &jobs, rules, &avoid, &keep);
+        let weak_spec = project
+            .get::<novo_core::Structure>(structure)
+            .is_some_and(|s| {
+                novo_layout::spec::EnclosureSpec::read(&s.properties)
+                    .notice()
+                    .is_some()
+            });
+        let entry_spec = crate::entry::entry_from_spec(project, structure);
         for r in &p.routes {
+            let on_spec_duct = r.ducts.iter().any(|d| *d >= SPEC_DUCT_BASE);
+            let at_spec_entry = entry_spec && out.entry_legs.get(&r.job) == Some(&structure);
+            if weak_spec && (on_spec_duct || at_spec_entry) {
+                out.spec_estimate.insert(r.job);
+            }
             if out.cross_legs.contains_key(&r.job) {
                 out.cross_routes.insert((r.job, structure), r.clone());
             } else {
