@@ -191,6 +191,21 @@ impl EnclosureSpec {
         })
     }
 
+    /// The first thing a chosen enclosure still lacks for the door and the
+    /// 3D shell: outside size, wall and plate setback. Door inner depth is
+    /// optional (nothing on the door). `None` when nothing was chosen.
+    pub fn shell_missing(&self) -> Option<Missing> {
+        if self.is_empty() {
+            return None;
+        }
+        if let Err(m) = self.interior() {
+            return Some(m);
+        }
+        self.plate_setback
+            .is_none()
+            .then_some(Missing("plate setback"))
+    }
+
     /// The weakest source among the known numbers; `None` without numbers.
     pub fn weakest(&self) -> Option<Source> {
         self.numbers()
