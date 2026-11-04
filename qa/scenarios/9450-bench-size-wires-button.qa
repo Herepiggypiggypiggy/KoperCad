@@ -24,7 +24,7 @@ wait 3
 expect "Print scale check (PDF)"
 shot calibrate
 check_layout
-click_text "Size"
+click_text "Size 21 wires"
 wait 10
 expect "Autopilot"
 shot autopilot

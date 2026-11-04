@@ -626,9 +626,7 @@ fn workshop_strip(
 ) {
     use novo_layout::template::Paper;
     ui.horizontal_wrapped(|ui| {
-        if novo_theme::widgets::primary_button(ui, "Print for the bench")
-            .on_hover_text(super::WORKSHOP_HINT)
-            .clicked()
+        if novo_theme::widgets::primary_button(ui, "Print for the bench").clicked()
         {
             *act = Some(Act::ExportWorkshop);
         }
