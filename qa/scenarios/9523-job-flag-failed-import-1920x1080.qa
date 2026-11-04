@@ -32,6 +32,7 @@ check_layout
 key Escape
 wait 6
 expect_not "Copy details"
+shot job-flag-popover-closed-by-escape
 answer_dialog qa/fixtures/files/box.dxf
 key ctrl+k
 text import dxf as background
@@ -40,4 +41,13 @@ key Enter
 wait 20
 expect_not "DXF import failed"
 shot job-flag-cleared-by-success
+check_layout
+# A success clears only its own job: the AML failure is still flagged. Dismiss it and no triangle is left.
+click_text "AML import failed" Button
+wait 8
+expect "Dismiss"
+click_text "Dismiss" Button
+wait 8
+expect_not "AML import failed"
+shot job-flag-none-left
 check_layout
