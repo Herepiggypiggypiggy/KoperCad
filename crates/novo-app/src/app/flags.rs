@@ -29,6 +29,10 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// Failed jobs: what Retry and Open folder need (lane T12).
+    pub(super) jobs: HashMap<FlagId, super::flags_jobs::JobInfo>,
+    /// The failed jobs, oldest first.
+    pub(super) job_order: Vec<FlagId>,
 }
 
 impl Default for FlagUi {
@@ -38,6 +42,8 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            jobs: HashMap::new(),
+            job_order: Vec::new(),
         }
     }
 }
@@ -271,6 +277,12 @@ impl NovoApp {
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
+                                Action::Retry => "Retry",
+                                Action::Open(k) if k == super::flags_jobs::OPEN_FOLDER => {
+                                    "Open folder"
+                                }
+                                Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
+                                Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
                                     "Explain with Claude"
@@ -312,6 +324,9 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        if self.run_job_action(flag.id, &action) {
+            return;
+        }
         match action {
             Action::Locate => {
                 if let Some(i) = index {

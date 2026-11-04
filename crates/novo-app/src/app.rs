@@ -132,6 +132,7 @@ mod example_plc;
 mod example_pump;
 mod faults;
 mod flags;
+mod flags_jobs;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -456,6 +457,8 @@ mod example_tests;
 mod faults_tests;
 #[cfg(test)]
 mod first_view_tests;
+#[cfg(test)]
+mod flags_jobs_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]
@@ -2447,6 +2450,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.job_pill(ui);
                 self.help_button(ui);
                 if fit.whats_new_pill {
                     self.whats_new_pill(ui);

@@ -38,7 +38,12 @@ impl NovoApp {
             return Some((dir, stem));
         }
         let Some(dir) = projects_dir() else {
-            self.message(Level::Error, "Could not find the Documents folder");
+            self.job_fail(
+                "export.pdf",
+                "PDF export failed",
+                Level::Error,
+                "Could not find the Documents folder",
+            );
             return None;
         };
         Some((dir, stem))
@@ -211,6 +216,7 @@ impl NovoApp {
                 } else {
                     ""
                 };
+                self.job_ok("export.pdf");
                 self.message_file(
                     format!("{verb} {}{checks}{remaining}", path.display()),
                     path,
@@ -219,7 +225,12 @@ impl NovoApp {
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not export the PDF: {e}"));
+                self.job_fail(
+                    "export.pdf",
+                    "PDF export failed",
+                    Level::Error,
+                    format!("Could not export the PDF: {e}"),
+                );
                 None
             }
         }
