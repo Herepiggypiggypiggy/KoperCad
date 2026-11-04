@@ -129,6 +129,16 @@ fn drag(ui: &mut egui::Ui, value: &mut f64, unit: &str, min: f64, max: f64, spee
     );
 }
 
+/// A ratio field: shows what the number divides, so "200" reads "span / 200".
+fn ratio(ui: &mut egui::Ui, value: &mut f64, of: &str) {
+    ui.add(
+        egui::DragValue::new(value)
+            .prefix(format!("{of} / "))
+            .range(50.0..=1000.0)
+            .speed(5.0),
+    );
+}
+
 fn row(ui: &mut egui::Ui, label: &str, help: &str, add: impl FnOnce(&mut egui::Ui)) {
     super::dialog_ui::explained(ui, label, help);
     add(ui);
@@ -309,13 +319,16 @@ pub(super) fn mechanical(
             *copy = Some(mechanical_text(s));
         }
     });
-    ui.colored_label(
-        crate::theme::ui_palette().warning,
-        "Estimate, not a verification of the busbar or support rating. Not a safety function.",
-    );
-    ui.weak(
-        "After the IEC 60865-1 method, not checked against the standard text or a test. Deflection assumes a simple beam and ignores stiffening by devices or ducts.",
-    );
+    ui.horizontal_wrapped(|ui| {
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            "Estimate, not a verification of the busbar or support rating. Not a safety function.",
+        );
+        super::window_help::mark(
+            ui,
+            "After the IEC 60865-1 method, not checked against the standard text or a test. Deflection assumes a simple beam and ignores stiffening by devices or ducts.",
+        );
+    });
     egui::CollapsingHeader::new("Busbar short circuit")
         .default_open(true)
         .show(ui, |ui| busbar(ui, s, available_ka));
@@ -529,7 +542,7 @@ fn rail(ui: &mut egui::Ui, s: &mut MechState) {
                 ui,
                 "Allowed deflection",
                 "Span divided by this number. 200 is a common planning limit.",
-                |ui| drag(ui, &mut s.rail_limit, "", 50.0, 1000.0, 5.0),
+                |ui| ratio(ui, &mut s.rail_limit, "span"),
             );
         });
     ui.add_space(4.0);
@@ -540,7 +553,12 @@ fn rail(ui: &mut egui::Ui, s: &mut MechState) {
         }
         Err(e) => result_line(ui, Verdict::Note, format!("Not calculated: {e}")),
     }
-    ui.weak("The fixing screws and the device clips usually fail before the rail bends.");
+    ui.horizontal(|ui| {
+        super::window_help::mark(
+            ui,
+            "The fixing screws and the device clips usually fail before the rail bends.",
+        );
+    });
 }
 
 fn plate(ui: &mut egui::Ui, s: &mut MechState) {
@@ -579,7 +597,7 @@ fn plate(ui: &mut egui::Ui, s: &mut MechState) {
                 ui,
                 "Allowed deflection",
                 "Shorter side divided by this number.",
-                |ui| drag(ui, &mut s.plate.limit_ratio, "", 50.0, 1000.0, 5.0),
+                |ui| ratio(ui, &mut s.plate.limit_ratio, "short side"),
             );
         });
     ui.add_space(4.0);

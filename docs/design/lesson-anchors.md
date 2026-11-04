@@ -162,6 +162,8 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `calc.tab.starters`: {ui:calc.tab.starters} shows **Motor starters tab**
 - `calc.tab.sccr`: {ui:calc.tab.sccr} shows **Panel SCCR tab**
 - `calc.tab.busbar_impedance`: {ui:calc.tab.busbar_impedance} shows **Busbar impedance tab**
+- `calc.tab.mechanical`: {ui:calc.tab.mechanical} shows **Mechanical tab**
+- `calc.tab.busbar_heat`: {ui:calc.tab.busbar_heat} shows **Busbar heat tab**
 - `autopilot.window`: {ui:autopilot.window} shows **Autopilot**
 - `autopilot.accept_all`: {ui:autopilot.accept_all} shows **Accept all button**
 
