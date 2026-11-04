@@ -141,6 +141,9 @@ pub struct BridgeReport {
     pub enclosure_source: Option<novo_layout::spec::Source>,
     /// Maker article of the chosen enclosure, empty without a record.
     pub enclosure_article: String,
+    /// True while any number of the record is a catalogue or default value
+    /// (not only the weakest one): the estimate notice is then shown.
+    pub enclosure_estimate: bool,
 }
 
 impl BridgeReport {
@@ -198,10 +201,7 @@ impl BridgeReport {
                 self.enclosure_article.as_str()
             };
             m.push(format!("Enclosure {article}: {}", src.words()));
-            if matches!(
-                src,
-                novo_layout::spec::Source::Catalogue | novo_layout::spec::Source::Default
-            ) {
+            if self.enclosure_estimate {
                 m.push(novo_layout::spec::ESTIMATE_NOTICE.to_owned());
             }
         }
@@ -373,6 +373,7 @@ pub fn scenario_from_project(
     if from_spec {
         report.enclosure_source = spec.weakest();
         report.enclosure_article = spec.article.clone();
+        report.enclosure_estimate = spec.notice().is_some();
     }
     let mut devices = Vec::new();
     let mut placements: Vec<&Placement> = layout.placements.iter().collect();

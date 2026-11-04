@@ -415,6 +415,33 @@ mod spec {
     }
 
     #[test]
+    fn the_estimate_notice_shows_when_any_number_is_catalogue() {
+        let (mut p, cab) = fixture();
+        let mut s = catalogue(500.0, 700.0, 250.0, 2.0);
+        s.wall = Some(Field::new(2.0, Source::Typed)); // weakest is typed, size is still catalogue
+        with_spec(&mut p, cab, &s);
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        assert_eq!(b.report.enclosure_source, Some(Source::Typed));
+        assert!(
+            b.report
+                .messages_with_enclosure()
+                .contains(&novo_layout::spec::ESTIMATE_NOTICE.to_owned())
+        );
+        let mut all_typed = catalogue(500.0, 700.0, 250.0, 2.0);
+        for f in [
+            &mut all_typed.width,
+            &mut all_typed.height,
+            &mut all_typed.depth,
+            &mut all_typed.wall,
+        ] {
+            *f = f.map(|f| Field::new(f.value, Source::Typed));
+        }
+        with_spec(&mut p, cab, &all_typed);
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        assert!(!b.report.enclosure_estimate);
+    }
+
+    #[test]
     fn a_chosen_enclosure_with_a_missing_field_fails_loudly() {
         let (mut p, cab) = fixture();
         let mut s = catalogue(500.0, 700.0, 250.0, 2.0);
@@ -447,6 +474,7 @@ fn the_enclosure_line_names_article_and_weakest_source() {
     let mut b = plain;
     b.report.enclosure_source = Some(novo_layout::spec::Source::Catalogue);
     b.report.enclosure_article = "8455.600".into();
+    b.report.enclosure_estimate = true;
     let m = b.report.messages_with_enclosure();
     assert!(m.contains(&"Enclosure 8455.600: catalogue".to_owned()));
     assert!(m.contains(&ESTIMATE_NOTICE.to_owned()));
