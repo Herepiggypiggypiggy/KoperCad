@@ -319,16 +319,14 @@ pub(super) fn mechanical(
             *copy = Some(mechanical_text(s));
         }
     });
-    ui.horizontal_wrapped(|ui| {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
-            "Estimate, not a verification of the busbar or support rating. Not a safety function.",
-        );
-        super::window_help::mark(
-            ui,
-            "After the IEC 60865-1 method, not checked against the standard text or a test. Deflection assumes a simple beam and ignores stiffening by devices or ducts.",
-        );
-    });
+    ui.colored_label(
+        crate::theme::ui_palette().warning,
+        "Estimate, not a verification of the busbar or support rating. Not a safety function.",
+    );
+    super::window_help::add(
+        ui.ctx(),
+        "After the IEC 60865-1 method, not checked against the standard text or a test. Deflection assumes a simple beam and ignores stiffening by devices or ducts.",
+    );
     egui::CollapsingHeader::new("Busbar short circuit")
         .default_open(true)
         .show(ui, |ui| busbar(ui, s, available_ka));
@@ -553,12 +551,10 @@ fn rail(ui: &mut egui::Ui, s: &mut MechState) {
         }
         Err(e) => result_line(ui, Verdict::Note, format!("Not calculated: {e}")),
     }
-    ui.horizontal(|ui| {
-        super::window_help::mark(
-            ui,
-            "The fixing screws and the device clips usually fail before the rail bends.",
-        );
-    });
+    super::window_help::add(
+        ui.ctx(),
+        "The fixing screws and the device clips usually fail before the rail bends.",
+    );
 }
 
 fn plate(ui: &mut egui::Ui, s: &mut MechState) {
