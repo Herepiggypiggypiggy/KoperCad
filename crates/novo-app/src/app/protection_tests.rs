@@ -164,3 +164,74 @@ fn limiter_credit_entries_are_checked_and_saved_on_the_device() {
     d.app.protection.tab = super::protection::Tab::Rating;
     d.frame();
 }
+
+#[test]
+fn the_curves_tab_draws_cable_and_motor_curves_behind_the_devices() {
+    use novo_checks::protection::plot::CheckKind;
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenStarterExample);
+    d.frame();
+    let f1 = d
+        .doc()
+        .project()
+        .devices()
+        .find(|dev| dev.tag.to_string() == "=A1+CAB-F1")
+        .unwrap()
+        .id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Rating", |tx| {
+            tx.update::<Device>(f1, |dev| {
+                dev.properties
+                    .insert("rated_current_a".into(), Value::Float(16.0));
+            })
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::Protection);
+    d.frame();
+    let (_, study) = d.app.protection.study.as_ref().expect("study");
+    let f1_index = study
+        .devices
+        .iter()
+        .position(|x| x.id == f1)
+        .expect("F1 read");
+    let plot = &d.app.protection.results.as_ref().expect("analysed").plot;
+    // The motor behind the fuse: its start is drawn and checked against it.
+    assert_eq!(plot.motors.len(), 1, "{plot:?}");
+    let motor = &plot.motors[0];
+    assert!(motor.start_a > motor.rated_a);
+    assert!(
+        motor.ratio_assumed && motor.time_assumed,
+        "typical values are marked"
+    );
+    assert!(motor.devices.contains(&f1_index));
+    assert!(
+        plot.checks
+            .iter()
+            .any(|c| c.device == f1_index && c.kind == CheckKind::MotorStart)
+    );
+    // The 1.5 mm2 run behind the fuse has a damage curve.
+    let cable = plot
+        .cables
+        .iter()
+        .find(|c| c.device == f1_index)
+        .expect("cable curve");
+    assert_eq!(cable.section_mm2, 1.5);
+    assert!(
+        plot.checks
+            .iter()
+            .any(|c| c.device == f1_index && c.kind == CheckKind::Cable)
+    );
+    // Drawn with the groups on and off, and with the fuse unticked.
+    d.frame();
+    d.app.protection.show_cables = false;
+    d.app.protection.show_motors = false;
+    d.frame();
+    d.app.protection.show_cables = true;
+    d.app.protection.show_motors = true;
+    d.app.protection.shown.clear();
+    d.frame();
+}
