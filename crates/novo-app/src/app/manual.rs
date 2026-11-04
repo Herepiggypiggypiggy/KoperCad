@@ -122,13 +122,21 @@ impl NovoApp {
     /// Writes the manual and opens the page for `topic` (the front page for
     /// `None`).
     pub(super) fn open_manual(&mut self, topic: Option<&'static str>) {
-        let Some(dir) = manual_dir() else {
-            self.message(Level::Warning, "No place for the manual on this computer");
+        let forced = super::flags_jobs::qa_forced_error("manual.open");
+        let Some(dir) = manual_dir().filter(|_| forced.is_none()) else {
+            self.job_fail(
+                "manual.open",
+                "Manual not opened",
+                Level::Warning,
+                "No place for the manual on this computer",
+            );
             return;
         };
         let version = env!("CARGO_PKG_VERSION");
         if let Err(e) = novo_workflow::manual::write_site(&dir, version, IMAGES) {
-            self.message(
+            self.job_fail(
+                "manual.open",
+                "Manual not opened",
                 Level::Warning,
                 format!("Could not write the manual to {}: {e}", dir.display()),
             );
@@ -144,8 +152,13 @@ impl NovoApp {
             return;
         }
         match open_page(&target, anchor) {
-            Ok(()) => self.message_file("Manual opened in your browser", &target),
-            Err(e) => self.message(
+            Ok(()) => {
+                self.job_ok("manual.open");
+                self.message_file("Manual opened in your browser", &target)
+            }
+            Err(e) => self.job_fail(
+                "manual.open",
+                "Manual not opened",
                 Level::Warning,
                 format!(
                     "Could not open the manual ({e}). Open {} yourself.",

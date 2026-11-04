@@ -1,0 +1,32 @@
+@title Docked forms: Rename terminals opens at a sensible height
+@sizes 1366x768 1920x1080
+@area Windows
+key ctrl+k
+wait 4
+text terminal strips
+wait 6
+key Enter
+wait 40
+try click_text "Next"
+wait 20
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Do it for me"
+wait 30
+try click_text "Next"
+wait 20
+try click_text "Do it for me"
+wait 30
+key ctrl+k
+wait 4
+text rename terminals
+wait 8
+key Enter
+wait 30
+expect "Nothing matches yet"
+shot d-rename-terminals
+check_layout

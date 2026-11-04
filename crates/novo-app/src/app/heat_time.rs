@@ -47,7 +47,10 @@ pub(super) fn spec_for_minutes(minutes: f64) -> TransientSpec {
 /// final air rise with the mass of walls and plate, and how much shorter the
 /// run above reads without it.
 pub(super) fn mass_line(m: &HeatUp) -> String {
-    format!("Shell mass: 90 % in {}", TimeLine::time_label(m.rise.t90_s))
+    format!(
+        "Shell mass: 90 % in {} (model)",
+        TimeLine::time_label(m.rise.t90_s)
+    )
 }
 
 pub(super) fn mass_hover(m: &HeatUp) -> String {

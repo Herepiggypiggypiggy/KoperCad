@@ -257,6 +257,23 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str) -> Response {
     .on_hover_text(tooltip)
 }
 
+/// Marks that a popup was open at the start of this pass, so the Escape that
+/// closes it is not also taken by a docked window or panel behind it.
+fn note_popup_open(ctx: &egui::Context, popup: egui::Id) {
+    if egui::Popup::is_id_open(ctx, popup) {
+        // Only a flag chip's popup calls this, so other popups keep their old Escape.
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("popup_open_in_pass"), pass));
+    }
+}
+
+/// `true` when the popup of a [`flag_chip`] was open in this pass:
+/// Escape belongs to it, not to the window it sits in.
+pub fn popup_owns_escape(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<u64>(egui::Id::new("popup_open_in_pass")))
+        .is_some_and(|pass| pass == ctx.cumulative_pass_nr())
+}
+
 /// A small "?" that opens a popup with `text` when clicked. Explanation that would otherwise sit in the
 /// window body goes here, so the window keeps short labels only.
 pub fn help_mark(ui: &mut Ui, text: &str) -> Response {
@@ -613,16 +630,161 @@ pub fn chip(ui: &mut Ui, text: &str, selected: bool) -> Response {
 pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
     let p = Palette::of(ui);
     let small = egui::TextStyle::Small.resolve(ui.style());
-    let mut job = egui::text::LayoutJob::default();
-    for (text, color) in pill_parts(p, errors, warnings) {
-        job.append(&text, 0.0, egui::TextFormat::simple(small.clone(), color));
+    // Each run is a glyph (a painted triangle, or the tick of "No issues")
+    // and its text; the triangles are drawn, not typed, so red is solid and
+    // yellow hollow whatever the font does.
+    let runs: Vec<(Option<bool>, std::sync::Arc<egui::Galley>)> = pill_parts(p, errors, warnings)
+        .into_iter()
+        .map(|(text, color)| {
+            let red = text.starts_with(status::ERROR);
+            let triangle = red || text.starts_with(status::WARNING);
+            let rest = if triangle {
+                text.trim_start_matches(|c: char| !c.is_ascii()).to_owned()
+            } else {
+                text
+            };
+            let galley = ui.painter().layout_no_wrap(
+                if triangle {
+                    format!("    {}", rest.trim_start())
+                } else {
+                    rest
+                },
+                small.clone(),
+                color,
+            );
+            (triangle.then_some(red), galley)
+        })
+        .collect();
+    let pad = egui::vec2(8.0, 3.0);
+    let width: f32 = runs.iter().map(|(_, g)| g.size().x).sum();
+    let height = runs.iter().map(|(_, g)| g.size().y).fold(0.0_f32, f32::max);
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, height) + pad * 2.0, egui::Sense::click());
+    let label = runs
+        .iter()
+        .map(|(_, g)| g.text().trim().to_owned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+    if ui.is_rect_visible(rect) {
+        ui.painter().rect_filled(rect, radius::PILL, p.raised);
+        ui.painter().rect_stroke(
+            rect,
+            radius::PILL,
+            Stroke::new(1.0, p.border_subtle),
+            egui::StrokeKind::Inside,
+        );
+        let mut x = rect.left() + pad.x;
+        for (glyph, galley) in &runs {
+            let y = rect.center().y - galley.size().y / 2.0;
+            if let Some(red) = glyph {
+                flag_triangle(
+                    ui.painter(),
+                    egui::pos2(x + 5.0, rect.center().y),
+                    10.0,
+                    *red,
+                    false,
+                    p,
+                );
+            }
+            ui.painter()
+                .galley(egui::pos2(x, y), galley.clone(), p.text_primary);
+            x += galley.size().x;
+        }
     }
-    ui.add(
-        Button::new(job)
-            .fill(p.raised)
-            .stroke(Stroke::new(1.0, p.border_subtle))
-            .corner_radius(radius::PILL),
-    )
+    response
+}
+
+/// A problem triangle of side `size` centred on `c`. Red is solid with a
+/// white "!"; yellow is hollow (the panel colour inside a thick coloured
+/// outline) with the "!" in the outline colour; `dashed` is the yellow one
+/// for "could not be checked" (design: docs/design/problem-triangles.md).
+pub fn flag_triangle(
+    painter: &egui::Painter,
+    c: egui::Pos2,
+    size: f32,
+    red: bool,
+    dashed: bool,
+    p: &Palette,
+) {
+    let h = size * 0.5;
+    let pts = vec![
+        c + egui::vec2(0.0, -h),
+        c + egui::vec2(h, h * 0.8),
+        c + egui::vec2(-h, h * 0.8),
+    ];
+    let (outline, bang) = if red {
+        (p.error, egui::Color32::WHITE)
+    } else {
+        (p.warning, p.warning)
+    };
+    if red {
+        painter.add(egui::Shape::convex_polygon(
+            pts.clone(),
+            outline,
+            Stroke::new(2.0, outline),
+        ));
+    } else {
+        painter.add(egui::Shape::convex_polygon(
+            pts.clone(),
+            p.raised,
+            Stroke::NONE,
+        ));
+        let stroke = Stroke::new(2.0, outline);
+        if dashed {
+            let mut ring = pts;
+            ring.push(ring[0]);
+            painter.extend(egui::Shape::dashed_line(&ring, stroke, 3.0, 2.0));
+        } else {
+            painter.add(egui::Shape::closed_line(pts, stroke));
+        }
+    }
+    let stroke = Stroke::new(1.4, bang);
+    painter.line_segment(
+        [c + egui::vec2(0.0, -h * 0.35), c + egui::vec2(0.0, h * 0.2)],
+        stroke,
+    );
+    painter.circle_filled(c + egui::vec2(0.0, h * 0.5), 0.8, bang);
+}
+
+/// A problem on a control or a section, in place of a sentence: the
+/// triangle with a short noun-phrase `title`. A click opens `detail` (the
+/// numbers and what to do) in a popover; the title is also its accessible
+/// name. `red` is wrong, otherwise yellow (docs/design/problem-triangles.md).
+pub fn flag_chip(ui: &mut Ui, red: bool, title: &str, detail: &str) -> Response {
+    let p = Palette::of(ui);
+    let color = if red { p.error } else { p.warning };
+    let galley = ui.painter().layout_no_wrap(
+        title.to_owned(),
+        egui::TextStyle::Small.resolve(ui.style()),
+        color,
+    );
+    let size = egui::vec2(22.0 + galley.size().x + 6.0, 24.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let level = if red { "Error" } else { "Warning" };
+    let name = format!("{level}: {title}");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+    if ui.is_rect_visible(rect) {
+        flag_triangle(
+            ui.painter(),
+            egui::pos2(rect.left() + 11.0, rect.center().y),
+            14.0,
+            red,
+            false,
+            p,
+        );
+        let at = egui::pos2(rect.left() + 22.0, rect.center().y - galley.size().y / 2.0);
+        ui.painter().galley(at, galley, color);
+    }
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    note_popup_open(ui.ctx(), egui::Popup::default_response_id(&response));
+    egui::Popup::from_toggle_button_response(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .width(320.0)
+        .show(|ui| {
+            ui.add(Label::new(detail).wrap());
+        });
+    response
 }
 
 /// The pill for a recovered copy nobody has checked yet. It takes the place

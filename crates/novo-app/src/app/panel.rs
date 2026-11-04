@@ -251,6 +251,7 @@ impl Panel {
                 add,
             );
         }
+        let add = |ui: &mut egui::Ui| super::window_help::scope(ctx, self.id, || add(ui));
         // A layout preset that was just opened puts the panel where that
         // layout left it, or back at its side when the layout never moved it.
         let taken = take_place(ctx, id);
@@ -444,7 +445,7 @@ impl Panel {
             let stopped = ctx
                 .read_response(id.with("__title_click"))
                 .is_some_and(|r| r.drag_stopped());
-            let slot = super::panel_dock::title_buttons(ctx, id, egui::Order::Middle)
+            let slot = super::panel_dock::title_buttons(ctx, id, self.id, egui::Order::Middle)
                 .or_else(|| super::panel_dock::snap_zones(ctx, self.canvas, pulled, stopped));
             if let Some(slot) = slot {
                 super::panel_dock::set(ctx, self.id, Some(slot));
@@ -607,6 +608,7 @@ pub(super) fn dialog<'a>(
         open: None,
         scrolls: true,
         floats: wide,
+        tall: size[1] >= 1000.0,
     }
 }
 
@@ -630,6 +632,10 @@ const MODAL_QUESTIONS: &[&str] = &[
 #[cfg(test)]
 pub(super) const MODAL_QUESTIONS_FOR_TEST: &[&str] = MODAL_QUESTIONS;
 
+/// The height a docked form opens at the first time: room for the longest forms
+/// (Add PLC card) without leaving a short one mostly empty.
+const FORM_PANE_HEIGHT: f32 = 520.0;
+
 /// Dialogs wider than this open as floating windows; narrower ones dock at
 /// the right edge when they open (the strip is at most 520 points wide).
 const WIDE_DIALOG: f32 = 640.0;
@@ -650,6 +656,9 @@ pub(super) struct Dialog<'a> {
     scrolls: bool,
     /// A window that opens floating (wide ones, or `floating`).
     floats: bool,
+    /// Asked for "as tall as the screen allows": docked, it opens that tall
+    /// instead of at the default pane height.
+    tall: bool,
 }
 
 impl<'a> Dialog<'a> {
@@ -721,6 +730,7 @@ impl<'a> Dialog<'a> {
             open,
             scrolls,
             floats,
+            tall,
         } = self;
         let pane_id = self::id(&name);
         if !floats
@@ -731,6 +741,9 @@ impl<'a> Dialog<'a> {
             super::panel_dock::set(ctx, &name, Some(super::panel_dock::Slot::Right));
         }
         if let Some(slot) = super::panel_dock::slot_of(ctx, &name) {
+            if tall {
+                super::panel_dock::open_tall(ctx, &name);
+            }
             let shown = super::panel_dock::show_docked(
                 ctx,
                 pane_id,
@@ -748,6 +761,7 @@ impl<'a> Dialog<'a> {
             // floating one on top (not while a text field has the keyboard).
             let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape))
                 && !ctx.egui_wants_keyboard_input()
+                && !novo_theme::widgets::popup_owns_escape(ctx)
                 && super::panel_dock::last_window(ctx).as_deref() == Some(name.as_str());
             if (take_closed(ctx, &name) || escape)
                 && let Some(open) = open
@@ -760,7 +774,7 @@ impl<'a> Dialog<'a> {
             Some(open) => window.open(open),
             None => window,
         };
-        let shown = window.show(ctx, add);
+        let shown = window.show(ctx, |ui| super::window_help::scope(ctx, &name, || add(ui)));
         if shown.is_some() {
             dock_controls(ctx, id, &name, egui::Order::Middle);
         }
@@ -786,7 +800,7 @@ fn dock_controls(ctx: &egui::Context, id: egui::Id, name: &str, order: egui::Ord
         egui::pos2(screen.min.x, screen.min.y + TOP),
         egui::pos2(screen.max.x, screen.max.y - STATUS_BAR),
     );
-    let slot = super::panel_dock::title_buttons(ctx, id, order)
+    let slot = super::panel_dock::title_buttons(ctx, id, name, order)
         .or_else(|| super::panel_dock::snap_zones(ctx, canvas, pulled, stopped));
     if let Some(slot) = slot {
         super::panel_dock::set(ctx, name, Some(slot));
@@ -1163,6 +1177,11 @@ fn modal_impl<R: Default>(
         super::panel_dock::set(ctx, &dock_name, Some(super::panel_dock::Slot::Right));
     }
     if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, &dock_name) {
+        // A form docks at FORM_PANE_HEIGHT the first time (a height the person
+        // gave it stays): at the 340 pt default a long form such as Add PLC card
+        // had its Create button below the fold, and the whole slot left a short
+        // form with a wide gap above its button.
+        super::panel_dock::open_at(ctx, &dock_name, FORM_PANE_HEIGHT);
         let shown = super::panel_dock::show_docked(
             ctx,
             self::id(&dock_name),

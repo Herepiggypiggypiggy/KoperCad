@@ -20,17 +20,22 @@ expect_file "~/Documents/KoperCAD/qa 230 work cards.pdf" 3000
 shot printed
 click_text Heat #1
 wait 20
-# Heat starts a Thorough run by itself on this small cabinet and greys the Quality row: stop it, run Quick, then open the cooling buttons.
+# Heat starts a Thorough run by itself on this small cabinet and greys the Quality row: stop it, switch Auto off, run Quick, then open the cooling buttons.
 click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
 wait 10
 click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 120
-click_text "Cooling selection"
-wait 10
-scroll 1190 560 -500
-wait 10
 click_text "Cooler layout"
 wait_s 120
 expect "Apply the moves"

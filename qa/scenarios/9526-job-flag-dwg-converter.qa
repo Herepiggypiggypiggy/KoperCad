@@ -1,0 +1,34 @@
+@title DWG import without a converter, and a wrong converter program, are job flags with a popover
+@area Files
+# T12: no DWG converter is installed on the test machine; choosing a file that is not a converter is refused. Both are the same job flag (import.dwg), newest text shown in the popover with Retry-less buttons Open folder, Copy details, Dismiss.
+click_text "New project"
+wait 20
+answer_dialog qa/fixtures/files/fake.dwg
+key ctrl+k
+text import dwg
+wait 5
+key Enter
+wait 15
+expect "No DWG converter"
+shot dwg-no-converter-flag
+check_layout
+click_text "No DWG converter" Button
+wait 8
+expect "Dismiss"
+shot dwg-no-converter-popover
+check_layout
+key Escape
+wait 6
+answer_dialog qa/fixtures/files/not-a-drawing.dxf
+key ctrl+k
+text choose dwg converter
+wait 5
+key Enter
+wait 15
+expect "Not a DWG converter"
+click_text "Not a DWG converter" Button
+wait 8
+shot dwg-wrong-converter-popover
+check_layout
+key Escape
+wait 6

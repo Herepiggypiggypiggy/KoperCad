@@ -240,6 +240,7 @@ fn a_run_computes_the_shell_mass_line_and_clear_forgets_it() {
     );
     let m = t.mass.as_ref().expect("the shell mass run is cheap");
     assert!(mass_line(m).starts_with("Shell mass: 90 % in "));
+    assert!(mass_line(m).ends_with("(model)"));
     assert!(mass_hover(m).contains("not validated"));
     t.clear();
     assert!(t.mass.is_none());

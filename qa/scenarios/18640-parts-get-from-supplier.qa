@@ -1,0 +1,43 @@
+@title Parts window: Get parts from supplier menu and the fallback without a web view
+@sizes 1366x768 1920x1080
+@area Parts
+# PR 1864: the menu lists the suppliers; with no WebView2 runtime (Linux) the normal browser is used and the strip says so.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+expect "Get parts from supplier"
+click_text "Get parts from supplier"
+wait 10
+expect "Rittal PARTcommunity"
+expect "Use my normal browser"
+shot supplier-menu
+click_text "Downloads folder"
+wait 8
+shot submenu-downloads-folder
+click_text "Forget sign-in"
+wait 8
+shot submenu-forget-sign-in
+click 480 49
+wait 4
+click 212 157
+wait 8
+shot help-text
+click 480 49
+wait 4
+click_text "Get parts from supplier"
+wait 8
+click_text "Rittal PARTcommunity"
+wait 15
+expect "WebView2"
+expect "Files taken"
+shot fallback-no-webview
+click_text Stop Button
+wait 8
+expect_not "WebView2"
+shot strip-closed
+check_layout
