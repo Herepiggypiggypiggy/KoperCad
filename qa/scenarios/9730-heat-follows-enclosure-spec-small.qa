@@ -1,7 +1,7 @@
 @title Heat: the cabinet follows the chosen enclosure (small synthetic enclosure)
 @area Heat
 @sizes 1366x768
-# Fixture qa/fixtures/cabinet-heat-spec-small.novo (make_heat_spec_fixtures.py): the example cabinet with an `encl.` record, synthetic catalogue enclosure 1000x1400x300 mm. Compare with 9501 (1400x1800x500): same devices and plate, only the record differs, so the heat result must differ. The enclosure line and the estimate sentence sit behind the Temperature panel's "?" (second picture). The visible tag "(estimate)" stays on screen (first picture).
+# Fixture qa/fixtures/cabinet-heat-spec-small.novo (make_heat_spec_fixtures.py): the example cabinet with an `encl.` record, synthetic catalogue enclosure 1000x1400x300 mm. Compare with its twin (9730 small, 9731 large, 9732 and 9733 the 1920x1080 runs) (1400x1800x500): same devices and plate, only the record differs, so the heat result must differ. The enclosure line and the estimate sentence sit behind the Temperature panel's "?" (second picture). The visible tag "(estimate)" stays on screen (first picture).
 open qa/fixtures/cabinet-heat-spec-small.novo
 wait 20
 click_text Cabinet #1
