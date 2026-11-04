@@ -239,8 +239,9 @@ fn a_run_computes_the_shell_mass_line_and_clear_forgets_it() {
         meta(),
     );
     let m = t.mass.as_ref().expect("the shell mass run is cheap");
-    assert!(mass_line(m).starts_with("Shell mass: 90 % in "));
+    assert!(mass_line(m).starts_with("Wall and plate mass: 90 % after "));
     assert!(mass_hover(m).contains("not validated"));
+    assert!(mass_line(m).contains("model, not measurement"));
     t.clear();
     assert!(t.mass.is_none());
 }

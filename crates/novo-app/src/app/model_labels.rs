@@ -66,7 +66,7 @@ pub(crate) const ROWS: [Row; 8] = [
         number: "Heat, airflow, device temperatures",
         label: "model, not validated",
         text: "A physical model with a stated accuracy (docs/thermal-validation.md). The enclosure result is not yet validated against IEC 60890 or a measurement. With a fan the heat balance is only good to about 3 % on one window. The heat-up time with wall and plate mass is a lumped model (one air temperature, devices as one lump); the animation frames have no wall mass.",
-        shown: "Cabinet Heat view, 3D heat, heat legend and probe, Heat-up strip (shell mass line)",
+        shown: "Cabinet Heat view, 3D heat, heat legend and probe, Heat-up strip (wall and plate mass line)",
     },
     Row {
         model: Model::MotorStart,

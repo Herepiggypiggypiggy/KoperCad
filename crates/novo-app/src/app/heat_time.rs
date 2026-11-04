@@ -47,15 +47,20 @@ pub(super) fn spec_for_minutes(minutes: f64) -> TransientSpec {
 /// final air rise with the mass of walls and plate, and how much shorter the
 /// run above reads without it.
 pub(super) fn mass_line(m: &HeatUp) -> String {
-    format!("Shell mass: 90 % in {}", TimeLine::time_label(m.rise.t90_s))
+    format!(
+        "Wall and plate mass: 90 % after {} (model, not measurement)",
+        TimeLine::time_label(m.rise.t90_s)
+    )
 }
 
 pub(super) fn mass_hover(m: &HeatUp) -> String {
     let r = &m.rise;
     format!(
-        "Heat-up of the air with the heat stored in the walls and the mounting plate \
-         (lumped model, not validated): 63 % of the rise in {}, 90 % in {}. Without \
-         the wall and plate mass the same cabinet reads {} and {} ({:.0} % too short). \
+        "How long the air takes to reach 90 % of its final rise when the walls and \
+         the mounting plate store heat too. A lumped model with one air temperature \
+         and the devices as one lump; not validated, not a measurement. 63 % of the rise in {}, 90 % in {}. Without \
+         the wall and plate mass the same model reads {} and {} ({:.0} % too short; \
+         this compares the model with itself with and without the mass, it is not a measurement). \
          Steady temperature is unchanged. The frames and curve above come from the \
          2D run, which has no wall mass. Not counted: rails, ducts, wires, door \
          gasket, sun. Time constants: {}.",
@@ -411,6 +416,8 @@ pub(super) fn strip(ui: &mut egui::Ui, tl: &mut TimeLine) {
     ui.label(egui::RichText::new(ESTIMATE_LABEL).small().color(t.warning))
         .on_hover_text(ESTIMATE_HOVER);
     if let Some(m) = &tl.mass {
+        // Own row: beside the other labels it pushed the curve over the buttons.
+        ui.end_row();
         ui.label(
             egui::RichText::new(mass_line(m))
                 .small()
