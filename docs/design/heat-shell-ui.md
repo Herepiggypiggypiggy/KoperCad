@@ -4,9 +4,9 @@ Status: design; H1 contract is as built in PR #1865 (`Params::shell`, `ThermalRe
 
 ## Rules
 
-- On-screen text: values, units and names only. Every "model vs exact", "assumed" and "why" sentence sits behind a `?` (hover). Almost nothing else is explained on screen.
+- On-screen text: values, units, names and short word badges only. Long "why" and "model vs exact" explanations sit behind a `?` (hover). Words that decide how far a number can be trusted are always visible, never hover only: each result number (wall and door temperatures, heat per face) carries the word badge **model**, or **IEC** for IEC 60890 totals, and **exact** only for a term with a passing exact case. The Shell section has one visible line "Model, not measurement"; its detail is behind the `?`.
 - Colours from `crate::theme::ui_palette()` and the `novo_theme::heat` scale, never `tokens::*`.
-- A value is badged **model** until H6 has a passing exact or measured case for that term. The badge is a small dot with `?`, not a sentence. IEC 60890 totals carry **IEC**. Nothing says "validated" while `ENCLOSURE_VALIDATED` is false.
+- A value is badged **model** until H6 has a passing exact or measured case for that term. The badge is a word (`model`, `IEC`, `exact`) with a `?` for detail, not a sentence. IEC 60890 totals carry **IEC**. Nothing says "validated" while `ENCLOSURE_VALIDATED` is false.
 - Setup edits go through commands (undo/redo), stored on the enclosure in the project, like the other Cabinet properties.
 
 ## Where the user finds it
@@ -56,7 +56,7 @@ ShellCaps { layers, emissivity, door_spec, setback, outside }   // bools from th
 ModelStatus { Model, Iec, Exact }                                // per value, drives the badge
 ```
 
-Until H1, the builder returns faces `None`, `split` from `Balance`, and `caps` all false, so only the split bar and the existing mounting/material rows show. Tests: the builder fills the split so the sum matches `loss_w`; absent data produces no tint and no text; badge for every term is `Model` unless listed in an `EXACT_TERMS` table that H6 edits.
+Until H1, the builder returns faces `None`, `split` from `Balance`, and `caps` all false, so only the split bar and the existing mounting/material rows show. Tests: at 1366x768 without hovering, the word `assumed` is visible in the Shell section when the record lacks a value (own QA scenario number block, chosen in the PR), plus the line "Model, not measurement" and the `model` badge on a wall temperature; typing over a catalogue value shows `typed by you`; "drawn shape, simulated as a box" shows while H2 is not on the drawn mesh. The builder fills the split so the sum matches `loss_w`; absent data produces no tint and no text; badge for every term is `Model` unless listed in an `EXACT_TERMS` table that H6 edits.
 
 ## 5. Needs from H1 (contract)
 
@@ -66,19 +66,19 @@ Until H1, the builder returns faces `None`, `split` from `Balance`, and `caps` a
 - Stable enum for face order (match the existing `front/rear/left/right/top/bottom` balance fields).
 - Defaults reproduce today's totals within 2 %, so the Shell section can ship before the layered model without moving any result.
 
-## 7. Real enclosure feed: provenance and CAD envelope
+## 6. Real enclosure feed: provenance and CAD envelope
 
 The simulation runs on the enclosure the user chose at cabinet start (see "Real enclosure feed" in `handoff/heat-research/ROADMAP.md`). The UI shows where each value came from:
 
-- **Provenance dot per field** in the Shell section: `catalogue` (from the chosen enclosure record), `measured` (user typed a measured value) and `assumed` (today's default because the record has no value). One small dot with a colour from `ui_palette()` and a `?` that names the source; no sentence beside the field. Typing over a catalogue value turns the dot to `measured`. A reset arrow returns it to `catalogue`.
-- Provenance lives next to the value in the project (`Provenance { Catalogue, Measured, Assumed }` per field), so a saved file keeps it. Heat results carry the lowest provenance among the inputs of a term; a term built on any `assumed` input keeps the `?` badge text "assumed inputs".
+- **Provenance per field** in the Shell section: `catalogue` (from the chosen enclosure record), `typed` (the user typed over it), `measured` (only when the user marks the value measured, with a checkbox on the field) and `assumed` (today's default because the record has no value). A small dot with a colour from `ui_palette()` plus the word next to the value, or one legend line under the section naming all four; colour and hover alone are not enough. Typing over a catalogue value gives `typed by you`, never `measured`. A reset arrow returns it to `catalogue`.
+- Provenance lives next to the value in the project (`Provenance { Catalogue, Measured, Assumed }` per field), so a saved file keeps it. Heat results carry the lowest provenance among the inputs of a term; a term built on any `assumed` input shows the visible word `assumed inputs` next to the result.
 - Fields covered: outside and interior size, wall material and thickness per face, finish, insulation or double wall, door (hinge side, gasket, window area), openings and IP rating, plate size, thickness, material and setback, installation, enclosure weight.
 
-**3D heat view draws the real CAD envelope** (ribs, roof, plinth, door swing) from the enclosure record's model instead of a plain box when one exists, with the face temperature tint on its surfaces. Without a record it draws the box, and the provenance dots read `assumed`. Same envelope is exported for H2 view factors, so what is drawn is what is simulated.
+**3D heat view draws the real CAD envelope** (ribs, roof, plinth, door swing) from the enclosure record's model instead of a plain box when one exists, with the face temperature tint on its surfaces. Only the box is simulated until H2 view factors use the same mesh. While that holds, the 3D view carries the visible line "drawn shape, simulated as a box"; it goes away only when H2 reports it uses the drawn mesh. Without a record it draws the box, and the fields read `assumed`.
 
 Needs from the chain thread: the enclosure record with a provenance flag per field and an envelope mesh (or parametric ribs/plinth); from H1: `ShellModel` built from that record.
 
-## 6. Steps
+## 7. Steps
 
 1. This design plus the `ShellView` builder and split bar from today's `Balance` (no engine change, QA scenario).
 2. Shell section for material, wall thickness, mounting wired to existing fields.
