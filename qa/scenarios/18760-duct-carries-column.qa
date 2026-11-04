@@ -1,0 +1,18 @@
+@title Cabinet: Rails and ducts has an optional Carries column per duct
+@area Cabinet
+@sizes 1366x768 1920x1080
+# qa/fixtures/cabinet-lesson-t-junctions.novo: Place all result with ducts. The Rails and ducts list has a
+# "Carries" box on each duct row (empty = any wire, hover text explains). Typing "signal" sets it; the box
+# shows it back after focus leaves. Pictures: the list before, after typing.
+open qa/fixtures/cabinet-lesson-t-junctions.novo
+wait 20
+click_text Cabinet #1
+wait 30
+click_text "Rails and ducts"
+wait 10
+# The window opens docked on the right; its table is wider than the strip, so float it first.
+click 1321 72
+wait 10
+expect "Carries"
+shot list-before
+check_layout
