@@ -12,6 +12,7 @@
 //! | [`devices`] | A protective device: curve, breaking capacity, let-through, maker tables (user data) |
 //! | [`coordination`] | A chain of devices from supply to load: breaking capacity, back-up, selectivity, disconnection time, conductor withstand |
 //! | [`model`] | Reading the project: protective devices, their data and which sits behind which |
+//! | [`plot`] | Cable damage and motor start curves for the coordination plot, and whether each device lies between them |
 //! | [`sccr`] | Short-circuit current rating of a panel (UL 508A Supplement SB method): weakest component, combinations, current limiting, transformers |
 //! | [`selectivity`] | Is the upstream device selective with the downstream one, up to which current; back-up protection |
 
@@ -30,6 +31,7 @@ pub mod coordination;
 pub mod curves;
 pub mod devices;
 pub mod model;
+pub mod plot;
 pub mod sccr;
 pub mod selectivity;
 

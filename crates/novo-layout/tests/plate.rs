@@ -2,7 +2,9 @@ use novo_core::{DeviceTag, MountingPlate, Project, StructureId, Value};
 use novo_layout::drill::{
     CutoutShape, Surface, drill_table, features_from_text, parse_cutout, parse_holes, rail_holes,
 };
-use novo_layout::model::{apply_plan, candidates, load, plate_documents, set_plate};
+use novo_layout::model::{
+    apply_plan, candidates, drill_plan, load, plate_documents, set_plate, set_plate_part,
+};
 use novo_layout::plate_drawing::{choose_scale, plate_drawing, scale_text, tables};
 use novo_layout::state::CabinetLayout;
 use novo_layout::{Margins, Placement, Plate, Rail, Size};
@@ -193,6 +195,40 @@ fn documents_read_the_part_keys_from_the_project() {
             .any(|h| h.dia == 4.2 && h.source.contains("K1"))
     );
     assert_eq!(docs[0].drawing.scale, docs[1].drawing.scale);
+}
+
+#[test]
+fn a_maker_plate_sets_the_size_and_its_holes_reach_the_layout_and_the_drill_plan() {
+    let (mut p, cab) = project();
+    // The device hole of -K1 is the first planned hole; find where it is.
+    let before = drill_plan(&p, cab, "t").unwrap();
+    let first = &before.sheets[0].groups[0].steps[0];
+    let at = format!("{},{},9; 390,390,9", first.x, first.y);
+    p.transact("plate part", |tx| {
+        set_plate_part(tx, cab, "Rittal 8806000", 500.0, 700.0, Some(&at)).map(|_| ())
+    })
+    .unwrap();
+    let layout = load(&p, cab).unwrap();
+    assert_eq!((layout.plate.width, layout.plate.height), (500.0, 700.0));
+    // The margin stays what the user had.
+    assert_eq!(layout.plate.margin, 10.0);
+    assert_eq!(layout.factory_holes.len(), 2);
+    let plan = drill_plan(&p, cab, "t").unwrap();
+    let sheet = &plan.sheets[0];
+    assert_eq!(sheet.factory_holes.len(), 2);
+    assert!(
+        sheet
+            .groups
+            .iter()
+            .flat_map(|g| &g.steps)
+            .any(|s| s.source.contains("on a factory hole"))
+    );
+    // Taking the holes away again clears them.
+    p.transact("plate part", |tx| {
+        set_plate_part(tx, cab, "Rittal 8806000", 500.0, 700.0, None).map(|_| ())
+    })
+    .unwrap();
+    assert!(load(&p, cab).unwrap().factory_holes.is_empty());
 }
 
 #[test]

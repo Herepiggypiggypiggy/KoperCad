@@ -8,33 +8,40 @@ click_text 3D #1
 wait 30
 shot 3d-start
 click_text Heat #1
+wait 5
+# Heat starts a run by itself on a small cabinet (as in scenario 135): switch Auto off first so no run restarts, then stop the running one, else Quality and Simulate stay greyed.
+click_text Auto #1
+wait 10
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
 wait 20
-expect "fills this strip"
 expect "Vents and fans"
 shot heat-on
 click_text "Settings for the next run"
 wait 10
-click_text Quick
+try click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 100
 wait 60
 wait_s 100
 wait 60
-expect "Result for this layout"
+expect "Heat: "
 shot heat-result
 check_layout
-click_text "✔ Heat"
+click 24 428
 wait 20
-expect_not "fills this strip"
+expect_not "Air speed"
 expect_not "Vents and fans"
-expect_not "Result for this layout"
 shot heat-off
-click_text EMC #1
+click 24 464
 wait 30
 expect "Indicative model"
 shot emc-on
-click_text "✔ EMC"
+click 24 464
 wait 30
 expect_not "Indicative model"
 shot emc-off
@@ -46,7 +53,7 @@ wait 20
 expect "Walk through"
 expect "Slotted ducts"
 expect "Connection points"
-expect "Missing data"
+expect "Missing part data"
 shot layers
 check_layout
 move 65 420

@@ -20,6 +20,7 @@ use crate::openings::{OPENING_PREFIX, Opening};
 use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
+use crate::spec::{EnclosureSpec, Field, Source};
 use crate::state::CabinetLayout;
 use crate::surfaces::{MAIN_PLATE, SURFACE_PROPERTY, SurfaceKind};
 use crate::swing::DoorDevice;
@@ -157,6 +158,52 @@ fn structure(project: &Project, id: StructureId) -> Option<&Structure> {
 }
 
 /// The layout stored for an enclosure; `None` when it has no plate yet.
+/// Structure property: the mounting plate part in use (`Rittal 8806000`),
+/// for display. Set with [`set_plate_part`].
+pub const PLATE_PART: &str = "plate.part";
+/// Structure property: the round holes the plate is delivered with, as
+/// `x,y,d; x,y,d` in plate mm from the top left seen from the front.
+pub const PLATE_FACTORY_HOLES: &str = "plate.factory_holes";
+
+/// Uses a maker's mounting plate for the panel: the plate gets the part's
+/// size (the margin is kept) and the holes the plate is delivered with are
+/// remembered, so the drilling plan can show them and flag a planned hole
+/// that lands on one. `holes` is the `x,y,d; ...` text, or `None` when the
+/// part has none. One undo step with the caller's transaction.
+pub fn set_plate_part(
+    tx: &mut Tx<'_>,
+    id: StructureId,
+    label: &str,
+    width: f64,
+    height: f64,
+    holes: Option<&str>,
+) -> Result<usize> {
+    let margin = tx
+        .project()
+        .get::<novo_core::Structure>(id)
+        .and_then(|s| s.plate)
+        .map_or(0.0, |p| p.margin);
+    // Rails and ducts that ran across the old plate follow the new one.
+    let resized = set_plate_following(
+        tx,
+        id,
+        MountingPlate {
+            width,
+            height,
+            margin,
+        },
+    )?;
+    tx.set_property(id, PLATE_PART, Some(Value::Text(label.to_owned())))?;
+    tx.set_property(
+        id,
+        PLATE_FACTORY_HOLES,
+        holes
+            .filter(|h| !h.trim().is_empty())
+            .map(|h| Value::Text(h.to_owned())),
+    )?;
+    Ok(resized)
+}
+
 pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
     let s = structure(project, id)?;
     let plate = s.plate?;
@@ -193,6 +240,13 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
         })
         .collect();
     layout.enclosure = enclosure_of(project, id);
+    if let Some(Value::Text(t)) = s.properties.get(PLATE_FACTORY_HOLES) {
+        layout.factory_holes = crate::drill::parse_holes(t)
+            .0
+            .into_iter()
+            .map(|h| (h.dx, h.dy, h.dia))
+            .collect();
+    }
     (layout.openings, layout.opening_problems) = openings_of(project, id);
     let known = surface_names(project, id, layout.enclosure.as_ref(), &layout.plate);
     layout
@@ -904,14 +958,33 @@ pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {
     let s = structure(project, id)?;
     let get = |key: &str| s.properties.get(key).and_then(number);
     let positive = |key: &str| get(key).filter(|v| *v > 0.0);
+    let spec = EnclosureSpec::read(&s.properties);
+    // A chosen enclosure gives the inside from its record; the door dialog
+    // only overrides single numbers (and marks them typed, `set_enclosure`).
+    let from_spec = spec.shell_missing().is_none() && !spec.is_empty();
+    let inner = spec.door_inner_depth.map(|f| f.value);
     let door = match s.properties.get(keys::DOOR_HINGE) {
         Some(Value::Text(text)) => Hinge::parse(text).map(|hinge| Door {
             hinge,
             max_angle: get(keys::DOOR_ANGLE).unwrap_or(DEFAULT_DOOR_ANGLE_DEG),
-            inner_depth: get(keys::DOOR_INNER).unwrap_or(0.0).max(0.0),
+            inner_depth: inner
+                .or_else(|| get(keys::DOOR_INNER))
+                .unwrap_or(0.0)
+                .max(0.0),
         }),
         _ => None,
     };
+    if from_spec && let Ok(i) = spec.interior() {
+        return Some(Enclosure {
+            width: i.width,
+            height: i.height,
+            depth: i.depth,
+            plate_setback: spec.plate_setback.map_or(0.0, |f| f.value).max(0.0),
+            door,
+            front_clearance: get(keys::FRONT_CLEARANCE).filter(|v| *v >= 0.0),
+            hinge_side_clearance: get(keys::HINGE_SIDE_CLEARANCE).filter(|v| *v >= 0.0),
+        });
+    }
     Some(Enclosure {
         width: positive(keys::INTERIOR_WIDTH)?,
         height: positive(keys::INTERIOR_HEIGHT)?,
@@ -921,6 +994,21 @@ pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {
         front_clearance: get(keys::FRONT_CLEARANCE).filter(|v| *v >= 0.0),
         hinge_side_clearance: get(keys::HINGE_SIDE_CLEARANCE).filter(|v| *v >= 0.0),
     })
+}
+
+/// One line when a chosen enclosure lacks a number the door or the 3D shell
+/// needs; they never fall back to a default size or depth then.
+pub fn spec_problem(project: &Project, id: StructureId) -> Option<String> {
+    let s = structure(project, id)?;
+    EnclosureSpec::read(&s.properties)
+        .shell_missing()
+        .map(|m| m.to_string())
+}
+
+/// The record of an enclosure, if one was chosen.
+pub fn spec_of(project: &Project, id: StructureId) -> Option<EnclosureSpec> {
+    let spec = EnclosureSpec::read(&structure(project, id)?.properties);
+    (!spec.is_empty()).then_some(spec)
 }
 
 /// Stores the interior and door on an enclosure; a value that is `None`
@@ -947,6 +1035,58 @@ pub fn set_enclosure(tx: &mut Tx<'_>, id: StructureId, e: &Enclosure) -> Result<
     ];
     for (key, value) in entries {
         tx.set_property(id, key, value)?;
+    }
+    override_spec(tx, id, e)
+}
+
+/// A dialog edit on a chosen enclosure changes the record only where the
+/// number differs from it, and marks that number typed.
+fn override_spec(tx: &mut Tx<'_>, id: StructureId, e: &Enclosure) -> Result<()> {
+    let Some(mut props) = tx
+        .project()
+        .get::<Structure>(id)
+        .map(|s| s.properties.clone())
+    else {
+        return Ok(());
+    };
+    let spec = EnclosureSpec::read(&props);
+    if spec.shell_missing().is_some() || spec.is_empty() {
+        return Ok(());
+    }
+    let Ok(old) = spec.interior() else {
+        return Ok(());
+    };
+    let wall = spec.wall.map_or(0.0, |f| f.value);
+    let typed = |v: f64| Some(Field::new(v, Source::Typed));
+    let mut next = spec.clone();
+    if (e.width - old.width).abs() > 1e-9 {
+        next.width = typed(e.width + 2.0 * wall);
+    }
+    if (e.height - old.height).abs() > 1e-9 {
+        next.height = typed(e.height + 2.0 * wall);
+    }
+    if (e.depth - old.depth).abs() > 1e-9 {
+        next.depth = typed(e.depth + 2.0 * wall);
+    }
+    if spec
+        .plate_setback
+        .is_some_and(|f| (f.value - e.plate_setback).abs() > 1e-9)
+    {
+        next.plate_setback = typed(e.plate_setback);
+    }
+    let inner = e.door.map_or(0.0, |d| d.inner_depth);
+    if spec
+        .door_inner_depth
+        .map_or(inner != 0.0, |f| (f.value - inner).abs() > 1e-9)
+    {
+        next.door_inner_depth = typed(inner);
+    }
+    if next == spec {
+        return Ok(());
+    }
+    next.write(&mut props);
+    for (k, v) in props.iter().filter(|(k, _)| k.starts_with("encl.")) {
+        tx.set_property(id, k, Some(v.clone()))?;
     }
     Ok(())
 }

@@ -190,6 +190,10 @@ impl NovoApp {
             self.wb.issue = Some(draft);
             return;
         }
+        if let Some(why) = super::flags_jobs::qa_forced_error("revision.issue") {
+            self.job_fail("revision.issue", "Revision not issued", Level::Error, why);
+            return;
+        }
         let index = draft.index.trim().to_owned();
         let author = draft.author.trim().to_owned();
         let result = self.backend.issue_revision_locking(
@@ -222,10 +226,20 @@ impl NovoApp {
                 if let BackendError::IssuedNotLocked(_, changes) = &e {
                     self.changed_outside_canvas(changes);
                 }
-                self.message(Level::Error, e.to_string());
+                self.job_fail(
+                    "revision.issue",
+                    "Revision not issued",
+                    Level::Error,
+                    format!("{e}."),
+                );
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not issue the revision: {e}"));
+                self.job_fail(
+                    "revision.issue",
+                    "Revision not issued",
+                    Level::Error,
+                    format!("Could not issue the revision: {e}"),
+                );
             }
         }
     }
@@ -279,7 +293,12 @@ impl NovoApp {
                     ),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not change the lock: {e}")),
+            Err(e) => self.job_fail(
+                "revision.lock",
+                "Lock not changed",
+                Level::Error,
+                format!("Could not change the lock: {e}"),
+            ),
         }
     }
 
@@ -287,7 +306,9 @@ impl NovoApp {
     /// replace. Esc or a click outside cancels.
     pub(super) fn ask_restore(&mut self, revision: RevisionId, scope: RestoreScope) {
         let Some(snapshot) = self.backend.revision_snapshot(revision) else {
-            self.message(
+            self.job_fail(
+                "revision.restore",
+                "Restore not possible",
                 Level::Error,
                 "This revision has no stored copy to restore".to_owned(),
             );
@@ -317,7 +338,12 @@ impl NovoApp {
                     removed: p.removed,
                 });
             }
-            Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
+            Err(e) => self.job_fail(
+                "revision.restore",
+                "Restore not possible",
+                Level::Error,
+                format!("Could not restore: {e}"),
+            ),
         }
     }
 
@@ -382,7 +408,9 @@ impl NovoApp {
     /// Puts `scope` back to the state kept with `revision`. One undo step.
     pub(super) fn restore_to(&mut self, revision: RevisionId, scope: RestoreScope) {
         let Some(snapshot) = self.backend.revision_snapshot(revision) else {
-            self.message(
+            self.job_fail(
+                "revision.restore",
+                "Restore not possible",
                 Level::Error,
                 "This revision has no stored copy to restore".to_owned(),
             );
@@ -409,7 +437,12 @@ impl NovoApp {
                     ),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
+            Err(e) => self.job_fail(
+                "revision.restore",
+                "Restore not possible",
+                Level::Error,
+                format!("Could not restore: {e}"),
+            ),
         }
     }
 }

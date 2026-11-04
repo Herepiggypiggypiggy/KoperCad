@@ -18,15 +18,15 @@ key Home
 wait 30
 # Radio step 2 (S2): the drive magnetises, the relay contact in the drawing closes the brake contactor,
 # the hook rises, and at the probe frequency the load is sensed (200 kg: the top step may go faster).
-mouse_down 370 343
+mouse_down 370 359
 wait 150
 shot magnetising-and-brake-opens
 wait 700
 expect "m/min"
 expect "Load sensed"
-expect "What the hoist run found"
+expect "What the run found"
 shot running-with-finding
-mouse_up 370 343
+mouse_up 370 359
 wait 400
 expect "brake closed"
 check_layout

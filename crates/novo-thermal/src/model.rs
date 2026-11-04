@@ -99,6 +99,24 @@ impl Obstacle {
     }
 }
 
+/// Heat released inside the cabinet that is not a device: a busbar system,
+/// a transformer's stray heat, wires outside a duct. It enters the air in the
+/// cells under `rect` (2D) or in a solid of that footprint (3D), spread
+/// evenly. The caller states the part that reaches the cabinet air
+/// (for a busbar its `heat_to_air_w`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeatSource {
+    /// The caller's id, for the caller's own bookkeeping.
+    pub id: u64,
+    /// Footprint on the plate, interior frame.
+    pub rect: Rect,
+    /// Heat into the cabinet air, W.
+    pub power_w: f64,
+    /// Share of the air depth the body blocks, 0 to 1. `None` = 0.15, a thin
+    /// bar or rail.
+    pub blockage: Option<f64>,
+}
+
 /// Where an opening is.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Placement {
@@ -156,6 +174,58 @@ pub struct Fan {
     pub max_pressure_pa: f64,
 }
 
+/// Which way an internal fan blows, in the interior frame (`y` is down).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlowDirection {
+    Right,
+    Left,
+    Up,
+    Down,
+    /// Towards the door, across the air depth. The 2D slice is depth averaged,
+    /// so such a fan only stirs (like the jet term of an opening fan).
+    ToDoor,
+    /// Towards the mounting plate (see `ToDoor`).
+    ToPlate,
+}
+
+/// A circulation fan inside the enclosure: it takes air from one side of its
+/// disc and puts it on the other, with no opening to the outside. Its flow
+/// is therefore not set by a vent but by the resistance of the loop the air
+/// has to find.
+///
+/// Curve: the same straight line from (0 flow, `max_pressure_pa`) to
+/// (`free_flow_m3h`, 0 pressure) as an opening fan. `installed_factor`
+/// scales both ends for the losses the datasheet does not show (inlet
+/// obstruction, swirl, a bad guard); 1.0 is the free-air curve.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CirculationFan {
+    /// Centre in the interior frame, mm.
+    pub x_mm: f64,
+    pub y_mm: f64,
+    /// Fan disc diameter (outer frame), mm.
+    pub diameter_mm: f64,
+    pub direction: BlowDirection,
+    pub free_flow_m3h: f64,
+    pub max_pressure_pa: f64,
+    /// 1.0 = datasheet curve, below 1 = installed worse than on the test rig.
+    pub installed_factor: f64,
+    /// Distance of the fan disc from the mounting plate, mm. `None` = half the
+    /// air depth. Sets how a jet meets the devices (it passes over their
+    /// fronts, or hits them when the fan blows at the plate).
+    pub z_mm: Option<f64>,
+}
+
+impl CirculationFan {
+    /// Free flow after installation, m3/s.
+    pub fn q_max_m3s(&self) -> f64 {
+        self.free_flow_m3h / 3600.0 * self.installed_factor
+    }
+    /// Shut-off pressure after installation, Pa.
+    pub fn p_max_pa(&self) -> f64 {
+        self.max_pressure_pa * self.installed_factor
+    }
+}
+
 /// Modelling choices and the rough values behind them. Every field is a
 /// stated assumption; `Params::cooling_favourable` and
 /// `Params::cooling_unfavourable` give the two ends of the range used for
@@ -185,9 +255,93 @@ pub struct Params {
     pub discharge_coefficient: f64,
     /// Multiplier on the wall heat transfer coefficient (IEC 60890 k).
     pub wall_k_scale: f64,
+    /// The shell as layers (lane H1). `None` = the default shell of the
+    /// enclosure, calibrated to the IEC 60890 coefficient of its material, so
+    /// results equal the one-number wall.
+    pub shell: Option<crate::shell::ShellModel>,
+    /// Extra heat sources besides devices and duct wires (additive; the
+    /// engines turn each into a solid body with heat, see [`Scenario::lowered`]).
+    pub sources: Vec<HeatSource>,
     /// Solver stop: largest temperature change between iterations, K.
     pub tolerance_k: f64,
     pub max_iterations: usize,
+    /// Fans inside the enclosure with no opening (lane H8). Empty = none.
+    /// Kept here, not in [`Scenario`], so the existing scenario literals stay
+    /// valid.
+    pub circulation_fans: Vec<CirculationFan>,
+    /// Finned surfaces: device id and its heatsink (lane H8). Empty = none.
+    pub heatsinks: Vec<(u64, crate::forced::Heatsink)>,
+    /// Let the turbulence behind blocking parts and the fan jets lift the
+    /// forced film toward the turbulent plate value. Off keeps the clean
+    /// laminar plate (the long-standing behaviour).
+    pub wake_turbulence: bool,
+}
+
+impl Scenario {
+    /// Refuses a heat source with a negative or non-finite power, a
+    /// non-finite blockage or a footprint that is not a number. Run before
+    /// [`Scenario::lowered`], which would otherwise hide the source from the
+    /// solver's own checks.
+    pub fn check_sources(&self) -> Result<(), crate::Error> {
+        for h in &self.params.sources {
+            if !(h.power_w.is_finite() && h.power_w >= 0.0) {
+                return Err(crate::Error::Invalid(
+                    "a heat source is negative or not a number".into(),
+                ));
+            }
+            if h.blockage.is_some_and(|b| !b.is_finite()) {
+                return Err(crate::Error::Invalid(
+                    "a heat source blockage is not a number".into(),
+                ));
+            }
+            let r = &h.rect;
+            if !(r.x.is_finite() && r.y.is_finite() && r.w.is_finite() && r.h.is_finite())
+                || r.w <= 0.0
+                || r.h <= 0.0
+            {
+                return Err(crate::Error::Invalid(
+                    "a heat source has no footprint".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// The scenario with `Params::sources` turned into obstacles that carry
+    /// their heat, which is the form both engines solve (a porous body, like a
+    /// duct with wires). Borrowed unchanged when there are no sources.
+    ///
+    /// **Call [`Scenario::check_sources`] and then this once at the entry of
+    /// every solver.** A caller that skips it silently drops the sources: the
+    /// engines below it only see obstacles.
+    pub fn lowered(&self) -> std::borrow::Cow<'_, Scenario> {
+        if self.params.sources.is_empty() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut s = self.clone();
+        for h in std::mem::take(&mut s.params.sources) {
+            // A porous body that carries heat: the only obstacle kind whose
+            // heat both engines place (ducts with wires).
+            s.obstacles.push(Obstacle {
+                kind: ObstacleKind::Duct,
+                rect: h.rect,
+                blockage: Some(match h.blockage {
+                    Some(b) if b.is_finite() => b.clamp(0.0, 1.0),
+                    _ => 0.15,
+                }),
+                loss_w: h.power_w,
+            });
+        }
+        std::borrow::Cow::Owned(s)
+    }
+
+    /// The shell in use: the user's, or the default one of the enclosure.
+    pub fn shell(&self) -> crate::shell::ShellModel {
+        self.params
+            .shell
+            .clone()
+            .unwrap_or_else(|| crate::shell::ShellModel::from_enclosure(&self.enclosure))
+    }
 }
 
 impl Default for Params {
@@ -205,8 +359,13 @@ impl Default for Params {
             radiation_view_factor: 0.5,
             discharge_coefficient: 0.6,
             wall_k_scale: 1.0,
+            shell: None,
+            sources: Vec::new(),
             tolerance_k: 0.01,
             max_iterations: 60,
+            circulation_fans: Vec::new(),
+            heatsinks: Vec::new(),
+            wake_turbulence: false,
         }
     }
 }

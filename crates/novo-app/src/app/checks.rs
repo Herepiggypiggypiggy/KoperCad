@@ -2,8 +2,7 @@
 //! outline's Issues mode and F8 / Shift+F8.
 
 use eframe::egui;
-use novo_canvas::model::item_id;
-use novo_canvas::{Mark, MarkKind};
+use novo_canvas::Mark;
 use novo_checks::{Problem, Severity, Summary};
 use novo_core::{AnyId, PageId, Project};
 use novo_xref::Place;
@@ -51,30 +50,8 @@ impl NovoApp {
             return Vec::new();
         }
         self.refresh_problems(true);
-        let Some(doc) = self.backend.document() else {
-            return Vec::new();
-        };
-        let project = doc.project();
-        let on_page = |id: &AnyId| match id {
-            AnyId::Symbol(s) => project.symbol(*s).is_some_and(|s| s.page == page),
-            AnyId::Wire(w) => project.wire(*w).is_some_and(|w| w.page == page),
-            _ => false,
-        };
-        // While a background run is catching up, the marks of the last
-        // finished one stay (they may be a revision old).
-        let problems = self.wb.problems.as_ref().map_or(&[][..], |(_, p)| p);
-        let mut marks = Vec::new();
-        for p in problems {
-            let kind = match p.severity {
-                Severity::Error => MarkKind::Error,
-                Severity::Warning => MarkKind::Warning,
-                Severity::Info => continue,
-            };
-            for id in p.at.iter().filter(|id| on_page(id)) {
-                marks.push(Mark::on(kind, item_id(*id)).with_text(p.message.clone()));
-            }
-        }
-        marks
+        // The triangles come from the flag store, which the same problems fill.
+        self.flag_marks(page)
     }
 
     /// The problems the person is shown: none while a lesson about something
@@ -368,33 +345,56 @@ impl NovoApp {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 for (i, p) in &problems {
+                    let pal = crate::theme::ui_palette();
+                    let triangle = p.severity != Severity::Info;
                     let (mark, color) = match p.severity {
-                        Severity::Error => (
-                            novo_theme::icons::status::ERROR,
-                            crate::theme::ui_palette().error,
-                        ),
-                        Severity::Warning => (
-                            novo_theme::icons::status::WARNING,
-                            crate::theme::ui_palette().warning,
-                        ),
-                        Severity::Info => (
-                            novo_theme::icons::status::INFO,
-                            crate::theme::ui_palette().info,
-                        ),
+                        Severity::Error | Severity::Warning => ("", pal.text_primary),
+                        Severity::Info => (novo_theme::icons::status::INFO, pal.info),
                     };
                     let mut text = egui::text::LayoutJob::default();
                     let font = egui::TextStyle::Body.resolve(ui.style());
-                    text.append(
-                        &format!("{mark}  "),
-                        0.0,
-                        egui::TextFormat::simple(font.clone(), color),
-                    );
+                    if !mark.is_empty() {
+                        text.append(
+                            &format!("{mark}  "),
+                            0.0,
+                            egui::TextFormat::simple(font.clone(), color),
+                        );
+                    }
                     text.append(
                         &p.message,
                         0.0,
                         egui::TextFormat::simple(font, ui.visuals().text_color()),
                     );
-                    let row = ui.selectable_label(false, text);
+                    // The triangle has its own column; the text, wrapped or
+                    // not, starts after it.
+                    let row = ui
+                        .horizontal_top(|ui| {
+                            if triangle {
+                                let (slot, _) = ui.allocate_exact_size(
+                                    egui::vec2(20.0, 20.0),
+                                    egui::Sense::hover(),
+                                );
+                                novo_theme::widgets::flag_triangle(
+                                    ui.painter(),
+                                    slot.center(),
+                                    15.0,
+                                    p.severity == Severity::Error,
+                                    super::flags::is_unchecked(p.kind),
+                                    novo_theme::Palette::of(ui),
+                                );
+                            }
+                            // A horizontal layout never wraps: give the label a
+                            // top-down cell of the width left after the triangle,
+                            // so a long message wraps there as it did before.
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| ui.selectable_label(false, text),
+                            )
+                            .inner
+                        })
+                        .inner;
                     self.problem_flash(ui, *i, &row);
                     self.learn_row("issues.list", &p.message, row.rect);
                     if row.clicked() {
@@ -427,15 +427,7 @@ impl NovoApp {
                                 .clicked()
                             }
                         {
-                            match self.execute(fix.command) {
-                                Some(Ok(_)) => {
-                                    self.message(Level::Info, "Renamed to the usual pin names");
-                                }
-                                Some(Err(e)) => {
-                                    self.message(Level::Error, format!("Could not rename: {e}"));
-                                }
-                                None => {}
-                            }
+                            self.fix_pin_names(*i);
                             ui.close();
                         }
                         let waive = ui.button("Waive with a reason…");
@@ -639,6 +631,32 @@ impl NovoApp {
         self.outline_mode = super::OutlineMode::Issues;
         if !self.outline_pinned() {
             self.outline_open = !(toggle && showing && self.outline_open);
+        }
+    }
+
+    /// Runs the pin-name fix of problem `index` as one undo step.
+    pub(super) fn fix_pin_names(&mut self, index: usize) {
+        let Some(problem) = self.shown_problems().get(index).cloned() else {
+            return;
+        };
+        let Some(fix) = self
+            .backend
+            .document()
+            .and_then(|d| novo_checks::pin_fix(d.project(), &problem))
+        else {
+            return;
+        };
+        match self.execute(fix.command) {
+            Some(Ok(_)) => self.message(Level::Info, "Renamed to the usual pin names"),
+            Some(Err(e)) => self.message(Level::Error, format!("Could not rename: {e}")),
+            None => {}
+        }
+    }
+
+    /// Sends problem `index` to Ask Claude (when the assistant is on).
+    pub(super) fn explain_problem(&mut self, index: usize) {
+        if let Some(p) = self.shown_problems().get(index).cloned() {
+            self.wb.assistant.ask_later(explain_question(&p));
         }
     }
 

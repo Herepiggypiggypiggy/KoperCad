@@ -1,16 +1,17 @@
 @title Heat: the airflow lines keep a light edge in the Light theme
 @area Cabinet
 @sizes 1366x768 1920x1080
-# The airflow streamlines are drawn with a halo under the line. It used to be a fixed near-black in both themes; it is now the theme's surface colour at half opacity, so in Light the lines have a light edge. Contour lines stay dark on purpose: they run over the fixed heat ramp. Needs a finished run for Airflow to be on offer. The pictures are the evidence.
+# The airflow streamlines are drawn with a halo under the line. It used to be a fixed near-black in both themes; it is now the theme's surface colour at half opacity, so in Light the lines have a light edge. Contour lines stay dark on purpose: they run over the fixed heat ramp. Needs a finished run for the Flow menu to draw lines. The pictures are the evidence.
 open qa/fixtures/cabinet-cooling-advice.novo
 wait 20
 click_text Cabinet #1
 wait 30
 key shift+h
 wait 60
-click_text Simulate #2
+# Auto starts the run by itself; the Flow menu (it replaced the Airflow chip) needs a result.
 wait_s 150
-click_text Airflow
+click_text Off
+click_text Streamlines
 wait 30
 shot airflow-dark
 check_layout

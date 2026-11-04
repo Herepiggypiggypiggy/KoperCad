@@ -80,6 +80,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.proposals",
     "palette.field",
     "issue.pill",
+    "job.pill",
     "whats_new.pill",
     "help.button",
     "drawer.terminals",
@@ -216,6 +217,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "calc.tab.circuits",
     "calc.tab.starters",
     "calc.tab.sccr",
+    "calc.tab.busbar_impedance",
     "autopilot.window",
     "autopilot.accept_all",
 ];
@@ -736,6 +738,14 @@ impl NovoApp {
     ) {
         self.anchor(id, rect, label);
         if clicked {
+            self.learn_event(Event::Clicked(id.to_owned()));
+        }
+    }
+
+    /// A click on a rail row counts as a click on the control of the same
+    /// name that a lesson may point at (the row replaced the toolbar button).
+    pub(super) fn learn_rail_click(&mut self, id: &str) {
+        if ANCHORS.contains(&id) {
             self.learn_event(Event::Clicked(id.to_owned()));
         }
     }

@@ -4,6 +4,7 @@
 //! wall, so the opening drawn is the opening solved. Edits undo here.
 
 use eframe::egui;
+use novo_thermal::gaps::{self, Filter, FilterClass, IpClass};
 use novo_thermal::model::Enclosure;
 
 use super::heat_openings::{self, Role};
@@ -89,24 +90,27 @@ fn body(
             .color(pal.text_secondary)
     };
     let Some(e) = enclosure else {
-        ui.label(muted(
+        ui.label(muted("Enclosure size not set"));
+        super::window_help::add(
+            ui.ctx(),
             "Set the enclosure size first (Cabinet, Size enclosure): the openings sit in its walls.",
-        ));
+        );
         return;
     };
-    ui.label(muted(
-        "Where air gets in (blue) and out (orange). Grey: the direction is known after a run.",
-    ));
-    ui.label(muted(
-        "Motion is only an illustration of direction; its speed is not the air speed.",
-    ));
+    super::window_help::add(
+        ui.ctx(),
+        "Where air gets in (blue) and out (orange). Grey: the direction is known after a run.\n\
+         Motion is only an illustration of direction; its speed is not the air speed.",
+    );
     if running {
         ui.label(
-            egui::RichText::new(
-                "A run is going on the openings as they were. A change here marks its result out of date; with auto re-solve on it restarts.",
-            )
+            egui::RichText::new("Run in progress")
                 .small()
                 .color(pal.warning),
+        );
+        super::window_help::add(
+            ui.ctx(),
+            "A run is going on the openings as they were. A change here marks its result out of date; with auto re-solve on it restarts.",
         );
     }
     if let Some(k) = settings.requested.take()
@@ -142,11 +146,18 @@ fn body(
             }
         });
     });
+    seal_row(ui, settings, e);
     if settings.vents.is_empty() {
         ui.add_space(4.0);
-        ui.label(muted(
-            "None: the enclosure is sealed. Add a grille low and another high, or a filter fan and an exhaust grille.",
-        ));
+        ui.label(muted(if settings.seal.is_some() {
+            "No openings: only the door seal leaks"
+        } else {
+            "None: the enclosure is sealed"
+        }));
+        super::window_help::add(
+            ui.ctx(),
+            "Add a grille low and another high, or a filter fan and an exhaust grille.",
+        );
     }
     let mut remove = None;
     settings.hovered = None;
@@ -199,7 +210,7 @@ fn body(
                 ui.add(
                     egui::Label::new(
                         egui::RichText::new(format!(
-                            "Opening {} is a fan only {:.0} mm across: that is smaller than the cut-out of the smallest common cabinet fans (about 38 mm). Check its size and datasheet flow.",
+                            "Opening {}: fan only {:.0} mm across",
                             i + 1,
                             spec.width_mm.min(spec.height_mm)
                         ))
@@ -207,9 +218,20 @@ fn body(
                     )
                     .wrap(),
                 );
+                super::window_help::add(
+                    ui.ctx(),
+                    "A fan this small is below the cut-out of the smallest common cabinet fans (about 38 mm). Check its size and datasheet flow.",
+                );
             }
             if let Some(line) = operating_point(&spec, flow) {
-                ui.label(muted(&line));
+                let (shown, why) = line.split_once(" against").unwrap_or((&line, ""));
+                ui.label(muted(&format!("{shown} (model)")));
+                if !why.is_empty() {
+                    super::window_help::add(
+                        ui.ctx(),
+                        format!("Operating point: this run moves the air{why}"),
+                    );
+                }
             }
             let edited = edited.fitted(e);
             if edited != spec && remove.is_none() {
@@ -275,25 +297,85 @@ fn body(
     }
     if stale {
         ui.add_space(4.0);
-        ui.colored_label(
-            pal.warning,
+        ui.colored_label(pal.warning, "Result out of date");
+        super::window_help::add(
+            ui.ctx(),
             "The result shown is from before your last change: run Simulate again.",
         );
     }
     if let Some(line) = balance_line(flows, settings, running) {
         ui.add_space(4.0);
-        ui.label(muted(&line));
+        // The numbers stay; the sentence that explains them is behind the "?".
+        let (shown, why) = match line.find(". ") {
+            Some(at) => (&line[..=at - 1], &line[at + 2..]),
+            None => (line.as_str(), ""),
+        };
+        ui.label(muted(shown));
+        if !why.is_empty() {
+            super::window_help::add(ui.ctx(), why);
+        }
     }
-    egui::CollapsingHeader::new("What is this?")
-        .id_salt("view3d_vents_about")
-        .show(ui, |ui| {
-            ui.label(muted(
-                "Walls are named as seen from the front of the cabinet; the one you pick is tinted. \
-                 Openings are kept inside their wall and saved with the project. They apply to the \
-                 next run. A grille's flow is read from the solved air speed next to it: a model \
-                 value, not a measurement. Drag an opening's label in the cabinet to slide it.",
-            ));
+    super::heat_inside_fans::section(ui, settings, e);
+    super::window_help::add(
+        ui.ctx(),
+        "Walls are named as seen from the front of the cabinet; the one you pick is tinted. \
+         Openings are kept inside their wall and saved with the project. They apply to the \
+         next run. A grille's flow is read from the solved air speed next to it: a model \
+         value, not a measurement. Drag an opening's label in the cabinet to slide it.",
+    );
+}
+
+/// Small secondary text.
+fn muted(t: &str) -> egui::RichText {
+    egui::RichText::new(t.to_owned())
+        .small()
+        .color(crate::theme::ui_palette().text_secondary)
+}
+
+/// Explanation goes behind the window's one "?" (see `window_help`).
+fn help(ui: &mut egui::Ui, text: &str) {
+    super::window_help::add(ui.ctx(), text);
+}
+
+/// The door seal and cable entries: air that gets through a closed cabinet.
+fn seal_row(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclosure) {
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        ui.label("Door seal");
+        let mut on = settings.seal.is_some();
+        let mut seal = settings.seal.unwrap_or_default();
+        let before = (on, seal);
+        ui.checkbox(&mut on, "Leaks");
+        ui.add_enabled_ui(on, |ui| {
+            egui::ComboBox::from_id_salt("seal_ip")
+                .selected_text(seal.ip.label())
+                .width(70.0)
+                .show_ui(ui, |ui| {
+                    for ip in IpClass::ALL {
+                        ui.selectable_value(&mut seal.ip, ip, ip.label());
+                    }
+                });
+            ui.add(
+                egui::DragValue::new(&mut seal.glands)
+                    .range(0..=200)
+                    .suffix(" glands"),
+            );
         });
+        help(
+            ui,
+            "Off: the cabinet is sealed, as before. On: the door seal and the cable glands pass \
+             a little air (more for a lower IP class), in low and out high. Model: typical \
+             leakage per metre of seal, not measured; IEC 60529 does not give an air rate.",
+        );
+        if (on, seal) != before {
+            settings.checkpoint_edit();
+            settings.seal = on.then_some(seal);
+        }
+    });
+    if let Some(seal) = settings.seal {
+        let q = gaps::total_leak_m3h(e, &seal, 4.0);
+        ui.label(muted(&format!("Leaks about {q:.1} m³/h at 4 Pa (model)")));
+    }
 }
 
 /// Where the shown run puts a fan against its datasheet: the flow the run
@@ -536,6 +618,52 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
                     v.free_fraction = pct / 100.0;
                 }
                 ui.end_row();
+            }
+            if v.kind != Kind::FilterFan {
+                ui.label("Filter mat");
+                ui.horizontal(|ui| {
+                    let now = v.filter.map_or("None", |c| c.label());
+                    egui::ComboBox::from_id_salt(("vent_filter", i))
+                        .selected_text(now)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut v.filter, None, "None");
+                            for c in FilterClass::ALL {
+                                ui.selectable_value(&mut v.filter, Some(c), c.label());
+                            }
+                        });
+                    help(
+                        ui,
+                        "A mat in front of the opening. Its pressure drop rises with dust, \
+                         so a clogged mat passes less air (model: typical mat values, not a \
+                         maker's curve; the grille sees it at about 4 Pa).",
+                    );
+                });
+                ui.end_row();
+                if let Some(c) = v.filter {
+                    ui.label("Dust on it");
+                    ui.horizontal(|ui| {
+                        let mut pct = (v.filter_load * 100.0).round();
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut pct)
+                                    .range(0.0..=150.0)
+                                    .speed(1.0)
+                                    .max_decimals(0)
+                                    .suffix(" %"),
+                            )
+                            .on_hover_text("0 % is a new mat, 100 % is when to change it")
+                            .changed()
+                        {
+                            v.filter_load = pct / 100.0;
+                        }
+                        let dp = Filter::from_class(c).with_loading(v.filter_load).dp_pa(1.5);
+                        ui.label(muted(&format!(
+                            "{} · {dp:.0} Pa at 1.5 m/s",
+                            gaps::loading_word(v.filter_load)
+                        )));
+                    });
+                    ui.end_row();
+                }
             }
         });
     // Notes go under the grid: a grid cell does not wrap and would stretch

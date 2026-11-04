@@ -52,6 +52,7 @@ fn input(runs: Vec<Run>, devices: Vec<Device>) -> Input {
             finish: None,
             door_bonded: None,
         }],
+        cables: Vec::new(),
         params: Params::default(),
     }
 }

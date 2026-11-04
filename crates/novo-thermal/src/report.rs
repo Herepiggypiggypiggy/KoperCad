@@ -205,6 +205,31 @@ pub fn build(
         });
     }
 
+    // Circulation fans: flow through the fan faces and the pressure they build.
+    let circulation: Vec<CirculationFlow> = scn
+        .params
+        .circulation_fans
+        .iter()
+        .enumerate()
+        .map(|(k, fan)| {
+            let q = flow::circulation_flow(s, &st.flow, k);
+            let (mut dp_w, mut w) = (0.0, 0.0);
+            for &ci in &s.circ_of[k] {
+                let cf = &s.circ[ci];
+                let sign = cf.force.signum();
+                let part = sign * cf.sigma * (st.flow.p[cf.i] - st.flow.p[cf.j] + cf.force);
+                dp_w += part.max(1e-12) * sign * (st.flow.p[cf.j] - st.flow.p[cf.i]);
+                w += part.max(1e-12);
+            }
+            CirculationFlow {
+                index: k,
+                flow_m3h: q * 3600.0,
+                pressure_pa: dp_w / w.max(1e-12),
+                share_of_free_flow: (q / fan.q_max_m3s()).clamp(0.0, 1.0),
+            }
+        })
+        .collect();
+
     let air_field = grid_field(s, st.t_air.clone());
     let (half, top) = profile(&air_field);
     let max_speed = velocity.max_magnitude();
@@ -246,8 +271,11 @@ pub fn build(
         notes.push("Devices without a temperature limit are not judged.".into());
     }
 
+    let shell = shell_report(scn, s, st);
+
     ThermalResult {
         grid,
+        shell,
         ambient_c: s.ambient,
         air_temp: air_field,
         plate_temp: grid_field(s, plate_vals),
@@ -268,6 +296,7 @@ pub fn build(
         recommendations: Vec::new(),
         balance,
         openings,
+        circulation,
         max_speed_ms: max_speed,
         air_at_half_height_c: half,
         air_at_top_c: top,
@@ -400,6 +429,39 @@ pub fn hot_spots(result: &ThermalResult) -> Vec<HotSpot> {
         }
     }
     out
+}
+
+/// Wall temperatures from the solver's per-cell wall data (lane H1).
+fn shell_report(scn: &Scenario, s: &Setup, st: &State) -> crate::shell::ShellReport {
+    use crate::shell::FaceSamples;
+    let mut samples: [FaceSamples; 6] = Default::default();
+    for i in 0..s.n() {
+        for (f, face) in samples.iter_mut().enumerate() {
+            let g = s.g_wall[i][f];
+            if g > 0.0 {
+                face.push((g, st.t_air[i]));
+            }
+        }
+        if s.plate_idx[i].is_some() && s.g_pa[i] > 0.0 {
+            samples[setup::REAR].push((s.g_pa[i], st.t_plate[i]));
+        }
+    }
+    let (mut wsum, mut tsum) = (0.0, 0.0);
+    for i in 0..s.n() {
+        if s.plate_idx[i].is_some() {
+            wsum += s.plate_frac[i];
+            tsum += s.plate_frac[i] * st.t_plate[i];
+        }
+    }
+    let plate_rear = (wsum > 0.0).then(|| tsum / wsum);
+    crate::shell::report(
+        &s.shell,
+        &scn.enclosure,
+        s.ambient,
+        scn.params.wall_k_scale,
+        &samples,
+        plate_rear,
+    )
 }
 
 #[cfg(test)]

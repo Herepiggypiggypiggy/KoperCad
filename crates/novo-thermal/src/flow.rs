@@ -125,6 +125,18 @@ pub fn sweep(s: &Setup, t_air: &[f64], flow: &mut Flow) {
         }
     }
 
+    // Internal fans: extra faces with the straight fan curve, in parallel with
+    // the ordinary path between the same two cells.
+    for cf in &s.circ {
+        faces.push(Face {
+            i: cf.i,
+            j: cf.j,
+            sigma: cf.sigma,
+            force: cf.force,
+            area: cf.area,
+        });
+    }
+
     // Port laws: out-flow = g * p - q0.
     let mut g = vec![0.0; n];
     let mut q0 = vec![0.0; n];
@@ -163,21 +175,34 @@ pub fn sweep(s: &Setup, t_air: &[f64], flow: &mut Flow) {
         }
     }
 
-    // Fluxes and speeds (relaxed).
+    // Fluxes and speeds (relaxed). A fan face adds to the ordinary face
+    // between the same cells; the speed follows the summed flux over the
+    // larger of the two cross sections.
     let relax = 0.5;
     for q in flow.qx.iter_mut().chain(flow.qy.iter_mut()) {
         *q = 0.0;
     }
+    let mut ax = vec![0.0; n];
+    let mut ay = vec![0.0; n];
     for f in &faces {
         let q = f.sigma * (flow.p[f.i] - flow.p[f.j] + f.force);
         let east = f.j == f.i + 1 && !(f.j == f.i + nx);
-        let speed = q.abs() / f.area;
         if east {
-            flow.qx[f.i] = q;
-            flow.sx[f.i] = (1.0 - relax) * flow.sx[f.i] + relax * speed;
+            flow.qx[f.i] += q;
+            ax[f.i] = f64::max(ax[f.i], f.area);
         } else {
-            flow.qy[f.i] = q;
-            flow.sy[f.i] = (1.0 - relax) * flow.sy[f.i] + relax * speed;
+            flow.qy[f.i] += q;
+            ay[f.i] = f64::max(ay[f.i], f.area);
+        }
+    }
+    for i in 0..n {
+        if ax[i] > 0.0 {
+            let speed = flow.qx[i].abs() / ax[i];
+            flow.sx[i] = (1.0 - relax) * flow.sx[i] + relax * speed;
+        }
+        if ay[i] > 0.0 {
+            let speed = flow.qy[i].abs() / ay[i];
+            flow.sy[i] = (1.0 - relax) * flow.sy[i] + relax * speed;
         }
     }
     for (k, port) in s.ports.iter().enumerate() {
@@ -308,4 +333,16 @@ pub fn cell_velocity(s: &Setup, flow: &Flow) -> (Vec<f64>, Vec<f64>) {
 
 pub(crate) fn face_open_fraction(a: f64, b: f64) -> f64 {
     open_fraction(a, b)
+}
+
+/// Flow through circulation fan `k` at the present pressures, m3/s (positive =
+/// the way the fan blows). 0 for a fan that blows across the depth.
+pub fn circulation_flow(s: &Setup, flow: &Flow, k: usize) -> f64 {
+    s.circ_of[k]
+        .iter()
+        .map(|&ci| {
+            let cf = &s.circ[ci];
+            cf.force.signum() * cf.sigma * (flow.p[cf.i] - flow.p[cf.j] + cf.force)
+        })
+        .sum()
 }

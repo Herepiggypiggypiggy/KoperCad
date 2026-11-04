@@ -155,20 +155,30 @@ impl NovoApp {
         ))
     }
 
-    pub(super) fn bench_write(&mut self, path: &Path, bytes: &[u8], what: &str) -> Option<PathBuf> {
+    pub(super) fn bench_write(
+        &mut self,
+        job: &'static str,
+        path: &Path,
+        bytes: &[u8],
+        what: &str,
+    ) -> Option<PathBuf> {
         let replaced = path.exists();
         match write_replacing(path, bytes) {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
+                self.job_ok(job);
                 self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    job,
+                    "Bench file not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }
@@ -204,7 +214,9 @@ impl NovoApp {
     pub fn export_bench_cut_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.bench_cut",
+                "Cut list not written",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -233,7 +245,7 @@ impl NovoApp {
                 jobs.len()
             )
         };
-        self.bench_write(path, &bytes, &what)
+        self.bench_write("export.bench_cut", path, &bytes, &what)
     }
 
     /// The machine job file (CSV) under the window's draft standard, so it
@@ -247,7 +259,9 @@ impl NovoApp {
     pub fn export_machine_csv_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.machine_csv",
+                "Machine file not written",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -264,7 +278,12 @@ impl NovoApp {
             ..novo_reports::CsvOptions::default()
         };
         let text = novo_reports::wire_cut_csv(&jobs, &options);
-        self.bench_write(path, text.as_bytes(), &format!("{} wires", jobs.len()))
+        self.bench_write(
+            "export.machine_csv",
+            path,
+            text.as_bytes(),
+            &format!("{} wires", jobs.len()),
+        )
     }
 
     pub(super) fn export_ferrules(&mut self) -> Option<PathBuf> {
@@ -276,7 +295,9 @@ impl NovoApp {
     pub fn export_ferrules_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.ferrules",
+                "Ferrule list not written",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -286,7 +307,7 @@ impl NovoApp {
         let project = self.machine()?;
         let jobs = wire_cut_jobs_with(&project, &inputs.standard);
         let report = FerruleTable::build(&project, &jobs, &inputs.standard);
-        if report.section("ferrules").is_none() {
+        if report.section("ferrules").is_none() && report.section("lugs").is_none() {
             let (unknown, off) = novo_reports::ends_without_ferrule(&jobs);
             let why = if jobs.is_empty() {
                 "No ferrules to crimp yet: connect two device pins".to_owned()
@@ -299,7 +320,12 @@ impl NovoApp {
             } else {
                 "No ferrules to crimp yet".to_owned()
             };
-            self.message(Level::Warning, why);
+            self.job_fail(
+                "export.ferrules",
+                "Ferrule list not written",
+                Level::Warning,
+                why,
+            );
             return None;
         }
         let options = pdf_options(
@@ -308,7 +334,7 @@ impl NovoApp {
             self.report_translator(),
         );
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
-        self.bench_write(path, &bytes, "ferrule table")
+        self.bench_write("export.ferrules", path, &bytes, "ferrule table")
     }
 
     /// The label run for the current settings.
@@ -329,7 +355,9 @@ impl NovoApp {
     pub fn export_labels_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
         if !inputs.labels.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.labels",
+                "Labels not written",
                 Level::Warning,
                 "The label stock does not fit its sheet: check the sizes",
             );
@@ -361,7 +389,7 @@ impl NovoApp {
                 run.too_small
             ));
         }
-        self.bench_write(path, &bytes, &what)
+        self.bench_write("export.labels", path, &bytes, &what)
     }
 
     /// The chosen label kinds as Brother P-touch Editor database files, one
@@ -403,7 +431,12 @@ impl NovoApp {
                 "csv",
                 &self.wb.sheet_exports,
             );
-            if let Some(p) = self.bench_write(&path, text.as_bytes(), &format!("{kind} labels")) {
+            if let Some(p) = self.bench_write(
+                "export.labels",
+                &path,
+                text.as_bytes(),
+                &format!("{kind} labels"),
+            ) {
                 out.push(p);
             }
         }
@@ -467,6 +500,10 @@ impl NovoApp {
         let shown = super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
+                // A docked pane scrolls both ways, which gives the content an
+                // endless width: wrap the button rows at the visible width so
+                // every control stays reachable.
+                ui.set_max_width(ui.clip_rect().width().max(200.0));
                 if let Some(ready) = meter {
                     super::autopilot::meter(ui, ready);
                     ui.add_space(6.0);
@@ -621,30 +658,14 @@ fn workshop_strip(
     stale: Option<&str>,
 ) {
     use novo_layout::template::Paper;
-    ui.horizontal(|ui| {
-        if novo_theme::widgets::primary_button(ui, "Workshop pack (folder)")
-            .on_hover_text(super::WORKSHOP_HINT)
-            .clicked()
+    ui.horizontal_wrapped(|ui| {
+        if novo_theme::widgets::primary_button(ui, "Print for the bench").clicked()
         {
             *act = Some(Act::ExportWorkshop);
         }
-        ui.label("Template on");
         for p in [Paper::A4, Paper::A3] {
-            ui.selectable_value(paper, p, p.name());
-        }
-        if ui
-            .button("Preview")
-            .on_hover_text("See how each mounting plate is cut into template pages")
-            .clicked()
-        {
-            *act = Some(Act::PreviewWorkshop);
-        }
-        if ui
-            .button("Bench packet (PDF)")
-            .on_hover_text(super::BENCH_PACKET_HINT)
-            .clicked()
-        {
-            *act = Some(Act::ExportPacket);
+            ui.selectable_value(paper, p, p.name())
+                .on_hover_text("Paper for the drilling templates");
         }
         if ui
             .button("Work cards (PDF)")
@@ -653,6 +674,28 @@ fn workshop_strip(
         {
             *act = Some(Act::Run("export.workpack"));
         }
+        ui.menu_button("More", |ui| {
+            if ui
+                .button("Bench packet (PDF)")
+                .on_hover_text(super::BENCH_PACKET_HINT)
+                .clicked()
+            {
+                *act = Some(Act::ExportPacket);
+                ui.close();
+            }
+            if ui
+                .button("Preview templates")
+                .on_hover_text("See how each mounting plate is cut into template pages")
+                .clicked()
+            {
+                *act = Some(Act::PreviewWorkshop);
+                ui.close();
+            }
+        });
+        novo_theme::widgets::help_mark(
+            ui,
+            "Print for the bench writes one folder next to the project, in working order: print scale check, drilling templates and drill plans, work cards, labels, kitting list, and the bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans). More has the single PDFs.",
+        );
     });
     if let Some(note) = stale {
         ui.label(
@@ -661,12 +704,9 @@ fn workshop_strip(
                 .color(crate::theme::ui_palette().warning),
         );
     }
-    print_check(ui, check, act);
-    super::dialog_ui::explained(
-        ui,
-        "Workshop pack",
-        "The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the print scale check, the 1:1 drilling templates, the labels, the kitting list and the work cards in one folder next to the project.",
-    );
+    egui::CollapsingHeader::new("Calibrate printer")
+        .default_open(!check[0].trim().is_empty() || !check[1].trim().is_empty())
+        .show(ui, |ui| print_check(ui, check, act));
 }
 
 /// One thing the printed bench output cannot be trusted on yet.
@@ -674,7 +714,36 @@ fn workshop_strip(
 pub(super) struct Gap {
     pub(super) text: String,
     /// Button label and the command that starts the fix, if one exists.
-    pub(super) fix: Option<(&'static str, &'static str)>,
+    pub(super) fix: Option<(String, &'static str)>,
+    /// Longer reasoning, shown behind a "?" and not on the line.
+    pub(super) detail: Option<&'static str>,
+}
+
+impl Gap {
+    /// The short name the triangle chip carries; the sentence is in its popover.
+    pub(super) fn title(&self) -> &'static str {
+        let t = &self.text;
+        if t.starts_with("No mounting plate") {
+            "No mounting plate"
+        } else if t.contains("no number") {
+            "Wires without number"
+        } else if t.contains("no cross-section") {
+            "Wires without size"
+        } else if t.contains("no ferrule") {
+            "Ferrules switched off"
+        } else if t.contains("estimates") {
+            "Lengths estimated"
+        } else {
+            "Not ready to print"
+        }
+    }
+
+    /// The fix as `(button label, command)` with the label borrowed.
+    pub(super) fn fix_pair(&self) -> Option<(&str, &'static str)> {
+        self.fix
+            .as_ref()
+            .map(|(label, command)| (label.as_str(), *command))
+    }
 }
 
 /// `1 of 1 wire to cut has`, `3 of 25 wires to cut have`: the start of a
@@ -696,7 +765,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if !has_plate {
         out.push(Gap {
             text: "No mounting plate: nothing is routed, every length is an estimate".into(),
-            fix: Some(("Open Cabinet", "view.cabinet")),
+            fix: Some(("Open Cabinet".into(), "view.cabinet")),
+            detail: None,
         });
     }
     let unnumbered = count(&|j| j.number.trim().is_empty());
@@ -706,17 +776,24 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
                 "{} no number, so their labels and flags are blank",
                 lacking(unnumbered, jobs.len())
             ),
-            fix: Some(("Number wires", "wires.number")),
+            fix: Some(("Number wires".into(), "wires.number")),
+            detail: None,
         });
     }
     let no_size = count(&|j| j.cross_section_mm2.is_none());
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{} no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
+                "{} no cross-section",
                 lacking(no_size, jobs.len())
             ),
-            fix: Some(("Autopilot", "wires.autopilot")),
+            fix: Some((
+                format!("Size {}", novo_reports::count_text(no_size, "wires")),
+                "wires.autopilot",
+            )),
+            detail: Some(
+                "Wires without a cross-section get no ferrule and sit in one group. Autopilot proposes the sizes from the protective devices and the ampacity tables (planning values), with a reason each; you accept or change them.",
+            ),
         });
     }
     let (_, off) = novo_reports::ends_without_ferrule(jobs);
@@ -724,6 +801,7 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
         out.push(Gap {
             text: format!("{off} wire ends are set to have no ferrule"),
             fix: None,
+            detail: None,
         });
     }
     if has_plate {
@@ -733,7 +811,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
                 text: format!(
                     "{estimates} lengths are estimates (~): route the wires through ducts"
                 ),
-                fix: Some(("Open Cabinet", "view.cabinet")),
+                fix: Some(("Open Cabinet".into(), "view.cabinet")),
+                detail: None,
             });
         }
     }
@@ -747,9 +826,13 @@ fn readiness_strip(ui: &mut egui::Ui, gaps: &[Gap], act: &mut Option<Act>) {
     novo_theme::widgets::section_label(ui, "Before you print");
     for gap in gaps {
         ui.horizontal_wrapped(|ui| {
-            ui.label(&gap.text);
-            if let Some((label, command)) = gap.fix
-                && ui.small_button(label).clicked()
+            let detail = match gap.detail {
+                Some(more) => format!("{}\n\n{more}", gap.text),
+                None => gap.text.clone(),
+            };
+            novo_theme::widgets::flag_chip(ui, false, gap.title(), &detail);
+            if let Some((label, command)) = gap.fix_pair()
+                && novo_theme::widgets::primary_button(ui, label).clicked()
             {
                 *act = Some(Act::Run(command));
             }
@@ -765,11 +848,11 @@ fn cut_tab(
     act: &mut Option<Act>,
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            "Ferrule standard invalid",
             "The ferrule standard is not valid: fix it on the Ferrules tab",
-            |_| {},
         );
         return;
     };
@@ -804,20 +887,13 @@ fn cut_tab(
         ));
     }
     if estimates > 0 {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            &format!("{estimates} lengths estimated"),
             &format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
-            |_| {},
-        );
-    } else {
-        novo_theme::widgets::banner(
-            ui,
-            novo_theme::widgets::Level::Success,
-            "Every length comes from a routed wire",
-            |_| {},
         );
     }
     ui.add_space(4.0);
@@ -828,7 +904,7 @@ fn cut_tab(
         rules.ferrule_mm, rules.lug_mm, rules.lug_from_mm2
     ));
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if novo_theme::widgets::primary_button(ui, "Export bench cut list (PDF)")
             .on_hover_text("Grouped by size and colour, longest first, with tick boxes")
             .clicked()
@@ -856,12 +932,6 @@ fn defaults_row(
     act: &mut Option<Act>,
 ) {
     if unset.is_complete() {
-        novo_theme::widgets::banner(
-            ui,
-            novo_theme::widgets::Level::Success,
-            "Every wire has a size and a colour",
-            |_| {},
-        );
         return;
     }
     let mut missing = Vec::new();
@@ -877,11 +947,11 @@ fn defaults_row(
             lacking(unset.connections_no_colour, unset.connections)
         ));
     }
-    novo_theme::widgets::banner(
+    novo_theme::widgets::flag_chip(
         ui,
-        novo_theme::widgets::Level::Warning,
+        false,
+        "Wire size or colour not set",
         &format!("Not set: {}.", missing.join("; ")),
-        |_| {},
     );
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
@@ -1096,7 +1166,7 @@ fn ferrule_tab(
     if let Some(i) = remove {
         state.standard.sizes.remove(i);
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.small_button("Add size").clicked() {
             state.standard.sizes.push(FerruleSize {
                 mm2: 0.0,
@@ -1114,7 +1184,7 @@ fn ferrule_tab(
             state.standard = FerruleStandard::default();
         }
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Spares");
         ui.add(
             egui::DragValue::new(&mut state.standard.spare_percent)
@@ -1131,11 +1201,11 @@ fn ferrule_tab(
     });
     let valid = state.standard.is_valid();
     if !valid {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            "Ferrule sizes invalid",
             "Each size must be listed once, above zero, with a contact length above zero and an overall length (if set) at least as long as the contact length",
-            |_| {},
         );
     }
     ui.add_space(8.0);
@@ -1161,8 +1231,26 @@ fn ferrule_tab(
         }
         _ => {}
     }
+    if let Some(cache) = state.cache.as_ref().filter(|_| valid) {
+        let lugs: Vec<_> = novo_reports::crimp_list(&cache.jobs, &state.standard)
+            .into_iter()
+            .filter(|c| c.kind != novo_reports::TerminationKind::Ferrule)
+            .collect();
+        if !lugs.is_empty() {
+            novo_theme::widgets::section_label(ui, "Lugs to crimp");
+            for c in &lugs {
+                ui.label(format!(
+                    "{} {}  x {} (prepare {})",
+                    c.kind.label(),
+                    c.size,
+                    c.pieces,
+                    c.to_prepare
+                ));
+            }
+        }
+    }
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let changed = state.standard != *stored;
         if ui
             .add_enabled(valid && changed, egui::Button::new("Save to project"))
@@ -1233,7 +1321,7 @@ fn label_tab(
         LabelStock::Sheet(g) => sheet_fields(ui, g),
         LabelStock::Tape(t) => tape_fields(ui, t),
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Copies of each");
         ui.add(egui::DragValue::new(&mut state.labels.copies).range(1..=99));
         if matches!(state.labels.stock, LabelStock::Sheet(_)) {
@@ -1249,7 +1337,7 @@ fn label_tab(
             &mut state.labels.outlines,
             "Test print: draw a line around every label",
         );
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Shift");
             ui.add(
                 egui::DragValue::new(&mut state.labels.offset_x)
@@ -1268,11 +1356,11 @@ fn label_tab(
     });
     let valid = state.labels.is_valid();
     if !valid {
-        novo_theme::widgets::banner(
+        novo_theme::widgets::flag_chip(
             ui,
-            novo_theme::widgets::Level::Warning,
+            false,
+            "Labels do not fit the sheet",
             "The label sizes do not fit the sheet: check the sheet fields",
-            |_| {},
         );
     }
     if let (Some(cache), true) = (&state.cache, valid) {
@@ -1293,19 +1381,19 @@ fn label_tab(
             ));
         }
         if run.too_small > 0 {
-            novo_theme::widgets::banner(
+            novo_theme::widgets::flag_chip(
                 ui,
-                novo_theme::widgets::Level::Warning,
+                false,
+                &format!("{} labels under 2 mm", run.too_small),
                 &format!(
                     "{} labels have text under 2 mm: choose bigger labels or wider tape",
                     run.too_small
                 ),
-                |_| {},
             );
         }
     }
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let changed = state.labels != *stored;
         if ui
             .add_enabled(valid && changed, egui::Button::new("Save to project"))
@@ -1376,7 +1464,7 @@ fn sheet_fields(ui: &mut egui::Ui, g: &mut SheetGrid) {
 }
 
 fn tape_fields(ui: &mut egui::Ui, t: &mut TapeStock) {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut auto = t.length_mm.is_none();
         if ui.checkbox(&mut auto, "Length follows the text").changed() {
             t.length_mm = if auto { None } else { Some(40.0) };

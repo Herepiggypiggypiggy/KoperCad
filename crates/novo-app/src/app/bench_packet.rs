@@ -54,14 +54,18 @@ impl NovoApp {
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
                 let verb = if replaced { "Replaced" } else { "Exported" };
+                self.job_ok("export.bench_packet");
                 self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.bench_packet",
+                    "Bench packet not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }
@@ -139,9 +143,9 @@ impl NovoApp {
                 report: BenchCut::build(&project, &jobs),
             });
             let ferrules = FerruleTable::build(&project, &jobs, &inputs.standard);
-            if ferrules.section("ferrules").is_some() {
+            if ferrules.section("ferrules").is_some() || ferrules.section("lugs").is_some() {
                 parts.push(Part {
-                    what: "Ferrules to crimp, with spares",
+                    what: "Crimp list: ferrules and lugs, with spares",
                     print: "A4, any printer",
                     basis: TABLE,
                     report: ferrules,
