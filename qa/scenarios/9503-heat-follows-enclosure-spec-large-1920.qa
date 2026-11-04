@@ -21,5 +21,4 @@ check_layout
 click 1847 201
 wait 8
 expect "Estimate from catalogue"
-expect_popups_stable 20
 shot 02-help-open

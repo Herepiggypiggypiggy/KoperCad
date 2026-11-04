@@ -2149,7 +2149,7 @@ fn thin_ticks(ticks: Vec<f64>, range: range::Range, height: f32, gap: f32) -> Ve
 /// The one line the legend starts with while the map is a preview.
 /// Short tag that stays on screen while a result rests on an estimate; the
 /// sentences behind it sit under the panel's "?".
-const ESTIMATE_TAG: &str = "(estimate)";
+pub(super) const ESTIMATE_TAG: &str = "(estimate)";
 
 const PREVIEW_NOTE: &str = "Preview, not a solver result";
 
