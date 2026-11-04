@@ -71,8 +71,6 @@ pub(crate) struct Ghost {
     pub(super) name: String,
     definition: BlockDefinition,
     options: PlaceOptions,
-    /// Where the pointer last rested on a page before the ghost began.
-    prior_pointer: Option<(novo_core::PageId, novo_core::Point)>,
 }
 
 impl PlaceWindow {
@@ -770,7 +768,6 @@ impl NovoApp {
             return;
         };
         let options = win.options();
-        let prior_pointer = self.wb.last_pointer;
         let outline = self
             .backend
             .document()
@@ -787,7 +784,6 @@ impl NovoApp {
             name: entry.name,
             definition,
             options,
-            prior_pointer,
         });
     }
 
@@ -842,9 +838,6 @@ impl NovoApp {
         if let Some(view) = self.canvas.schematic() {
             view.editor.leave_tool();
         }
-        // The form places where the pointer rested before the ghost, as it
-        // always did; the chip in the status bar is not the drawing.
-        self.wb.last_pointer = ghost.prior_pointer;
         self.open_macro_place(Some(&ghost.name));
         self.wb.macro_place.select(&ghost.path);
     }
