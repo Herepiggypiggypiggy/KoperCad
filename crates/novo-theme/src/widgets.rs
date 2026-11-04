@@ -730,6 +730,45 @@ pub fn flag_triangle(
     painter.circle_filled(c + egui::vec2(0.0, h * 0.5), 0.8, bang);
 }
 
+/// A problem on a control or a section, in place of a sentence: the
+/// triangle with a short noun-phrase `title`. A click opens `detail` (the
+/// numbers and what to do) in a popover; the title is also its accessible
+/// name. `red` is wrong, otherwise yellow (docs/design/problem-triangles.md).
+pub fn flag_chip(ui: &mut Ui, red: bool, title: &str, detail: &str) -> Response {
+    let p = Palette::of(ui);
+    let color = if red { p.error } else { p.warning };
+    let galley = ui.painter().layout_no_wrap(
+        title.to_owned(),
+        egui::TextStyle::Small.resolve(ui.style()),
+        color,
+    );
+    let size = egui::vec2(22.0 + galley.size().x + 6.0, 24.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let level = if red { "Error" } else { "Warning" };
+    let name = format!("{level}: {title}");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+    if ui.is_rect_visible(rect) {
+        flag_triangle(
+            ui.painter(),
+            egui::pos2(rect.left() + 11.0, rect.center().y),
+            14.0,
+            red,
+            false,
+            p,
+        );
+        let at = egui::pos2(rect.left() + 22.0, rect.center().y - galley.size().y / 2.0);
+        ui.painter().galley(at, galley, color);
+    }
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    egui::Popup::from_toggle_button_response(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .width(320.0)
+        .show(|ui| {
+            ui.add(Label::new(detail).wrap());
+        });
+    response
+}
+
 /// The pill for a recovered copy nobody has checked yet. It takes the place
 /// of the green "No issues": the checks only see what survived, so a clean
 /// result proves nothing about what was lost.
