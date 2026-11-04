@@ -1364,3 +1364,52 @@ fn a_damaged_page_is_described_in_words_not_by_sqlite() {
     assert!(!r.err.contains("btree"), "{}", r.err);
     assert!(!r.err.contains("***"), "{}", r.err);
 }
+
+#[test]
+fn query_reads_the_project_and_refuses_anything_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = project(dir.path(), false);
+    let f = file.to_str().unwrap();
+
+    let r = novo(&[
+        "query",
+        f,
+        "SELECT tag, description FROM devices ORDER BY tag",
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("tag"));
+    assert!(r.out.contains("-K1"));
+    assert!(r.out.contains("(1 rows)"), "{}", r.out);
+
+    let r = novo(&["query", f, "SELECT count(*) AS n FROM devices", "--json"]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    let rows: serde_json::Value = serde_json::from_str(&r.out).unwrap();
+    assert_eq!(rows[0]["n"], 1);
+
+    let csv = dir.path().join("devices.csv");
+    let r = novo(&[
+        "query",
+        f,
+        "SELECT tag FROM devices",
+        "-o",
+        csv.to_str().unwrap(),
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(std::fs::read_to_string(&csv).unwrap().contains("-K1"));
+
+    let r = novo(&["query", f, "--tables"]);
+    assert_eq!(r.code, exit::OK);
+    assert!(r.out.contains("wires:") && r.out.contains("order_number"));
+
+    let r = novo(&["query", f, "DELETE FROM devices"]);
+    assert_eq!(r.code, exit::USAGE);
+    assert!(r.err.contains("only read"), "{}", r.err);
+    let r = novo(&["query", f, "SELECT tga FROM devices"]);
+    assert_eq!(r.code, exit::USAGE);
+    assert!(r.err.contains("Did you mean `tag`"), "{}", r.err);
+
+    let r = novo(&["query", f, "--preset", "nothing here"]);
+    assert_eq!(r.code, exit::USAGE);
+    let r = novo(&["query", f, "--presets"]);
+    assert_eq!(r.code, exit::OK);
+}

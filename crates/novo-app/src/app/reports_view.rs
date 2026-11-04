@@ -60,6 +60,8 @@ pub(crate) struct ReportsView {
     pub(super) template: Option<String>,
     /// The row counts of the list, worked out off the UI thread.
     counts: ListCounts,
+    /// The editor of the "My reports" report.
+    pub(super) queries: super::reports_queries::QueriesEditor,
 }
 
 type CountAnswer = Vec<(String, usize)>;
@@ -420,6 +422,10 @@ impl NovoApp {
             ui.colored_label(crate::theme::ui_palette().warning, note);
         }
         ui.separator();
+        if id == novo_reports::query::SavedQueries::ID {
+            self.queries_editor(ui);
+            ui.separator();
+        }
         // The single-line diagram shows its drawing first; its schedule tab
         // falls through to the table.
         let drawn = id == novo_reports::SingleLineDiagram::ID && self.single_line_view(ui);
@@ -1474,6 +1480,7 @@ fn empty_report_hint(id: &str) -> &'static str {
         "cables" | "cableschedule" => {
             "Nothing to list yet: no cable is drawn. Use the Cable tool to draw one between devices."
         }
+        "queries" => "No saved reports yet. Open Edit my reports above to write one.",
         _ => "Nothing to list yet",
     }
 }

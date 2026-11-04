@@ -99,6 +99,7 @@ impl<'a> View<'a> {
             material: cm.material.clone(),
             materials: cm.materials.clone(),
             wall_flux_w_m2: Vec::new(),
+            plate_rear_c: None,
             devices: Vec::new(),
             hot_spots: Vec::new(),
             progress: Progress {
@@ -142,6 +143,11 @@ impl<'a> View<'a> {
         let medium = self.setup.cfg.medium.as_ref();
         s.wall_flux_w_m2 =
             medium.map_or_else(|| vec![0.0; flow.t.len()], |m| self.surface_flux(flow, m));
+        s.plate_rear_c = flow.cfg.plate.as_ref().and_then(|p| {
+            let t = flow.plate_temps()?;
+            let w: f64 = p.cover.iter().sum();
+            (w > 0.0).then(|| p.cover.iter().zip(t).map(|(c, t)| c * t).sum::<f64>() / w)
+        });
         let (devices, unresolved) = self.devices(flow);
         s.devices = devices;
         s.heat_paths = self.heat_paths(flow);
