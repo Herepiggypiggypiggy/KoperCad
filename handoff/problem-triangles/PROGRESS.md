@@ -23,3 +23,4 @@
 - `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9522, 9523.
 
 - T12 PR 2 (bench): `widgets::flag_chip` for inline problems on a section (triangle, short title, popover with the sentence); bench banners and readiness gaps migrated; census files 18 to 13. QA 9524/9525.
+- T12 PR 4: DWG converter, handover, revision, change report, designer and manual refusals are job flags; files area down to the one written-with-warnings toast.
