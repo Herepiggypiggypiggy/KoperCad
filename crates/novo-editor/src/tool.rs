@@ -2938,12 +2938,12 @@ impl Editor {
                 if blocked {
                     "Overlaps another wire · Backspace takes back the last line".into()
                 } else {
-                    "Lines: click a pin to finish, empty space to draw a line · Backspace undo · Esc or right-click cancels · Shift+W corners"
+                    "Lines: click a pin to finish, empty space for a line · Backspace undo · Esc or right-click cancels"
                         .into()
                 }
             }
             Tool::Wire(_) => {
-                "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc or right-click cancels · Shift+W lines"
+                "Corners: click a pin to finish, empty space to bend · R flips · Backspace undo · Esc or right-click cancels"
                     .into()
             }
             Tool::Cable(c) if c.points.is_empty() => {

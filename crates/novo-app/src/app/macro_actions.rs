@@ -63,6 +63,9 @@ pub(crate) struct PlaceWindow {
     status: String,
     /// A circuit on the pointer, waiting for its click.
     pub(super) ghost: Option<Ghost>,
+    /// Where the ghost was on screen when Options opened the form: the
+    /// form places there, in the view as the docked form leaves it.
+    anchor: Option<egui::Pos2>,
 }
 
 /// A circuit following the pointer as a ghost until a click places it.
@@ -71,6 +74,8 @@ pub(crate) struct Ghost {
     pub(super) name: String,
     definition: BlockDefinition,
     options: PlaceOptions,
+    /// The pointer's last place on the drawing, on screen.
+    pub(super) screen: Option<egui::Pos2>,
 }
 
 impl PlaceWindow {
@@ -121,6 +126,7 @@ impl PlaceWindow {
             shown: None,
             status: String::new(),
             ghost: None,
+            anchor: None,
         }
     }
 
@@ -466,6 +472,7 @@ impl NovoApp {
 
     pub(super) fn macro_place_window(&mut self, ctx: &egui::Context) {
         if !self.wb.macro_place.open {
+            self.wb.macro_place.anchor = None;
             return;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -717,6 +724,13 @@ impl NovoApp {
             .last_pointer
             .filter(|&(p, _)| p == page)
             .map(|(_, at)| at);
+        // Options from a circuit ghost: where the ghost was on screen, which
+        // is the same drawing point unless the docked form moved the view.
+        if let (Some(anchor), Some((_, rect))) = (self.wb.macro_place.anchor, self.wb.canvas_area) {
+            let local = anchor - rect.min;
+            let w = viewport.screen_to_world(novo_canvas::Vec2::new(local.x, local.y));
+            place.pointer = Some(novo_core::Point::new(f64::from(w.x), f64::from(w.y)));
+        }
         place.sheet = self
             .backend
             .document()
@@ -784,6 +798,7 @@ impl NovoApp {
             name: entry.name,
             definition,
             options,
+            screen: None,
         });
     }
 
@@ -839,6 +854,7 @@ impl NovoApp {
             view.editor.leave_tool();
         }
         self.open_macro_place(Some(&ghost.name));
+        self.wb.macro_place.anchor = ghost.screen;
         self.wb.macro_place.select(&ghost.path);
     }
 
@@ -875,6 +891,7 @@ impl NovoApp {
         // first drawing page takes it, and the canvas goes there.
         let moved = self.current_page != Some(page);
         let view = self.macro_view(Some(page));
+        self.wb.macro_place.anchor = None;
         let name = definition.name.clone();
         let plc_note = draws_plc_channels(&definition);
         let Some(doc) = self.backend.document_mut() else {
