@@ -207,6 +207,11 @@ fn validate(s: &Scenario) -> Result<(), Error> {
     if !finite(s.ambient_c) || !(-60.0..=120.0).contains(&s.ambient_c) {
         return bad("ambient temperature is out of range");
     }
+    for h in &s.params.sources {
+        if !(finite(h.power_w) && h.power_w >= 0.0) {
+            return bad("a heat source is negative or not a number");
+        }
+    }
     for o in &s.obstacles {
         if !(finite(o.loss_w) && o.loss_w >= 0.0) {
             return bad("an obstacle's heat is negative or not a number");

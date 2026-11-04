@@ -122,3 +122,51 @@ fn wall_capacity_matches_the_layers() {
     let want = 7850.0 * 490.0 * 0.002 * area;
     assert!((r.shell.capacity_j_per_k / want - 1.0).abs() < 1e-9);
 }
+
+#[test]
+fn an_extra_heat_source_adds_its_heat_to_the_balance() {
+    let plain = quick(base());
+    let mut sc = base();
+    sc.params.sources.push(HeatSource {
+        id: 1,
+        rect: novo_layout::Rect {
+            x: 100.0,
+            y: 100.0,
+            w: 400.0,
+            h: 30.0,
+        },
+        power_w: 40.0,
+        blockage: None,
+    });
+    let hot = quick(sc);
+    // 80 W of device plus 40 W of busbar: the walls and openings carry 120 W.
+    assert!(
+        (hot.balance.loss_w - 120.0).abs() < 1e-6,
+        "{}",
+        hot.balance.loss_w
+    );
+    assert!(hot.balance.residual_rel.abs() < 0.02);
+    // The mean rise follows the total heat (IEC: rise proportional to loss).
+    let ratio = hot.balance.mean_rise_k / plain.balance.mean_rise_k;
+    assert!((ratio - 1.5).abs() < 0.2, "rise ratio {ratio}");
+    let amb = hot.ambient_c;
+    let walls: f64 = hot.shell.faces.iter().map(|f| f.heat_w).sum();
+    assert!((walls / 120.0 - 1.0).abs() < 0.02 && walls > 0.0 && amb > 0.0);
+}
+
+#[test]
+fn a_negative_source_is_refused() {
+    let mut sc = base();
+    sc.params.sources.push(HeatSource {
+        id: 1,
+        rect: novo_layout::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+        },
+        power_w: -5.0,
+        blockage: None,
+    });
+    assert!(simulate_steady(&sc).is_err());
+}
