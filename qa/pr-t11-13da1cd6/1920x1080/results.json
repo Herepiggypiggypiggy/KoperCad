@@ -1,0 +1,319 @@
+{
+  "app_info": {
+    "frame": 45,
+    "id": 4,
+    "ok": true,
+    "pixels_per_point": 1.0,
+    "size": [
+      1920.0,
+      1080.0
+    ]
+  },
+  "binary": {
+    "built": "1793797638 (unix time)",
+    "git_head": "13da1cd6ad",
+    "path": "/home/claude/target/debug/kopercad",
+    "warning": null
+  },
+  "findings": [
+    {
+      "area": "Check",
+      "expected": "every control fully visible and not overlapped",
+      "id": "F-001",
+      "kind": "layout-maybe",
+      "saw": "' New' over 'Run the EMC rules with the design checks'",
+      "scenario": "9512-emc-triangles-popover-1920x1080",
+      "screenshot": "shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png",
+      "severity": "S4",
+      "size": "1920x1080",
+      "steps": [
+        "open qa/fixtures/emc-cabinet.novo",
+        "wait 20",
+        "key ctrl+k",
+        "text EMC check",
+        "key enter",
+        "wait 10",
+        "click_text \"Run the EMC rules with the design checks\"",
+        "wait 10",
+        "key Escape",
+        "wait 10",
+        "shot emc-triangles",
+        "check_layout",
+        "click 546 256",
+        "wait 6",
+        "expect \"Open EMC check\"",
+        "expect \"Sensitive device near drive\"",
+        "expect \"Preview the fix\"",
+        "shot emc-popover",
+        "check_layout",
+        "click_text \"Preview the fix\" Button",
+        "wait 12",
+        "expect \"EMC check\"",
+        "expect \"Preview\"",
+        "shot emc-fix-preview",
+        "check_layout"
+      ],
+      "title": "1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)"
+    }
+  ],
+  "generated": 1793797670,
+  "platform": "linux",
+  "scenarios": [
+    {
+      "area": "Check",
+      "files": [],
+      "findings": [
+        "F-001"
+      ],
+      "name": "9512-emc-triangles-popover-1920x1080",
+      "seconds": 35.1,
+      "shots": [
+        "shots/9512-emc-triangles-popover-1920x1080-1920x1080-01-emc-triangles.png",
+        "shots/9512-emc-triangles-popover-1920x1080-1920x1080-02-emc-popover.png",
+        "shots/9512-emc-triangles-popover-1920x1080-1920x1080-03-emc-fix-preview.png",
+        "shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png"
+      ],
+      "size": "1920x1080",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 5908,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "open qa/fixtures/emc-cabinet.novo"
+        },
+        {
+          "error": null,
+          "ms": 1407,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 2048,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 1035,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "text EMC check"
+        },
+        {
+          "error": null,
+          "ms": 971,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "key enter"
+        },
+        {
+          "error": null,
+          "ms": 816,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 1023,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"Run the EMC rules with the design checks\""
+        },
+        {
+          "error": null,
+          "ms": 927,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 491,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 763,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 2072,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "shot emc-triangles"
+        },
+        {
+          "error": null,
+          "ms": 416,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 631,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "click 546 256"
+        },
+        {
+          "error": null,
+          "ms": 465,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 121,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Open EMC check\""
+        },
+        {
+          "error": null,
+          "ms": 121,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Sensitive device near drive\""
+        },
+        {
+          "error": null,
+          "ms": 129,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Preview the fix\""
+        },
+        {
+          "error": null,
+          "ms": 1782,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "shot emc-popover"
+        },
+        {
+          "error": null,
+          "ms": 473,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 1047,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"Preview the fix\" Button"
+        },
+        {
+          "error": null,
+          "ms": 947,
+          "n": 21,
+          "note": null,
+          "status": "ok",
+          "step": "wait 12"
+        },
+        {
+          "error": null,
+          "ms": 148,
+          "n": 22,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"EMC check\""
+        },
+        {
+          "error": null,
+          "ms": 144,
+          "n": 23,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Preview\""
+        },
+        {
+          "error": null,
+          "ms": 2038,
+          "n": 24,
+          "note": null,
+          "status": "ok",
+          "step": "shot emc-fix-preview"
+        },
+        {
+          "error": null,
+          "ms": 2492,
+          "n": 25,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 459,
+          "n": 26,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 424,
+          "n": 27,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 142,
+          "n": 28,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"warnings\""
+        }
+      ],
+      "title": "EMC findings are triangles on the drawing, with a popover and a fix preview (1920x1080)"
+    }
+  ],
+  "sizes": [
+    "1920x1080"
+  ],
+  "summary": {
+    "blocking": 0,
+    "failed": 0,
+    "findings": 1,
+    "passed": 1,
+    "runs": 1
+  },
+  "sweeps": [],
+  "tool": "kopercad-cli qa run"
+}
