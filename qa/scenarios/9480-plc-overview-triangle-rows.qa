@@ -1,0 +1,23 @@
+@title PLC overview and a bad card layout: triangles, not coloured sentences
+@area Schematic
+# T8: Draw > PLC > PLC overview. A card or I/O problem is a triangle row with its sentence in the popup; a layout that does not parse is a chip with the reason. This checks both draw and fit.
+key ctrl+n
+wait 20
+key ctrl+k
+wait 4
+text add card DI99999999999
+wait 6
+key Enter
+wait 10
+shot bad-layout-chip
+key Escape
+wait 5
+key ctrl+k
+wait 4
+text plc overview
+wait 6
+key Enter
+wait 20
+expect "The project has no PLC cards yet"
+shot plc-overview
+check_layout

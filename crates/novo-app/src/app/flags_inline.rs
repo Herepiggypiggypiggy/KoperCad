@@ -221,19 +221,19 @@ impl NovoApp {
             return;
         }
         r.frames += 1;
-        let pressed = ctx.input(|i| {
-            i.events.iter().any(|e| {
-                matches!(
-                    e,
-                    egui::Event::Key { pressed: true, .. }
-                        | egui::Event::PointerButton { pressed: true, .. }
-                )
-            })
+        // A key press clears it wherever the pointer is; a click only when
+        // it lands outside the chip.
+        let (key, click) = ctx.input(|i| {
+            let any = |f: fn(&egui::Event) -> bool| i.events.iter().any(f);
+            (
+                any(|e| matches!(e, egui::Event::Key { pressed: true, .. })),
+                any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. })),
+            )
         });
         let inside = ctx
             .pointer_interact_pos()
             .is_some_and(|p| area.response.rect.contains(p));
-        if r.frames > 1 && pressed && !inside {
+        if r.frames > 1 && (key || (click && !inside)) {
             self.wb.flags.refusals.0 = None;
         }
     }
