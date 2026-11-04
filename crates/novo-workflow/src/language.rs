@@ -1362,6 +1362,11 @@ pub const DUTCH: &[Aliases] = &[
         &["stekkers", "stekkerlijst"],
     ),
     nl(
+        "report.queries",
+        &["mijn rapporten", "eigen rapport"],
+        &["query", "eigen lijst"],
+    ),
+    nl(
         "report.singleline",
         &["eenlijnschema", "enkelpolig schema"],
         &["verdeling", "stroomverdeling", "spanningsval"],

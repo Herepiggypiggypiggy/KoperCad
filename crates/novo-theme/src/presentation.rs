@@ -975,6 +975,7 @@ pub const TABLE: &[Presentation] = &[
         d(&drawn::SCHEMATIC),
         "Single-line diagram",
     ),
+    row("report.queries", p(icons::FILE_TEXT), "My reports"),
     row(
         "report.add_page",
         p(icons::FILE_PLUS),

@@ -1413,3 +1413,47 @@ fn query_reads_the_project_and_refuses_anything_else() {
     let r = novo(&["query", f, "--presets"]);
     assert_eq!(r.code, exit::OK);
 }
+
+#[test]
+fn a_saved_report_exports_through_the_cli() {
+    use calamine::{Reader, Xlsx, open_workbook};
+    let dir = tempfile::tempdir().unwrap();
+    let file = project(dir.path(), false);
+    // Save a report into the project file the way the program does.
+    let project = novo_storage::ProjectFile::read(&file).unwrap();
+    let mut doc = novo_core::Document::new(project);
+    let mut presets = novo_reports::query::Presets::default();
+    presets
+        .upsert(
+            "Device tags",
+            "SELECT tag, description FROM devices ORDER BY tag",
+        )
+        .unwrap();
+    doc.transact("Save", |tx| presets.save(tx)).unwrap();
+    let mut store = novo_storage::ProjectFile::open(&file).unwrap();
+    store.save(doc.project()).unwrap();
+    drop(store);
+    let f = file.to_str().unwrap();
+
+    let r = novo(&["query", f, "--presets"]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("Device tags"), "{}", r.out);
+    let r = novo(&["query", f, "--preset", "device tags"]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("-K1"), "{}", r.out);
+
+    let csv = dir.path().join("mine.csv");
+    let r = novo(&["export", "queries", f, "-o", csv.to_str().unwrap()]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(std::fs::read_to_string(&csv).unwrap().contains("-K1"));
+
+    let xlsx = dir.path().join("all.xlsx");
+    let r = novo(&["export", "reports", f, "-o", xlsx.to_str().unwrap()]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    let book: Xlsx<_> = open_workbook(&xlsx).unwrap();
+    assert!(
+        book.sheet_names().iter().any(|n| n == "My reports"),
+        "{:?}",
+        book.sheet_names()
+    );
+}

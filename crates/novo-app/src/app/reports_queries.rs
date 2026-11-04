@@ -371,6 +371,12 @@ fn builder_body(
     });
     if write {
         state.sql = builder.to_sql();
+        // A new query is a new report: do not overwrite the saved one under its name.
+        if let Some(old) = state.selected.take()
+            && state.name.trim().eq_ignore_ascii_case(old.trim())
+        {
+            state.name.clear();
+        }
     }
 }
 

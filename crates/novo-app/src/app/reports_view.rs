@@ -114,6 +114,7 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.cable_schedule", "cableschedule"),
     ("report.plugs", "plugs"),
     ("report.singleline", "singleline"),
+    ("report.queries", "queries"),
 ];
 
 impl ReportsView {
@@ -444,7 +445,11 @@ impl NovoApp {
                         ui.add_space(12.0);
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
-                        ui.weak(empty_report_hint(&id));
+                        if id == novo_reports::query::SavedQueries::ID {
+                            novo_theme::widgets::help_mark(ui, empty_report_hint(&id));
+                        } else {
+                            ui.weak(empty_report_hint(&id));
+                        }
                     }
                     jump
                 })
@@ -1356,6 +1361,7 @@ mod tests {
                 "Cable schedule",
                 "Plug connection list",
                 "Single-line diagram",
+                "My reports",
             ]
         );
         // The palette still finds a report by the name it used to have.
