@@ -59,6 +59,8 @@ text "emergency stop with safety relay"
 wait 6
 key Enter
 wait 10
+click_text Options
+wait 10
 shot safety-macro-picked
 click_text Place Button
 wait 20
@@ -72,6 +74,8 @@ key ctrl+k
 text "plc network with switch"
 wait 6
 key Enter
+wait 10
+click_text Options
 wait 10
 shot network-macro-picked
 click_text Place Button

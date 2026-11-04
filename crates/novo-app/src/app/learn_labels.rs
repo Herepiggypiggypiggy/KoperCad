@@ -131,6 +131,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("issues.waive", "Waive"),
     ("issues.restore", "Restore"),
     ("macro.place", "Place macro"),
+    ("macro.ghost", "Circuit ghost"),
     ("macros.window", "Macros"),
     ("standards.iec60204", "IEC 60204-1 tick"),
     ("standards.nfpa79", "NFPA 79 tick"),

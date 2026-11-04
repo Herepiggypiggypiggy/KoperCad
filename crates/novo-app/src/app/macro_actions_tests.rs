@@ -162,7 +162,7 @@ fn a_device_part_is_saved_with_the_macro_and_assigned_on_placement() {
 }
 
 #[test]
-fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() {
+fn the_command_field_finds_a_starter_circuit_and_puts_it_on_the_pointer() {
     use novo_workflow::palette::{Mode, Target};
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -184,9 +184,54 @@ fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() 
             .collect::<Vec<_>>()
     );
     d.app.run_target(&ctx, rows[0].target.clone());
-    assert!(d.app.wb.macro_place.open);
-    // Picked by its whole name, so the window already has it chosen.
-    assert!(d.app.wb.macro_place.selected.is_some());
+    // The circuit follows the pointer; the form is not in the way.
+    assert!(!d.app.wb.macro_place.open);
+    assert!(d.app.wb.macro_place.ghost.is_some());
+    assert!(d.app.canvas.schematic_ref().unwrap().editor.pasting());
+}
+
+#[test]
+fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
+    use novo_workflow::palette::Target;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let target = Target::Macro("Motor starter DOL".into());
+    // Esc leaves nothing behind.
+    d.app.run_target(&ctx, target.clone());
+    d.frame();
+    d.editor_leave();
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    assert_eq!(d.doc().project().symbols().count(), 0);
+    // A click places it at the click, as one undo step.
+    d.app.run_target(&ctx, target.clone());
+    d.frame();
+    d.click(novo_core::Point::new(200.0, 60.0));
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    let left = d
+        .doc()
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin.x)
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        d.doc().project().symbols().count() > 1 && (195.0..=260.0).contains(&left),
+        "the circuit starts at the click: {left}"
+    );
+    d.app.undo_redo(false);
+    d.frame();
+    assert_eq!(d.doc().project().symbols().count(), 0, "one undo step");
+    // Options hands the circuit to the form.
+    d.app.run_target(&ctx, target);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_some());
 }
 
 /// Audit C-59: the PLC input card macro only draws symbols, so placing it says

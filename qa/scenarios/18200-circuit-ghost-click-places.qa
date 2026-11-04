@@ -1,0 +1,18 @@
+@title A circuit follows the pointer as a ghost and a click places it
+@area Schematic
+@sizes 1366x768
+# Workflow gap row 2: Ctrl+K, motor starter, Enter puts the circuit on the pointer; click places it. No form, no Place button.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter"
+wait 5
+key Enter
+wait 10
+move 400 200
+wait 5
+shot ghost-on-pointer
+click 400 200
+wait 20
+expect "Placed Motor starter DOL"
+shot placed-by-click

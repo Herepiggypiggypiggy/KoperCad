@@ -1844,8 +1844,8 @@ impl NovoApp {
                 }
             }
             Target::Lesson(id) => self.learn_run_command_lesson(&id),
-            // The place window opens on the macro, to be confirmed there.
-            Target::Macro(name) => self.open_macro_place(Some(&name)),
+            // The circuit follows the pointer; a click places it.
+            Target::Macro(name) => self.begin_macro_ghost(&name),
             Target::Addon(id) => self.run_addon_command(&id),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),

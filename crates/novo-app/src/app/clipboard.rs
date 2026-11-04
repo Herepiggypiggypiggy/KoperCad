@@ -171,6 +171,9 @@ impl NovoApp {
 
     /// The click that drops a paste in hand, or Esc that cancelled it.
     pub(super) fn after_paste_click(&mut self) {
+        if self.after_macro_ghost() {
+            return;
+        }
         let Some(view) = self.canvas.schematic() else {
             return;
         };

@@ -18,6 +18,8 @@ text "start/stop latch"
 wait 5
 key Enter
 wait 10
+click_text Options
+wait 10
 try click_text "Start/stop latch" Label
 wait 10
 click_text Place Button
@@ -32,6 +34,8 @@ key ctrl+k
 text "start/stop latch"
 wait 5
 key Enter
+wait 10
+click_text Options
 wait 10
 try click_text "Start/stop latch" Label
 wait 10
