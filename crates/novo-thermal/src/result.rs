@@ -331,6 +331,9 @@ pub struct Snapshot {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThermalResult {
     pub grid: GridInfo,
+    /// Wall, door and plate temperatures and the heat capacity of the shell
+    /// (lane H1). Labelled model, see [`crate::shell`].
+    pub shell: crate::shell::ShellReport,
     pub ambient_c: f64,
     /// Air temperature, degrees C.
     pub air_temp: Field,
