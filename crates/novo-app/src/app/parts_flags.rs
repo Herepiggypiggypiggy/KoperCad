@@ -78,7 +78,7 @@ pub(super) fn slot(ui: &mut egui::Ui, flag: Option<&RowFlag>) -> Option<egui::Re
 fn slot_with(
     ui: &mut egui::Ui,
     flag: Option<&RowFlag>,
-    mut dismiss: Option<&mut bool>,
+    dismiss: Option<&mut bool>,
 ) -> Option<egui::Response> {
     let sense = if flag.is_some() {
         egui::Sense::click()
@@ -102,7 +102,7 @@ fn slot_with(
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .show(|ui| popover(ui, flag, dismiss.as_deref_mut()));
+        .show(|ui| popover(ui, flag, dismiss));
     Some(response)
 }
 
