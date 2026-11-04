@@ -17,7 +17,7 @@ wait 3
 expect "Bench packet (PDF)"
 expect "Preview templates"
 shot more
-key escape
+click_text More
 wait 3
 click_text "Calibrate printer"
 wait 3
