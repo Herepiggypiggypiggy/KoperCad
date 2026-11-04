@@ -684,7 +684,7 @@ impl NovoApp {
                 super::window_help::add(ui.ctx(), notes);
                 super::window_help::add(
                     ui.ctx(),
-                    "The yellow line on the floor marks the safety zone around the crane.",
+                    "The yellow line on the floor is a drawn marking, not a computed safety clearance.",
                 );
             });
         if !open {
