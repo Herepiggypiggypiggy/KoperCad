@@ -4,12 +4,17 @@
 # The Hoist in 3D picture from three sides and close on the hook block.
 open qa/fixtures/travel-drive.novo
 wait 20
+click_text Simulate
+wait 20
+shot simulate-menu
+key Escape
+wait 10
 key ctrl+k
 wait 3
 text Hoist in 3D
 wait 4
 key Enter
-wait 30
+wait 120
 shot iso
 click_text "Front"
 wait 60

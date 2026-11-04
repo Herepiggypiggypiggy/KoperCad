@@ -769,6 +769,19 @@ pub fn hook_bounds(layout: &CraneLayout, state: &CraneState) -> crate::math::Aab
     )
 }
 
+/// The box around the crane without its floor and the columns under the runway: what a camera
+/// frames to see the machine.
+pub fn machine_bounds(scene: &Scene) -> crate::math::Aabb {
+    let mut b = crate::math::Aabb::EMPTY;
+    let machine = |i: &&Item| {
+        i.id.kind != ItemKind::Plate && !(RAW_COLUMN..RAW_COLUMN + 1000).contains(&i.id.raw)
+    };
+    for it in scene.items.iter().filter(machine) {
+        b = b.union(&scene.world_bounds(it));
+    }
+    if b.is_empty() { scene.bounds() } else { b }
+}
+
 /// The scene as the shared handle the widget takes.
 pub fn shared(layout: &CraneLayout, state: &CraneState) -> Arc<Scene> {
     Arc::new(build(layout, state))

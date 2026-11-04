@@ -4,17 +4,14 @@ Goal (Tadjiro, 2026-11-04): the crane in the simulation (hoist, bridge, crab dri
 should look and move far more like a real crane. A real crane project STEP file was uploaded as the
 reference for shapes. Ambition stays high: real shapes first, then behaviour.
 
-## What the reference file is (private, never committed)
+## Reference
 
-`Vandenberg-ATD-RevC.STEP` (85 MB, SolidWorks 2020, about 128 placed solids, reads in 8 s with the
-existing reader). It is a crane bridge: about 11.5 m span, two box girders (6 mm plates, 1 m deep,
-stiffeners every 1.5 m), a walkway about 0.5 m wide with a 33.7 / 48.3 mm tube handrail, four end
-truck wheel boxes with flanged wheels and geared motors (about 880 x 455 x 360 mm), buffers and
-brackets. Only generic proportions and typical details were taken from it; no geometry, names or
-numbers are copied. The file stays on the project mount and Tadjiro's PC.
+A customer STEP file (private, kept on the project mount, never committed) was inspected for proportions
+and typical details. Generic proportions only, nothing copied: no geometry, names or numbers. The
+private notes are in the project mount's `handoff/crane-sim-realism/PLAN-private.md`.
 
-Reader finding: big plates with many holes triangulate badly (huge overlapping triangles at coarse
-tolerance). Loading the file at runtime needs a better planar-face triangulator first (lane R2).
+Reader finding: big plates with many holes triangulate badly. Loading such a model at run time needs a
+better planar-face triangulator first (lane R2).
 
 ## Lanes, one small PR each, no stacking
 
