@@ -1,0 +1,43 @@
+@title A failed import is a red triangle in the top bar with a popover; a success clears it (1920x1080)
+@area Files
+@sizes 1920x1080
+# T12: a file that is not a DXF makes the import fail. The failure becomes a red triangle (the job flag) next to the Issues pill; a second failed job raises the count. The popover has Retry, Open folder, Copy details and Dismiss; Escape closes it; importing a real DXF clears the flag. No toast text is left on the screen.
+click_text "New project"
+wait 20
+answer_dialog qa/fixtures/files/not-a-drawing.dxf
+key ctrl+k
+text import dxf as background
+wait 5
+key Enter
+wait 20
+shot job-flag-triangle
+check_layout
+expect "DXF import failed"
+answer_dialog qa/fixtures/files/not-a-drawing.dxf
+key ctrl+k
+text import automationml
+wait 5
+key Enter
+wait 20
+shot job-flag-count
+check_layout
+click_text "failed jobs" Button
+wait 8
+expect "Retry"
+expect "Open folder"
+expect "Copy details"
+expect "Dismiss"
+shot job-flag-popover
+check_layout
+key Escape
+wait 6
+expect_not "Copy details"
+answer_dialog qa/fixtures/files/box.dxf
+key ctrl+k
+text import dxf as background
+wait 5
+key Enter
+wait 20
+expect_not "DXF import failed"
+shot job-flag-cleared-by-success
+check_layout

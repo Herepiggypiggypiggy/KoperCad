@@ -238,6 +238,8 @@ pub(crate) struct Workbench {
     /// Where the issue pill was drawn, so its own click does not close
     /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
+    /// Where the failed-jobs triangle was drawn last frame (lane T12).
+    pub(super) job_pill_rect: egui::Rect,
     /// The open project is a recovered copy that nobody has checked yet:
     /// the lines of what it holds and what was left out. Cleared by "I have
     /// checked every page", or when another project is opened.
@@ -442,6 +444,7 @@ impl Default for Workbench {
             check_started: 0,
             last_issue_total: None,
             pill_rect: egui::Rect::NOTHING,
+            job_pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
             problem_flash: None,

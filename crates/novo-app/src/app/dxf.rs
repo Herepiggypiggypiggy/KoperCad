@@ -170,11 +170,12 @@ impl NovoApp {
         let import = match import {
             Ok(import) => import,
             Err(e) => {
-                self.job_fail(
+                self.job_fail_at(
                     "import.dxf",
                     "DXF import failed",
                     Level::Error,
                     format!("Could not import {name}: {e}"),
+                    path,
                 );
                 return false;
             }
@@ -196,6 +197,7 @@ impl NovoApp {
             label: "Import DXF background".into(),
             commands,
         });
+        self.job_ok("import.dxf");
         self.message(Level::Info, summary);
         true
     }

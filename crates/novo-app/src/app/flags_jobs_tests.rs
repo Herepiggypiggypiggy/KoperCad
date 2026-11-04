@@ -78,11 +78,19 @@ fn retry_runs_the_command_again_and_dismiss_clears() {
     assert!(d.app.run_job_action(id, &Action::Retry));
     assert!(d.app.wb.queued.contains(&"export.pdf"));
     assert!(d.app.job_flags().is_empty());
-    d.app
-        .job_fail("import.dxf", "DXF import failed", Level::Error, "x");
+    d.app.job_fail_at(
+        "import.dxf",
+        "DXF import failed",
+        Level::Error,
+        "Could not import a.dxf: group code `abc` is not a number",
+        Path::new("/tmp/a.dxf"),
+    );
     let id = job_flag_id("import.dxf");
-    // No command repeats an import that needs a chosen file: no Retry offered.
-    assert!(!d.app.job_flags()[0].actions.contains(&Action::Retry));
+    // Retry asks for the file again; Open folder shows where it was read from.
+    let f = &d.app.job_flags()[0];
+    assert!(f.actions.contains(&Action::Retry));
+    assert!(f.actions.contains(&Action::Open(OPEN_FOLDER.into())));
+    assert!(!f.detail.0[0].contains('`'), "{:?}", f.detail);
     assert!(d.app.run_job_action(id, &Action::Open(DISMISS.into())));
     assert!(d.app.job_flags().is_empty());
 }
@@ -109,6 +117,7 @@ fn every_retry_command_exists() {
     for job in [
         "export.pdf",
         "export.dxf",
+        "import.dxf",
         "export.step",
         "export.aml",
         "export.eplan",
@@ -205,5 +214,70 @@ fn problem_census_files() {
         total <= ceiling,
         "{total} red or yellow toasts in the files area, ceiling {ceiling}: {counts:?}. \
          A failed job is a job flag (`job_fail`); lower the ceiling when you remove one."
+    );
+}
+
+#[test]
+fn a_job_failure_never_touches_a_toast_on_screen() {
+    let (_dir, mut d) = drive();
+    d.app
+        .message(Level::Error, "Could not write a.pdf: disk full");
+    d.app.message(Level::Warning, "Something else happened");
+    d.app.job_fail(
+        "export.pdf",
+        "PDF export failed",
+        Level::Error,
+        "Could not write a.pdf: disk full",
+    );
+    let flag = &d.app.job_flags()[0];
+    assert_eq!(flag.detail.0, ["Could not write a.pdf: disk full"]);
+    let shown: Vec<_> = d
+        .app
+        .messages()
+        .iter()
+        .filter(|m| !m.dismissed)
+        .map(|m| m.text.as_str())
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            "Could not write a.pdf: disk full",
+            "Something else happened"
+        ],
+        "the toasts that were up stay up, unchanged"
+    );
+}
+
+#[test]
+fn a_failed_job_goes_when_the_project_is_replaced() {
+    let (_dir, mut d) = drive();
+    d.app
+        .job_fail("export.pdf", "PDF export failed", Level::Error, "x");
+    d.app.document_replaced();
+    assert!(d.app.job_flags().is_empty());
+    assert!(d.app.wb.flags.jobs.is_empty());
+}
+
+#[test]
+fn many_failed_jobs_keep_the_top_bar_in_the_window() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    for (job, title) in [
+        ("export.pdf", "PDF export failed"),
+        ("export.dxf", "DXF export failed"),
+        ("import.aml", "AML import failed"),
+    ] {
+        d.app.job_fail(job, title, Level::Error, "x");
+    }
+    d.frame_sized(eframe::egui::vec2(1366.0, 768.0), Vec::new());
+    d.frame_sized(eframe::egui::vec2(1366.0, 768.0), Vec::new());
+    let rect = d.app.wb.job_pill_rect;
+    assert!(rect.width() > 0.0, "the pill is drawn");
+    assert!(rect.right() <= 1366.0 && rect.left() >= 0.0, "{rect:?}");
+    assert!(d.app.wb.pill_rect.right() <= 1366.0);
+    assert!(
+        rect.right() <= d.app.wb.pill_rect.left() + 1.0,
+        "left of Issues"
     );
 }

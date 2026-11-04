@@ -13,4 +13,4 @@
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
 
 ## 2026-11-04 Lane T12 (import, export, reports): job flags
-- `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9520, 9521.
+- `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9522, 9523.

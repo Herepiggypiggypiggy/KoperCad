@@ -33,6 +33,7 @@ pub(super) fn retry_command(job: &str) -> Option<&'static str> {
     Some(match job {
         "export.pdf" => "export.pdf",
         "export.dxf" => "export.dxf_page",
+        "import.dxf" => "file.import_dxf_background",
         "export.step" => "export.step",
         "export.aml" => "export.aml",
         "export.eplan" => "export.eplan",
@@ -96,15 +97,9 @@ impl NovoApp {
                 return;
             }
         };
-        self.raise(level, text, None);
-        // The flag is the visible part; the log keeps the message.
-        let words = match self.messages.last_mut() {
-            Some(m) => {
-                m.dismissed = true;
-                m.text.clone()
-            }
-            None => String::new(),
-        };
+        // The flag is the visible part; the log keeps the message. Backticks in
+        // an engine message are code quoting: plain quotes here.
+        let words = self.log_only(level, text).replace('`', "'");
         let retry = retry_command(job);
         let mut actions = Vec::new();
         if retry.is_some() {
@@ -130,6 +125,21 @@ impl NovoApp {
         flags.jobs.insert(id, JobInfo { folder, retry });
         flags.job_order.retain(|i| *i != id);
         flags.job_order.push(id);
+    }
+
+    /// A project was closed or replaced: its failed jobs go.
+    pub(super) fn forget_jobs(&mut self) {
+        let flags = &mut self.wb.flags;
+        for id in std::mem::take(&mut flags.job_order) {
+            flags.store.clear(id);
+        }
+        flags.jobs.clear();
+        if flags
+            .open
+            .is_some_and(|(id, _)| !flags.store.get(id).is_some())
+        {
+            flags.open = None;
+        }
     }
 
     /// The job worked: its flag goes.
@@ -160,6 +170,7 @@ impl NovoApp {
     pub(super) fn job_pill(&mut self, ui: &mut egui::Ui) {
         let flags = self.job_flags();
         let Some(newest) = flags.last() else {
+            self.wb.job_pill_rect = egui::Rect::NOTHING;
             return;
         };
         let red = flags.iter().any(|f| f.severity == Severity::Red);
@@ -205,6 +216,7 @@ impl NovoApp {
             .collect::<Vec<_>>()
             .join("\n");
         let response = response.on_hover_text(hover);
+        self.wb.job_pill_rect = response.rect;
         self.anchor_response("job.pill", &response, "Failed jobs");
         if response.clicked() {
             let at = ui

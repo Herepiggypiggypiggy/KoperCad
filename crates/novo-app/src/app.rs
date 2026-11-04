@@ -1168,6 +1168,30 @@ impl NovoApp {
         self.raise(Level::Info, text.into(), Some(file.to_owned()));
     }
 
+    /// Puts a message in the log only (no toast): a failed job shows as a flag.
+    /// Returns the plain words it logged. Never touches another message.
+    fn log_only(&mut self, level: Level, text: String) -> String {
+        match level {
+            Level::Info => log::info!("{text}"),
+            Level::Warning => log::warn!("{text}"),
+            Level::Error => log::error!("{text}"),
+        }
+        let text = error_words::plain(&text);
+        self.messages.push(Message {
+            level,
+            text: text.clone(),
+            at: Instant::now(),
+            dismissed: true,
+            count: 1,
+            file: None,
+        });
+        if self.messages.len() > MESSAGE_HISTORY {
+            let excess = self.messages.len() - MESSAGE_HISTORY;
+            self.messages.drain(..excess);
+        }
+        text
+    }
+
     fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
         match level {
             Level::Info => log::info!("{text}"),
@@ -1573,6 +1597,9 @@ impl NovoApp {
     /// A different project was opened, created or closed: nothing cached
     /// for the old one carries over.
     fn document_replaced(&mut self) {
+        // A failed job belongs to the project it failed in: Retry must not run
+        // for another one.
+        self.forget_jobs();
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
