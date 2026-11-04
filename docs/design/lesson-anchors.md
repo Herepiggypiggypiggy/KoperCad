@@ -25,6 +25,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `dock.proposals`: {ui:dock.proposals} shows **Proposals**
 - `palette.field`: {ui:palette.field} shows **Command field**
 - `issue.pill`: {ui:issue.pill} shows **Issues**
+- `job.pill`: {ui:job.pill} shows **Failed jobs**
 - `whats_new.pill`: {ui:whats_new.pill} shows **What's new**
 - `help.button`: {ui:help.button} shows **Help button**
 - `drawer.terminals`: {ui:drawer.terminals} shows **Terminals drawer**

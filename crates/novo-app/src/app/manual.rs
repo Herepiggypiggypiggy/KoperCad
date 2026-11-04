@@ -128,7 +128,9 @@ impl NovoApp {
         };
         let version = env!("CARGO_PKG_VERSION");
         if let Err(e) = novo_workflow::manual::write_site(&dir, version, IMAGES) {
-            self.message(
+            self.job_fail(
+                "manual.open",
+                "Manual not opened",
                 Level::Warning,
                 format!("Could not write the manual to {}: {e}", dir.display()),
             );
@@ -144,8 +146,13 @@ impl NovoApp {
             return;
         }
         match open_page(&target, anchor) {
-            Ok(()) => self.message_file("Manual opened in your browser", &target),
-            Err(e) => self.message(
+            Ok(()) => {
+                self.job_ok("manual.open");
+                self.message_file("Manual opened in your browser", &target)
+            }
+            Err(e) => self.job_fail(
+                "manual.open",
+                "Manual not opened",
                 Level::Warning,
                 format!(
                     "Could not open the manual ({e}). Open {} yourself.",
