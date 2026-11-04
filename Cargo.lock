@@ -2204,6 +2204,7 @@ dependencies = [
  "novo-drive",
  "novo-editor",
  "novo-emc",
+ "novo-flags",
  "novo-heatview",
  "novo-interop",
  "novo-layout",

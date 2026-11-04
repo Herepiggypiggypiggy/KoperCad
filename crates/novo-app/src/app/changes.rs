@@ -241,6 +241,7 @@ impl NovoApp {
                         .find(|(r, _)| *r == id)
                         .map(|(_, t)| t.clone())
                         .unwrap_or_default(),
+                    key: 0,
                 })
                 .collect();
             mode.ghosts = Some((key, ghosts));

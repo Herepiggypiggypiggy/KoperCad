@@ -613,16 +613,115 @@ pub fn chip(ui: &mut Ui, text: &str, selected: bool) -> Response {
 pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
     let p = Palette::of(ui);
     let small = egui::TextStyle::Small.resolve(ui.style());
-    let mut job = egui::text::LayoutJob::default();
-    for (text, color) in pill_parts(p, errors, warnings) {
-        job.append(&text, 0.0, egui::TextFormat::simple(small.clone(), color));
+    // Each run is a glyph (a painted triangle, or the tick of "No issues")
+    // and its text; the triangles are drawn, not typed, so red is solid and
+    // yellow hollow whatever the font does.
+    let runs: Vec<(Option<bool>, std::sync::Arc<egui::Galley>)> = pill_parts(p, errors, warnings)
+        .into_iter()
+        .map(|(text, color)| {
+            let red = text.starts_with(status::ERROR);
+            let triangle = red || text.starts_with(status::WARNING);
+            let rest = if triangle {
+                text.trim_start_matches(|c: char| !c.is_ascii()).to_owned()
+            } else {
+                text
+            };
+            let galley = ui.painter().layout_no_wrap(
+                if triangle {
+                    format!("    {}", rest.trim_start())
+                } else {
+                    rest
+                },
+                small.clone(),
+                color,
+            );
+            (triangle.then_some(red), galley)
+        })
+        .collect();
+    let pad = egui::vec2(8.0, 3.0);
+    let width: f32 = runs.iter().map(|(_, g)| g.size().x).sum();
+    let height = runs.iter().map(|(_, g)| g.size().y).fold(0.0_f32, f32::max);
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, height) + pad * 2.0, egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        ui.painter().rect_filled(rect, radius::PILL, p.raised);
+        ui.painter().rect_stroke(
+            rect,
+            radius::PILL,
+            Stroke::new(1.0, p.border_subtle),
+            egui::StrokeKind::Inside,
+        );
+        let mut x = rect.left() + pad.x;
+        for (glyph, galley) in &runs {
+            let y = rect.center().y - galley.size().y / 2.0;
+            if let Some(red) = glyph {
+                flag_triangle(
+                    ui.painter(),
+                    egui::pos2(x + 5.0, rect.center().y),
+                    10.0,
+                    *red,
+                    false,
+                    p,
+                );
+            }
+            ui.painter()
+                .galley(egui::pos2(x, y), galley.clone(), p.text_primary);
+            x += galley.size().x;
+        }
     }
-    ui.add(
-        Button::new(job)
-            .fill(p.raised)
-            .stroke(Stroke::new(1.0, p.border_subtle))
-            .corner_radius(radius::PILL),
-    )
+    response
+}
+
+/// A problem triangle of side `size` centred on `c`. Red is solid with a
+/// white "!"; yellow is hollow (the panel colour inside a thick coloured
+/// outline) with the "!" in the outline colour; `dashed` is the yellow one
+/// for "could not be checked" (design: docs/design/problem-triangles.md).
+pub fn flag_triangle(
+    painter: &egui::Painter,
+    c: egui::Pos2,
+    size: f32,
+    red: bool,
+    dashed: bool,
+    p: &Palette,
+) {
+    let h = size * 0.5;
+    let pts = vec![
+        c + egui::vec2(0.0, -h),
+        c + egui::vec2(h, h * 0.8),
+        c + egui::vec2(-h, h * 0.8),
+    ];
+    let (outline, bang) = if red {
+        (p.error, egui::Color32::WHITE)
+    } else {
+        (p.warning, p.warning)
+    };
+    if red {
+        painter.add(egui::Shape::convex_polygon(
+            pts.clone(),
+            outline,
+            Stroke::new(2.0, outline),
+        ));
+    } else {
+        painter.add(egui::Shape::convex_polygon(
+            pts.clone(),
+            p.raised,
+            Stroke::NONE,
+        ));
+        let stroke = Stroke::new(2.0, outline);
+        if dashed {
+            let mut ring = pts;
+            ring.push(ring[0]);
+            painter.extend(egui::Shape::dashed_line(&ring, stroke, 3.0, 2.0));
+        } else {
+            painter.add(egui::Shape::closed_line(pts, stroke));
+        }
+    }
+    let stroke = Stroke::new(1.4, bang);
+    painter.line_segment(
+        [c + egui::vec2(0.0, -h * 0.35), c + egui::vec2(0.0, h * 0.2)],
+        stroke,
+    );
+    painter.circle_filled(c + egui::vec2(0.0, h * 0.5), 0.8, bang);
 }
 
 /// The pill for a recovered copy nobody has checked yet. It takes the place

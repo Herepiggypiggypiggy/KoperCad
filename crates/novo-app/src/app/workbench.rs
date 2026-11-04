@@ -225,6 +225,8 @@ pub(crate) struct Workbench {
     pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
+    /// The problem triangles: one store for every flag, built from the problems.
+    pub(super) flags: super::flags::FlagUi,
     /// The design check running on a worker thread (big projects only).
     pub(super) check_job: Option<super::checks::CheckJob>,
     /// The revision whose background check died, and how many were started.
@@ -434,6 +436,7 @@ impl Default for Workbench {
             ghost_left_out: true,
             clip: Default::default(),
             problems: None,
+            flags: super::flags::FlagUi::default(),
             check_job: None,
             check_failed: None,
             check_started: 0,
