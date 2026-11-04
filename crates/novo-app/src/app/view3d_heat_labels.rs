@@ -52,6 +52,15 @@ pub(super) fn labels(snap: &CfdSnapshot, tag_of: &dyn Fn(u64) -> String) -> Vec<
         .collect()
 }
 
+/// The triangle a status leads with: `Some(true)` red, `Some(false)` yellow.
+fn cue(status: Status) -> Option<bool> {
+    match status {
+        Status::Over => Some(true),
+        Status::Marginal => Some(false),
+        Status::Ok | Status::NoLimit => None,
+    }
+}
+
 /// Draws the labels over the 3D view. `dim` greys them while the result is
 /// out of date or a new run is under way.
 pub(super) fn paint(
@@ -92,7 +101,15 @@ pub(super) fn paint(
             }
         };
         let galley = painter.layout_no_wrap(l.text.clone(), font.clone(), pal.text_primary);
-        let size = galley.size() + egui::vec2(12.0, 6.0);
+        // The colour is never the only cue: a device over its limit (red) or
+        // marginal (yellow) leads with the problem triangle.
+        let cue = if dim { None } else { cue(l.status) };
+        let lead = if cue.is_some() {
+            super::view3d_flags::SIZE + 4.0
+        } else {
+            0.0
+        };
+        let size = galley.size() + egui::vec2(12.0 + lead, 6.0);
         let mut chip = egui::Rect::from_center_size(at, size);
         // Labels of devices that lie close together step down instead of
         // covering each other.
@@ -107,7 +124,24 @@ pub(super) fn paint(
             egui::Stroke::new(1.5, colour),
             egui::StrokeKind::Inside,
         );
-        painter.galley(chip.min + egui::vec2(6.0, 3.0), galley, pal.text_primary);
+        if let Some(red) = cue {
+            novo_theme::widgets::flag_triangle(
+                &painter,
+                egui::pos2(
+                    chip.min.x + 6.0 + super::view3d_flags::SIZE * 0.5,
+                    chip.center().y,
+                ),
+                super::view3d_flags::SIZE,
+                red,
+                false,
+                pal,
+            );
+        }
+        painter.galley(
+            chip.min + egui::vec2(6.0 + lead, 3.0),
+            galley,
+            pal.text_primary,
+        );
     }
 }
 
@@ -166,6 +200,14 @@ mod tests {
         // Just over still says over, in the Over colour.
         let over = l.iter().find(|l| l.text == "-F5  70 °C · just over limit");
         assert_eq!(over.map(|l| l.status), Some(Status::Over));
+    }
+
+    #[test]
+    fn over_is_red_marginal_is_yellow_and_the_rest_have_no_triangle() {
+        assert_eq!(cue(Status::Over), Some(true));
+        assert_eq!(cue(Status::Marginal), Some(false));
+        assert_eq!(cue(Status::Ok), None);
+        assert_eq!(cue(Status::NoLimit), None);
     }
 
     #[test]

@@ -333,6 +333,11 @@ impl NovoApp {
         match action {
             Action::Locate => match index {
                 Some(i) => self.go_problem(i),
+                // In 3D the parts are selected there; elsewhere the device is
+                // shown on its page.
+                None if self.workspace() == super::workspace::Workspace::View3d => {
+                    self.locate_flag_in_3d(flag)
+                }
                 None => self.locate_flag(flag),
             },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
