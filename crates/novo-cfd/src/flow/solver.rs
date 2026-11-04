@@ -235,6 +235,10 @@ pub struct FlowSolver {
     /// Factor on each device's film coefficient (true area over grid area).
     film_scale: Vec<f64>,
     film_clock: usize,
+    /// Heat moved from the device to the air by the film reference, K/s per
+    /// cell: the film reads the air at a fixed distance, the face reads the
+    /// first cell, and this is the difference (zero where they coincide).
+    q_film: Vec<f64>,
     /// Radiation part of each device's film, W/m2K: it does not warm the air,
     /// so only the rest of the film is a boundary layer (see
     /// [`film_conductance`]).
@@ -271,6 +275,55 @@ struct FilmFace {
     air: usize,
     /// Distance from the device surface to the centre of the air cell, m.
     y_air: f64,
+    /// Air temperature the convective film is measured against: the two
+    /// cells that enclose the fixed distance [`FILM_REF_M`] from the surface,
+    /// and the weight of the second. `None` when the first air cell already
+    /// sits at or beyond that distance (the film then reads that cell).
+    air_ref: Option<([usize; 2], f64)>,
+}
+
+/// Distance from a device surface at which the air temperature is read for
+/// the convective film, m. The film correlation is defined against the air
+/// outside the boundary layer; reading it at a fixed distance, not at the
+/// first cell, keeps the housing temperature from drifting with the mesh
+/// (lane H6, `docs/thermal-validation.md`).
+pub const FILM_REF_M: f64 = 0.03;
+
+/// The cells that enclose the distance `FILM_REF_M` from a device surface,
+/// walking away from it along `axis` in direction `dir` from the air cell
+/// `ix`; the weight is that of the second cell. `None` when the air cell is
+/// already at or beyond it.
+fn film_reference(
+    mesh: &Mesh,
+    md: &crate::solids::Medium,
+    ix: [usize; 3],
+    axis: usize,
+    dir: isize,
+    y_air: f64,
+    d_ref: f64,
+) -> Option<([usize; 2], f64)> {
+    if y_air >= d_ref {
+        return None;
+    }
+    let mut prev = (mesh.cell(ix), y_air);
+    let mut pos = ix[axis] as isize;
+    loop {
+        pos += dir;
+        if pos < 0 || pos as usize >= mesh.n[axis] {
+            return Some(([prev.0, prev.0], 0.0));
+        }
+        let cur = mesh.cell(with(ix, axis, pos as usize));
+        if md.fluid_frac[cur] < 0.5 {
+            return Some(([prev.0, prev.0], 0.0));
+        }
+        let y = prev.1
+            + (mesh.centre[axis][pos as usize] - mesh.centre[axis][(pos - dir) as usize]).abs();
+        if y >= d_ref {
+            let w = (d_ref - prev.1) / (y - prev.1);
+            return Some(([prev.0, cur], w));
+        }
+        prev = (cur, y);
+    }
 }
 
 /// Conductance per area from a device surface to the centre of an air cell
@@ -373,7 +426,22 @@ impl FlowSolver {
                             if slot >= cfg.device_film_h.len() {
                                 continue;
                             }
+                            let air_ix = if dev_is_lo {
+                                hi_ix
+                            } else {
+                                with(hi_ix, a, hi_ix[a] - 1)
+                            };
+                            let y_air_f = 0.5 * mesh.dx[a][air_ix[a]];
                             film_faces.push(FilmFace {
+                                air_ref: film_reference(
+                                    &mesh,
+                                    md,
+                                    air_ix,
+                                    a,
+                                    if dev_is_lo { 1 } else { -1 },
+                                    y_air_f,
+                                    FILM_REF_M,
+                                ),
                                 axis: a,
                                 hi,
                                 dist: mesh.centre[a][hi_ix[a]] - mesh.centre[a][hi_ix[a] - 1],
@@ -401,7 +469,11 @@ impl FlowSolver {
                 .collect();
             for f in &film_faces {
                 let h = cfg.device_film_h[f.slot];
-                let g = film_conductance(h, 0.0, f.y_air, cfg.conductivity);
+                let g = if f.air_ref.is_some() {
+                    h
+                } else {
+                    film_conductance(h, 0.0, f.y_air, cfg.conductivity)
+                };
                 k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / (g * film_scale[f.slot]));
             }
         }
@@ -475,6 +547,7 @@ impl FlowSolver {
             k_face,
             conv_scale,
             q_cell,
+            q_film: vec![0.0; cells],
             drag_cell,
             drag_rate,
             sheet,
@@ -517,6 +590,40 @@ impl FlowSolver {
         self.film_clock += 1;
         if self.film_clock.is_multiple_of(FILM_EVERY) {
             self.update_device_films();
+        }
+        self.update_film_reference();
+    }
+
+    /// Refreshes the heat the film reference moves from the devices to the
+    /// first air cells: the film conducts `h_conv (T_surface - T_ref)`, the
+    /// face already carries `h_conv (T_surface - T_air)`, so the cell gets
+    /// `h_conv (T_air - T_ref)` more and the device gives the same.
+    /// Relaxed halfway between calls; heat is conserved by construction.
+    fn update_film_reference(&mut self) {
+        if self.film_faces.iter().all(|f| f.air_ref.is_none()) {
+            return;
+        }
+        let m = &self.mesh;
+        let mut q = vec![0.0; self.q_film.len()];
+        for f in self.film_faces.iter().filter(|f| f.air_ref.is_some()) {
+            let Some(([a, b], w)) = f.air_ref else {
+                continue;
+            };
+            let t_ref = (1.0 - w) * self.t[a] + w * self.t[b];
+            let h = self.cfg.device_film_h[f.slot];
+            let h_c = (h - self.film_rad[f.slot]).max(0.0) * self.film_scale[f.slot];
+            let hi_ix = m.unindex(f.hi);
+            let dev = if f.air == f.hi {
+                m.cell(with(hi_ix, f.axis, hi_ix[f.axis] - 1))
+            } else {
+                f.hi
+            };
+            let w_k = h_c * m.area(f.axis, hi_ix) * (self.t[f.air] - t_ref);
+            q[f.air] += w_k / (self.c_cell[f.air] * m.volume(m.unindex(f.air)));
+            q[dev] -= w_k / (self.c_cell[dev] * m.volume(m.unindex(dev)));
+        }
+        for (old, new) in self.q_film.iter_mut().zip(q) {
+            *old = 0.5 * *old + 0.5 * new;
         }
     }
 
@@ -592,8 +699,11 @@ impl FlowSolver {
         }
         let h_rad = self.film_rad.get(slot).copied().unwrap_or(0.0);
         for f in self.film_faces.iter().filter(|f| f.slot == slot) {
-            let g = film_conductance(h.max(1e-3), h_rad, f.y_air, self.cfg.conductivity)
-                * self.film_scale[slot];
+            let g = if f.air_ref.is_some() {
+                h.max(1e-3)
+            } else {
+                film_conductance(h.max(1e-3), h_rad, f.y_air, self.cfg.conductivity)
+            } * self.film_scale[slot];
             self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / g);
         }
     }
@@ -641,7 +751,12 @@ impl FlowSolver {
         let mut seen = std::collections::HashSet::new();
         for f in self.film_faces.iter().filter(|f| f.slot == slot) {
             if seen.insert(f.air) {
-                t_air += self.t[f.air];
+                // the film correlation is defined against the air outside the
+                // boundary layer: read it at the reference distance
+                t_air += match f.air_ref {
+                    Some(([a, b], w)) => (1.0 - w) * self.t[a] + w * self.t[b],
+                    None => self.t[f.air],
+                };
                 speed += self.cell_speed(f.air);
                 w_air += 1.0;
             }
@@ -1398,7 +1513,9 @@ impl FlowSolver {
                         conv += (face(ix[a] + 1) - face(ix[a])) / m.dx[a][ix[a]];
                     }
                     let id = m.cell(ix);
-                    rhs[id] = -conv * self.conv_scale[id] + self.heat_scale * self.q_cell[id];
+                    rhs[id] = -conv * self.conv_scale[id]
+                        + self.heat_scale * self.q_cell[id]
+                        + self.q_film[id];
                 }
             }
         }

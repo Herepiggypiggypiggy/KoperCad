@@ -99,6 +99,24 @@ impl Obstacle {
     }
 }
 
+/// Heat released inside the cabinet that is not a device: a busbar system,
+/// a transformer's stray heat, wires outside a duct. It enters the air in the
+/// cells under `rect` (2D) or in a solid of that footprint (3D), spread
+/// evenly. The caller states the part that reaches the cabinet air
+/// (for a busbar its `heat_to_air_w`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeatSource {
+    /// The caller's id, for the caller's own bookkeeping.
+    pub id: u64,
+    /// Footprint on the plate, interior frame.
+    pub rect: Rect,
+    /// Heat into the cabinet air, W.
+    pub power_w: f64,
+    /// Share of the air depth the body blocks, 0 to 1. `None` = 0.15, a thin
+    /// bar or rail.
+    pub blockage: Option<f64>,
+}
+
 /// Where an opening is.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Placement {
@@ -237,6 +255,13 @@ pub struct Params {
     pub discharge_coefficient: f64,
     /// Multiplier on the wall heat transfer coefficient (IEC 60890 k).
     pub wall_k_scale: f64,
+    /// The shell as layers (lane H1). `None` = the default shell of the
+    /// enclosure, calibrated to the IEC 60890 coefficient of its material, so
+    /// results equal the one-number wall.
+    pub shell: Option<crate::shell::ShellModel>,
+    /// Extra heat sources besides devices and duct wires (additive; the
+    /// engines turn each into a solid body with heat, see [`Scenario::lowered`]).
+    pub sources: Vec<HeatSource>,
     /// Solver stop: largest temperature change between iterations, K.
     pub tolerance_k: f64,
     pub max_iterations: usize,
@@ -250,6 +275,38 @@ pub struct Params {
     /// forced film toward the turbulent plate value. Off keeps the clean
     /// laminar plate (the long-standing behaviour).
     pub wake_turbulence: bool,
+}
+
+impl Scenario {
+    /// The scenario with `Params::sources` turned into obstacles that carry
+    /// their heat, which is the form both engines solve (a porous body, like a
+    /// duct with wires). Borrowed unchanged
+    /// when there are no sources. Call it once at the entry of a solver.
+    pub fn lowered(&self) -> std::borrow::Cow<'_, Scenario> {
+        if self.params.sources.is_empty() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut s = self.clone();
+        for h in std::mem::take(&mut s.params.sources) {
+            // A porous body that carries heat: the only obstacle kind whose
+            // heat both engines place (ducts with wires).
+            s.obstacles.push(Obstacle {
+                kind: ObstacleKind::Duct,
+                rect: h.rect,
+                blockage: Some(h.blockage.unwrap_or(0.15).clamp(0.0, 1.0)),
+                loss_w: h.power_w,
+            });
+        }
+        std::borrow::Cow::Owned(s)
+    }
+
+    /// The shell in use: the user's, or the default one of the enclosure.
+    pub fn shell(&self) -> crate::shell::ShellModel {
+        self.params
+            .shell
+            .clone()
+            .unwrap_or_else(|| crate::shell::ShellModel::from_enclosure(&self.enclosure))
+    }
 }
 
 impl Default for Params {
@@ -267,6 +324,8 @@ impl Default for Params {
             radiation_view_factor: 0.5,
             discharge_coefficient: 0.6,
             wall_k_scale: 1.0,
+            shell: None,
+            sources: Vec::new(),
             tolerance_k: 0.01,
             max_iterations: 60,
             circulation_fans: Vec::new(),

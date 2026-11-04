@@ -25,6 +25,7 @@ use serde_json::{Value, json};
 
 mod addon_keys;
 mod addons;
+mod audit;
 mod eplan;
 mod macros;
 mod parts;
@@ -71,6 +72,10 @@ enum Cmd {
     /// into a `.kcaddon`.
     #[command(subcommand)]
     Addons(addons::Addons),
+    /// Audit a project or a symbol folder for a script or CI: sheet links with
+    /// no partner, symbol file lint, nets, search. Exit 0 clean, 1 findings.
+    #[command(subcommand)]
+    Audit(audit::Audit),
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
@@ -124,6 +129,32 @@ enum Cmd {
         before: PathBuf,
         /// The project to compare with it.
         after: PathBuf,
+    },
+    /// Read the project with a query (a read-only SQL subset over the tables
+    /// pages, devices, terminals, wires, cables, cores, parts), or run a
+    /// report saved in the project. Exits with 2 when the query is wrong.
+    Query {
+        file: PathBuf,
+        /// The query, e.g. "SELECT tag FROM devices WHERE order_number IS NULL".
+        sql: Option<String>,
+        /// Run the saved report with this name instead of a query.
+        #[arg(long, value_name = "NAME", conflicts_with = "sql")]
+        preset: Option<String>,
+        /// List the saved reports of the project.
+        #[arg(long, conflicts_with_all = ["sql", "preset"])]
+        presets: bool,
+        /// List the tables and their columns.
+        #[arg(long, conflicts_with_all = ["sql", "preset", "presets"])]
+        tables: bool,
+        /// Write `.csv` or `.xlsx` (by the extension) instead of printing.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Print JSON instead of a text table.
+        #[arg(long)]
+        json: bool,
+        /// CSV field separator; `;` suits Excel in locales with a decimal comma.
+        #[arg(long, default_value_t = ',')]
+        delimiter: char,
     },
     /// Export a project.
     #[command(subcommand)]
@@ -589,6 +620,7 @@ fn manual(dir: &Path, images: Option<&Path>, out: &mut dyn Write) -> Result<i32,
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Addons(cmd) => addons::run(cmd, out),
+        Cmd::Audit(cmd) => audit::run(cmd, out),
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),
@@ -618,6 +650,28 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Query {
+            file,
+            sql,
+            preset,
+            presets,
+            tables,
+            output,
+            json,
+            delimiter,
+        } => query_command(
+            &file,
+            QueryArgs {
+                sql,
+                preset,
+                presets,
+                tables,
+                output,
+                json,
+                delimiter,
+            },
+            out,
+        ),
         Cmd::CommissioningReport {
             file,
             output,
@@ -1561,6 +1615,154 @@ fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {
 
 /// Writes an export through the shared guard: never over the input or any
 /// other project or recovery file, atomically.
+struct QueryArgs {
+    sql: Option<String>,
+    preset: Option<String>,
+    presets: bool,
+    tables: bool,
+    output: Option<PathBuf>,
+    json: bool,
+    delimiter: char,
+}
+
+/// `kopercad-cli query`: the read-only query layer from the command line.
+fn query_command(file: &Path, args: QueryArgs, out: &mut dyn Write) -> Result<i32, Failure> {
+    use novo_reports::query;
+    let project = read(file)?;
+    if args.tables {
+        for table in query::schema(&project) {
+            let columns: Vec<&str> = table.columns.iter().map(|c| c.name.as_str()).collect();
+            print(out, &format!("{}: {}", table.name, table.about))?;
+            print(out, &format!("  {}", columns.join(", ")))?;
+        }
+        return Ok(exit::OK);
+    }
+    let saved = query::Presets::of(&project);
+    if args.presets {
+        if let Some(problem) = &saved.unreadable {
+            return Err(Failure::new(exit::READ, problem.clone()));
+        }
+        for p in &saved.list {
+            print(out, &format!("{}\n  {}", p.name, p.sql.replace('\n', " ")))?;
+        }
+        return Ok(exit::OK);
+    }
+    let (title, sql) = match (&args.sql, &args.preset) {
+        (Some(sql), _) => ("Query".to_owned(), sql.clone()),
+        (None, Some(name)) => {
+            let preset = saved.get(name).ok_or_else(|| {
+                Failure::new(
+                    exit::USAGE,
+                    format!(
+                        "this project has no saved report named `{name}` (kopercad-cli query --presets lists them)"
+                    ),
+                )
+            })?;
+            (preset.name.clone(), preset.sql.clone())
+        }
+        (None, None) => {
+            return Err(Failure::new(
+                exit::USAGE,
+                "give a query, --preset NAME, --presets or --tables",
+            ));
+        }
+    };
+    let result =
+        query::run(&project, &sql).map_err(|e| Failure::new(exit::USAGE, e.describe(&sql)))?;
+    let section = query::to_section("query", &title, &result);
+    let report = novo_reports::ReportOutput {
+        report: "query".into(),
+        title,
+        revision: project.revision(),
+        sections: vec![section],
+    };
+    if let Some(path) = &args.output {
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_lowercase);
+        let bytes = match extension.as_deref() {
+            Some("xlsx") => novo_reports::xlsx_bytes(&[&report])
+                .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?,
+            Some("csv") => novo_reports::to_csv(
+                &report,
+                &CsvOptions {
+                    delimiter: args.delimiter,
+                    ..CsvOptions::default()
+                },
+            )
+            .into_bytes(),
+            _ => {
+                return Err(Failure::new(
+                    exit::USAGE,
+                    "the output file must end in .csv or .xlsx",
+                ));
+            }
+        };
+        write_output(file, path, &bytes)?;
+        print(out, &format!("{} rows", result.rows.len()))?;
+        return Ok(exit::OK);
+    }
+    if args.json {
+        let rows: Vec<serde_json::Value> = result
+            .rows
+            .iter()
+            .map(|row| {
+                let mut map = serde_json::Map::new();
+                for (column, value) in result.columns.iter().zip(row) {
+                    map.insert(column.name.clone(), query_json(value));
+                }
+                serde_json::Value::Object(map)
+            })
+            .collect();
+        print(out, &format!("{:#}", serde_json::Value::Array(rows)))?;
+        return Ok(exit::OK);
+    }
+    let rows = report.sections[0].text_rows();
+    let mut widths: Vec<usize> = result
+        .columns
+        .iter()
+        .map(|c| c.name.chars().count())
+        .collect();
+    for row in &rows {
+        for (w, cell) in widths.iter_mut().zip(row) {
+            *w = (*w).max(cell.chars().count());
+        }
+    }
+    let line = |cells: Vec<&str>| {
+        cells
+            .iter()
+            .zip(&widths)
+            .map(|(c, w)| format!("{c:<w$}"))
+            .collect::<Vec<_>>()
+            .join("  ")
+            .trim_end()
+            .to_owned()
+    };
+    print(
+        out,
+        &line(result.columns.iter().map(|c| c.name.as_str()).collect()),
+    )?;
+    for row in &rows {
+        print(out, &line(row.iter().map(String::as_str).collect()))?;
+    }
+    print(out, &format!("({} rows)", rows.len()))?;
+    Ok(exit::OK)
+}
+
+fn query_json(value: &novo_reports::query::QValue) -> serde_json::Value {
+    use novo_reports::query::QValue;
+    match value {
+        QValue::Null => serde_json::Value::Null,
+        QValue::Bool(b) => (*b).into(),
+        QValue::Int(i) => (*i).into(),
+        QValue::Num(n) => {
+            serde_json::Number::from_f64(*n).map_or(serde_json::Value::Null, Into::into)
+        }
+        QValue::Text(t) => t.clone().into(),
+    }
+}
+
 fn write_output(input: &Path, output: &Path, bytes: &[u8]) -> Result<(), Failure> {
     novo_py::write_export(output, bytes, Some(input))
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))

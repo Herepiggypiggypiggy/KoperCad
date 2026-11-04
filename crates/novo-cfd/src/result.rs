@@ -209,6 +209,9 @@ pub struct CfdSnapshot {
     pub materials: Vec<MaterialInfo>,
     /// On solid faces, for heat flux maps; same length as cells.
     pub wall_flux_w_m2: Vec<f32>,
+    /// Mean temperature of the mounting plate sheet (rear side), degrees C;
+    /// `None` when the run has no plate sheet.
+    pub plate_rear_c: Option<f64>,
     pub devices: Vec<DeviceResult>,
     pub hot_spots: Vec<HotSpot>,
     pub progress: Progress,

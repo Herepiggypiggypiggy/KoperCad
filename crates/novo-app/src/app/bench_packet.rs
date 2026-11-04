@@ -139,9 +139,9 @@ impl NovoApp {
                 report: BenchCut::build(&project, &jobs),
             });
             let ferrules = FerruleTable::build(&project, &jobs, &inputs.standard);
-            if ferrules.section("ferrules").is_some() {
+            if ferrules.section("ferrules").is_some() || ferrules.section("lugs").is_some() {
                 parts.push(Part {
-                    what: "Ferrules to crimp, with spares",
+                    what: "Crimp list: ferrules and lugs, with spares",
                     print: "A4, any printer",
                     basis: TABLE,
                     report: ferrules,

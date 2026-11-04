@@ -2322,6 +2322,7 @@ dependencies = [
  "novo-reports",
  "novo-revisions",
  "novo-storage",
+ "novo-symbols",
  "novo-workflow",
  "novo-xref",
  "serde_json",
@@ -2391,6 +2392,10 @@ dependencies = [
 [[package]]
 name = "novo-flags"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "novo-heatview"
