@@ -6,7 +6,7 @@
 //! times; paragraphs are joined). The header of the window that is being built
 //! reads the text of the previous frame, so the "?" appears one frame after the
 //! window opens. Honesty caveats (model estimate, not validated) go through the
-//! same call and stay reachable there; [`caveat`] adds the tiny inline marker.
+//! same call and stay reachable there, next to a tiny inline marker.
 
 use eframe::egui;
 
