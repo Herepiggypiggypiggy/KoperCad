@@ -160,3 +160,56 @@ fn a_plate_end_no_duct_reaches_is_still_one_consistent_wire() {
     assert_eq!(r.routes[&7].kind, Kind::FreeAir);
     assert_eq!(r.surface_legs[&7].opening.as_deref(), Some("gland"));
 }
+
+/// The chosen enclosure sets the plate-to-door distance: another spec gives
+/// another wire length; a spec with a gap says so; no spec behaves as before.
+#[test]
+fn the_enclosure_spec_changes_the_door_wire_length() {
+    use novo_layout::spec::{EnclosureSpec, Field, Source};
+    let spec = |depth: f64, setback: Option<f64>| EnclosureSpec {
+        article: "8455.600".into(),
+        width: Some(Field::new(600.0, Source::Catalogue)),
+        height: Some(Field::new(600.0, Source::Catalogue)),
+        depth: Some(Field::new(depth, Source::Catalogue)),
+        wall: Some(Field::new(2.0, Source::Catalogue)),
+        plate_setback: setback.map(|v| Field::new(v, Source::Catalogue)),
+        ..EnclosureSpec::default()
+    };
+    let (mut p, cab, pins) = project(true);
+    let run = |p: &Project| route_connections(p, &[conn(7, pins[0], pins[1])], &Rules::default());
+    let none = run(&p);
+    assert_eq!(none.surface_legs[&7].depth_mm, 0.0);
+    assert!(none.spec_gaps.is_empty());
+    let set = |p: &mut Project, s: &EnclosureSpec| {
+        p.transact("spec", |tx| {
+            let mut props = tx
+                .project()
+                .get::<novo_core::Structure>(cab)
+                .unwrap()
+                .properties
+                .clone();
+            s.write(&mut props);
+            for (k, v) in props.iter().filter(|(k, _)| k.starts_with("encl.")) {
+                tx.set_property(cab, k, Some(v.clone()))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    };
+    set(&mut p, &spec(300.0, Some(20.0)));
+    let a = run(&p);
+    // Interior depth 296, minus setback 20.
+    assert_eq!(a.surface_legs[&7].depth_mm, 276.0);
+    assert_eq!(
+        a.surface_legs[&7].length_mm,
+        none.surface_legs[&7].length_mm + 276.0
+    );
+    assert_eq!(a.routes[&7].length_mm, none.routes[&7].length_mm + 276.0);
+    set(&mut p, &spec(400.0, Some(20.0)));
+    let b = run(&p);
+    assert_eq!(b.surface_legs[&7].depth_mm, 376.0);
+    set(&mut p, &spec(400.0, None));
+    let c = run(&p);
+    assert_eq!(c.spec_gaps, vec![(cab, "plate setback")]);
+    assert_eq!(c.surface_legs[&7].depth_mm, 0.0);
+}

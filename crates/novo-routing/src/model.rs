@@ -628,6 +628,12 @@ pub struct Routed {
     /// The leg of a cross-cabinet connection inside one plate, by
     /// connection id and plate. Ends at that plate's entry point.
     pub cross_routes: BTreeMap<(u64, StructureId), Route>,
+    /// Enclosures with a chosen `EnclosureSpec` that lacks a number the
+    /// wiring needs (plate to door distance), with the field's name. Their
+    /// door wires are cut without that distance; the checks say so, one line
+    /// per enclosure. Enclosures without a spec are not listed (old projects
+    /// behave as before).
+    pub spec_gaps: Vec<(StructureId, &'static str)>,
 }
 
 /// The part of a wire that runs on a surface other than the mounting plate.
@@ -643,6 +649,25 @@ pub struct SurfaceLeg {
     /// terminal. This is a model: the distance between plate and door and
     /// the hinge loop are not in it.
     pub length_mm: f64,
+    /// Part of `length_mm` that crosses from the plate to the door:
+    /// interior depth minus the plate setback, from the enclosure's
+    /// `EnclosureSpec` (0 without a spec or with a gap in it).
+    pub depth_mm: f64,
+}
+
+/// Plate-to-door distance of a chosen enclosure: `Ok(None)` when the
+/// structure has no spec, `Err` names the missing field.
+fn door_gap(project: &Project, structure: StructureId) -> Result<Option<f64>, &'static str> {
+    let Some(s) = project.get::<novo_core::Structure>(structure) else {
+        return Ok(None);
+    };
+    let spec = novo_layout::spec::EnclosureSpec::read(&s.properties);
+    if spec.is_empty() {
+        return Ok(None);
+    }
+    let interior = spec.interior().map_err(|m| m.0)?;
+    let setback = spec.plate_setback.ok_or("plate setback")?;
+    Ok(Some((interior.depth - setback.value).max(0.0)))
 }
 
 /// The surface of a device's placement and what the structure offers
@@ -834,6 +859,7 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                         surface: a,
                         opening: None,
                         length_mm: length,
+                        depth_mm: 0.0,
                     },
                 );
             }
@@ -876,8 +902,18 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                     to: job_to,
                     diameter_mm: c.diameter_mm,
                 });
+                let depth = match door_gap(project, s1) {
+                    Ok(d) => d.unwrap_or(0.0),
+                    Err(field) => {
+                        if !out.spec_gaps.iter().any(|(s, _)| *s == s1) {
+                            out.spec_gaps.push((s1, field));
+                        }
+                        0.0
+                    }
+                };
                 let leg = Point::new(passage.leave.0, passage.leave.1).manhattan(&off_end.pos)
-                    + rules.slack_mm;
+                    + rules.slack_mm
+                    + depth;
                 extra.push((c.id, leg));
                 out.surface_legs.insert(
                     c.id,
@@ -885,6 +921,7 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                         surface,
                         opening: Some(passage.opening.name.clone()),
                         length_mm: leg,
+                        depth_mm: depth,
                     },
                 );
             }
