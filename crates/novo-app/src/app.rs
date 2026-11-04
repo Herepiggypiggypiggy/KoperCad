@@ -264,6 +264,7 @@ mod parts_table;
 mod pdf;
 mod pdf_options;
 mod pin_offer;
+mod place_list;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -304,6 +305,9 @@ mod shortcuts_sheet;
 mod sim_chip;
 #[cfg(test)]
 mod sim_chip_tests;
+mod sim_flags;
+#[cfg(test)]
+mod sim_flags_tests;
 mod simulate;
 mod single_line_view;
 #[cfg(test)]
@@ -2218,6 +2222,7 @@ impl NovoApp {
         self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
+        self.place_list_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.restore_ask_dialog(&ctx);
         self.handover_ask_dialog(&ctx);

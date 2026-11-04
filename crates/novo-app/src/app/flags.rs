@@ -33,6 +33,8 @@ pub(super) struct FlagUi {
     pub(super) jobs: HashMap<FlagId, super::flags_jobs::JobInfo>,
     /// The failed jobs, oldest first.
     pub(super) job_order: Vec<FlagId>,
+    /// The drafts each simulation window raised (lane T10), by window.
+    pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
 }
 
 impl Default for FlagUi {
@@ -44,6 +46,7 @@ impl Default for FlagUi {
             open: None,
             jobs: HashMap::new(),
             job_order: Vec::new(),
+            sim: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -328,11 +331,10 @@ impl NovoApp {
             return;
         }
         match action {
-            Action::Locate => {
-                if let Some(i) = index {
-                    self.go_problem(i);
-                }
-            }
+            Action::Locate => match index {
+                Some(i) => self.go_problem(i),
+                None => self.locate_flag(flag),
+            },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
             Action::Fix(cmd) if cmd == FIX_PIN_NAMES => {
                 if let Some(i) = index {

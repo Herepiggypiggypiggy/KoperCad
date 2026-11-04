@@ -126,6 +126,13 @@ impl HeatState {
         now: f64,
         ctx: &egui::Context,
     ) {
+        // The cooling selection follows the chosen enclosure of this cabinet
+        // (the Cabinet and the 3D view both come through here).
+        self.set_spec(
+            project
+                .get::<novo_core::Structure>(structure)
+                .map(|st| novo_layout::spec::EnclosureSpec::read(&st.properties)),
+        );
         // The vents of the settings are part of the cabinet being solved.
         let vents = {
             let mut h = std::collections::hash_map::DefaultHasher::new();

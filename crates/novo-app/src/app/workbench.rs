@@ -162,6 +162,8 @@ pub(crate) struct Workbench {
     pub(super) options: Option<super::variants::OptionsWindow>,
     /// The Generate pages from a spec sheet window, while open.
     pub(super) generate: Option<super::variants::GenerateWindow>,
+    /// The Place from a list window, while open.
+    pub(super) place_list: Option<super::place_list::PlaceListWindow>,
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
@@ -413,6 +415,7 @@ impl Default for Workbench {
             sheet: 0,
             options: None,
             generate: None,
+            place_list: None,
             nav: Navigator::default(),
             pending: None,
             deferred_jump: None,
@@ -795,6 +798,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "project.tie",
     "project.untie",
     "project.generate",
+    "place.list",
     "export.variant_pdf",
     "export.spec",
     "revision.issue",
@@ -1783,6 +1787,7 @@ impl NovoApp {
             "project.tie" => self.tie_command(argument),
             "project.untie" => self.untie_command(),
             "project.generate" => self.open_generate(),
+            "place.list" => self.open_place_list(),
             "export.variant_pdf" => {
                 self.export_variant_pdf(argument);
             }
