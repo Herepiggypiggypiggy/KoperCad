@@ -5,7 +5,7 @@
 # 1791 is the 1366x768 walk-through, 1791b the same at 1920x1080 (the motor and the Live card buttons sit elsewhere there).
 open qa/fixtures/travel-brake-wind.novo
 wait 20
-click 265 367
+click 249 377
 wait 20
 shot motor-selected
 scroll 1160 500 -450
@@ -48,11 +48,11 @@ click_text "none"
 wait 10
 click_text "=A1+FLD-M1"
 wait 10
-mouse_down 75 343
+mouse_down 123 359
 wait 400
 expect "pushes with"
 expect "last stop"
 shot status-line-running
-mouse_up 75 343
+mouse_up 123 359
 wait 20
 check_layout

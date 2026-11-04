@@ -401,6 +401,10 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
             "flyout card of the tool rail, closes on Esc or a click elsewhere",
         ),
         ("toasts", "messages that fade away"),
+        (
+            "window_help_popup",
+            "the ? popup of a floating window, closes on a click elsewhere",
+        ),
         ("refusal_card_id()", "a refusal that fades away"),
         ("empty_sheet_ghost", "a hint drawn on the empty sheet"),
         ("lesson_note", "lesson note beside a highlighted control"),

@@ -156,6 +156,58 @@ pub struct Fan {
     pub max_pressure_pa: f64,
 }
 
+/// Which way an internal fan blows, in the interior frame (`y` is down).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlowDirection {
+    Right,
+    Left,
+    Up,
+    Down,
+    /// Towards the door, across the air depth. The 2D slice is depth averaged,
+    /// so such a fan only stirs (like the jet term of an opening fan).
+    ToDoor,
+    /// Towards the mounting plate (see `ToDoor`).
+    ToPlate,
+}
+
+/// A circulation fan inside the enclosure: it takes air from one side of its
+/// disc and puts it on the other, with no opening to the outside. Its flow
+/// is therefore not set by a vent but by the resistance of the loop the air
+/// has to find.
+///
+/// Curve: the same straight line from (0 flow, `max_pressure_pa`) to
+/// (`free_flow_m3h`, 0 pressure) as an opening fan. `installed_factor`
+/// scales both ends for the losses the datasheet does not show (inlet
+/// obstruction, swirl, a bad guard); 1.0 is the free-air curve.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CirculationFan {
+    /// Centre in the interior frame, mm.
+    pub x_mm: f64,
+    pub y_mm: f64,
+    /// Fan disc diameter (outer frame), mm.
+    pub diameter_mm: f64,
+    pub direction: BlowDirection,
+    pub free_flow_m3h: f64,
+    pub max_pressure_pa: f64,
+    /// 1.0 = datasheet curve, below 1 = installed worse than on the test rig.
+    pub installed_factor: f64,
+    /// Distance of the fan disc from the mounting plate, mm. `None` = half the
+    /// air depth. Sets how a jet meets the devices (it passes over their
+    /// fronts, or hits them when the fan blows at the plate).
+    pub z_mm: Option<f64>,
+}
+
+impl CirculationFan {
+    /// Free flow after installation, m3/s.
+    pub fn q_max_m3s(&self) -> f64 {
+        self.free_flow_m3h / 3600.0 * self.installed_factor
+    }
+    /// Shut-off pressure after installation, Pa.
+    pub fn p_max_pa(&self) -> f64 {
+        self.max_pressure_pa * self.installed_factor
+    }
+}
+
 /// Modelling choices and the rough values behind them. Every field is a
 /// stated assumption; `Params::cooling_favourable` and
 /// `Params::cooling_unfavourable` give the two ends of the range used for
@@ -185,9 +237,33 @@ pub struct Params {
     pub discharge_coefficient: f64,
     /// Multiplier on the wall heat transfer coefficient (IEC 60890 k).
     pub wall_k_scale: f64,
+    /// The shell as layers (lane H1). `None` = the default shell of the
+    /// enclosure, calibrated to the IEC 60890 coefficient of its material, so
+    /// results equal the one-number wall.
+    pub shell: Option<crate::shell::ShellModel>,
     /// Solver stop: largest temperature change between iterations, K.
     pub tolerance_k: f64,
     pub max_iterations: usize,
+    /// Fans inside the enclosure with no opening (lane H8). Empty = none.
+    /// Kept here, not in [`Scenario`], so the existing scenario literals stay
+    /// valid.
+    pub circulation_fans: Vec<CirculationFan>,
+    /// Finned surfaces: device id and its heatsink (lane H8). Empty = none.
+    pub heatsinks: Vec<(u64, crate::forced::Heatsink)>,
+    /// Let the turbulence behind blocking parts and the fan jets lift the
+    /// forced film toward the turbulent plate value. Off keeps the clean
+    /// laminar plate (the long-standing behaviour).
+    pub wake_turbulence: bool,
+}
+
+impl Scenario {
+    /// The shell in use: the user's, or the default one of the enclosure.
+    pub fn shell(&self) -> crate::shell::ShellModel {
+        self.params
+            .shell
+            .clone()
+            .unwrap_or_else(|| crate::shell::ShellModel::from_enclosure(&self.enclosure))
+    }
 }
 
 impl Default for Params {
@@ -205,8 +281,12 @@ impl Default for Params {
             radiation_view_factor: 0.5,
             discharge_coefficient: 0.6,
             wall_k_scale: 1.0,
+            shell: None,
             tolerance_k: 0.01,
             max_iterations: 60,
+            circulation_fans: Vec::new(),
+            heatsinks: Vec::new(),
+            wake_turbulence: false,
         }
     }
 }

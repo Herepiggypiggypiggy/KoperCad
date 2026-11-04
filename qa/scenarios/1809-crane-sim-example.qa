@@ -36,21 +36,21 @@ wait 20
 expect "Hoists in this project: =CRN+FLD-M11"
 shot controller-bound
 # Main on, then hold hoist up step 1 (fine winding) and step 2 (coarse winding).
-click 1037 387
+click 716 387
 wait 10
 expect "Signals (2 of 15 high)"
-mouse_down 1065 524
+mouse_down 758 524
 wait 150
 expect "fine"
 expect "brake open"
 shot hoist-fine-rising
-mouse_up 1065 524
+mouse_up 758 524
 wait 10
-mouse_down 1065 554
+mouse_down 758 554
 wait 150
 expect "coarse"
 shot hoist-coarse-rising
-mouse_up 1065 554
+mouse_up 758 554
 wait 150
 expect "0 rpm"
 shot hoist-stopped

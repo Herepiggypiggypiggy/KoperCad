@@ -11,9 +11,11 @@ use crate::accuracy::flow_core_statement;
 use crate::result::{AccuracyStatement, Fidelity};
 use crate::turb::TurbModel;
 
-/// Set when the cabinet against IEC 60890 and the 2D engine is within the
-/// tolerance of `tests/validation_cabinet.rs` for the sealed and the vented
-/// reference cabinet. Flip it in the PR that makes that test pass.
+/// True only when the reference register (`validation/references.txt`) holds
+/// a passed `measured` or `licensed` reference for the enclosure temperature.
+/// Agreement with IEC 60890, the 2D engine or a third-party model (RiTherm)
+/// never sets it. `tests/validation_gate.rs` enforces this; the rule is in
+/// `docs/thermal-validation.md`, "When the validated flag may change".
 pub const ENCLOSURE_VALIDATED: bool = false;
 
 /// The accuracy statement of a result at `fidelity`.
@@ -27,13 +29,11 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
         _ => "Fine grid: the best this build offers.",
     };
     let mut limits = vec![
-        "Device housing temperatures use the 2D engine's contact to the plate and surface film, \
-         so on a grid of 1500 cells they agree with it to about 5 %. On finer grids the air next \
-         to the device is resolved and comes out hotter than the 2D slice average: in the \
-         sealed 50 W reference case the housing rise is 10 to 20 % above the 2D estimate from \
-         6000 cells up and still creeps up with refinement (88 C at 6000 cells, about 92 C at \
-         150000, against 82 C). Neither engine is checked \
-         against a measurement."
+        "Device housing temperatures use the 2D engine's contact to the plate and surface film. \
+         The film reads the air 30 mm from the device surface, not in the first grid cell, so \
+         the housing rise no longer grows with the grid: in the sealed 50 W reference case it \
+         is 4 to 5 % above the 2D estimate from 1500 to 20000 cells (about 88 C at 60000 \
+         cells, against 82 C). Neither engine is checked against a measurement."
             .into(),
         "Turbulence and radiation are not modelled: surface temperatures of hot devices are \
          slightly high without radiation, and flow in a strongly forced cabinet is laminar."
@@ -55,11 +55,11 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
         limits.insert(
             0,
             "Enclosure temperatures are not yet validated. Reference study against the 2D engine \
-             (sealed 50 W, vented 100 W): from 1500 to 6000 cells the mean air rise is 11 to 19 % \
-             below it (the 3D mean is lower because the air stratifies; IEC 60890 sealed: 13 to \
-             14 %) and the housing rise 5 to 11 % above it; at 20000 cells the air rise is 16 % \
-             (sealed) and 31 % (vented) below and the housing 13 to 14 % above, and both are still \
-             moving with refinement, so the result is not yet independent of the grid."
+             (sealed 50 W, vented 100 W) from 1500 to 6000 cells: the mean air rise is 10 to \
+             18 % below it (the 3D mean is lower because the air stratifies; IEC 60890 sealed: \
+             13 to 14 %) and the housing rise 4 to 5 % above it, flat with the grid. The air \
+             rise at 20000 cells (16 % low sealed, 31 % low vented) was measured before the \
+             film change and has not been repeated. No measured cabinet exists yet."
                 .into(),
         );
     }

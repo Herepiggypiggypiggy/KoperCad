@@ -3,8 +3,9 @@
 //! implicit-Euler transient share the assembly.
 
 use crate::flow::{self, Flow};
+use crate::forced;
 use crate::linalg::{self, Builder};
-use crate::setup::Setup;
+use crate::setup::{DeviceCells, Setup};
 
 #[derive(Clone)]
 pub struct State {
@@ -46,7 +47,7 @@ impl State {
 const STALL_WINDOW: usize = 8;
 
 const SIGMA: f64 = 5.670_374e-8;
-const PR: f64 = 0.71;
+const PR: f64 = forced::PR;
 
 /// Surface coefficient of a device: natural convection on a vertical plate
 /// (Churchill and Chu), forced convection on a flat plate, combined as
@@ -59,27 +60,40 @@ pub fn device_h(
     emissivity: f64,
     view: f64,
 ) -> f64 {
+    device_h_turbulent(length_m, t_surf, t_air, speed, 0.0, emissivity, view)
+}
+
+/// As [`device_h`], with turbulence intensity `tu` (0 to 1) in the stream
+/// that lifts the forced part toward the turbulent plate value (see
+/// [`crate::forced::plate_nusselt_with_turbulence`]).
+pub fn device_h_turbulent(
+    length_m: f64,
+    t_surf: f64,
+    t_air: f64,
+    speed: f64,
+    tu: f64,
+    emissivity: f64,
+    view: f64,
+) -> f64 {
+    let (h_c, tf) = convective_h(length_m, t_surf, t_air, speed, tu);
+    let h_r = 4.0 * emissivity * SIGMA * tf.powi(3) * view;
+    h_c + h_r
+}
+
+/// Convective part of the film (natural and forced) and the film temperature, K.
+fn convective_h(length_m: f64, t_surf: f64, t_air: f64, speed: f64, tu: f64) -> (f64, f64) {
     let dt = (t_surf - t_air).abs().max(0.5);
     let tf = 0.5 * (t_surf + t_air) + 273.15;
-    let scale = (tf / 293.15).powf(1.7);
-    let nu = 1.5e-5 * scale;
-    let alpha = 2.1e-5 * scale;
-    let kf = 0.026;
+    let (nu, alpha) = forced::air_nu_alpha(tf);
+    let kf = forced::K_AIR;
     let ra = 9.81 / tf * dt * length_m.powi(3) / (nu * alpha);
     let nu_n = (0.825
         + 0.387 * ra.powf(1.0 / 6.0) / (1.0 + (0.492 / PR).powf(9.0 / 16.0)).powf(8.0 / 27.0))
     .powi(2);
     let h_n = nu_n * kf / length_m;
     let re = speed * length_m / nu;
-    let nu_f = if re < 5.0e5 {
-        0.664 * re.sqrt() * PR.powf(1.0 / 3.0)
-    } else {
-        0.037 * re.powf(0.8) * PR.powf(1.0 / 3.0)
-    };
-    let h_f = nu_f * kf / length_m;
-    let h_c = (h_n.powi(3) + h_f.powi(3)).cbrt();
-    let h_r = 4.0 * emissivity * SIGMA * tf.powi(3) * view;
-    h_c + h_r
+    let h_f = forced::plate_nusselt_with_turbulence(re, tu) * kf / length_m;
+    (forced::Mixed::default().combine(h_n, h_f), tf)
 }
 
 /// Update the surface coefficients from the current state.
@@ -89,17 +103,178 @@ pub fn update_device_h(s: &Setup, st: &mut State) {
         let t_air: f64 = d.air.iter().map(|&(i, w)| w * st.t_air[i]).sum();
         let local: f64 = d.air.iter().map(|&(i, w)| w * vx[i].hypot(vy[i])).sum();
         // The depth-averaged flow has no jet: the fans' stirring adds to it.
-        let speed = local.hypot(s.jet_speed_ms);
-        let h = device_h(
+        let ((jx, jy), across, jet_h) = circulation_jets(s, st, d);
+        let (lx, ly): (f64, f64) = d
+            .air
+            .iter()
+            .fold((0.0, 0.0), |a, &(i, w)| (a.0 + w * vx[i], a.1 + w * vy[i]));
+        let _ = local;
+        let speed = (lx + jx).hypot(ly + jy).hypot(s.jet_speed_ms).hypot(across);
+        let tu = if s.params.wake_turbulence {
+            wake_tu(s, d, (lx + jx, ly + jy))
+        } else {
+            0.0
+        };
+        let mut h = device_h_turbulent(
             d.length_m,
             st.t_dev[k],
             t_air,
             speed,
+            tu,
             s.params.emissivity,
             s.params.radiation_view_factor,
         );
+        if let Some(hj) = jet_h {
+            // A jet straight at the device: its stagnation film replaces the
+            // plate forced part where it is higher.
+            let tf = 0.5 * (st.t_dev[k] + t_air) + 273.15;
+            let h_r =
+                4.0 * s.params.emissivity * SIGMA * tf.powi(3) * s.params.radiation_view_factor;
+            h = h.max(forced::Mixed::default().combine(h - h_r, hj) + h_r);
+        }
+        if let Some(sink) = &s.sinks[k] {
+            // The fins replace the plain film over the footprint; their
+            // surfaces see each other, so no radiation is credited to them.
+            let f = sink.film(speed, st.t_dev[k], t_air);
+            let foot = d.footprint_m2.min(d.exposed_m2);
+            h = (f.h * f.area_gain * foot + h * (d.exposed_m2 - foot)) / d.exposed_m2.max(1e-9);
+        }
         st.h_dev[k] = 0.5 * st.h_dev[k] + 0.5 * h;
     }
+}
+
+/// Air speed (m/s) that the jets of the circulation fans bring to a device,
+/// and, for a fan blowing straight at the plate over the device, the film
+/// coefficient of that impinging jet. Free-jet model: parts in the way do not
+/// shade the device (see [`forced::round_jet_speed`], [`forced::jet_h`]).
+fn circulation_jets(s: &Setup, st: &State, d: &DeviceCells) -> ((f64, f64), f64, Option<f64>) {
+    use crate::model::BlowDirection as B;
+    let depth_mm = s.depth * 1000.0;
+    let (cx, cy) = (d.rect.x + 0.5 * d.rect.w, d.rect.y + 0.5 * d.rect.h);
+    let mut jet = (0.0_f64, 0.0_f64);
+    let mut across = 0.0_f64;
+    let mut h_jet: Option<f64> = None;
+    for (k, f) in s.params.circulation_fans.iter().enumerate() {
+        let q = match f.direction {
+            B::ToDoor | B::ToPlate => f.q_max_m3s() * 0.5,
+            _ => flow::circulation_flow(s, &st.flow, k).max(0.0),
+        };
+        // Clear disc: about 80 % of the frame circle (hub and guard).
+        let d_m = f.diameter_mm / 1000.0;
+        let u0 = q / (0.8 * std::f64::consts::FRAC_PI_4 * d_m * d_m);
+        if u0 <= 0.0 {
+            continue;
+        }
+        let z_fan = f.z_mm.unwrap_or(0.5 * depth_mm);
+        let dz = (z_fan - d.height_mm).abs();
+        match f.direction {
+            B::Right | B::Left | B::Up | B::Down => {
+                let (ax, ay) = match f.direction {
+                    B::Right => (1.0, 0.0),
+                    B::Left => (-1.0, 0.0),
+                    B::Down => (0.0, 1.0),
+                    _ => (0.0, -1.0),
+                };
+                let (rx, ry) = (cx - f.x_mm, cy - f.y_mm);
+                let along = rx * ax + ry * ay;
+                let lateral = (rx * ay - ry * ax).abs();
+                let half_along = 0.5 * (d.rect.w * ax.abs() + d.rect.h * ay.abs());
+                let half_lat = 0.5 * (d.rect.w * ay.abs() + d.rect.h * ax.abs());
+                let x = (along - half_along).max(0.5 * f.diameter_mm);
+                if along <= 0.0 {
+                    continue;
+                }
+                let r = (lateral - half_lat).max(0.0).hypot(dz);
+                let u = forced::round_jet_speed(u0, f.diameter_mm, x, r);
+                jet = (jet.0 + u * ax, jet.1 + u * ay);
+            }
+            B::ToPlate => {
+                let h_mm = (z_fan - d.height_mm).max(0.0);
+                let lateral = (cx - f.x_mm).hypot(cy - f.y_mm);
+                let r_dev = (d.footprint_m2 / std::f64::consts::PI).sqrt();
+                let tf = 0.5
+                    * (st.t_air.iter().copied().sum::<f64>() / st.t_air.len() as f64 + s.ambient)
+                    + 273.15;
+                if lateral <= 0.5 * d.rect.w.min(d.rect.h)
+                    && let Some(hj) = forced::jet_h(u0, d_m, r_dev, h_mm / 1000.0, tf)
+                {
+                    h_jet = Some(h_jet.map_or(hj, |v: f64| v.max(hj)));
+                }
+                let x = h_mm.max(0.5 * f.diameter_mm);
+                let r = (lateral - 0.5 * d.rect.w.min(d.rect.h)).max(0.0);
+                let u = forced::round_jet_speed(u0, f.diameter_mm, x, r);
+                // Spreads over the plate away from the axis; straight under it
+                // there is no direction, only speed.
+                across = across.hypot(u);
+                let (rx, ry) = (cx - f.x_mm, cy - f.y_mm);
+                let n = rx.hypot(ry);
+                if n > 1.0 {
+                    jet = (jet.0 + 0.5 * u * rx / n, jet.1 + 0.5 * u * ry / n);
+                }
+            }
+            B::ToDoor => {}
+        }
+    }
+    (jet, across, h_jet)
+}
+
+/// Turbulence a device meets from a blocking part upstream of it: walk back
+/// against the local flow to the first mostly blocked cell that is not the
+/// device's own, take the width of that block across the flow as the wake
+/// width and the walked distance as the distance behind it. Model (see
+/// [`crate::forced::wake_turbulence`]).
+fn wake_tu(s: &Setup, d: &DeviceCells, (ux, uy): (f64, f64)) -> f64 {
+    let own: Vec<usize> = d.air.iter().map(|&(i, _)| i).collect();
+    let speed = ux.hypot(uy);
+    if speed < 0.02 {
+        return 0.0;
+    }
+    let (dx, dy) = (-ux / speed, -uy / speed); // upstream, screen axes
+    let (c0, r0) = {
+        let i = d
+            .air
+            .iter()
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|a| a.0)
+            .unwrap_or(0);
+        ((i % s.nx) as f64, (i / s.nx) as f64)
+    };
+    let step = s.hx.min(s.hy);
+    let reach = (0.4 / step).ceil() as usize;
+    for k in 1..=reach {
+        let (cx, cy) = (
+            c0 + 0.5 + dx * k as f64 * step / s.hx,
+            r0 + 0.5 + dy * k as f64 * step / s.hy,
+        );
+        if cx < 0.0 || cy < 0.0 || cx >= s.nx as f64 || cy >= s.ny as f64 {
+            return 0.0;
+        }
+        let i = cy as usize * s.nx + cx as usize;
+        if s.block[i] >= 0.5 && !own.contains(&i) {
+            // Width of the block across the flow (perpendicular walk both ways).
+            let (px, py) = (-dy, dx);
+            let mut count = 1;
+            for sign in [1.0, -1.0] {
+                for m in 1..=40 {
+                    let (qx, qy) = (
+                        cx + sign * px * m as f64 * step / s.hx,
+                        cy + sign * py * m as f64 * step / s.hy,
+                    );
+                    if qx < 0.0 || qy < 0.0 || qx >= s.nx as f64 || qy >= s.ny as f64 {
+                        break;
+                    }
+                    if s.block[qy as usize * s.nx + qx as usize] >= 0.5 {
+                        count += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            let width = count as f64 * step;
+            return forced::wake_turbulence(0.0, k as f64 * step, width);
+        }
+    }
+    0.0
 }
 
 /// Transient part of the assembly: step length and the previous state.

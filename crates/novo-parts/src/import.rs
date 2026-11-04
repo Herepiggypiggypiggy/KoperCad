@@ -23,6 +23,7 @@ use std::time::SystemTime;
 use thiserror::Error;
 
 use crate::bmecat::read_bmecat;
+use crate::body::{BodyReader, BodyReading};
 use crate::catalog::{CatalogPart, Dimensions, PartKey};
 use crate::csv::import_catalog;
 use crate::etim::EtimModel;
@@ -142,6 +143,16 @@ impl SourceTable {
                 None,
                 true,
             ),
+            // Rittal's CAD portal is CADENAS PARTcommunity, like WAGO's: a
+            // login is needed and the user downloads. The query form of the
+            // link is not confirmed with a real session (the site searches
+            // by number), so the page is not marked verified.
+            m(
+                "Rittal",
+                Some("https://rittal.partcommunity.com/3d-cad-models/?catalog=rittal&part={order}"),
+                Some("https://www.cadenas.de/terms-of-use-3d-cad-models"),
+                false,
+            ),
             // No Siemens page address found yet.
             m("Siemens", None, None, false),
         ])
@@ -172,6 +183,9 @@ pub struct ImportOutcome {
     pub parts: Vec<CatalogPart>,
     /// Size estimated from a STEP file.
     pub dimensions: Option<Dimensions>,
+    /// The enclosure or mounting-plate body read from a STEP file, when a
+    /// [`BodyReader`] was set and the model is one.
+    pub body: Option<Box<BodyReading>>,
     /// XML files found inside a ZIP or EDZ, as (name, text), for the app to
     /// pass to the EPLAN parts reader in `novo-interop`. This crate does not
     /// read them: that reader depends on this one.
@@ -231,6 +245,7 @@ pub struct ImportJob<'a> {
     files: Vec<RemoteFile>,
     outcome: ImportOutcome,
     measurer: Option<StepMeasurer>,
+    body_reader: Option<BodyReader>,
     etim: Option<std::sync::Arc<EtimModel>>,
 }
 
@@ -255,6 +270,7 @@ impl<'a> ImportJob<'a> {
             files: Vec::new(),
             outcome: ImportOutcome::default(),
             measurer: None,
+            body_reader: None,
             etim: None,
         }
     }
@@ -264,6 +280,14 @@ impl<'a> ImportJob<'a> {
     #[must_use]
     pub fn with_step_measurer(mut self, measurer: StepMeasurer) -> Self {
         self.measurer = Some(measurer);
+        self
+    }
+
+    /// Reads enclosure and mounting-plate bodies (size, factory holes) from
+    /// STEP files; a model that is neither is left alone.
+    #[must_use]
+    pub fn with_body_reader(mut self, reader: BodyReader) -> Self {
+        self.body_reader = Some(reader);
         self
     }
 
@@ -279,6 +303,20 @@ impl<'a> ImportJob<'a> {
     /// measurer is set and succeeds; otherwise the all-points estimate, with
     /// a note saying that it may be too large.
     fn measure_step(&mut self, label: &str, text: &str) {
+        if let Some(reader) = self.body_reader
+            && self.outcome.body.is_none()
+        {
+            match reader(text) {
+                Ok(b) if b.kind != crate::body::BodyKind::Other || !b.notes.is_empty() => {
+                    self.outcome.body = Some(Box::new(b));
+                }
+                Ok(_) => {}
+                Err(e) => self
+                    .outcome
+                    .notes
+                    .push(format!("{label}: the body was not analysed ({e})")),
+            }
+        }
         let why = match self.measurer.map(|m| m(text)) {
             Some(Ok(b)) => {
                 self.outcome.dimensions = Some(b.as_dimensions());

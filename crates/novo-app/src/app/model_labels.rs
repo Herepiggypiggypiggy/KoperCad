@@ -30,6 +30,8 @@ pub(crate) enum Model {
     DoorWire,
     /// Verdicts of the standards checks.
     Standards,
+    /// Busbar short-circuit force and deflection of rails and plates.
+    Structural,
     /// Bar and cable impedance, skin and proximity effect, current sharing.
     Busbar,
 }
@@ -48,7 +50,7 @@ pub(crate) struct Row {
 }
 
 /// Every number the product labels, in the order of the page.
-pub(crate) const ROWS: [Row; 9] = [
+pub(crate) const ROWS: [Row; 10] = [
     Row {
         model: Model::Ampacity,
         number: "Cable and wire ampacity, voltage drop tables",
@@ -104,6 +106,13 @@ pub(crate) const ROWS: [Row; 9] = [
         label: "subset, not a certification",
         text: "Rule checks on the model that cover a subset of the standard. A pass is not a certification; the engineer certifies.",
         shown: "Standards check, its report and PDF footer",
+    },
+    Row {
+        model: Model::Structural,
+        number: "Busbar short-circuit force, rail and plate deflection",
+        label: "model, closed form",
+        text: "Textbook formulas: force between parallel conductors, elastic beam and plate bending. The busbar check is quasi-static (the swinging factor of IEC 60865-1 is an input, not computed), has one bar per phase and treats the bars as thin wires. Material strengths are typical values; use the maker's certificate. A design aid, never a short-circuit withstand certificate.",
+        shown: "Check > Calculations > Mechanical",
     },
     Row {
         model: Model::Busbar,
@@ -225,6 +234,7 @@ mod tests {
             Model::WireLength,
             Model::DoorWire,
             Model::Standards,
+            Model::Structural,
             Model::Busbar,
         ] {
             assert_eq!(ROWS.iter().filter(|r| r.model == m).count(), 1, "{m:?}");

@@ -741,6 +741,14 @@ impl NovoApp {
         }
     }
 
+    /// A click on a rail row counts as a click on the control of the same
+    /// name that a lesson may point at (the row replaced the toolbar button).
+    pub(super) fn learn_rail_click(&mut self, id: &str) {
+        if ANCHORS.contains(&id) {
+            self.learn_event(Event::Clicked(id.to_owned()));
+        }
+    }
+
     /// The tool in hand and the keys that take a proposal.
     pub(super) fn learn_watch(&mut self, ctx: &egui::Context) {
         if self.learn.run.is_none() {

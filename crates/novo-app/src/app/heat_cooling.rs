@@ -48,8 +48,12 @@ pub(super) struct CoolingSettings {
 /// The line under a heat result when the option choice leaves devices out.
 pub(super) fn left_out_line(ui: &mut egui::Ui, left_out: bool) {
     if left_out {
+        super::window_help::add(
+            ui.ctx(),
+            "Counts only what the option choice includes; the veiled spots are kept free but not checked.",
+        );
         ui.label(
-            egui::RichText::new("Counts only what the option choice includes; the veiled spots are kept free but not checked.")
+            egui::RichText::new("Partial count")
                 .small()
                 .color(crate::theme::ui_palette().text_secondary),
         );
@@ -261,10 +265,8 @@ pub(super) fn show(
         .show(ui, |ui| {
             let auto_target = lowest_limit_c(sol);
             let Some((basis, selection)) = selection_for(sol, settings) else {
-                ui.label(small(
-                    "Needs a result with device losses and the enclosure size.",
-                    pal.text_secondary,
-                ));
+                ui.label(small("Needs a result with device losses", pal.text_secondary));
+                super::window_help::add(ui.ctx(), "Needs a result with device losses and the enclosure size.");
                 return;
             };
             let n = &selection.need;
@@ -290,15 +292,11 @@ pub(super) fn show(
                 ui.label(egui::RichText::new(selection.sentence()).strong().color(colour));
             });
             if running {
-                ui.label(small(
-                    "Preliminary: the run is still going, so this can change.",
-                    pal.warning,
-                ));
+                ui.label(small("Preliminary", pal.warning));
+                super::window_help::add(ui.ctx(), "Preliminary: the run is still going, so this can change.");
             } else if stale {
-                ui.label(small(
-                    "Out of date: the layout changed since this run.",
-                    pal.warning,
-                ));
+                ui.label(small("Out of date", pal.warning));
+                super::window_help::add(ui.ctx(), "Out of date: the layout changed since this run.");
             }
             ui.add_space(2.0);
             ui.horizontal_wrapped(|ui| {

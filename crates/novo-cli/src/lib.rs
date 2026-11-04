@@ -25,6 +25,7 @@ use serde_json::{Value, json};
 
 mod addon_keys;
 mod addons;
+mod audit;
 mod eplan;
 mod macros;
 mod parts;
@@ -71,6 +72,10 @@ enum Cmd {
     /// into a `.kcaddon`.
     #[command(subcommand)]
     Addons(addons::Addons),
+    /// Audit a project or a symbol folder for a script or CI: sheet links with
+    /// no partner, symbol file lint, nets, search. Exit 0 clean, 1 findings.
+    #[command(subcommand)]
+    Audit(audit::Audit),
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
@@ -589,6 +594,7 @@ fn manual(dir: &Path, images: Option<&Path>, out: &mut dyn Write) -> Result<i32,
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Addons(cmd) => addons::run(cmd, out),
+        Cmd::Audit(cmd) => audit::run(cmd, out),
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),
