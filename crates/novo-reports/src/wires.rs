@@ -111,16 +111,16 @@ impl WireList {
             "",
             vec![
                 Column::new("number", "Wire no.", 15.0),
-                Column::new("from", "From", 35.0),
-                Column::new("to", "To", 35.0),
+                Column::new("from", "From", 28.0),
+                Column::new("to", "To", 28.0),
                 Column::new("potential", "Potential", 15.0),
                 Column::new("color", "Colour", 12.0),
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
-                Column::new("cable", "Cable", 25.0),
+                Column::new("cable", "Cable", 20.0),
                 Column::new("location", "Location", 15.0),
                 Column::new("length_mm", "Route length mm", 14.0).right(),
                 Column::new("length_basis", "Length basis", 12.0),
-                Column::new("torque", "Torque", 20.0),
+                Column::new("torque", "Torque", 14.0),
             ],
         );
         // The wire's own cross-section, else its cable core's.

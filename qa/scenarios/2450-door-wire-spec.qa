@@ -71,6 +71,6 @@ text Route all wires
 wait 6
 key Enter
 wait 40
-expect "has no plate setback"
+expect "no plate setback"
 shot route-spec-gap
 check_layout

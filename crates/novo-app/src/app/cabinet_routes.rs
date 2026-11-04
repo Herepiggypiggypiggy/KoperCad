@@ -386,7 +386,13 @@ fn chips(
     let gap = routed.spec_gaps.iter().find(|(s, _)| *s == structure);
     add(
         usize::from(gap.is_some()),
-        "spec gap",
+        match gap.map(|(_, f)| *f) {
+            Some("outside width") => "no outside width",
+            Some("outside height") => "no outside height",
+            Some("outside depth") => "no outside depth",
+            Some("wall thickness") => "no wall thickness",
+            _ => "no plate setback",
+        },
         format!(
             "Enclosure {} has no {}: door wires are cut without the plate-to-door distance (~)",
             project
