@@ -1,6 +1,6 @@
 @title Heat: the cabinet follows the chosen enclosure (large synthetic enclosure)
 @area Heat
-@sizes 1366x768 1920x1080
+@sizes 1366x768
 # Fixture qa/fixtures/cabinet-heat-spec-large.novo (make_heat_spec_fixtures.py): the example cabinet with an `encl.` record, synthetic catalogue enclosure 1400x1800x500 mm. Compare with 9500 (1000x1400x300): same devices and plate, only the record differs, so the heat result must differ. The enclosure line and the estimate sentence sit behind the Temperature panel's "?" (second picture). The visible tag "(estimate)" stays on screen (first picture).
 open qa/fixtures/cabinet-heat-spec-large.novo
 wait 20
@@ -17,6 +17,9 @@ expect "(estimate)"
 shot 01-large-spec
 check_blank 01-large-spec
 check_layout
-try click_text ?
-wait 5
+# The "?" is painted in the title bar, not a widget: click it by position (1366x768: 1293,201; the 1920x1080 twin scenario clicks 1847,201).
+click 1293 201
+wait 8
+expect "Estimate from catalogue"
+expect_popups_stable 20
 shot 02-help-open
