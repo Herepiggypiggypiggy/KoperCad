@@ -33,6 +33,7 @@ mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_group;
 mod cabinet_inspector;
+mod cabinet_maker_plate;
 mod cabinet_menu;
 mod cabinet_panel;
 mod cabinet_rail_ends;

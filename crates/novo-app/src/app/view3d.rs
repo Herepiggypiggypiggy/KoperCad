@@ -2048,6 +2048,7 @@ impl NovoApp {
                         state: &mut self.cabinet.door,
                         layout: &stored,
                         tag_of: &tag_of,
+                        plates: &mut self.cabinet.maker_plates,
                     },
                 );
             }

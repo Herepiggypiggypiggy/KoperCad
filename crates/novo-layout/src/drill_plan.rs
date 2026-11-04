@@ -116,6 +116,9 @@ pub struct Sheet {
     pub sketch_holes: Vec<(f64, f64, f64)>,
     pub sketch_cutouts: Vec<(CutoutShape, f64, f64)>,
     pub sketch_rails: Vec<((f64, f64), (f64, f64))>,
+    /// Holes the plate is delivered with (x, y, dia), drawn as rings in the
+    /// sketch; empty unless the plate part is known.
+    pub factory_holes: Vec<(f64, f64, f64)>,
 }
 
 impl Sheet {
@@ -373,6 +376,21 @@ pub fn plan(
         } else {
             Vec::new()
         };
+        // Planned holes that land on a hole the plate already has.
+        let factory_holes = if surface == Surface::Plate {
+            layout.factory_holes.clone()
+        } else {
+            Vec::new()
+        };
+        for g in &mut groups {
+            for st in &mut g.steps {
+                if factory_holes.iter().any(|(fx, fy, fd)| {
+                    ((st.x - fx).powi(2) + (st.y - fy).powi(2)).sqrt() <= fd / 2.0
+                }) {
+                    st.source.push_str(" (on a factory hole)");
+                }
+            }
+        }
         sheets.push(Sheet {
             surface: surface.clone(),
             size,
@@ -382,6 +400,7 @@ pub fn plan(
             sketch_holes,
             sketch_cutouts,
             sketch_rails,
+            factory_holes,
         });
     }
     DrillPlan {
@@ -574,6 +593,9 @@ fn sketch(f: &mut Flow<'_>, sheet: &Sheet, x0: f64, y0: f64, bw: f64, bh: f64) {
             CutoutShape::Round { dia } => m.circle(Layer::Cutouts, p(*x, *y), dia / 2.0 * s),
         }
     }
+    for (x, y, dia) in &sheet.factory_holes {
+        m.circle(Layer::Margin, p(*x, *y), (dia / 2.0 * s).max(0.4));
+    }
     for (x, y, dia) in &sheet.sketch_holes {
         m.circle(Layer::Holes, p(*x, *y), (dia / 2.0 * s).max(0.4));
     }
@@ -675,6 +697,15 @@ impl DrillPlan {
                 "Check rails, ducts and devices against the layout before you mark. The positions come from the layout model, not from a measurement.",
                 true,
             );
+            if !sheet.factory_holes.is_empty() {
+                f.wrapped(
+                    &format!(
+                        "The plate comes with {} hole(s) from the maker (light rings in the sketch). Do not drill where one exists; a row marked \"on a factory hole\" may need no drilling.",
+                        sheet.factory_holes.len()
+                    ),
+                    true,
+                );
+            }
             f.wrapped(
                 "Mark and centre punch one group, drill it, then tick its boxes. Work through the groups in the order below.",
                 true,
@@ -905,6 +936,33 @@ mod tests {
         assert!(duct.steps.iter().all(|x| x.basis == Basis::Rule));
         // Fixings sit on the duct centre line, starting 25 mm in.
         assert_eq!((duct.steps[0].x, duct.steps[0].y), (35.0, 300.0));
+    }
+
+    #[test]
+    fn a_planned_hole_on_a_factory_hole_is_flagged_and_the_plate_shows_its_holes() {
+        let mut l = layout();
+        // The first device hole sits at 105 / 125 mm.
+        l.factory_holes = vec![(105.0, 125.0, 9.0), (500.0, 700.0, 9.0)];
+        let f = vec![feature()];
+        let t = drill_table(&l, &f);
+        let p = plan("Test", "=A1+CAB1", &l, &t, &HashMap::new(), false);
+        let s = &p.sheets[0];
+        assert_eq!(s.factory_holes.len(), 2);
+        let flagged: Vec<_> = s
+            .groups
+            .iter()
+            .flat_map(|g| &g.steps)
+            .filter(|st| st.source.contains("on a factory hole"))
+            .collect();
+        assert_eq!(flagged.len(), 1);
+        assert_eq!((flagged[0].x, flagged[0].y), (105.0, 125.0));
+        let text: String = p
+            .pages()
+            .iter()
+            .flat_map(|pg| pg.marks.texts.iter().map(|t| t.text.clone()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("2 hole(s) from the maker"), "{text}");
     }
 
     #[test]

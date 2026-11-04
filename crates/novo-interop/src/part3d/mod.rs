@@ -24,6 +24,7 @@
 //!
 //! Nothing here touches the GPU, the project file or the network.
 
+pub mod body;
 pub mod brep;
 pub mod build;
 pub mod cache;
@@ -43,6 +44,7 @@ pub mod tess;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
+pub use body::read_body;
 pub use build::{BuildError, StepOptions, StepStats};
 pub use mesh::{
     Aabb, FIT_TOLERANCE_MM, Fallback, Fit, MeshBudget, MeshData, MeshOrigin, Orientation,
