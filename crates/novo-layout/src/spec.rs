@@ -139,6 +139,124 @@ pub struct EnclosureSpec {
     /// File name and SHA-256 of the user's STEP; the file is never stored.
     pub step_name: String,
     pub step_sha256: String,
+    /// Rails and ducts fitted to the mounting plate at delivery, in plate
+    /// millimetres (origin top left, as the plate drawing).
+    pub parts: Vec<FactoryPart>,
+    /// Openings for cables in the walls or a gland plate.
+    pub entries: Vec<CableEntry>,
+}
+
+/// A DIN rail or duct fitted at delivery.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FactoryPart {
+    pub kind: PartKind,
+    /// Start of the run on the plate.
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+    /// Runs down from the start instead of to the right.
+    pub vertical: bool,
+    /// Cross-section of a duct (0 for a rail or while unknown).
+    pub width: f64,
+    pub height: f64,
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartKind {
+    Rail,
+    Duct,
+}
+
+/// A cable entry: where cables pass through the enclosure. `x`, `y` is the
+/// point on the plate edge nearest to it (plate millimetres), `wall` the
+/// side of the enclosure it is in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CableEntry {
+    pub name: String,
+    pub wall: String,
+    pub x: f64,
+    pub y: f64,
+    /// Diameter of the biggest round cable it takes; 0 while unknown.
+    pub diameter: f64,
+    pub source: Source,
+}
+
+impl FactoryPart {
+    fn encode(&self) -> String {
+        format!(
+            "{} {} {} {} {} {} {} {}",
+            if self.kind == PartKind::Duct {
+                "duct"
+            } else {
+                "rail"
+            },
+            self.x,
+            self.y,
+            self.length,
+            if self.vertical { "v" } else { "h" },
+            self.width,
+            self.height,
+            self.source.key()
+        )
+    }
+
+    fn decode(text: &str) -> Option<FactoryPart> {
+        let w: Vec<&str> = text.split_whitespace().collect();
+        if w.len() != 8 {
+            return None;
+        }
+        let n = |i: usize| w[i].parse::<f64>().ok().filter(|v| v.is_finite());
+        let length = n(3).filter(|v| *v > 0.0)?;
+        Some(FactoryPart {
+            kind: match w[0] {
+                "duct" => PartKind::Duct,
+                "rail" => PartKind::Rail,
+                _ => return None,
+            },
+            x: n(1)?,
+            y: n(2)?,
+            length,
+            vertical: match w[4] {
+                "v" => true,
+                "h" => false,
+                _ => return None,
+            },
+            width: n(5)?.max(0.0),
+            height: n(6)?.max(0.0),
+            source: Source::from_key(w[7]).unwrap_or(Source::Typed),
+        })
+    }
+}
+
+impl CableEntry {
+    fn encode(&self) -> String {
+        format!(
+            "{} {} {} {} {} {}",
+            self.wall.replace(' ', "_"),
+            self.x,
+            self.y,
+            self.diameter,
+            self.source.key(),
+            self.name
+        )
+    }
+
+    fn decode(text: &str) -> Option<CableEntry> {
+        let mut it = text.splitn(6, ' ');
+        let wall = it.next()?.replace('_', " ");
+        let mut n = || it.next()?.parse::<f64>().ok().filter(|v| v.is_finite());
+        let (x, y, diameter) = (n()?, n()?, n()?);
+        let source = Source::from_key(it.next()?).unwrap_or(Source::Typed);
+        Some(CableEntry {
+            name: it.next().unwrap_or("").to_owned(),
+            wall,
+            x,
+            y,
+            diameter: diameter.max(0.0),
+            source,
+        })
+    }
 }
 
 /// Inside size, from outside size and wall.
@@ -206,26 +324,35 @@ impl EnclosureSpec {
             .then_some(Missing("plate setback"))
     }
 
-    /// The weakest source among the known numbers; `None` without numbers.
-    pub fn weakest(&self) -> Option<Source> {
+    /// The sources of every known number, parts and entries included.
+    fn sources(&self) -> impl Iterator<Item = Source> + '_ {
         self.numbers()
-            .iter()
+            .into_iter()
             .filter_map(|f| f.map(|f| f.source))
-            .max()
+            .chain(self.parts.iter().map(|p| p.source))
+            .chain(self.entries.iter().map(|e| e.source))
     }
 
-    /// The line to show while any value is a catalogue or default value.
+    /// The weakest source among the known numbers, factory parts and cable
+    /// entries; `None` without any.
+    pub fn weakest(&self) -> Option<Source> {
+        self.sources().max()
+    }
+
+    /// The line to show while any value, factory part or cable entry is a
+    /// catalogue or default value.
     pub fn notice(&self) -> Option<&'static str> {
-        self.numbers()
-            .iter()
-            .filter_map(|f| f.map(|f| f.source))
+        self.sources()
             .any(|s| matches!(s, Source::Catalogue | Source::Default))
             .then_some(ESTIMATE_NOTICE)
     }
 
     /// True when nothing was chosen.
     pub fn is_empty(&self) -> bool {
-        self.article.is_empty() && self.numbers().iter().all(|f| f.is_none())
+        self.article.is_empty()
+            && self.numbers().iter().all(|f| f.is_none())
+            && self.parts.is_empty()
+            && self.entries.is_empty()
     }
 
     /// Writes the record into properties (replacing an earlier one).
@@ -249,6 +376,12 @@ impl EnclosureSpec {
                 put(key, Value::Float(f.value));
                 put(&format!("{key}.src"), Value::Text(f.source.key().into()));
             }
+        }
+        for (i, part) in self.parts.iter().enumerate() {
+            put(&format!("part.{i}"), Value::Text(part.encode()));
+        }
+        for (i, entry) in self.entries.iter().enumerate() {
+            put(&format!("entry.{i}"), Value::Text(entry.encode()));
         }
     }
 
@@ -281,8 +414,22 @@ impl EnclosureSpec {
             door_inner_depth: number(NUMBERS[5]),
             step_name: text("step_name"),
             step_sha256: text("step_sha256"),
+            parts: indexed(props, "part.", FactoryPart::decode),
+            entries: indexed(props, "entry.", CableEntry::decode),
         }
     }
+}
+
+/// The entries `<PREFIX><stem>0`, `<stem>1` ... in order; an entry that does
+/// not read is skipped (never guessed).
+fn indexed<T>(props: &Properties, stem: &str, decode: fn(&str) -> Option<T>) -> Vec<T> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(Value::Text(t)) = props.get(&format!("{PREFIX}{stem}{i}")) {
+        out.extend(decode(t));
+        i += 1;
+    }
+    out
 }
 
 /// One catalogue row. Every row says where it came from and which terms
@@ -359,4 +506,116 @@ pub fn from_csv(text: &str) -> (Vec<CatalogueRow>, Vec<(usize, String)>) {
         });
     }
     (rows, errors)
+}
+
+#[cfg(test)]
+mod factory_tests {
+    use super::*;
+
+    fn spec() -> EnclosureSpec {
+        EnclosureSpec {
+            article: "8455.600".into(),
+            parts: vec![
+                FactoryPart {
+                    kind: PartKind::Duct,
+                    x: 100.0,
+                    y: 50.0,
+                    length: 400.0,
+                    vertical: true,
+                    width: 40.0,
+                    height: 60.0,
+                    source: Source::Catalogue,
+                },
+                FactoryPart {
+                    kind: PartKind::Rail,
+                    x: 20.0,
+                    y: 200.0,
+                    length: 300.0,
+                    vertical: false,
+                    width: 0.0,
+                    height: 0.0,
+                    source: Source::Step,
+                },
+            ],
+            entries: vec![CableEntry {
+                name: "gland plate, bottom".into(),
+                wall: "bottom".into(),
+                x: 150.0,
+                y: 600.0,
+                diameter: 32.0,
+                source: Source::Catalogue,
+            }],
+            ..EnclosureSpec::default()
+        }
+    }
+
+    #[test]
+    fn parts_and_entries_round_trip() {
+        let a = spec();
+        let mut props = Properties::default();
+        a.write(&mut props);
+        assert_eq!(EnclosureSpec::read(&props), a);
+    }
+
+    #[test]
+    fn writing_again_replaces_the_parts() {
+        let mut props = Properties::default();
+        spec().write(&mut props);
+        let mut b = spec();
+        b.parts.truncate(1);
+        b.entries.clear();
+        b.write(&mut props);
+        let read = EnclosureSpec::read(&props);
+        assert_eq!(read.parts.len(), 1);
+        assert!(read.entries.is_empty());
+    }
+
+    #[test]
+    fn a_part_that_does_not_read_is_skipped() {
+        assert!(FactoryPart::decode("duct 1 2 0 v 40 60 catalogue").is_none());
+        assert!(FactoryPart::decode("pipe 1 2 5 v 40 60 catalogue").is_none());
+        assert!(CableEntry::decode("bottom x 1 2 step").is_none());
+    }
+
+    #[test]
+    fn a_two_word_wall_reads_back() {
+        let mut s = spec();
+        s.entries[0].wall = "bottom wall".into();
+        let mut props = Properties::default();
+        s.write(&mut props);
+        let read = EnclosureSpec::read(&props);
+        assert_eq!(read.entries[0].wall, "bottom wall");
+        assert_eq!(read.entries[0].name, "gland plate, bottom");
+    }
+
+    #[test]
+    fn a_catalogue_part_or_entry_shows_the_notice() {
+        let measured = |mut s: EnclosureSpec| {
+            for p in &mut s.parts {
+                p.source = Source::Step;
+            }
+            for e in &mut s.entries {
+                e.source = Source::Step;
+            }
+            s
+        };
+        // Numbers all from the STEP; only a part or an entry is catalogue.
+        let mut s = measured(spec());
+        assert_eq!(s.notice(), None);
+        assert_eq!(s.weakest(), Some(Source::Step));
+        s.parts[0].source = Source::Catalogue;
+        assert_eq!(s.notice(), Some(ESTIMATE_NOTICE));
+        assert_eq!(s.weakest(), Some(Source::Catalogue));
+        let mut s = measured(spec());
+        s.entries[0].source = Source::Default;
+        assert_eq!(s.notice(), Some(ESTIMATE_NOTICE));
+        assert_eq!(s.weakest(), Some(Source::Default));
+    }
+
+    #[test]
+    fn only_parts_still_counts_as_a_spec() {
+        let mut s = spec();
+        s.article.clear();
+        assert!(!s.is_empty());
+    }
 }

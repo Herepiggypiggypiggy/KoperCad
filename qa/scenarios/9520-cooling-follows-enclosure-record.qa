@@ -29,5 +29,6 @@ click_text "Cooling selection"
 wait 10
 shot catalogue-size
 expect "Enclosure size: catalogue."
-expect "Estimate from catalogue data, not a measurement of your cabinet."
+expect "(estimate)"
+expect_not "not a measurement of your cabinet"
 check_layout
