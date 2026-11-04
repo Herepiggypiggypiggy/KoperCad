@@ -240,21 +240,21 @@ fn enclosure_sections(project: &Project) -> Vec<Section> {
         "enclosure",
         "Enclosure",
         vec![
-            Column::new("tag", "Cabinet", 20.0),
-            Column::new("quantity", "Qty", 8.0).right(),
-            Column::new("order_number", "Article", 25.0),
-            Column::new("description", "Description", 60.0),
-            Column::new("source", "Source", 20.0),
+            Column::new("tag", "Cabinet", 14.0),
+            Column::new("quantity", "Qty", 6.0).right(),
+            Column::new("order_number", "Article", 20.0),
+            Column::new("description", "Description", 80.0),
+            Column::new("source", "Source", 18.0),
         ],
     );
     let mut sheet = Section::new(
         "cabinet",
         "Cabinet sheet",
         vec![
-            Column::new("tag", "Cabinet", 20.0),
-            Column::new("field", "Field", 30.0),
-            Column::new("value", "Value", 40.0),
-            Column::new("source", "Source", 25.0),
+            Column::new("tag", "Cabinet", 14.0),
+            Column::new("field", "Field", 22.0),
+            Column::new("value", "Value", 70.0),
+            Column::new("source", "Source", 20.0),
         ],
     );
     let mut cabinets: Vec<_> = project.structures().filter(|s| s.enclosure).collect();
