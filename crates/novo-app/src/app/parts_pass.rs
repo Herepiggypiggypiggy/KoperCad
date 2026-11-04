@@ -19,6 +19,10 @@ use super::{Level, NovoApp};
 
 /// Most parts one row's list offers; the Parts window has the rest.
 const OPTIONS: usize = 8;
+/// How many suggestions are searched for the remembered part.
+const REMEMBER_DEPTH: usize = 64;
+/// How many points below the best fit a remembered part may be.
+const CLOSE: u8 = 10;
 
 /// The pass while it is open.
 #[derive(Debug, Default)]
@@ -100,28 +104,29 @@ pub(super) fn pass_rows(
         .filter_map(|id| {
             let device = project.device(id)?;
             let class = device.tag.letter_code().to_owned();
-            let mut options: Vec<(PartKey, String)> =
-                suggestions_for_device(catalog, project, id, "", OPTIONS)
-                    .into_iter()
-                    .map(|s| {
-                        (
-                            s.part.key(),
-                            format!("{} {}", s.part.manufacturer, s.part.order_number),
-                        )
-                    })
-                    .collect();
-            let wanted = pass
-                .picks
-                .get(&id)
-                .cloned()
-                .or_else(|| last_used(project, &class, memory))
-                .filter(|key| catalog.get(key).is_some_and(|p| p.fits(&class)));
+            // The device's own suggestions, best first: the remembered part
+            // counts only if it is among them and fits nearly as well as the
+            // best (a fuse link last used for -F1 is not proposed to the
+            // breaker -F3 that shares the letter code).
+            let all = suggestions_for_device(catalog, project, id, "", REMEMBER_DEPTH);
+            let best = all.first().map_or(0, |s| s.fit.percent);
+            let title =
+                |p: &novo_parts::CatalogPart| format!("{} {}", p.manufacturer, p.order_number);
+            let mut options: Vec<(PartKey, String)> = all
+                .iter()
+                .take(OPTIONS)
+                .map(|s| (s.part.key(), title(s.part)))
+                .collect();
+            let wanted = pass.picks.get(&id).cloned().or_else(|| {
+                let key = last_used(project, &class, memory)?;
+                let s = all.iter().find(|s| s.part.key() == key)?;
+                (s.fit.percent + CLOSE >= best).then_some(key)
+            });
             let chosen = match wanted {
                 Some(key) => Some(options.iter().position(|(k, _)| *k == key).unwrap_or_else(
                     || {
-                        let part = catalog.get(&key).expect("filtered above");
-                        let title = format!("{} {}", part.manufacturer, part.order_number);
-                        options.insert(0, (key, title));
+                        let part = catalog.get(&key).expect("a suggestion");
+                        options.insert(0, (key, title(part)));
                         0
                     },
                 )),
@@ -474,5 +479,54 @@ mod tests {
         lv.click_label("Choose parts");
         assert!(lv.has_label("Accept all (1)"), "the drawer lists the rows");
         assert!(lv.has_label("-K1"));
+    }
+
+    #[test]
+    fn a_fuse_link_used_for_a_fuse_is_not_proposed_to_a_breaker() {
+        let (_dir, mut d) = drive_blank();
+        let fuse = d.place("fuse", 40.0, 48.0);
+        let breaker = d.place("mcb3", 120.0, 48.0);
+        let project = d.app.backend.document().unwrap().project();
+        let dev = |s| project.symbol(s).unwrap().device().unwrap();
+        let (f, b) = (dev(fuse), dev(breaker));
+        eprintln!(
+            "TAGS {} {}",
+            project.device(f).unwrap().tag,
+            project.device(b).unwrap().tag
+        );
+        let mut catalog = Catalog::new();
+        for (n, function, letters) in [
+            ("FUSE-1", "Fuse holder", ["F", "Q"]),
+            ("MCB-1", "Miniature circuit breaker", ["F", "Q"]),
+        ] {
+            let mut p = CatalogPart::new("Acme", n);
+            p.function = function.into();
+            p.letter_codes = letters.iter().map(|l| (*l).to_owned()).collect();
+            catalog.upsert(p);
+        }
+        let mut memory = HashMap::new();
+        let class_of = |id| project.device(id).unwrap().tag.letter_code().to_owned();
+        memory.insert(class_of(f), PartKey::new("Acme", "FUSE-1"));
+        memory.insert(class_of(b), PartKey::new("Acme", "FUSE-1"));
+        let rows = pass_rows(project, &catalog, &PartsPass::default(), &memory);
+        let chosen = |id| {
+            let r = rows.iter().find(|r| r.device == id).unwrap();
+            r.options[r.chosen.unwrap()].1.clone()
+        };
+        assert_eq!(
+            chosen(b),
+            "Acme MCB-1",
+            "a breaker never gets the fuse link"
+        );
+        assert_eq!(chosen(f), "Acme FUSE-1");
+    }
+
+    fn drive_blank() -> (tempfile::TempDir, Drive) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, crate::app::Action::NewProject);
+        d.frame();
+        (dir, d)
     }
 }

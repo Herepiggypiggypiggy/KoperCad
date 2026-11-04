@@ -32,3 +32,8 @@ wait 3
 key Enter
 wait 5
 shot pass-after-enter
+# Accept all takes the rest in one step: the pass closes and its button is gone.
+click_text "Accept all (" Button
+wait 10
+expect_not "Accept all ("
+shot pass-accepted-all
