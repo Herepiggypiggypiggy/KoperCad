@@ -17,9 +17,9 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore: ["**/*.md", "docs/**"]
+    paths-ignore: ["**/*.md", "docs/**", "qa/**", "handoff/**"]
   pull_request:
-    paths-ignore: ["**/*.md", "docs/**"]
+    paths-ignore: ["**/*.md", "docs/**", "qa/**", "handoff/**"]
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
