@@ -1,0 +1,742 @@
+{
+  "app_info": {
+    "frame": 75,
+    "id": 6,
+    "ok": true,
+    "pixels_per_point": 1.0,
+    "size": [
+      1366.0,
+      768.0
+    ]
+  },
+  "binary": {
+    "built": "1793796304 (unix time)",
+    "git_head": "1be84bbfce",
+    "path": "/home/claude/tgt/debug/kopercad",
+    "warning": null
+  },
+  "findings": [],
+  "generated": 1793796305,
+  "platform": "linux",
+  "scenarios": [
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9480-plc-overview-triangle-rows",
+      "seconds": 15.1,
+      "shots": [
+        "shots/9480-plc-overview-triangle-rows-1366x768-01-bad-layout-chip.png",
+        "shots/9480-plc-overview-triangle-rows-1366x768-02-plc-overview.png"
+      ],
+      "size": "1366x768",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 623,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+n"
+        },
+        {
+          "error": null,
+          "ms": 719,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1359,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 284,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "wait 4"
+        },
+        {
+          "error": null,
+          "ms": 540,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "text add card DI99999999999"
+        },
+        {
+          "error": null,
+          "ms": 791,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 384,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 323,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 649,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "shot bad-layout-chip"
+        },
+        {
+          "error": null,
+          "ms": 202,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 184,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 611,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 335,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "wait 4"
+        },
+        {
+          "error": null,
+          "ms": 504,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "text plc overview"
+        },
+        {
+          "error": null,
+          "ms": 672,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 387,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 647,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 76,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"The project has no PLC cards yet\""
+        },
+        {
+          "error": null,
+          "ms": 715,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "shot plc-overview"
+        },
+        {
+          "error": null,
+          "ms": 300,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        }
+      ],
+      "title": "PLC overview and a bad card layout: triangles, not coloured sentences"
+    },
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9480-plc-overview-triangle-rows",
+      "seconds": 19.5,
+      "shots": [
+        "shots/9480-plc-overview-triangle-rows-1920x1080-01-bad-layout-chip.png",
+        "shots/9480-plc-overview-triangle-rows-1920x1080-02-plc-overview.png"
+      ],
+      "size": "1920x1080",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 682,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+n"
+        },
+        {
+          "error": null,
+          "ms": 1032,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1628,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 451,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "wait 4"
+        },
+        {
+          "error": null,
+          "ms": 739,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "text add card DI99999999999"
+        },
+        {
+          "error": null,
+          "ms": 956,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 510,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 621,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 1408,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "shot bad-layout-chip"
+        },
+        {
+          "error": null,
+          "ms": 347,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 308,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 884,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 435,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "wait 4"
+        },
+        {
+          "error": null,
+          "ms": 691,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "text plc overview"
+        },
+        {
+          "error": null,
+          "ms": 992,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 611,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 1167,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 104,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"The project has no PLC cards yet\""
+        },
+        {
+          "error": null,
+          "ms": 1191,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "shot plc-overview"
+        },
+        {
+          "error": null,
+          "ms": 364,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        }
+      ],
+      "title": "PLC overview and a bad card layout: triangles, not coloured sentences"
+    },
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9481-refused-edit-chip",
+      "seconds": 14.3,
+      "shots": [
+        "shots/9481-refused-edit-chip-1366x768-01-refusal-chip.png",
+        "shots/9481-refused-edit-chip-1366x768-02-refusal-detail.png",
+        "shots/9481-refused-edit-chip-1366x768-03-refusal-gone.png"
+      ],
+      "size": "1366x768",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 652,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"New project\""
+        },
+        {
+          "error": null,
+          "ms": 663,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1428,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 599,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "text \"set terminal level\""
+        },
+        {
+          "error": null,
+          "ms": 748,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 439,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 388,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 76,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Warning: No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 819,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-chip"
+        },
+        {
+          "error": null,
+          "ms": 467,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 220,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 80,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Place a terminal\""
+        },
+        {
+          "error": null,
+          "ms": 783,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-detail"
+        },
+        {
+          "error": null,
+          "ms": 272,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 231,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 189,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 218,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 191,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 80,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "expect_not \"Warning: No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 688,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-gone"
+        }
+      ],
+      "title": "A refused terminal edit is a triangle chip with the reason in it, not a toast"
+    },
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9481-refused-edit-chip",
+      "seconds": 18.1,
+      "shots": [
+        "shots/9481-refused-edit-chip-1920x1080-01-refusal-chip.png",
+        "shots/9481-refused-edit-chip-1920x1080-02-refusal-detail.png",
+        "shots/9481-refused-edit-chip-1920x1080-03-refusal-gone.png"
+      ],
+      "size": "1920x1080",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 796,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"New project\""
+        },
+        {
+          "error": null,
+          "ms": 1045,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1670,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 779,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "text \"set terminal level\""
+        },
+        {
+          "error": null,
+          "ms": 836,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 639,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 568,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 110,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Warning: No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 1277,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-chip"
+        },
+        {
+          "error": null,
+          "ms": 564,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 372,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 167,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Place a terminal\""
+        },
+        {
+          "error": null,
+          "ms": 1319,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-detail"
+        },
+        {
+          "error": null,
+          "ms": 368,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 395,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 348,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 579,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 444,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 96,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "expect_not \"Warning: No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 1347,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-gone"
+        }
+      ],
+      "title": "A refused terminal edit is a triangle chip with the reason in it, not a toast"
+    }
+  ],
+  "sizes": [
+    "1366x768",
+    "1920x1080"
+  ],
+  "summary": {
+    "blocking": 0,
+    "failed": 0,
+    "findings": 0,
+    "passed": 4,
+    "runs": 4
+  },
+  "sweeps": [],
+  "tool": "kopercad-cli qa run"
+}
