@@ -7,6 +7,16 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+# Heat starts a run by itself (Thorough, Auto on): stop it, switch Auto off, stop again, so the panel stays short.
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
 click_text "Add opening"
 wait 10
 click_text "Filter fan, low on the door"
