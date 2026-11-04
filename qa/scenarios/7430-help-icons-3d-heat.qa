@@ -30,17 +30,19 @@ expect "Model estimate"
 expect_not "What is this?"
 expect_not "Model estimate, not a measurement."
 # Each popup closes on a click outside it: a click on the empty canvas.
-click_text Help #1
+click_text Help #2
 wait 8
 shot help-a
 click 700 690
 wait 6
-click_text Help #2
+click 317 343
 wait 8
 shot help-b
 click 700 690
 wait 6
-try click_text Help #3
+# The Heat window "?" sits at the right edge: x differs by size, a click at the other size lands on the canvas.
+try click 1294 311
+try click 1849 311
 wait 8
 try shot help-c
 click 700 690

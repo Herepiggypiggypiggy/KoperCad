@@ -277,9 +277,20 @@ pub fn help_mark(ui: &mut Ui, text: &str) -> Response {
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .width(320.0)
         .show(|ui| {
-            ui.add(Label::new(text).wrap());
+            help_text(ui, text);
         });
     response
+}
+
+/// The text of a help popup. A long text scrolls inside a popup that stays within the window.
+pub fn help_text(ui: &mut Ui, text: &str) {
+    let max = (ui.ctx().content_rect().height() * 0.6).max(120.0);
+    egui::ScrollArea::vertical()
+        .max_height(max)
+        .auto_shrink([true, true])
+        .show(ui, |ui| {
+            ui.add(Label::new(text).wrap());
+        });
 }
 
 /// A caption with its "?" help beside it on one row.
