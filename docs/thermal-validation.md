@@ -231,3 +231,24 @@ validated. Rule, enforced by `tests/validation_gate.rs`:
 5. Private data (RiTherm results, customer cabinets) stay in the project files, not in this repository.
 
 Today nothing `measured` or `licensed` exists, so the flag stays false.
+
+## Forced convection and internal fans (lane H8, `novo-thermal`)
+
+Pure functions in `crates/novo-thermal/src/forced.rs`, checked in its unit tests and in
+`crates/novo-thermal/tests/circulation.rs`. "Exact" means a textbook formula reproduced to the
+stated tolerance; "model" means a planning value with no measured case behind it yet.
+
+| Piece | Check | Status |
+| --- | --- | --- |
+| Flat plate laminar (Blasius) | Nu(Re 1e5) = 187.3 by hand, 0.2 % | exact |
+| Plate laminar to mixed at Re 5e5 | the two forms meet within 1.2 % | exact |
+| Impinging round jet (Martin, Incropera) | Nu(Re 2e4, r/D 5, H/D 6) = 56.2 by hand, 1 %; refuses values outside the fitted range | exact in range |
+| Elenbaas parallel plates | tends to Ra'/24 (small) and 0.60 Ra'^1/4 (large) | exact limits |
+| Fin efficiency tanh(mL)/mL | mL = 1 gives 0.7616 | exact |
+| Heatsink forced film | long channel tends to Nu 7.54 on D_h | exact limit; developing term and cube blend are model |
+| Free round jet | axis law 5.8/(10+3.8) at 10 D; half-width gives half speed; far momentum within 20 % of the exit momentum (0.857 with the literature constants) | constants from literature; core length 2 D for an axial fan is model |
+| Turbulence lift of the plate film | clean end exact; lift up to 1.5x at Tu 25 %, wake level (x/d)^-1/2 | model |
+| Circulation fan in the 2D flow | operating point sits on the straight fan curve; flow through a cut across the fan nets to zero in a closed box; reversing the fan reverses the air; weaker installation delivers less | exact properties of the solved field |
+| Fan effect on a device film | a device in the stream gets a higher film and a lower surface temperature; further away, less | model (2D flow has no momentum, the jet is added analytically) |
+
+Not yet checked against a measured fan case. ENCLOSURE_VALIDATED is unchanged.
