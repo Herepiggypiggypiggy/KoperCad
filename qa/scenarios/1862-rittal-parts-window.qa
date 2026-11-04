@@ -16,3 +16,7 @@ wait 12
 key Down
 wait 8
 shot part-selected
+click_text Import
+wait 15
+expect "PARTcommunity"
+shot waiting-with-steps
