@@ -24,6 +24,10 @@ The axes are the model's. A maker may model a plate the other way round, so
 check one hole on the real plate before drilling. The values are tagged
 `drill_basis = maker`.
 
+Two limits the printed plan repeats: check one hole against the real plate
+before drilling (a plate modelled the other way round comes out mirrored or
+turned), and countersunk or blind holes are listed with their front diameter.
+
 ## Where you find it
 
 - Parts window: Import on a Rittal part (the summary lists what was read).

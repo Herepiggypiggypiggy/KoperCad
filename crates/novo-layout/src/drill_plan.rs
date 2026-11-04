@@ -705,6 +705,10 @@ impl DrillPlan {
                     ),
                     true,
                 );
+                f.wrapped(
+                    "Check one hole against the real plate before drilling: the hole positions follow the maker's model, which may be turned or mirrored. Countersunk and blind holes are listed with their front diameter.",
+                    true,
+                );
             }
             f.wrapped(
                 "Mark and centre punch one group, drill it, then tick its boxes. Work through the groups in the order below.",
@@ -963,6 +967,10 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(text.contains("2 hole(s) from the maker"), "{text}");
+        assert!(
+            text.contains("Check one hole against the real plate"),
+            "{text}"
+        );
     }
 
     #[test]
