@@ -269,6 +269,16 @@ fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
             .any(|c| c.label.contains("Options") && c.command == "macro.place"),
         "the status bar chip offers the form"
     );
+    // The keyboard reaches the form too: O.
+    d.key(eframe::egui::Key::O, eframe::egui::Modifiers::NONE);
+    assert!(d.app.wb.macro_place.ghost.is_none(), "O opens the form");
+    assert!(d.app.wb.macro_place.open);
+    d.app.wb.macro_place.open = false;
+    d.app.run_target(
+        &ctx,
+        novo_workflow::palette::Target::Macro("Motor starter DOL".into()),
+    );
+    d.frame();
     d.app.run_command(&ctx, "macro.place", None);
     d.frame();
     assert!(d.app.wb.macro_place.ghost.is_none());

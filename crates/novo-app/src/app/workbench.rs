@@ -983,6 +983,13 @@ impl NovoApp {
             self.wb.last_pointer = Some((page, at));
         }
         self.keep_macro_ghost_on_sheet();
+        // O on a circuit ghost: the form, from the keyboard.
+        if self.wb.macro_place.ghost.is_some()
+            && self.key_focus(ctx) == Focus::Canvas
+            && ctx.input(|i| i.key_pressed(egui::Key::O) && !i.modifiers.any())
+        {
+            self.macro_place_command(None);
+        }
         // A circuit ghost remembers where it was on screen.
         if let (Some(ghost), Some(at), Some((_, rect))) =
             (self.wb.macro_place.ghost.as_mut(), at, self.wb.canvas_area)

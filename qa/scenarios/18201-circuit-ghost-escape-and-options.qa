@@ -24,3 +24,16 @@ click_text Options
 wait 10
 expect "Place macro"
 shot options-form
+key Escape
+wait 5
+key ctrl+k
+text "motor starter"
+wait 5
+key Enter
+wait 10
+move 400 200
+wait 5
+key o
+wait 10
+expect "Place macro"
+shot options-by-key

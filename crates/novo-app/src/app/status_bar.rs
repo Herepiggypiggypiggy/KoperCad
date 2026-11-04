@@ -356,7 +356,7 @@ impl NovoApp {
                     format!("{name} \u{b7} Options")
                 },
                 command: "macro.place",
-                hover: "Click places it, Esc cancels. Click here for the form: parameters, parts, wire numbers"
+                hover: "Click places it, Esc cancels. Click here or press O for the form: parameters, parts, wire numbers"
                     .into(),
             });
         }
