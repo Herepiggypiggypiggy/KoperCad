@@ -1,5 +1,6 @@
 @title Circuit library: the pump alternation circuit is found and placed
 @area Schematic
+@sizes 1366x768
 # Batch 5 of the circuit library: a new circuit is found by search and placed on the page.
 click_text "New project"
 wait 20
@@ -8,7 +9,9 @@ text "place macro"
 wait 5
 key Enter
 wait 10
-click 237 94
+# The macro window docks on the right; its search box is at x 1205 in a 1366 wide window.
+click 1205 103
+wait 3
 text "alternation"
 wait 5
 expect "Circuits/7 Sensors"
