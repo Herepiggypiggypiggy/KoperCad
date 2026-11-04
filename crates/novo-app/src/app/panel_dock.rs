@@ -1567,7 +1567,15 @@ mod tests {
         assert_eq!(pane_height(&ctx, "window:Ask Claude"), 400.0);
         // Alone in the slot, it is laid out as tall as the slot.
         let (rects, _) = stack_layout(700.0, &[(PANE_MAX_HEIGHT, false)]);
-        assert!(rects[0].1 > 4000.0 * 0.0 + 600.0, "{rects:?}");
+        assert_eq!(rects[0], (0.0, 700.0), "{rects:?}");
+        // With a second pane docked, that one keeps a usable height, not a
+        // title row; the stack scrolls by the little that does not fit.
+        let (rects, over) = stack_layout(
+            700.0,
+            &[(PANE_MAX_HEIGHT, false), (PANE_DEFAULT_HEIGHT, false)],
+        );
+        assert!(rects[1].1 >= PANE_MIN_HEIGHT - 0.01, "{rects:?}");
+        assert!(rects[0].1 > 500.0 && over < 100.0, "{rects:?} {over}");
     }
 
     #[test]
