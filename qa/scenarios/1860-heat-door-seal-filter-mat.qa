@@ -23,8 +23,9 @@ wait 10
 expect "Filter mat"
 shot grille-added
 click_text "None"
-wait 10
+wait 5
 shot filter-menu
+wait 5
 click_text "G4 coarse mat"
 wait 10
 expect "Dust on it"
