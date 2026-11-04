@@ -1,0 +1,28 @@
+@title Cabinet Routes panel: warnings are count chips with a fix button
+@area Cabinet
+@sizes 1366x768
+# Workflow gap row 3. After Route all the right pane shows one row of chips ("N no size [Size them]", "N no entry [Set entry]") instead of orange sentences; the sentence is behind the "?".
+open_starter_example
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+expect "Set entry"
+expect "Detect pins"
+shot chips
+check_layout
+click_text "Set entry"
+wait 20
+shot entry-set
+check_layout

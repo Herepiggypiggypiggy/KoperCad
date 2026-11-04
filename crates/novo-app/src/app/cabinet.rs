@@ -234,6 +234,8 @@ pub(super) enum Ask {
     SetEntryWall(StructureId, Option<novo_routing::entry::Wall>),
     ExportWireProduction,
     OpenBench,
+    /// Open the Parts window (a chip's fix for parts without terminal data).
+    OpenParts,
     ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
     Select(u64),
@@ -3172,6 +3174,7 @@ impl NovoApp {
                 self.export_wire_production();
             }
             Ask::OpenBench => self.open_bench(),
+            Ask::OpenParts => self.open_parts_browser(),
             Ask::ExportWiringDxf(s) => {
                 self.export_wiring_dxf(s);
             }

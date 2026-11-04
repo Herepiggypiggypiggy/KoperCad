@@ -115,16 +115,39 @@ fn the_cabinet_says_what_it_estimated_and_what_leaves_the_cabinet() {
     let o = super::cabinet_routes::overlay(p, cab);
     assert!(o.routes.iter().all(|r| !r.free_air));
     assert!(
-        o.notes
+        o.chips
             .iter()
-            .any(|n| n.contains("estimated terminal position")),
+            .any(|c| c.sentence.contains("estimated terminal position")),
         "{:?}",
-        o.notes
+        o.chips
     );
     assert!(
-        o.notes.iter().any(|n| n.contains("no entry point")),
+        o.chips
+            .iter()
+            .any(|c| c.sentence.contains("no entry point")),
         "{:?}",
-        o.notes
+        o.chips
+    );
+}
+
+#[test]
+fn the_routes_chips_are_counts_with_a_fix_where_there_is_one() {
+    use super::cabinet_routes::FixKind;
+    let (_dir, d) = placed_example();
+    let p = d.doc().project();
+    let cab = p.structures().find(|s| s.enclosure).unwrap().id;
+    let o = super::cabinet_routes::overlay(p, cab);
+    let fix = |label: &str| {
+        o.chips
+            .iter()
+            .find(|c| c.label == label)
+            .and_then(|c| c.fix)
+    };
+    assert!(o.chips.iter().all(|c| c.count > 0));
+    assert_eq!(fix("no entry").map(|f| f.1), Some(FixKind::Entry));
+    assert_eq!(
+        fix("estimated terminals").map(|f| f.1),
+        Some(FixKind::DetectPins)
     );
 }
 
