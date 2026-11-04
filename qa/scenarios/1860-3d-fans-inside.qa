@@ -1,7 +1,7 @@
 @title 3D Heat: add a fan inside the cabinet, the Fans inside section shows the row and the model label
 @area 3D
 @sizes 1366x768
-# Lane H8. Fans inside are circulation fans with no opening; 2D estimate only, labelled model, with assumed start values.
+# Lane H8. Fans inside are circulation fans with no opening; labelled model; a new fan shows its position and values as assumed until set.
 open_starter_example
 wait 20
 click_text 3D #1
@@ -11,10 +11,11 @@ wait 20
 scroll 170 560 -400
 wait 10
 expect "Fans inside"
-expect "(model, 2D estimate only)"
+expect "(model)"
 click_text "Add fan inside"
 wait 10
-expect "Fan inside, right (model)"
+expect "Fan inside, right (model, assumed values)"
+expect "assumed"
 expect "Off the plate"
 shot fan-inside-added
 check_layout

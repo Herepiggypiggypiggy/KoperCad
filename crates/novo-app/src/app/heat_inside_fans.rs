@@ -3,8 +3,10 @@
 //! project as one text property on the enclosure (like the openings), and
 //! added to the run's scenario by `HeatSettings::apply`.
 //!
-//! They work in the 2D thermal estimate; the 3D solver does not move air
-//! with them yet, and the panel says so behind its "?".
+//! They work in the 2D thermal estimate and in the 3D run (the solver moves
+//! air with them); the 3D picture does not draw them yet, and the panel says
+//! so behind its "?". A fan starts with assumed position and values, shown
+//! as such until the person sets them.
 
 use eframe::egui;
 use novo_core::{Project, StructureId, Value};
@@ -79,6 +81,12 @@ pub(super) struct InsideFan {
     pub pressure_pa: f64,
     /// 100 = as the datasheet; less when it sits behind a guard or a bend.
     pub installed_pct: f64,
+    /// The person has set the place and direction (until then the start
+    /// position is an assumption, shown as such).
+    pub placed: bool,
+    /// The person has entered the diameter and datasheet values (until then
+    /// the planning fan of the start is an assumption, shown as such).
+    pub rated: bool,
 }
 
 impl Default for InsideFan {
@@ -92,6 +100,8 @@ impl Default for InsideFan {
             flow_m3h: 100.0,
             pressure_pa: 60.0,
             installed_pct: 100.0,
+            placed: false,
+            rated: false,
         }
     }
 }
@@ -249,10 +259,10 @@ pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclos
              flow through the fan is set by the loop the air finds, not by a vent. Model, \
              not measured: how much a given fan lowers a given part. Flow and pressure are the \
              maker's free-air values; Installed lowers them. A new fan starts with assumed \
-             values. Used by the 2D estimate only; the 3D picture does not show them yet.",
+             values. Used by the 2D estimate and the 3D run; the 3D picture does not draw them yet.",
         );
         ui.label(
-            egui::RichText::new("(model, 2D estimate only)")
+            egui::RichText::new("(model)")
                 .small()
                 .color(pal.text_secondary),
         );
@@ -270,8 +280,13 @@ pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclos
         let f = settings.inside[i];
         let open = settings.inside_selected == Some(i);
         ui.horizontal(|ui| {
+            let tag = if f.placed && f.rated {
+                "model"
+            } else {
+                "model, assumed values"
+            };
             let title = format!(
-                "{}  Fan inside, {} (model)",
+                "{}  Fan inside, {} ({tag})",
                 i + 1,
                 f.dir.label().to_lowercase()
             );
@@ -301,6 +316,8 @@ pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclos
 }
 
 fn editor(ui: &mut egui::Ui, f: &mut InsideFan, i: usize, e: &Enclosure) {
+    let before = *f;
+    let (placed, rated) = (f.placed, f.rated);
     let (w, h, d) = (
         e.interior_width_mm(),
         e.interior_height_mm(),
@@ -318,6 +335,7 @@ fn editor(ui: &mut egui::Ui, f: &mut InsideFan, i: usize, e: &Enclosure) {
                         ui.selectable_value(&mut f.dir, dir, dir.label());
                     }
                 });
+            assumed_tag(ui, !placed, "Position assumed: the middle of the plate");
             ui.end_row();
             ui.label("From the left");
             ui.add(
@@ -385,6 +403,11 @@ fn editor(ui: &mut egui::Ui, f: &mut InsideFan, i: usize, e: &Enclosure) {
                         .suffix(" Pa"),
                 )
                 .on_hover_text("Maximum pressure: where the fan delivers nothing (shut-off)");
+                assumed_tag(
+                    ui,
+                    !rated,
+                    "Values assumed: a planning fan until you enter yours",
+                );
             });
             ui.end_row();
             ui.label("Installed");
@@ -401,6 +424,29 @@ fn editor(ui: &mut egui::Ui, f: &mut InsideFan, i: usize, e: &Enclosure) {
             );
             ui.end_row();
         });
+    let moved = (f.x_mm, f.y_mm, f.off_plate_mm, f.dir)
+        != (before.x_mm, before.y_mm, before.off_plate_mm, before.dir);
+    let rated_now = (f.diameter_mm, f.flow_m3h, f.pressure_pa, f.installed_pct)
+        != (
+            before.diameter_mm,
+            before.flow_m3h,
+            before.pressure_pa,
+            before.installed_pct,
+        );
+    f.placed |= moved;
+    f.rated |= rated_now;
+}
+
+/// A small visible "assumed" next to what the person has not set yet.
+fn assumed_tag(ui: &mut egui::Ui, show: bool, why: &str) {
+    if show {
+        ui.label(
+            egui::RichText::new("assumed")
+                .small()
+                .color(crate::theme::ui_palette().text_secondary),
+        )
+        .on_hover_text(why);
+    }
 }
 
 #[cfg(test)]
@@ -427,6 +473,36 @@ mod tests {
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].dir, Dir::Left);
         assert_eq!(v[0].diameter_mm, InsideFan::default().diameter_mm);
+    }
+
+    #[test]
+    fn a_new_fan_is_assumed_until_the_person_sets_it() {
+        let e = Enclosure {
+            width_mm: 800.0,
+            height_mm: 1000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: novo_layout::sizing::Material::Steel,
+            installation: novo_layout::sizing::Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 700.0,
+                h: 900.0,
+            },
+        };
+        let f = InsideFan::start(&e);
+        assert!(!f.placed && !f.rated);
+        // a saved fan from before the flags existed reads as assumed too
+        let v = parse(r#"[{"dir":"Left"}]"#);
+        assert!(!v[0].placed && !v[0].rated);
+        // the flags survive the project text
+        let g = InsideFan {
+            placed: true,
+            rated: true,
+            ..f
+        };
+        assert_eq!(parse(&text(&[g])), vec![g]);
     }
 
     #[test]
