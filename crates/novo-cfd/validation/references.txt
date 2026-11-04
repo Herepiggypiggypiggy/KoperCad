@@ -15,6 +15,6 @@ radiation-two-surface | analytic | passed | rad.rs | body in enclosure, cube vie
 sealed-iec-60890 | standard | passed | validation_enclosure.rs | sealed box mean air rise, k * Ae hand calculation (band 20 %)
 device-vs-2d | model_vs_model | passed | validation_device.rs | housing rise and plate share against the 2D engine, mesh spread
 cabinet-vs-2d | model_vs_model | passed | validation_cabinet.rs | cabinet solver against the 2D engine and IEC 60890
-mesh-independence | analytic | passed | validation_mesh_creep.rs | housing rise stays within a band from 1000 to 20000 cells
-ritherm-cross-check | third_party_model | planned | validation_gate.rs | RiTherm (IEC TR 60890:2022 curves) for 15 reference cases; never counts alone
+mesh-independence | model_vs_model | passed | validation_mesh_creep.rs | housing rise stays within a band from 1000 to 20000 cells
+ritherm-cross-check | third_party_model | passed | validation_iec.rs | RiTherm (IEC TR 60890:2022) mean air rise, nine cases: our IEC hand value 0.5 to 3 % below (6 % small box), 2D 11 to 20 % below; private data, never counts
 measured-cabinet | measured | planned | validation_gate.rs | one real cabinet with logged temperatures; needed to flip the flag
