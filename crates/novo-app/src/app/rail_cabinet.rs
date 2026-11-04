@@ -148,7 +148,11 @@ impl NovoApp {
         match id {
             "rail.pages" => self.show_pages(true),
             "rail.arrange" => super::rail::open(ctx, id),
-            other => self.wb.queued.push(other),
+            other => {
+                // The row is the button a lesson step "click X" waits for.
+                self.learn_rail_click(other);
+                self.wb.queued.push(other);
+            }
         }
         ctx.request_repaint();
     }
