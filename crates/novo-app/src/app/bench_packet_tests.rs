@@ -101,7 +101,7 @@ fn the_packet_has_a_cover_then_the_parts_and_the_cover_names_the_right_pages() {
         last.contains("Wired by") && last.contains("Signature"),
         "{last}"
     );
-    assert!(cover.contains("Wiring sign-off"), "{cover}");
+    assert!(cover.contains("sign-off on the last page"), "{cover}");
 }
 
 #[test]

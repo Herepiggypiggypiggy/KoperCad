@@ -33,8 +33,6 @@ const TABLE: &str = "Planning values you can edit";
 const ROW_MM: f64 = 8.0;
 /// Row height of the signature lines, in mm: room to sign.
 const SIGN_ROW_MM: f64 = 14.0;
-/// Row height of the cover's contents lines, in mm: every part has a line.
-const COVER_CONTENTS_ROW_MM: f64 = 5.5;
 /// Row height of the cover facts, in mm.
 const COVER_FACT_ROW_MM: f64 = 4.5;
 
@@ -156,7 +154,7 @@ impl NovoApp {
             let circuits = circuit_sheets(&project, &jobs);
             if !circuits.sections.is_empty() {
                 parts.push(Part {
-                    what: "Circuit sheets: devices, wires, tests per page",
+                    what: "Circuit sheets; sign-off on the last page",
                     print: "A4, any printer",
                     basis: ROUTED,
                     report: circuits,
@@ -174,7 +172,7 @@ impl NovoApp {
         }
         if let Some(signoff) = signoff_sheet(&project, &jobs) {
             parts.push(Part {
-                what: "Wiring sign-off: ticks, signatures",
+                what: "",
                 print: "A4, any printer",
                 basis: "Workshop record, not a certificate",
                 report: signoff,
@@ -189,9 +187,12 @@ impl NovoApp {
         }
 
         let make_cover = |pages: &[Option<usize>]| {
+            // A part without a name has no contents line of its own (the sign-off sheet is named
+            // on the circuit sheets' line: the cover has room for one line fewer).
             let mut lines: Vec<CoverLine> = parts
                 .iter()
                 .zip(pages)
+                .filter(|(p, _)| !p.what.is_empty())
                 .map(|(p, page)| {
                     CoverLine::new(
                         p.what,
@@ -225,7 +226,6 @@ impl NovoApp {
                 .map(|k| (k, ROW_MM))
                 .chain([
                     ("facts".to_owned(), COVER_FACT_ROW_MM),
-                    ("contents".to_owned(), COVER_CONTENTS_ROW_MM),
                     (SIGNOFF_SIGN_KEY.to_owned(), SIGN_ROW_MM),
                 ])
                 .collect(),
