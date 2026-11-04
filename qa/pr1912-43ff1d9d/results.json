@@ -1,0 +1,790 @@
+{
+  "app_info": {
+    "frame": 75,
+    "id": 6,
+    "ok": true,
+    "pixels_per_point": 1.0,
+    "size": [
+      1366.0,
+      768.0
+    ]
+  },
+  "binary": {
+    "built": "1793824146 (unix time)",
+    "git_head": "43ff1d9dae",
+    "path": "/home/claude/tgt/debug/kopercad",
+    "warning": null
+  },
+  "findings": [],
+  "generated": 1793824146,
+  "platform": "linux",
+  "scenarios": [
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9480-plc-card-triangle-rows-1366",
+      "seconds": 14.0,
+      "shots": [
+        "shots/9480-plc-card-triangle-rows-1366-1366x768-01-bad-layout-row.png",
+        "shots/9480-plc-card-triangle-rows-1366-1366x768-02-bad-layout-popup.png"
+      ],
+      "size": "1366x768",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 468,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+n"
+        },
+        {
+          "error": null,
+          "ms": 611,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1327,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 263,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "wait 4"
+        },
+        {
+          "error": null,
+          "ms": 552,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "text add plc card"
+        },
+        {
+          "error": null,
+          "ms": 791,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 415,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 512,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "wait 15"
+        },
+        {
+          "error": null,
+          "ms": 291,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "click 1216 334"
+        },
+        {
+          "error": null,
+          "ms": 147,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "wait 3"
+        },
+        {
+          "error": null,
+          "ms": 200,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+a"
+        },
+        {
+          "error": null,
+          "ms": 99,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "wait 2"
+        },
+        {
+          "error": null,
+          "ms": 180,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "text abc"
+        },
+        {
+          "error": null,
+          "ms": 127,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "wait 3"
+        },
+        {
+          "error": null,
+          "ms": 432,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"Add card\""
+        },
+        {
+          "error": null,
+          "ms": 327,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 711,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "shot bad-layout-row"
+        },
+        {
+          "error": null,
+          "ms": 276,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 307,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "click 1062 486"
+        },
+        {
+          "error": null,
+          "ms": 259,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 84,
+          "n": 21,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"the slot must be a number\""
+        },
+        {
+          "error": null,
+          "ms": 80,
+          "n": 22,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Copy\""
+        },
+        {
+          "error": null,
+          "ms": 779,
+          "n": 23,
+          "note": null,
+          "status": "ok",
+          "step": "shot bad-layout-popup"
+        }
+      ],
+      "title": "PLC card dialog and overview: a bad layout is a triangle row with its reason in a popup"
+    },
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9481-refused-edit-triangle-1366",
+      "seconds": 13.1,
+      "shots": [
+        "shots/9481-refused-edit-triangle-1366-1366x768-01-refusal-triangle.png",
+        "shots/9481-refused-edit-triangle-1366-1366x768-02-refusal-popup.png",
+        "shots/9481-refused-edit-triangle-1366-1366x768-03-refusal-gone.png"
+      ],
+      "size": "1366x768",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 587,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"New project\""
+        },
+        {
+          "error": null,
+          "ms": 591,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1343,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 604,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "text \"set terminal level\""
+        },
+        {
+          "error": null,
+          "ms": 699,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 376,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 291,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 664,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-triangle"
+        },
+        {
+          "error": null,
+          "ms": 248,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 263,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "click 71 81"
+        },
+        {
+          "error": null,
+          "ms": 196,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 68,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 116,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Copy\""
+        },
+        {
+          "error": null,
+          "ms": 647,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-popup"
+        },
+        {
+          "error": null,
+          "ms": 192,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 176,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 203,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 167,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 68,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "expect_not \"No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 634,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-gone"
+        }
+      ],
+      "title": "A refused terminal edit is a transient triangle in the canvas corner, not a toast"
+    },
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9482-plc-card-triangle-rows-1920",
+      "seconds": 16.5,
+      "shots": [
+        "shots/9482-plc-card-triangle-rows-1920-1920x1080-01-bad-layout-row.png",
+        "shots/9482-plc-card-triangle-rows-1920-1920x1080-02-bad-layout-popup.png"
+      ],
+      "size": "1920x1080",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 560,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+n"
+        },
+        {
+          "error": null,
+          "ms": 921,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1491,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 367,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "wait 4"
+        },
+        {
+          "error": null,
+          "ms": 639,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "text add plc card"
+        },
+        {
+          "error": null,
+          "ms": 856,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 543,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 760,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "wait 15"
+        },
+        {
+          "error": null,
+          "ms": 404,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "click 1770 334"
+        },
+        {
+          "error": null,
+          "ms": 176,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "wait 3"
+        },
+        {
+          "error": null,
+          "ms": 347,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+a"
+        },
+        {
+          "error": null,
+          "ms": 136,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "wait 2"
+        },
+        {
+          "error": null,
+          "ms": 317,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "text abc"
+        },
+        {
+          "error": null,
+          "ms": 202,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "wait 3"
+        },
+        {
+          "error": null,
+          "ms": 533,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"Add card\""
+        },
+        {
+          "error": null,
+          "ms": 550,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 1232,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "shot bad-layout-row"
+        },
+        {
+          "error": null,
+          "ms": 360,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 398,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "click 1616 486"
+        },
+        {
+          "error": null,
+          "ms": 316,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 88,
+          "n": 21,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"the slot must be a number\""
+        },
+        {
+          "error": null,
+          "ms": 99,
+          "n": 22,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Copy\""
+        },
+        {
+          "error": null,
+          "ms": 1127,
+          "n": 23,
+          "note": null,
+          "status": "ok",
+          "step": "shot bad-layout-popup"
+        }
+      ],
+      "title": "PLC card dialog and overview: a bad layout is a triangle row with its reason in a popup"
+    },
+    {
+      "area": "Schematic",
+      "files": [],
+      "findings": [],
+      "name": "9483-refused-edit-triangle-1920",
+      "seconds": 16.0,
+      "shots": [
+        "shots/9483-refused-edit-triangle-1920-1920x1080-01-refusal-triangle.png",
+        "shots/9483-refused-edit-triangle-1920-1920x1080-02-refusal-popup.png",
+        "shots/9483-refused-edit-triangle-1920-1920x1080-03-refusal-gone.png"
+      ],
+      "size": "1920x1080",
+      "status": "pass",
+      "steps": [
+        {
+          "error": null,
+          "ms": 791,
+          "n": 1,
+          "note": null,
+          "status": "ok",
+          "step": "click_text \"New project\""
+        },
+        {
+          "error": null,
+          "ms": 1036,
+          "n": 2,
+          "note": null,
+          "status": "ok",
+          "step": "wait 20"
+        },
+        {
+          "error": null,
+          "ms": 1559,
+          "n": 3,
+          "note": null,
+          "status": "ok",
+          "step": "key ctrl+k"
+        },
+        {
+          "error": null,
+          "ms": 720,
+          "n": 4,
+          "note": null,
+          "status": "ok",
+          "step": "text \"set terminal level\""
+        },
+        {
+          "error": null,
+          "ms": 840,
+          "n": 5,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 575,
+          "n": 6,
+          "note": null,
+          "status": "ok",
+          "step": "key Enter"
+        },
+        {
+          "error": null,
+          "ms": 511,
+          "n": 7,
+          "note": null,
+          "status": "ok",
+          "step": "wait 10"
+        },
+        {
+          "error": null,
+          "ms": 1223,
+          "n": 8,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-triangle"
+        },
+        {
+          "error": null,
+          "ms": 316,
+          "n": 9,
+          "note": null,
+          "status": "ok",
+          "step": "check_layout"
+        },
+        {
+          "error": null,
+          "ms": 387,
+          "n": 10,
+          "note": null,
+          "status": "ok",
+          "step": "click 320 81"
+        },
+        {
+          "error": null,
+          "ms": 280,
+          "n": 11,
+          "note": null,
+          "status": "ok",
+          "step": "wait 6"
+        },
+        {
+          "error": null,
+          "ms": 84,
+          "n": 12,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 96,
+          "n": 13,
+          "note": null,
+          "status": "ok",
+          "step": "expect \"Copy\""
+        },
+        {
+          "error": null,
+          "ms": 1019,
+          "n": 14,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-popup"
+        },
+        {
+          "error": null,
+          "ms": 292,
+          "n": 15,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 235,
+          "n": 16,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 296,
+          "n": 17,
+          "note": null,
+          "status": "ok",
+          "step": "key Escape"
+        },
+        {
+          "error": null,
+          "ms": 300,
+          "n": 18,
+          "note": null,
+          "status": "ok",
+          "step": "wait 5"
+        },
+        {
+          "error": null,
+          "ms": 84,
+          "n": 19,
+          "note": null,
+          "status": "ok",
+          "step": "expect_not \"No terminal strip yet\""
+        },
+        {
+          "error": null,
+          "ms": 1079,
+          "n": 20,
+          "note": null,
+          "status": "ok",
+          "step": "shot refusal-gone"
+        }
+      ],
+      "title": "A refused terminal edit is a transient triangle in the canvas corner, not a toast"
+    }
+  ],
+  "sizes": [
+    "1366x768",
+    "1920x1080"
+  ],
+  "summary": {
+    "blocking": 0,
+    "failed": 0,
+    "findings": 0,
+    "passed": 4,
+    "runs": 4
+  },
+  "sweeps": [],
+  "tool": "kopercad-cli qa run"
+}
