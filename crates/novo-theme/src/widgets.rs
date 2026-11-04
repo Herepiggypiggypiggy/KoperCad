@@ -259,14 +259,15 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str) -> Response {
 
 /// Marks that a popup was open at the start of this pass, so the Escape that
 /// closes it is not also taken by a docked window or panel behind it.
-fn note_popup_open(ctx: &egui::Context) {
-    if egui::Popup::is_any_open(ctx) {
+fn note_popup_open(ctx: &egui::Context, popup: egui::Id) {
+    if egui::Popup::is_id_open(ctx, popup) {
+        // Only a flag chip's popup calls this, so other popups keep their old Escape.
         let pass = ctx.cumulative_pass_nr();
         ctx.data_mut(|d| d.insert_temp(egui::Id::new("popup_open_in_pass"), pass));
     }
 }
 
-/// `true` when a popup of [`help_mark`] or [`flag_chip`] was open in this pass:
+/// `true` when the popup of a [`flag_chip`] was open in this pass:
 /// Escape belongs to it, not to the window it sits in.
 pub fn popup_owns_escape(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(egui::Id::new("popup_open_in_pass")))
@@ -289,7 +290,6 @@ pub fn help_mark(ui: &mut Ui, text: &str) -> Response {
         )
         .on_hover_text("Help");
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Help"));
-    note_popup_open(ui.ctx());
     egui::Popup::from_toggle_button_response(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .width(320.0)
@@ -777,7 +777,7 @@ pub fn flag_chip(ui: &mut Ui, red: bool, title: &str, detail: &str) -> Response 
         ui.painter().galley(at, galley, color);
     }
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    note_popup_open(ui.ctx());
+    note_popup_open(ui.ctx(), egui::Popup::default_response_id(&response));
     egui::Popup::from_toggle_button_response(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .width(320.0)
