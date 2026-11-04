@@ -456,6 +456,7 @@ pub const TABLE: &[Presentation] = &[
     ),
     row("proposal.next", p(icons::LIGHTBULB), "Next proposal"),
     row("draw.tidy", p(icons::SPARKLE), "Tidy routes"),
+    row("place.list", p(icons::CLIPBOARD_TEXT), "Place from list"),
     row("edit.undo", p(icons::ARROW_COUNTER_CLOCKWISE), "Undo"),
     row("edit.redo", p(icons::ARROW_CLOCKWISE), "Redo"),
     row("edit.copy", p(icons::COPY), "Copy"),
