@@ -871,8 +871,50 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
     assert_eq!(row[8], "596");
 }
 
-#[test]
-fn a_wire_to_the_door_is_a_model_and_says_so() {
+/// Gives the cabinet an enclosure spec (`None` setback leaves the number out).
+fn set_spec(
+    doc: &mut Document,
+    depth: f64,
+    setback: Option<f64>,
+    source: novo_layout::spec::Source,
+) {
+    use novo_layout::spec::{EnclosureSpec, Field};
+    doc.transact("spec", |tx| {
+        let cab = tx.project().structures().find(|s| s.enclosure).unwrap().id;
+        let f = |v: f64| Some(Field::new(v, source));
+        let spec = EnclosureSpec {
+            article: "T1".into(),
+            width: f(450.0),
+            height: f(450.0),
+            depth: f(depth),
+            wall: f(2.0),
+            plate_setback: setback.and_then(f),
+            ..EnclosureSpec::default()
+        };
+        let mut props = novo_core::Properties::default();
+        spec.write(&mut props);
+        let old: Vec<String> = tx
+            .project()
+            .get::<novo_core::Structure>(cab)
+            .unwrap()
+            .properties
+            .keys()
+            .filter(|k| k.starts_with("encl."))
+            .cloned()
+            .collect();
+        for k in old {
+            tx.set_property(cab, &k, None)?;
+        }
+        for (k, v) in props {
+            tx.set_property(cab, &k, Some(v))?;
+        }
+        Ok(())
+    })
+    .expect("spec");
+}
+
+/// The starter in a cabinet with F1 on the plate and K1 on the door.
+fn door_doc() -> Document {
     use novo_layout::enclosure::{Door, Enclosure, Hinge};
     let (mut doc, h) = starter();
     doc.transact("Cabinet", |tx| {
@@ -920,6 +962,13 @@ fn a_wire_to_the_door_is_a_model_and_says_so() {
         Ok(())
     })
     .expect("layout");
+    doc
+}
+
+#[test]
+fn a_wire_to_the_door_is_a_model_and_says_so() {
+    use novo_layout::spec::Source;
+    let mut doc = door_doc();
     let wires = report(&doc, "wires");
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(row[9], "door, no gap", "{row:?}");
@@ -927,46 +976,11 @@ fn a_wire_to_the_door_is_a_model_and_says_so() {
 
     // A chosen enclosure with catalogue numbers: the depth is in, marked ~,
     // and the sheet carries the shared estimate notice.
-    use novo_layout::spec::{EnclosureSpec, Field, Source};
-    let set_spec = |doc: &mut _, setback: Option<f64>| {
-        let doc: &mut novo_core::Document = doc;
-        doc.transact("spec", |tx| {
-            let cab = tx.project().structures().find(|s| s.enclosure).unwrap().id;
-            let spec = EnclosureSpec {
-                article: "T1".into(),
-                width: Some(Field::new(450.0, Source::Catalogue)),
-                height: Some(Field::new(450.0, Source::Catalogue)),
-                depth: Some(Field::new(300.0, Source::Catalogue)),
-                wall: Some(Field::new(2.0, Source::Catalogue)),
-                plate_setback: setback.map(|v| Field::new(v, Source::Catalogue)),
-                ..EnclosureSpec::default()
-            };
-            let mut props = novo_core::Properties::default();
-            spec.write(&mut props);
-            let old: Vec<String> = tx
-                .project()
-                .get::<novo_core::Structure>(cab)
-                .unwrap()
-                .properties
-                .keys()
-                .filter(|k| k.starts_with("encl."))
-                .cloned()
-                .collect();
-            for k in old {
-                tx.set_property(cab, &k, None)?;
-            }
-            for (k, v) in props {
-                tx.set_property(cab, &k, Some(v))?;
-            }
-            Ok(())
-        })
-        .expect("spec");
-    };
-    let mut doc = doc;
-    set_spec(&mut doc, Some(20.0));
+    set_spec(&mut doc, 300.0, Some(20.0), Source::Catalogue);
     let wires = report(&doc, "wires");
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(row[9], "~ door + depth (catalogue)", "{row:?}");
+    let short: f64 = row[8].parse().unwrap();
     assert!(
         wires.sections[0]
             .title
@@ -978,11 +992,52 @@ fn a_wire_to_the_door_is_a_model_and_says_so() {
             .title
             .contains(novo_layout::spec::ESTIMATE_NOTICE)
     );
+    // Another depth: another length (spec B is 200 mm deeper).
+    set_spec(&mut doc, 500.0, Some(20.0), Source::Catalogue);
+    let row = wire_row(&report(&doc, "wires"), "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[8].parse::<f64>().unwrap(), short + 200.0);
+    // Read from the maker's STEP: no ~.
+    set_spec(&mut doc, 500.0, Some(20.0), Source::Step);
+    let row = wire_row(&report(&doc, "wires"), "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[9], "door + depth (spec)", "{row:?}");
     // A number missing: marked ~ and says so.
-    set_spec(&mut doc, None);
-    let wires = report(&doc, "wires");
-    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    set_spec(&mut doc, 500.0, None, Source::Catalogue);
+    let row = wire_row(&report(&doc, "wires"), "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!(row[9], "~ door, spec has no depth", "{row:?}");
+}
+
+/// Writes the QA fixtures for scenario 1910:
+/// `cargo test -p novo-reports --test reports write_door_wire_spec_fixtures -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/door-wire-*.novo"]
+fn write_door_wire_spec_fixtures() {
+    use novo_layout::spec::Source;
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures");
+    let cases = [
+        ("door-wire-no-spec", None),
+        (
+            "door-wire-spec-a",
+            Some((300.0, Some(20.0), Source::Catalogue)),
+        ),
+        (
+            "door-wire-spec-b",
+            Some((500.0, Some(20.0), Source::Catalogue)),
+        ),
+        (
+            "door-wire-spec-step",
+            Some((500.0, Some(20.0), Source::Step)),
+        ),
+        ("door-wire-spec-gap", Some((500.0, None, Source::Catalogue))),
+    ];
+    for (name, spec) in cases {
+        let mut doc = door_doc();
+        if let Some((depth, setback, source)) = spec {
+            set_spec(&mut doc, depth, setback, source);
+        }
+        let path = dir.join(format!("{name}.novo"));
+        let _ = std::fs::remove_file(&path);
+        novo_storage::ProjectFile::create(&path, doc.project()).expect("save");
+    }
 }
 
 #[test]
