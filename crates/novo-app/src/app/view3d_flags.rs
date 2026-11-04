@@ -32,6 +32,9 @@ pub(super) const SIZE: f32 = 14.0;
 pub(super) const HIT: f32 = 24.0;
 /// Triangles closer than this, px, become one with a count.
 pub(super) const CLUSTER_PX: f32 = 14.0;
+/// A triangle on a part sits at the top right of the part's tag label (the
+/// label is centred on the same spot), so the tag stays readable.
+pub(super) const LABEL_CORNER: egui::Vec2 = egui::vec2(17.0, -15.0);
 /// Opacity of a triangle behind a part.
 pub(super) const HIDDEN_ALPHA: f32 = 0.35;
 /// A refusal stays at most this long, seconds, when no input comes.
@@ -128,13 +131,16 @@ fn spots(layer: &Layer, flags: &[&Flag]) -> Vec<Spot> {
             let Some(world) = world_of(layer.scene, layer.extra, anchor) else {
                 continue;
             };
-            let Some(at) = layer.view.project(layer.rect, layer.scene, world) else {
+            let Some(mut at) = layer.view.project(layer.rect, layer.scene, world) else {
                 continue;
             };
+            let own = item_of(anchor);
+            if own.is_some() {
+                at += LABEL_CORNER;
+            }
             if !layer.rect.contains(at) {
                 continue;
             }
-            let own = item_of(anchor);
             let selected = own.is_some_and(|o| selection.contains(&o));
             let hidden = !selected
                 && layer

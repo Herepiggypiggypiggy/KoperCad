@@ -59,6 +59,7 @@ fn a_flag_on_a_device_is_drawn_on_it_and_a_click_opens_its_popover() {
             .view
             .project(rect, scene, world)
             .expect("on screen")
+            + super::view3d_flags::LABEL_CORNER
     };
     assert!(rect.contains(at), "{at:?} in {rect:?}");
     assert!(d.app.wb.flags.open.is_none());

@@ -16,8 +16,10 @@ text duplicate the selected devices in 3d
 wait 5
 key Enter
 wait 10
+move 300 600
+wait 6
 expect "No room for a copy"
-shot refusal-triangle
+shot refusal-amber-triangle-pointer-elsewhere
 check_layout
 # The next input ends it.
 click 300 600
@@ -26,7 +28,7 @@ expect_not "No room for a copy"
 shot refusal-gone
 
 # The triangle on -K1: a click opens its popover.
-click 1083 579
+click 1100 564
 wait 8
 expect "Locate"
 expect "Waive"
