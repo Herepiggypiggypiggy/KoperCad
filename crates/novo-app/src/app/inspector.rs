@@ -739,6 +739,7 @@ impl NovoApp {
         match self.execute(command) {
             Some(Ok(_)) => {
                 self.message(Level::Info, format!("Part set: {title}"));
+                self.remember_part(&[device], key);
                 self.offer_part_terminals(device);
             }
             Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),

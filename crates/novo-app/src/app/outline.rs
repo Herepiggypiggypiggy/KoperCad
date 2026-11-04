@@ -83,8 +83,9 @@ pub(super) enum Reveal {
 pub(super) struct CabinetForm {
     name: String,
     group: Levels,
-    /// Index into the user's enclosure list; `None` for the default plate.
-    enclosure: Option<usize>,
+    /// The enclosure cards and the pick (`None` is the standard plate).
+    pub(super) picker: super::enclosure_pick::Picker,
+    pub(super) choices: Vec<super::enclosure_pick::Choice>,
     first_page: bool,
     focused: bool,
 }
@@ -2457,10 +2458,13 @@ fn drop_plan(
 impl NovoApp {
     pub(super) fn open_cabinet_form(&mut self, group: Levels) {
         self.sizing.ensure_loaded();
+        let parts = novo_parts::Catalog::load_default().ok();
+        let choices = super::enclosure_pick::all(parts.as_ref(), &self.sizing.catalog.items);
         self.ol.cabinet_form = Some(CabinetForm {
             name: String::new(),
             group,
-            enclosure: None,
+            picker: Default::default(),
+            choices,
             first_page: true,
             focused: false,
         });
@@ -2564,108 +2568,111 @@ impl NovoApp {
             .into_iter()
             .map(|g| g.function)
             .collect();
-        let catalog: Vec<EnclosureSize> = self.sizing.catalog.items.clone();
         let exists = tree::level_exists(project, Aspect::Location, &[form.name.trim().to_owned()]);
         let valid = super::pages::clean_level(&form.name, Aspect::Location);
         let mut open_list = false;
-        let modal = super::panel::modal(ctx, "cabinet_form", "New cabinet", [380.0, 0.0], |ui| {
-            ui.add_space(6.0);
-            egui::Grid::new("cabinet_form_grid")
-                .num_columns(2)
-                .spacing([10.0, 8.0])
-                .show(ui, |ui| {
-                    ui.label("Name");
-                    ui.vertical(|ui| {
-                        let name = ui.add(
-                            egui::TextEdit::singleline(&mut form.name)
-                                .desired_width(200.0)
-                                .hint_text("CAB1"),
-                        );
-                        if !form.focused {
-                            name.request_focus();
-                            super::inspector::select_all(ui.ctx(), name.id, &form.name);
-                            form.focused = true;
-                        }
-                        if valid.is_empty() {
-                            ui.colored_label(crate::theme::ui_palette().error, "Give it a name");
-                        } else if exists {
-                            ui.colored_label(
-                                crate::theme::ui_palette().warning,
-                                format!("{valid} exists: its layout stays, a page is added"),
-                            );
-                        } else {
-                            ui.weak(format!("Called {valid}, from the names in this project"));
-                        }
-                    });
-                    ui.end_row();
-
-                    ui.label("Enclosure");
-                    ui.vertical(|ui| {
-                        let current = match form.enclosure.and_then(|i| catalog.get(i)) {
-                            Some(e) => enclosure_text(e),
-                            None => format!(
-                                "Standard plate {} x {} mm",
-                                DEFAULT_PLATE.width, DEFAULT_PLATE.height
-                            ),
-                        };
-                        egui::ComboBox::from_id_salt("cabinet_form_enclosure")
-                            .selected_text(current)
-                            .width(250.0)
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut form.enclosure,
-                                    None,
-                                    format!(
-                                        "Standard plate {} x {} mm",
-                                        DEFAULT_PLATE.width, DEFAULT_PLATE.height
-                                    ),
+        let modal =
+            super::panel::modal_fill(ctx, "cabinet_form", "New cabinet", [680.0, 600.0], |ui| {
+                super::panel::fill_above(ui, 48.0, |ui| {
+                    ui.add_space(6.0);
+                    egui::Grid::new("cabinet_form_grid")
+                        .num_columns(2)
+                        .spacing([10.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Name");
+                            ui.vertical(|ui| {
+                                let name = ui.add(
+                                    egui::TextEdit::singleline(&mut form.name)
+                                        .desired_width(200.0)
+                                        .hint_text("CAB1"),
                                 );
-                                for (i, e) in catalog.iter().enumerate() {
-                                    ui.selectable_value(
-                                        &mut form.enclosure,
-                                        Some(i),
-                                        enclosure_text(e),
+                                if !form.focused {
+                                    name.request_focus();
+                                    super::inspector::select_all(ui.ctx(), name.id, &form.name);
+                                    form.focused = true;
+                                }
+                                if valid.is_empty() {
+                                    ui.colored_label(
+                                        crate::theme::ui_palette().error,
+                                        "Give it a name",
                                     );
+                                } else if exists {
+                                    ui.colored_label(
+                                        crate::theme::ui_palette().warning,
+                                        format!(
+                                            "{valid} exists: its layout stays, a page is added"
+                                        ),
+                                    );
+                                } else {
+                                    ui.weak(format!(
+                                        "Called {valid}, from the names in this project"
+                                    ));
                                 }
                             });
-                        if catalog.is_empty() {
-                            ui.weak("Your enclosure list is empty.");
-                        }
-                        if ui.small_button("Edit the enclosure list…").clicked() {
-                            open_list = true;
-                        }
-                    });
-                    ui.end_row();
+                            ui.end_row();
 
-                    ui.label("Page group");
-                    egui::ComboBox::from_id_salt("cabinet_form_group")
-                        .selected_text(if form.group.is_empty() {
-                            "No group".to_owned()
-                        } else {
-                            group_name(&form.group)
-                        })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut form.group, Vec::new(), "No group");
-                            for g in &groups {
-                                ui.selectable_value(&mut form.group, g.clone(), group_name(g));
-                            }
+                            ui.label("Page group");
+                            egui::ComboBox::from_id_salt("cabinet_form_group")
+                                .selected_text(if form.group.is_empty() {
+                                    "No group".to_owned()
+                                } else {
+                                    group_name(&form.group)
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut form.group, Vec::new(), "No group");
+                                    for g in &groups {
+                                        ui.selectable_value(
+                                            &mut form.group,
+                                            g.clone(),
+                                            group_name(g),
+                                        );
+                                    }
+                                });
+                            ui.end_row();
+
+                            ui.label("");
+                            ui.checkbox(&mut form.first_page, "Add its first page");
+                            ui.end_row();
                         });
-                    ui.end_row();
-
-                    ui.label("");
-                    ui.checkbox(&mut form.first_page, "Add its first page");
-                    ui.end_row();
+                    ui.add_space(6.0);
+                    ui.label("Enclosure");
+                    super::enclosure_pick::show(ui, &mut form.picker, &form.choices);
+                    match form.picker.picked.and_then(|i| form.choices.get(i)) {
+                        Some(c) => {
+                            for line in super::enclosure_pick::state_lines(c) {
+                                ui.weak(line);
+                            }
+                            if let Some(notice) = c.spec.notice() {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(notice)
+                                            .color(crate::theme::ui_palette().warning),
+                                    )
+                                    .wrap(),
+                                );
+                            }
+                        }
+                        None => {
+                            ui.weak(format!(
+                                "Standard plate {} x {} mm",
+                                DEFAULT_PLATE.width, DEFAULT_PLATE.height
+                            ));
+                        }
+                    }
+                    if ui.small_button("Edit the enclosure list…").clicked() {
+                        open_list = true;
+                    }
                 });
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let ok = ui
-                    .add_enabled(!valid.is_empty(), egui::Button::new("Create (Enter)"))
-                    .clicked();
-                let cancel = ui.button("Cancel (Esc)").clicked();
-                (ok, cancel)
-            })
-            .inner
-        });
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let ok = ui
+                        .add_enabled(!valid.is_empty(), egui::Button::new("Create (Enter)"))
+                        .clicked();
+                    let cancel = ui.button("Cancel (Esc)").clicked();
+                    (ok, cancel)
+                })
+                .inner
+            });
         if open_list {
             self.sizing.editor_open = true;
         }
@@ -2675,14 +2682,12 @@ impl NovoApp {
             return;
         }
         if (ok || enter) && !valid.is_empty() {
-            let plate = match form.enclosure.and_then(|i| catalog.get(i)) {
-                Some(e) => MountingPlate {
-                    width: e.plate_width,
-                    height: e.plate_height,
-                    margin: e.margin,
-                },
-                None => DEFAULT_PLATE,
-            };
+            let choice = form
+                .picker
+                .picked
+                .and_then(|i| form.choices.get(i))
+                .cloned();
+            let plate = choice.as_ref().map_or(DEFAULT_PLATE, |c| c.plate);
             let name = valid.trim_start_matches('+').to_owned();
             let spec = CabinetSpec {
                 name: name.clone(),
@@ -2690,10 +2695,7 @@ impl NovoApp {
                 plate,
                 first_page: form.first_page,
             };
-            let enclosure_name = form
-                .enclosure
-                .and_then(|i| catalog.get(i))
-                .map(|e| e.name.clone());
+            let enclosure_name = choice.as_ref().and_then(|c| c.list_name.clone());
             let page = self.edit("New cabinet", |tx| {
                 let page = tree::add_cabinet(tx, &spec)?;
                 if let Some(enclosure) = &enclosure_name
@@ -2710,6 +2712,31 @@ impl NovoApp {
                         key: tree::ENCLOSURE_PROPERTY.into(),
                         value: Some(novo_core::Value::Text(enclosure.clone())),
                     })?;
+                }
+                if let Some(choice) = &choice
+                    && let Some(id) = tx
+                        .project()
+                        .structure_by_tag(&DeviceTag {
+                            location: vec![spec.name.clone()],
+                            ..Default::default()
+                        })
+                        .map(|s| s.id)
+                {
+                    let mut props = novo_core::Properties::new();
+                    choice.spec.write(&mut props);
+                    if let Some(depth) = choice.spec.depth {
+                        props.insert(
+                            novo_interop::step::DEPTH_KEY.into(),
+                            novo_core::Value::Float(depth.value),
+                        );
+                    }
+                    for (key, value) in props {
+                        tx.execute(Command::SetProperty {
+                            target: AnyId::Structure(id),
+                            key,
+                            value: Some(value),
+                        })?;
+                    }
                 }
                 Ok(page)
             });

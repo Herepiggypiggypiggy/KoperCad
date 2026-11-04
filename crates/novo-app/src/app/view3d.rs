@@ -1561,6 +1561,17 @@ impl NovoApp {
                 }
             }
         }
+        if let Some(line) = model::shell_problem(project, id) {
+            // A chosen enclosure lacks a number: no guessed body is drawn.
+            let pal = crate::theme::ui_palette();
+            ui.painter().text(
+                out.rect.left_bottom() + egui::vec2(12.0, -12.0),
+                egui::Align2::LEFT_BOTTOM,
+                line,
+                egui::FontId::proportional(13.0),
+                pal.warning,
+            );
+        }
         if mode.emc.on
             && let Some(pic) = mode.emc.picture().cloned()
         {
