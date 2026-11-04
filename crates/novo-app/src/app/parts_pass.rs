@@ -489,11 +489,6 @@ mod tests {
         let project = d.app.backend.document().unwrap().project();
         let dev = |s| project.symbol(s).unwrap().device().unwrap();
         let (f, b) = (dev(fuse), dev(breaker));
-        eprintln!(
-            "TAGS {} {}",
-            project.device(f).unwrap().tag,
-            project.device(b).unwrap().tag
-        );
         let mut catalog = Catalog::new();
         for (n, function, letters) in [
             ("FUSE-1", "Fuse holder", ["F", "Q"]),
