@@ -1,0 +1,39 @@
+@title Parts pass: after a macro, the toast opens the Devices drawer on devices without a part
+@area Schematic
+@sizes 1366x768
+# Workflow gap row 5: placing a macro leaves devices without parts; one toast takes you to them.
+click_text "New project"
+wait 20
+key ctrl+k
+# The command, not a macro's name (a name picks that macro already).
+text "place macro"
+wait 5
+key Enter
+wait 10
+# The Place macro window docks at the right edge: its search field is at x 1205 at this width.
+click 1205 103
+wait 4
+text motor starter dol
+wait 5
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button
+wait 20
+expect "without a part"
+shot offer-toast
+click_text "Choose parts" Button
+wait 15
+# "Accept all (n)" exists only in the parts pass (the rail's button is "Accept all proposals").
+expect "Accept all ("
+expect "-K1"
+shot pass-open
+key Down
+wait 3
+key Enter
+wait 5
+shot pass-after-enter
+# Accept all takes the rest in one step: the pass closes and its button is gone.
+click_text "Accept all (" Button
+wait 10
+expect_not "Accept all ("
+shot pass-accepted-all

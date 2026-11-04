@@ -357,7 +357,9 @@ pub fn solve_temperatures(s: &Setup, st: &mut State, load: f64, step: Option<&St
         // Walls.
         let gw: f64 = s.g_wall[i].iter().sum();
         bld.add(i, i, gw);
-        rhs[i] += gw * amb;
+        rhs[i] += (0..6)
+            .map(|f| s.g_wall[i][f] * (amb + s.face_offset[f]))
+            .sum::<f64>();
         // Air and plate.
         if let Some(pi) = plate_row(i) {
             let g = s.g_ap[i];
@@ -367,7 +369,7 @@ pub fn solve_temperatures(s: &Setup, st: &mut State, load: f64, step: Option<&St
             bld.add(pi, i, -g);
             let gp = s.g_pa[i];
             bld.add(pi, pi, gp);
-            rhs[pi] += gp * amb;
+            rhs[pi] += gp * (amb + s.face_offset[crate::setup::REAR]);
         }
     }
 
@@ -538,10 +540,11 @@ pub fn fluxes(s: &Setup, st: &State, load: f64, step: Option<&Step>) -> Fluxes {
     let mut faces = [0.0; 6];
     for i in 0..n {
         for (f, face) in faces.iter_mut().enumerate() {
-            *face += s.g_wall[i][f] * (st.t_air[i] - amb);
+            *face += s.g_wall[i][f] * (st.t_air[i] - amb - s.face_offset[f]);
         }
         if s.plate_idx[i].is_some() {
-            faces[crate::setup::REAR] += s.g_pa[i] * (st.t_plate[i] - amb);
+            faces[crate::setup::REAR] +=
+                s.g_pa[i] * (st.t_plate[i] - amb - s.face_offset[crate::setup::REAR]);
         }
     }
     let rho_cp = s.air.rho_cp();

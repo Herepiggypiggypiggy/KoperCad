@@ -6,18 +6,35 @@
 use novo_core::{Project, StructureId, Value};
 
 use super::heat_settings::VentSpec;
+use novo_thermal::gaps::Seal;
+
+/// What is stored: the bare list (no seal, as before this version) or, once a
+/// door seal is set, an object holding both.
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum Stored {
+    List(Vec<VentSpec>),
+    Both {
+        #[serde(default)]
+        vents: Vec<VentSpec>,
+        #[serde(default)]
+        seal: Option<Seal>,
+    },
+}
 
 /// The structure property that holds the openings.
 pub(super) const KEY: &str = "heat.openings";
 
 /// The text the openings are stored as; empty for none.
-pub(super) fn text(vents: &[VentSpec]) -> String {
-    if vents.is_empty() {
-        String::new()
-    } else {
-        // No NaN in the text: it would be stored as null and lose the list.
-        let clean: Vec<VentSpec> = vents.iter().map(|v| v.finite()).collect();
-        serde_json::to_string(&clean).unwrap_or_default()
+pub(super) fn text(vents: &[VentSpec], seal: Option<Seal>) -> String {
+    if vents.is_empty() && seal.is_none() {
+        return String::new();
+    }
+    // No NaN in the text: it would be stored as null and lose the list.
+    let clean: Vec<VentSpec> = vents.iter().map(|v| v.finite()).collect();
+    match seal {
+        None => serde_json::to_string(&clean).unwrap_or_default(),
+        Some(seal) => serde_json::json!({ "vents": clean, "seal": seal }).to_string(),
     }
 }
 
@@ -33,17 +50,21 @@ pub(super) fn stored_text(project: &Project, id: StructureId) -> String {
 }
 
 /// The openings in `stored`; a damaged text gives none (the file still opens).
-pub(super) fn parse(stored: &str) -> Vec<VentSpec> {
+pub(super) fn parse(stored: &str) -> (Vec<VentSpec>, Option<Seal>) {
     if stored.trim().is_empty() {
-        return Vec::new();
+        return (Vec::new(), None);
     }
-    serde_json::from_str(stored).unwrap_or_default()
+    match serde_json::from_str(stored) {
+        Ok(Stored::List(v)) => (v, None),
+        Ok(Stored::Both { vents, seal }) => (vents, seal),
+        Err(_) => (Vec::new(), None),
+    }
 }
 
 /// True when `stored` holds something but no list can be read from it: it is
 /// left alone until the person adds an opening, instead of being cleared.
 pub(super) fn is_damaged(stored: &str) -> bool {
-    !stored.trim().is_empty() && serde_json::from_str::<Vec<VentSpec>>(stored).is_err()
+    !stored.trim().is_empty() && serde_json::from_str::<Stored>(stored).is_err()
 }
 
 /// Stores `text` (empty clears the property) on the enclosure.
@@ -90,11 +111,12 @@ impl super::NovoApp {
         // Another enclosure (a second cabinet, another project) or the first
         // look: the project is the truth, never our list.
         let Some(known) = known else {
-            settings.load(parse(&held));
+            let (v, seal) = parse(&held);
+            settings.load(v, seal);
             settings.stored = Some((id, held));
             return;
         };
-        let now = text(&settings.vents);
+        let now = text(&settings.vents, settings.seal);
         if known == held {
             // The project is as we last knew it: our side may have moved on.
             let keep_damaged = now.is_empty() && is_damaged(&held);
@@ -106,7 +128,8 @@ impl super::NovoApp {
             }
         } else {
             // The project changed under us (opened, undone).
-            settings.load(parse(&held));
+            let (v, seal) = parse(&held);
+            settings.load(v, seal);
             settings.stored = Some((id, held));
         }
     }
@@ -124,17 +147,36 @@ mod tests {
         fan.u_mm = 321.5;
         let mut g = VentSpec::new(Wall::Right);
         g.free_fraction = 0.55;
-        let t = text(&[fan, g]);
-        assert_eq!(parse(&t), vec![fan, g]);
-        assert_eq!(text(&[]), "");
-        assert!(parse("").is_empty());
+        let t = text(&[fan, g], None);
+        assert_eq!(parse(&t), (vec![fan, g], None));
+        assert_eq!(text(&[], None), "");
+        assert!(parse("").0.is_empty());
+    }
+
+    #[test]
+    fn the_door_seal_and_a_filter_survive_a_round_trip_and_old_files_still_open() {
+        let mut g = VentSpec::new(Wall::Left);
+        g.filter = Some(novo_thermal::gaps::FilterClass::G4);
+        g.filter_load = 0.4;
+        let seal = Seal {
+            ip: novo_thermal::gaps::IpClass::Ip65,
+            glands: 5,
+        };
+        let t = text(&[g], Some(seal));
+        assert_eq!(parse(&t), (vec![g], Some(seal)));
+        // The seal alone, with no openings, is kept too.
+        assert_eq!(parse(&text(&[], Some(seal))), (vec![], Some(seal)));
+        // A list from before filters and seals has neither.
+        let old = parse(r#"[{"kind":"Grille","wall":"Top"}]"#);
+        assert_eq!(old.0[0].filter, None);
+        assert_eq!(old.1, None);
     }
 
     #[test]
     fn a_damaged_or_newer_text_does_not_stop_the_project_opening() {
-        assert!(parse("{not json").is_empty());
+        assert!(parse("{not json").0.is_empty());
         // A field this version does not know, and one it lacks, are fine.
-        let v = parse(r#"[{"kind":"Fan","wall":"Top","future":1}]"#);
+        let (v, _) = parse(r#"[{"kind":"Fan","wall":"Top","future":1}]"#);
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].kind, Kind::Fan);
         assert_eq!(v[0].wall, Wall::Top);
@@ -145,9 +187,9 @@ mod tests {
     fn a_nan_is_not_stored_and_a_damaged_text_is_kept_until_something_is_added() {
         let mut v = VentSpec::new(Wall::Top);
         v.u_mm = f64::NAN;
-        let t = text(&[v]);
+        let t = text(&[v], None);
         assert!(!t.contains("null"), "{t}");
-        assert_eq!(parse(&t).len(), 1);
+        assert_eq!(parse(&t).0.len(), 1);
         assert!(is_damaged("{not json"));
         assert!(!is_damaged("") && !is_damaged("[]") && !is_damaged(&t));
     }

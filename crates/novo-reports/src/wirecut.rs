@@ -867,7 +867,10 @@ impl Report for WireCut {
             Column::new("to", "To", 25.0),
             Column::new("basis", "Length basis", 14.0),
         ];
-        let title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
+        let mut title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
+        if jobs.iter().any(|j| j.basis.starts_with('~')) {
+            title = format!("{title}. {}", novo_layout::spec::ESTIMATE_NOTICE);
+        }
         let mut cuts = Section::new("cuts", &title, columns);
         // The production data sits in a table of its own: the cut list is already as wide as
         // a page takes, and the job CSV carries every column in one row.

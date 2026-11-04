@@ -1,0 +1,27 @@
+@title 3D Heat: door seal row and filter rows are reachable in a narrow window
+@area 3D
+@sizes 1366x768
+# H4: at 1366x768 the Vents and fans panel scrolls. The Door seal row sits above the list so it is never clipped; the Filter mat row is below and is reached by scrolling.
+open_starter_example
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+expect "Door seal"
+click_text "Leaks"
+wait 10
+expect "Leaks about"
+expect "(model)"
+shot door-seal-on
+check_layout
+click_text "Add opening"
+wait 10
+click_text "Grille, high on the right wall"
+wait 20
+move 170 560
+scroll 170 560 -300
+wait 40
+expect "Filter mat"
+shot filter-row-reached
+check_layout
