@@ -37,6 +37,7 @@ novo-pdf.workspace = true
 novo-interop.workspace = true
 novo-reports.workspace = true
 novo-checks.workspace = true
+novo-flags.workspace = true
 novo-commissioning.workspace = true
 novo-learn.workspace = true
 novo-terminals.workspace = true
