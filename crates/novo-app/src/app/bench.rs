@@ -467,6 +467,10 @@ impl NovoApp {
         let shown = super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
+                // A docked pane scrolls both ways, which gives the content an
+                // endless width: wrap the button rows at the visible width so
+                // every control stays reachable.
+                ui.set_max_width(ui.clip_rect().width().max(200.0));
                 if let Some(ready) = meter {
                     super::autopilot::meter(ui, ready);
                     ui.add_space(6.0);
@@ -621,7 +625,7 @@ fn workshop_strip(
     stale: Option<&str>,
 ) {
     use novo_layout::template::Paper;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if novo_theme::widgets::primary_button(ui, "Workshop pack (folder)")
             .on_hover_text(super::WORKSHOP_HINT)
             .clicked()
@@ -828,7 +832,7 @@ fn cut_tab(
         rules.ferrule_mm, rules.lug_mm, rules.lug_from_mm2
     ));
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if novo_theme::widgets::primary_button(ui, "Export bench cut list (PDF)")
             .on_hover_text("Grouped by size and colour, longest first, with tick boxes")
             .clicked()
@@ -1096,7 +1100,7 @@ fn ferrule_tab(
     if let Some(i) = remove {
         state.standard.sizes.remove(i);
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.small_button("Add size").clicked() {
             state.standard.sizes.push(FerruleSize {
                 mm2: 0.0,
@@ -1114,7 +1118,7 @@ fn ferrule_tab(
             state.standard = FerruleStandard::default();
         }
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Spares");
         ui.add(
             egui::DragValue::new(&mut state.standard.spare_percent)
@@ -1180,7 +1184,7 @@ fn ferrule_tab(
         }
     }
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let changed = state.standard != *stored;
         if ui
             .add_enabled(valid && changed, egui::Button::new("Save to project"))
@@ -1251,7 +1255,7 @@ fn label_tab(
         LabelStock::Sheet(g) => sheet_fields(ui, g),
         LabelStock::Tape(t) => tape_fields(ui, t),
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Copies of each");
         ui.add(egui::DragValue::new(&mut state.labels.copies).range(1..=99));
         if matches!(state.labels.stock, LabelStock::Sheet(_)) {
@@ -1267,7 +1271,7 @@ fn label_tab(
             &mut state.labels.outlines,
             "Test print: draw a line around every label",
         );
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Shift");
             ui.add(
                 egui::DragValue::new(&mut state.labels.offset_x)
@@ -1323,7 +1327,7 @@ fn label_tab(
         }
     }
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let changed = state.labels != *stored;
         if ui
             .add_enabled(valid && changed, egui::Button::new("Save to project"))
@@ -1394,7 +1398,7 @@ fn sheet_fields(ui: &mut egui::Ui, g: &mut SheetGrid) {
 }
 
 fn tape_fields(ui: &mut egui::Ui, t: &mut TapeStock) {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut auto = t.length_mm.is_none();
         if ui.checkbox(&mut auto, "Length follows the text").changed() {
             t.length_mm = if auto { None } else { Some(40.0) };

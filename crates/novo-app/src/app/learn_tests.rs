@@ -1616,3 +1616,53 @@ fn the_command_field_row_for_the_lesson_names_the_lesson_like_the_help_menu() {
         .expect("`continue lesson` finds the lesson command");
     assert_eq!(row.label, "Continue lesson: Tiny lesson");
 }
+
+/// Runs the lesson `lesson` to the step `step` (skipping what comes before).
+fn lesson_at_step(d: &mut Drive, dir: &std::path::Path, lesson: &str, step: &str) {
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.join("learn.json"));
+    d.app.start_lesson(lesson);
+    d.frame();
+    let ctx = d.ctx.clone();
+    for _ in 0..30 {
+        let here = d
+            .app
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step())
+            .is_some_and(|s| s.id == step);
+        if here {
+            break;
+        }
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    d.frame();
+}
+
+#[test]
+fn a_rail_click_on_the_test_tab_ticks_the_click_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at_step(&mut d, dir.path(), "wire-test", "tab");
+    let ctx = d.ctx.clone();
+    d.app.workspace_rail_click(&ctx, "rail.cm_test");
+    d.frame();
+    d.frame();
+    let phase = d.app.learn.run.as_ref().map(|r| r.phase());
+    assert_eq!(phase, Some(novo_learn::Phase::Ticked));
+}
+
+#[test]
+fn a_rail_click_on_plate_setup_ticks_the_click_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at_step(&mut d, dir.path(), "enclosure-door-and-depth", "open-panel");
+    let ctx = d.ctx.clone();
+    d.app.rail_cabinet_click(&ctx, "cabinet.plate");
+    d.frame();
+    d.frame();
+    let phase = d.app.learn.run.as_ref().map(|r| r.phase());
+    assert_eq!(phase, Some(novo_learn::Phase::Ticked));
+}
