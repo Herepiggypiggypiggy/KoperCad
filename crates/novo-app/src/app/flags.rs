@@ -29,6 +29,8 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// The transient flags of refused edits (lane T7).
+    pub(super) edit: super::flags_edit::EditFlags,
 }
 
 impl Default for FlagUi {
@@ -38,6 +40,7 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            edit: Default::default(),
         }
     }
 }
@@ -170,7 +173,7 @@ impl NovoApp {
 
     /// The marks of the flags anchored on drawn objects of `page`.
     pub(super) fn flag_marks(&mut self, page: PageId) -> Vec<novo_canvas::Mark> {
-        use novo_canvas::{Mark, model::item_id};
+        use novo_canvas::Mark;
         self.sync_flags();
         let Some(doc) = self.backend.document() else {
             return Vec::new();
@@ -182,29 +185,13 @@ impl NovoApp {
                 .chain(flag.detail.0.iter().cloned())
                 .collect::<Vec<_>>()
                 .join(": ");
-            for anchor in &flag.anchors {
-                let id = match anchor {
-                    Anchor::Symbol(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(novo_core::SymbolId)
-                        .filter(|s| project.symbol(*s).is_some_and(|s| s.page == page))
-                        .map(AnyId::Symbol),
-                    Anchor::Wire(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(novo_core::WireId)
-                        .filter(|w| project.wire(*w).is_some_and(|w| w.page == page))
-                        .map(AnyId::Wire),
-                    _ => None,
-                };
-                if let Some(id) = id {
-                    marks.push(
-                        Mark::on(mark_kind(flag), item_id(id))
-                            .with_text(hover.clone())
-                            .with_key(flag.id.0),
-                    );
-                }
+            for target in super::flags_edit::mark_targets(project, flag, page) {
+                marks.push(Mark {
+                    kind: mark_kind(flag),
+                    target,
+                    text: hover.clone(),
+                    key: flag.id.0,
+                });
             }
         }
         marks

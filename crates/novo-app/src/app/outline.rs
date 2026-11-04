@@ -1559,7 +1559,7 @@ impl NovoApp {
                 Some(value)
             }
             Err(e) => {
-                self.message(Level::Error, format!("{label}: {e}"));
+                self.refuse(Level::Error, format!("{label}: {e}"));
                 None
             }
         }

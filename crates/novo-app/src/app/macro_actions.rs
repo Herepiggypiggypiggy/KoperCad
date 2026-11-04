@@ -733,8 +733,7 @@ impl NovoApp {
     /// Places what the window previewed, as one undo step, and selects it.
     pub(super) fn place_picked_macro(&mut self) {
         let Some(page) = self.macro_target_page() else {
-            self.message(
-                Level::Error,
+            self.refuse_tool(Level::Error,
                 "Could not place: the project has no drawing page, only generated pages. Add a page first.",
             );
             return;
@@ -838,8 +837,7 @@ impl NovoApp {
                     text
                 };
                 if off_sheet > 0 {
-                    self.message(
-                        Level::Warning,
+                    self.refuse(Level::Warning,
                         format!(
                             "{name}: {off_sheet} {} outside the page edge; move {} onto the sheet or use a bigger page",
                             if off_sheet == 1 { "symbol is" } else { "symbols are" },
@@ -853,7 +851,7 @@ impl NovoApp {
             }
             Err(e) => {
                 self.wb.macro_place.status = format!("Could not place: {e}");
-                self.message(Level::Error, format!("Could not place {name}: {e}"));
+                self.refuse_tool(Level::Error, format!("Could not place {name}: {e}"));
             }
         }
     }
