@@ -189,6 +189,18 @@ fn the_enclosure_spec_changes_the_door_wire_length() {
                 .properties
                 .clone();
             s.write(&mut props);
+            let old: Vec<String> = tx
+                .project()
+                .get::<novo_core::Structure>(cab)
+                .unwrap()
+                .properties
+                .keys()
+                .filter(|k| k.starts_with("encl."))
+                .cloned()
+                .collect();
+            for k in old {
+                tx.set_property(cab, &k, None)?;
+            }
             for (k, v) in props.iter().filter(|(k, _)| k.starts_with("encl.")) {
                 tx.set_property(cab, k, Some(v.clone()))?;
             }
