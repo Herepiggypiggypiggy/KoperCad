@@ -147,7 +147,7 @@ impl NovoApp {
             Ok(w) => {
                 self.message_file(
                     format!(
-                        "Exported the heat result for ParaView: {}",
+                        "Exported the heat result for ParaView (a model, not validated): {}",
                         w.open.display()
                     ),
                     &w.open,
