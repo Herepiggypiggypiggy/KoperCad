@@ -1,0 +1,22 @@
+@title New cabinet: pick an enclosure card, the cabinet gets its plate and the estimate line
+@sizes 1366x768
+@area Cabinet
+# Where the user finds it: Outline > New cabinet > Enclosure (cards, search, state lines).
+user_catalog qa/fixtures/enclosure-parts.json
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..." Button
+wait 10
+expect "Demo TS-600x1800x500"
+shot a-cards
+click_text "Demo TS-600x1800x500"
+wait 6
+expect "Estimate from catalogue data"
+shot b-picked
+check_layout
+key Enter
+wait 20
+shot c-created

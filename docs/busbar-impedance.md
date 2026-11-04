@@ -1,6 +1,6 @@
 # Busbar and cable impedance, skin and proximity effect, current sharing
 
-Engine: `novo-emc::busbar`. Where the user finds it: **Check > Calculations > Busbars** tab.
+Engine: `novo-emc::busbar`. Where the user finds it: **Check > Calculations > Busbar impedance** tab.
 
 ## What it computes
 Straight, parallel conductors of equal length (bars or round cables), grouped into phases. Each cross-section is cut into a graded grid of filaments; filament resistance `rho l / a` (temperature-corrected) and partial inductances (Neumann integral of parallel filaments, Grover) give `Z = R + jwL`. The conductors of one group (a phase of several parallel bars) share one voltage drop and a stated total current; the solve returns the group impedance matrix, the voltage drop per phase, the current in every bar and filament (so the share between parallel bars), the loss per bar and the AC factor (loss over `R_dc I^2`).

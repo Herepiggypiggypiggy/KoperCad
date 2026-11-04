@@ -101,6 +101,7 @@ mod order;
 pub mod packet;
 mod page;
 mod plugs;
+pub mod query;
 mod report;
 pub mod safety;
 mod schedule;
@@ -189,6 +190,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(Labels),
         Box::new(SingleLineDiagram),
         Box::new(FrontMatter),
+        Box::new(query::SavedQueries),
     ]
 }
 
@@ -197,6 +199,10 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
 pub fn generate_all(project: &Project) -> Vec<ReportOutput> {
     standard_reports()
         .iter()
+        // "My reports" is left out of an export until the project has one.
+        .filter(|report| {
+            report.id() != query::SavedQueries::ID || !query::Presets::of(project).list.is_empty()
+        })
         .map(|report| report.generate(project))
         .collect()
 }

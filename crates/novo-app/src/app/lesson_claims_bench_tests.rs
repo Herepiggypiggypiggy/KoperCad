@@ -131,7 +131,7 @@ fn the_bench_window_says_what_is_missing_before_printing() {
     let gaps = super::bench::readiness(&[], false);
     assert_eq!(gaps.len(), 1);
     assert!(gaps[0].text.starts_with("No mounting plate"));
-    assert_eq!(gaps[0].fix, Some(("Open Cabinet", "view.cabinet")));
+    assert_eq!(gaps[0].fix_pair(), Some(("Open Cabinet", "view.cabinet")));
 }
 
 #[test]

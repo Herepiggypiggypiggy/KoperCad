@@ -1,4 +1,4 @@
-@title Calculations > Busbars: bar impedance and current sharing with the model label
+@title Calculations > Busbar impedance: bar impedance and current sharing with the model label
 @area Windows
 open_starter_example
 wait 20
@@ -6,7 +6,7 @@ key ctrl+k
 text calculations
 key enter
 wait 10
-click_text Busbars
+click_text "Busbar impedance"
 wait 20
 expect model, quasi-static
 shot busbars-one-bar

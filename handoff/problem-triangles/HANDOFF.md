@@ -13,3 +13,6 @@ Traps
 - The text sweep thread (cmsg_01TV2QyH4AYw9X2aTmgUsuhCX47GPBDJt1jU9TUbWEhxqv) owns class T rows; do not both edit one file at once.
 - Menu ceilings conflict between PRs; the census ceilings here are one file per area.
 - Scenario block 9400 up. 9201..9203 are taken.
+
+## After T0b
+Schematic checks are flags. To add a surface, read `wb.flags.store` (`at`, `list`, `roll_up`) and use `flags::mark_kind` / `novo_theme::widgets::flag_triangle`; to add a source, build `FlagDraft`s and call `replace_source`. The popover (`flag_popover`) works for any flag with `wb.flags.open = Some((id, pos))`. The problem index behind a flag exists only for Issues flags (`wb.flags.index`).

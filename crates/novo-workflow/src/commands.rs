@@ -1063,6 +1063,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     cmd("proposal.next", "Next proposal", "Draw", &[], Needs::Page),
     verb(
         cmd(
+            "place.list",
+            "Place devices from a pasted list...",
+            "Draw",
+            &[
+                "paste list",
+                "parts list",
+                "bill of materials in",
+                "from excel",
+                "place many",
+                "bulk place",
+            ],
+            Needs::Page,
+        ),
+        &["place list", "paste list"],
+    ),
+    verb(
+        cmd(
             "draw.tidy",
             "Tidy routes",
             "Draw",
@@ -3562,6 +3579,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["export drill plan"],
     ),
+    cmd(
+        "heat.export_vtk",
+        "Export heat result for ParaView",
+        "Export",
+        &[
+            "heat",
+            "vtk",
+            "vtr",
+            "paraview",
+            "airflow",
+            "cfd",
+            "temperature",
+            "result",
+            "export heat",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.open_paraview",
+        "Open heat result in ParaView",
+        "Export",
+        &["heat", "paraview", "vtk", "airflow", "cfd", "view result"],
+        Needs::Project,
+    ),
     verb(
         cmd(
             "export.plate_dxf",
@@ -3795,6 +3836,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "Export",
             &[
                 "workshop",
+                "print for the bench",
                 "drilling template",
                 "drill template",
                 "cut-out",
@@ -3811,6 +3853,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &[
             "export workshop",
+            "print for the bench",
             "workshop pack",
             "drilling template",
             "drill template",

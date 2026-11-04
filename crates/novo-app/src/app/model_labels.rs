@@ -119,7 +119,7 @@ pub(crate) const ROWS: [Row; 10] = [
         number: "Bar and cable resistance, reactance and current sharing",
         label: "model, quasi-static",
         text: "Partial-element filament model of straight parallel conductors; exact against the textbook closed forms it is tested on (inductance of bars, DC resistance, skin effect of a round wire, two-branch sharing). Not modelled: steel plate or enclosure near the bars, bends, taps, bolted joints and contact resistance, stranding, capacitance. A planning number, never a measurement.",
-        shown: "Check > Calculations > Busbars tab",
+        shown: "Check > Calculations > Busbar impedance",
     },
 ];
 

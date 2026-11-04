@@ -1,5 +1,5 @@
-//! The Busbars tab of the Calculations window (Check > Calculations >
-//! Busbars): resistance, reactance, skin and proximity effect and the share
+//! The Busbar impedance tab of the Calculations window (Check > Calculations >
+//! Busbar impedance): resistance, reactance, skin and proximity effect and the share
 //! of the current each parallel bar carries, from [`novo_emc::busbar`].
 //!
 //! The numbers are a model (quasi-static, non-magnetic, straight parallel
@@ -577,7 +577,7 @@ mod tests {
 
     #[test]
     fn the_tab_is_registered_with_its_label() {
-        assert!(super::super::learn::ANCHORS.contains(&"calc.tab.busbars"));
+        assert!(super::super::learn::ANCHORS.contains(&"calc.tab.busbar_impedance"));
         assert!(Model::Busbar.label().contains("model"));
     }
 }

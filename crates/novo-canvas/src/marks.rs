@@ -17,10 +17,16 @@ use std::collections::BTreeMap;
 pub enum MarkKind {
     /// A suggested object (terminals, cable, part): a dashed outline.
     Proposal,
-    /// A small triangle at the top right of the object.
+    /// Problem triangles (docs/design/problem-triangles.md section 2), at the
+    /// top right of the object. Yellow: doubtful or unfinished, a hollow
+    /// triangle with a thick coloured outline.
     Warning,
-    /// A small octagon at the top right of the object.
+    /// Red: wrong, a solid triangle with a white "!". (The octagon this used
+    /// to be is gone: red and yellow differ in fill, not in shape.)
     Error,
+    /// Yellow that could not be judged for missing data: the hollow triangle
+    /// with a dashed outline.
+    Unchecked,
     /// A hollow diamond at the top left, shown only while asked for.
     Override,
     /// Changes mode: an outline in the added colour.
@@ -47,7 +53,11 @@ impl MarkKind {
     pub fn is_glyph(self) -> bool {
         matches!(
             self,
-            MarkKind::Warning | MarkKind::Error | MarkKind::Override | MarkKind::Note
+            MarkKind::Warning
+                | MarkKind::Error
+                | MarkKind::Unchecked
+                | MarkKind::Override
+                | MarkKind::Note
         )
     }
 
@@ -75,6 +85,9 @@ pub struct Mark {
     pub target: MarkTarget,
     /// Shown on hover (problems) or next to the nearest proposal.
     pub text: String,
+    /// What the app knows the mark by (a problem flag's id); 0 is none. A
+    /// click on the glyph hands it back so the app can open the popover.
+    pub key: u64,
 }
 
 impl Mark {
@@ -83,7 +96,13 @@ impl Mark {
             kind,
             target: MarkTarget::Item(item),
             text: String::new(),
+            key: 0,
         }
+    }
+
+    pub fn with_key(mut self, key: u64) -> Self {
+        self.key = key;
+        self
     }
 
     pub fn with_text(mut self, text: impl Into<String>) -> Self {
@@ -103,7 +122,7 @@ pub struct Marks {
 }
 
 /// Size of a glyph in screen points.
-pub const GLYPH_SIZE: f32 = 10.0;
+pub const GLYPH_SIZE: f32 = 14.0;
 /// Glyphs of one kind closer than this (screen points) merge into a count.
 pub const CLUSTER_PX: f32 = 24.0;
 /// Outlines sit this far outside the object, in screen points.
@@ -446,11 +465,13 @@ mod tests {
                     kind: MarkKind::Removed,
                     target: MarkTarget::Area(Aabb::new(Vec2::ZERO, Vec2::splat(5.0))),
                     text: String::new(),
+                    key: 0,
                 },
                 Mark {
                     kind: MarkKind::Added,
                     target: MarkTarget::Area(Aabb::new(Vec2::splat(5000.0), Vec2::splat(5001.0))),
                     text: String::new(),
+                    key: 0,
                 },
                 Mark::on(MarkKind::Error, ItemId(99)),
             ],

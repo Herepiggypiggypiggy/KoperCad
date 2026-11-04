@@ -24,6 +24,7 @@ pub mod rules;
 pub mod site;
 pub mod sizing;
 pub mod sizing_model;
+pub mod spec;
 pub mod state;
 pub mod stock;
 pub mod surface_rules;

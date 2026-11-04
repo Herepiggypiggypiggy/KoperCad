@@ -324,7 +324,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
         add_strip_cards(&mut pack, &groups);
         add_wiring_opening_cards(&mut pack, &layout);
         let stored = heat_openings_store::stored_text(project, enclosure.id);
-        let vents = heat_openings_store::parse(&stored);
+        let (vents, _) = heat_openings_store::parse(&stored);
         if !vents.is_empty() {
             // The openings as the Heat panel and the solver cut them: moved and
             // trimmed to lie inside their wall, in the interior's millimetres.
