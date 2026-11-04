@@ -309,6 +309,13 @@ pub(super) fn mechanical(
             *copy = Some(mechanical_text(s));
         }
     });
+    ui.colored_label(
+        crate::theme::ui_palette().warning,
+        "Estimate, not a verification of the busbar or support rating. Not a safety function.",
+    );
+    ui.weak(
+        "After the IEC 60865-1 method, not checked against the standard text or a test. Deflection assumes a simple beam and ignores stiffening by devices or ducts.",
+    );
     egui::CollapsingHeader::new("Busbar short circuit")
         .default_open(true)
         .show(ui, |ui| busbar(ui, s, available_ka));
@@ -322,12 +329,23 @@ pub(super) fn mechanical(
 
 fn busbar(ui: &mut egui::Ui, s: &mut MechState, available_ka: Option<f64>) {
     let i = &mut s.bus;
-    if let Some(ka) = available_ka
-        && ui
-            .button(format!("Use the {} kA at the supply", fmt(ka)))
-            .clicked()
-    {
-        i.ik_a = ka * 1000.0;
+    match available_ka {
+        Some(ka) => {
+            if ui
+                .button(format!("Use the {} kA at the supply", fmt(ka)))
+                .on_hover_text("From Check > Calculations > Panel SCCR")
+                .clicked()
+            {
+                i.ik_a = ka * 1000.0;
+            }
+            ui.weak("Supply current taken from Check > Calculations > Panel SCCR.");
+        }
+        None => {
+            ui.add_enabled(false, egui::Button::new("Use the current at the supply"));
+            ui.weak(
+                "Supply current not stated. Enter it in Electrical inputs; it then shows under Check > Calculations > Panel SCCR.",
+            );
+        }
     }
     egui::Grid::new("mech_bus")
         .num_columns(2)
@@ -445,7 +463,7 @@ fn busbar(ui: &mut egui::Ui, s: &mut MechState, available_ka: Option<f64>) {
             }
         }
         Err(e) => {
-            result_line(ui, Verdict::Note, e.to_string());
+            result_line(ui, Verdict::Note, format!("Not calculated: {e}"));
         }
     }
 }
@@ -520,7 +538,7 @@ fn rail(ui: &mut egui::Ui, s: &mut MechState) {
             let (v, t) = beam_line(&r);
             result_line(ui, v, t);
         }
-        Err(e) => result_line(ui, Verdict::Note, e.to_string()),
+        Err(e) => result_line(ui, Verdict::Note, format!("Not calculated: {e}")),
     }
     ui.weak("The fixing screws and the device clips usually fail before the rail bends.");
 }
@@ -570,7 +588,7 @@ fn plate(ui: &mut egui::Ui, s: &mut MechState) {
             let (v, t) = plate_line(&r);
             result_line(ui, v, t);
         }
-        Err(e) => result_line(ui, Verdict::Note, e.to_string()),
+        Err(e) => result_line(ui, Verdict::Note, format!("Not calculated: {e}")),
     }
 }
 
