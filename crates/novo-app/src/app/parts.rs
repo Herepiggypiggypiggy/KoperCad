@@ -1544,6 +1544,14 @@ fn parts_ui(
         }
         return;
     }
+    // Failed catalogue actions: their own row above the toolbar, so the
+    // toolbar keeps its width in a narrow window.
+    if !win.job_flags.is_empty() {
+        ui.horizontal(|ui| {
+            let dismissed = super::parts_flags::job_strip(ui, &win.job_flags);
+            win.job_dismissed.extend(dismissed);
+        });
+    }
     let mut search_focused = false;
     ui.horizontal(|ui| {
         let search = ui.add(
@@ -1565,8 +1573,6 @@ fn parts_ui(
                 }
             });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let dismissed = super::parts_flags::job_strip(ui, &win.job_flags);
-            win.job_dismissed.extend(dismissed);
             ui.menu_button("More", |ui| {
                 for (label, hint, action) in [
                     (
