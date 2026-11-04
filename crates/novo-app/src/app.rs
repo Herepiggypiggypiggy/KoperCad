@@ -31,6 +31,7 @@ mod cabinet;
 mod cabinet_arrange;
 mod cabinet_bar;
 mod cabinet_door;
+mod cabinet_flags;
 mod cabinet_group;
 mod cabinet_inspector;
 mod cabinet_maker_plate;
@@ -407,6 +408,8 @@ mod assembly_tests;
 mod bench_tests;
 #[cfg(test)]
 mod cabinet_arrange_tests;
+#[cfg(test)]
+mod cabinet_flags_tests;
 #[cfg(test)]
 mod cabinet_group_tests;
 #[cfg(test)]
