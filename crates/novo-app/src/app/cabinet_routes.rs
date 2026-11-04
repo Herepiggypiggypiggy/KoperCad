@@ -611,30 +611,28 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
 /// colours: how problems are shown is decided by the problem triangles.
 fn chips_row(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
     let mut ask = None;
+    // Plain widgets straight in a wrapped row, so every item can wrap to the
+    // next line; a framed chip in its own sub-layout does not wrap and pushes
+    // the pane wider than the window.
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         for chip in &overlay.chips {
-            let text = format!("{} {}", chip.count, chip.label);
-            let frame = egui::Frame::group(ui.style())
-                .inner_margin(egui::Margin::symmetric(6, 2))
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(text);
-                        ui.weak("?").on_hover_text(&chip.sentence);
-                        if let Some((button, kind)) = chip.fix
-                            && ui.small_button(button).clicked()
-                        {
-                            ask = Some(match kind {
-                                FixKind::SizeWires => Ask::OpenBench,
-                                FixKind::DetectPins => Ask::OpenParts,
-                                FixKind::Entry => {
-                                    let (w, h) = overlay.plate.unwrap_or((0.0, 0.0));
-                                    Ask::SetEntryPoint(plate, Some((w / 2.0, h)))
-                                }
-                            });
-                        }
-                    });
+            ui.label(egui::RichText::new(format!("{} {}", chip.count, chip.label)).strong())
+                .on_hover_text(&chip.sentence);
+            ui.weak("?").on_hover_text(&chip.sentence);
+            if let Some((button, kind)) = chip.fix
+                && ui.small_button(button).clicked()
+            {
+                ask = Some(match kind {
+                    FixKind::SizeWires => Ask::OpenBench,
+                    FixKind::DetectPins => Ask::OpenParts,
+                    FixKind::Entry => {
+                        let (w, h) = overlay.plate.unwrap_or((0.0, 0.0));
+                        Ask::SetEntryPoint(plate, Some((w / 2.0, h)))
+                    }
                 });
-            frame.response.on_hover_text(&chip.sentence);
+            }
+            ui.add_space(8.0);
         }
     });
     ask
