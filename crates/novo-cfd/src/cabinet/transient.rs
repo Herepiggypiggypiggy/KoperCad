@@ -52,6 +52,8 @@ impl TransientSolver for CabinetSolver {
         control: &Control,
         publish: &mut dyn FnMut(&TransientFrame),
     ) -> Result<TransientSummary, CfdError> {
+        let lowered = scenario.lowered();
+        let scenario = &*lowered;
         let lvl = self
             .tuning
             .level(fidelity)
