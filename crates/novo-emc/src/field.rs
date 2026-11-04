@@ -15,7 +15,8 @@
 //! steep edges and a poor one for 50 Hz in a thin plate.
 //!
 //! What it is not. A near-field model of the differential-mode current you
-//! stated: no common-mode current, no capacitive coupling, no eddy currents
+//! stated: no common-mode current, no capacitive coupling (motor cable
+//! leakage to earth is EMC-21, not part of this field), no eddy currents
 //! in a steel plate at mains frequency, no screening of the door or cabinet,
 //! no riser wires between plate and device. It is good for the order of
 //! magnitude and for the ranking of layouts, never for a compliance

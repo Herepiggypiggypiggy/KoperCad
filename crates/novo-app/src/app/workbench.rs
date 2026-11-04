@@ -225,6 +225,8 @@ pub(crate) struct Workbench {
     pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
+    /// The problem triangles: one store for every flag, built from the problems.
+    pub(super) flags: super::flags::FlagUi,
     /// The design check running on a worker thread (big projects only).
     pub(super) check_job: Option<super::checks::CheckJob>,
     /// The revision whose background check died, and how many were started.
@@ -434,6 +436,7 @@ impl Default for Workbench {
             ghost_left_out: true,
             clip: Default::default(),
             problems: None,
+            flags: super::flags::FlagUi::default(),
             check_job: None,
             check_failed: None,
             check_started: 0,
@@ -816,6 +819,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.simulate",
     "heat.cooling_advice",
     "heat.cooling_whatif",
+    "heat.export_vtk",
+    "heat.open_paraview",
     "heat.cooler_layout",
     "heat.vents",
     "heat.add_filter_fan",
@@ -1025,12 +1030,17 @@ impl NovoApp {
     /// the canvas first. Taken before the canvas runs, which would read it
     /// as its own Escape ladder while the pointer is over the drawing.
     pub(super) fn escape_popups(&mut self, ctx: &egui::Context) {
-        let open = self.wb.field.is_open() || self.wb.occurrences.is_some() || self.outline_open;
+        let open = self.wb.field.is_open()
+            || self.wb.occurrences.is_some()
+            || self.wb.flags.open.is_some()
+            || self.outline_open;
         if open && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             if self.wb.field.is_open() {
                 self.wb.field.close();
             } else if self.wb.occurrences.is_some() {
                 self.wb.occurrences = None;
+            } else if self.wb.flags.open.is_some() {
+                self.wb.flags.open = None;
             } else {
                 self.outline_open = false;
             }
@@ -1174,6 +1184,12 @@ impl NovoApp {
                 // The preview is drawn in the 3D view, so the wizard lives there.
                 self.switch_workspace(Workspace::View3d);
                 self.cabinet.heat.command(id);
+            }
+            "heat.export_vtk" if self.is_open() => {
+                self.export_heat_vtk();
+            }
+            "heat.open_paraview" if self.is_open() => {
+                self.open_heat_in_paraview();
             }
             "heat.cooling_advice" if self.is_open() => {
                 // Stays in the 3D view when it is the one open.

@@ -33,6 +33,7 @@ mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_group;
 mod cabinet_inspector;
+mod cabinet_maker_plate;
 mod cabinet_menu;
 mod cabinet_panel;
 mod cabinet_rail_ends;
@@ -51,6 +52,8 @@ mod cable_cores_tests;
 #[cfg(test)]
 mod cable_proposals_fixture_tests;
 mod calculations;
+mod calculations_busbar;
+mod calculations_mechanical;
 #[cfg(test)]
 mod calculations_tests;
 mod centre;
@@ -129,6 +132,7 @@ mod example_mcc;
 mod example_plc;
 mod example_pump;
 mod faults;
+mod flags;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -143,6 +147,7 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_export;
 mod heat_flow;
 #[cfg(test)]
 mod heat_flow_tests;
@@ -252,6 +257,7 @@ mod parts_pins;
 #[cfg(test)]
 mod parts_pins_tests;
 mod parts_quality;
+mod parts_suppliers;
 mod parts_table;
 mod pdf;
 mod pdf_options;
@@ -278,6 +284,7 @@ mod rail_cabinet;
 mod rail_reports;
 mod rail_schematic;
 mod reports;
+mod reports_queries;
 mod reports_view;
 mod review_notes;
 mod revisions;
@@ -374,6 +381,7 @@ mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod winch_scenarios;
+mod window_help;
 mod wire_it_export;
 mod wire_panel;
 #[cfg(test)]
@@ -451,6 +459,8 @@ mod example_tests;
 mod faults_tests;
 #[cfg(test)]
 mod first_view_tests;
+#[cfg(test)]
+mod flags_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
@@ -2044,6 +2054,7 @@ impl NovoApp {
                     self.canvas.show(ui, open);
                     self.after_canvas();
                     self.after_canvas_frame();
+                    self.flag_click();
                     self.wb.canvas_area = Some((ui.layer_id(), ui.min_rect()));
                 } else {
                     self.start_screen(ui, &mut picked);
@@ -2052,6 +2063,7 @@ impl NovoApp {
             .response
             .rect;
 
+        self.flag_popover(&ctx);
         if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         } else {
@@ -2171,6 +2183,8 @@ impl NovoApp {
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
+        let asked = std::mem::take(&mut self.cabinet.heat.app_commands);
+        self.wb.queued.extend(asked);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
         }

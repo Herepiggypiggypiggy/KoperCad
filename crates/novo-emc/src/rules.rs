@@ -58,7 +58,7 @@ pub static RULES: &[Rule] = &[
         title: "Shield pigtail short",
         level: Level::Estimate,
         requirement: "A shield is led away on a pigtail shorter than the limit; the impedance at the stated frequency is shown.",
-        source: "Rule of thumb of 10 nH per cm; not verified",
+        source: "Wire inductance formula of Rosa and Grover (high frequency), textbook; the old rule of thumb was 10 nH per cm; not verified against a measurement",
         verify: true,
         inputs: "Shield ends (`emc.shield_a`, `emc.shield_b`: `360`, `pigtail:<mm>`, `open`)",
     },
@@ -133,6 +133,15 @@ pub static RULES: &[Rule] = &[
         source: "Faraday's law on the field model; the planning value is a house value, not verified",
         verify: true,
         inputs: "Currents, routed paths of aggressors and signal wires, go and return of a pair, twisting (`emc.twisted`)",
+    },
+    Rule {
+        id: "EMC-21",
+        title: "Motor cable capacitance to earth and leakage current",
+        level: Level::Estimate,
+        requirement: "The shielded motor cable's capacitance core to shield is worked out from its length and the maker's pF per metre (else a coaxial formula with assumed insulation), with the leakage current to earth at mains frequency that an RCD sees, and the charging current per kV/us of output edge. Warns above 15 mA, half of a 30 mA RCD.",
+        source: "Coaxial capacitance 2 pi eps / ln(D/d) (textbook); I = 2 pi f C V; the half-of-30-mA yardstick is a common rule of thumb for RCD no-trip, not checked against the standard text; not a measurement",
+        verify: true,
+        inputs: "Motor cables with a shield, cable length (`length_m` on the cable), maker capacitance (`emc.cable_pf_per_m`)",
     },
 ];
 
@@ -263,6 +272,24 @@ pub fn analyse_with_field(input: &Input, field: Option<&crate::field::FieldSetup
         motor,
         "Motor wires and their cables",
         false,
+    );
+
+    let n = findings.len();
+    let leak_missing = motor_cable_leakage(&cx, &mut findings);
+    note(
+        &mut status,
+        "EMC-21",
+        findings.len() - n,
+        input
+            .runs
+            .iter()
+            .any(|r| r.class == EmcClass::Motor && r.shield.is_some()),
+        if leak_missing {
+            "Some motor cables have no length stated (length on the cable)"
+        } else {
+            "Shielded motor cables with a stated length"
+        },
+        leak_missing && findings.len() == n,
     );
 
     let n = findings.len();
@@ -822,6 +849,94 @@ fn motor_cables(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
     }
 }
 
+// ---- EMC-21 ----------------------------------------------------------------
+
+/// Phase-to-earth voltage assumed for the leakage current (V rms): a 400 V
+/// three-phase supply.
+pub const LEAK_PHASE_V: f64 = 230.0;
+/// Frequency of the leakage current (Hz): the output fundamental is not
+/// known here, mains frequency is what an RCD on the supply side sees.
+pub const LEAK_HZ: f64 = 50.0;
+/// Leakage above this (mA) is a warning: half of the 30 mA RCD rating.
+pub const LEAK_WARN_MA: f64 = 15.0;
+/// Core-to-shield ratio D/d and relative permittivity assumed for a motor
+/// cable when the maker's pF per metre is not stated (PVC or XLPE insulation
+/// of a typical power core).
+pub const ASSUMED_D_OVER_D: f64 = 2.2;
+pub const ASSUMED_EPS_R: f64 = 3.0;
+
+/// Returns true when a shielded motor cable has no stated length.
+fn motor_cable_leakage(cx: &Ctx<'_>, out: &mut Vec<Finding>) -> bool {
+    let mut missing = false;
+    let mut done: BTreeSet<u64> = BTreeSet::new();
+    for r in cx.input.runs.iter().filter(|r| r.class == EmcClass::Motor) {
+        let (Some(c), Some(_)) = (r.cable, r.shield) else {
+            continue;
+        };
+        if !done.insert(c) {
+            continue;
+        }
+        let data = cx.input.cables.iter().find(|d| d.id == c);
+        let Some(len_m) = data.and_then(|d| d.length_m) else {
+            missing = true;
+            continue;
+        };
+        let cores = cx
+            .input
+            .runs
+            .iter()
+            .filter(|x| x.cable == Some(c) && x.class == EmcClass::Motor)
+            .count()
+            .max(1) as f64;
+        let (per_m, from_maker) = match data.and_then(|d| d.core_shield_pf_per_m) {
+            Some(v) => (v, true),
+            None => (
+                geometry::coax_pf_per_m(ASSUMED_D_OVER_D, ASSUMED_EPS_R),
+                false,
+            ),
+        };
+        let total_pf = per_m * len_m * cores;
+        let ma = geometry::leakage_ma(total_pf, LEAK_PHASE_V, LEAK_HZ);
+        let pulse = geometry::charging_current_a(total_pf, 1.0);
+        let source = if from_maker {
+            "maker data"
+        } else {
+            "assumed D/d 2.2, eps 3"
+        };
+        let warn = ma > LEAK_WARN_MA;
+        out.push(Finding {
+            rule: "EMC-21",
+            level: Level::Estimate,
+            severity: if warn { Severity::Warning } else { Severity::Info },
+            subjects: vec![Subject::Cable(c), Subject::Run(r.id)],
+            points: vec![(Subject::Run(r.id), if warn { 20 } else { 5 })],
+            message: format!(
+                "The shielded motor cable of {} ({len_m:.0} m, {cores:.0} {}) has about {:.1} nF to earth ({source}): {ma:.1} mA leakage at {LEAK_HZ:.0} Hz and {LEAK_PHASE_V:.0} V{}.",
+                cx.run(r.id),
+                if cores > 1.5 { "cores" } else { "core" },
+                total_pf / 1000.0,
+                if warn {
+                    ", over half of what a 30 mA RCD tolerates: use a drive-rated RCD (type B) or a shorter cable"
+                } else {
+                    ""
+                }
+            ),
+            metrics: vec![
+                Metric { label: "Capacitance per core", value: format!("{per_m:.0} pF/m ({source})"), level: if from_maker { Level::Fact } else { Level::Estimate } },
+                Metric { label: "Capacitance, all cores", value: format!("{:.2} nF", total_pf / 1000.0), level: Level::Estimate },
+                Metric { label: "Leakage to earth", value: format!("{ma:.1} mA at {LEAK_HZ:.0} Hz, {LEAK_PHASE_V:.0} V"), level: Level::Estimate },
+                Metric { label: "Charging current per kV/us", value: format!("{pulse:.1} A"), level: Level::Estimate },
+            ],
+            fixes: Vec::new(),
+            at: None,
+            ribbons: Vec::new(),
+            loop_polygon: Vec::new(),
+            band_hz: None,
+        });
+    }
+    missing
+}
+
 // ---- EMC-05 ----------------------------------------------------------------
 
 fn pigtails(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
@@ -860,7 +975,7 @@ fn pigtails(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                 ),
                 metrics: vec![
                     Metric { label: "Pigtail", value: mm(len), level: Level::Index },
-                    Metric { label: "Impedance (estimate)", value: format!("{z:.1} ohm at {} MHz, rule of thumb 10 nH/cm", p.frequency_hz / 1.0e6), level: Level::Estimate },
+                    Metric { label: "Impedance (estimate)", value: format!("{z:.1} ohm at {} MHz, computed from a {} mm wire", p.frequency_hz / 1.0e6, geometry::PIGTAIL_WIRE_MM), level: Level::Estimate },
                 ],
                 fixes: vec![Fix::Terminate360 { cable }, Fix::ShortenPigtail { cable, to_mm: p.pigtail_max_mm }],
                 at: None,

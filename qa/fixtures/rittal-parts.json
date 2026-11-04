@@ -1,0 +1,34 @@
+{
+  "format": 2,
+  "parts": [
+    {
+      "manufacturer": "Rittal",
+      "order_number": "1500510",
+      "description": "Compact enclosure 600 x 760 x 210 mm (QA fixture, hand-made data)",
+      "keywords": [
+        "enclosure"
+      ]
+    },
+    {
+      "manufacturer": "Rittal",
+      "order_number": "8806500",
+      "description": "Mounting plate 500 x 700 mm (QA fixture, hand-made data)",
+      "keywords": [
+        "mounting plate"
+      ],
+      "data": {
+        "body_kind": "mounting_plate",
+        "plate_width_mm": 500.0,
+        "plate_height_mm": 700.0,
+        "plate_thickness_mm": 3.0,
+        "factory_holes": "25,25,9; 475,25,9; 25,675,9; 475,675,9; 250,350,9",
+        "drill_basis": "maker"
+      },
+      "dimensions": {
+        "width_mm": 500.0,
+        "height_mm": 700.0,
+        "depth_mm": 3.0
+      }
+    }
+  ]
+}

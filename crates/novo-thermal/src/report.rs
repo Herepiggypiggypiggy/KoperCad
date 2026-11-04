@@ -271,8 +271,11 @@ pub fn build(
         notes.push("Devices without a temperature limit are not judged.".into());
     }
 
+    let shell = shell_report(scn, s, st);
+
     ThermalResult {
         grid,
+        shell,
         ambient_c: s.ambient,
         air_temp: air_field,
         plate_temp: grid_field(s, plate_vals),
@@ -426,6 +429,39 @@ pub fn hot_spots(result: &ThermalResult) -> Vec<HotSpot> {
         }
     }
     out
+}
+
+/// Wall temperatures from the solver's per-cell wall data (lane H1).
+fn shell_report(scn: &Scenario, s: &Setup, st: &State) -> crate::shell::ShellReport {
+    use crate::shell::FaceSamples;
+    let mut samples: [FaceSamples; 6] = Default::default();
+    for i in 0..s.n() {
+        for (f, face) in samples.iter_mut().enumerate() {
+            let g = s.g_wall[i][f];
+            if g > 0.0 {
+                face.push((g, st.t_air[i]));
+            }
+        }
+        if s.plate_idx[i].is_some() && s.g_pa[i] > 0.0 {
+            samples[setup::REAR].push((s.g_pa[i], st.t_plate[i]));
+        }
+    }
+    let (mut wsum, mut tsum) = (0.0, 0.0);
+    for i in 0..s.n() {
+        if s.plate_idx[i].is_some() {
+            wsum += s.plate_frac[i];
+            tsum += s.plate_frac[i] * st.t_plate[i];
+        }
+    }
+    let plate_rear = (wsum > 0.0).then(|| tsum / wsum);
+    crate::shell::report(
+        &s.shell,
+        &scn.enclosure,
+        s.ambient,
+        scn.params.wall_k_scale,
+        &samples,
+        plate_rear,
+    )
 }
 
 #[cfg(test)]

@@ -268,7 +268,8 @@ pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclos
         ui.label(
             egui::RichText::new(
                 "Model, not measurement. Flow and pressure are the maker's free-air values; \
-                 Installed lowers them. A new fan starts with assumed values.",
+                 Installed lowers them. A new fan starts with assumed values. \
+                 Used by the 2D estimate only; the 3D picture does not show them yet.",
             )
             .small()
             .color(pal.text_secondary),

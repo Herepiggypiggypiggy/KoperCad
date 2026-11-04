@@ -95,11 +95,11 @@ title = "Read the verdict"
 title_nl = "Lees het oordeel"
 text = """
 The first line says whether the cabinet is fine or "Too hot", names the hottest device with its temperature and how far it is over or under its limit. The device name is a button that selects it in the view.
-Below it: "Model estimate, not a measurement." Limits come from the parts data.
+The **?** in the panel header says it is a model estimate, not a measurement. Limits come from the parts data.
 """
 text_nl = """
 De eerste regel zegt of de kast goed is of "Too hot", noemt het heetste component met zijn temperatuur en hoever het boven of onder zijn grens zit. De naam is een knop die het component in de weergave selecteert.
-Eronder: "Model estimate, not a measurement." De grenzen komen uit de onderdelendata.
+Het **?** in de kop van het paneel zegt dat het een modelschatting is en geen meting. De grenzen komen uit de onderdelendata.
 """
 point = { ui = "heat.simulate" }
 
@@ -123,10 +123,10 @@ id = "stale"
 title = "When the result is out of date"
 title_nl = "Wanneer het resultaat verouderd is"
 text = """
-Move a device, or change the vents and fans, and the panel says "Out of date: the layout or the vents and fans changed after this run. Simulate again." in the warning colour. The old picture stays until you run again, so do not trust it for the new layout.
+Move a device, or change the vents and fans, and the panel status says "Heat: out of date, simulate again" in the warning colour. The old picture stays until you run again, so do not trust it for the new layout.
 """
 text_nl = """
-Verplaats een component of verander de roosters en ventilatoren, en het paneel zegt in de waarschuwingskleur "Out of date: the layout or the vents and fans changed after this run. Simulate again." Het oude beeld blijft staan tot je opnieuw draait, vertrouw het dus niet voor de nieuwe indeling.
+Verplaats een component of verander de roosters en ventilatoren, en de status van het paneel zegt in de waarschuwingskleur "Heat: out of date, simulate again". Het oude beeld blijft staan tot je opnieuw draait, vertrouw het dus niet voor de nieuwe indeling.
 """
 point = { ui = "heat.simulate" }
 manual = "reading step: changing the layout would leave the lesson project; QA 209 does not edit it"

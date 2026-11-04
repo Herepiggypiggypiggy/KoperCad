@@ -395,6 +395,94 @@ fn solid_soup(
     Ok(soup)
 }
 
+/// Every B-rep face of every placed solid, in model millimetres, with the
+/// placements of assemblies applied. Tessellated (mesh-only) solids have no
+/// analytic faces and are skipped. The flag says whether a length unit was
+/// declared but could not be read.
+pub fn placed_faces(
+    text: &str,
+    opts: &StepOptions,
+    cancel: &AtomicBool,
+) -> Result<(Vec<super::brep::Face>, bool), BuildError> {
+    let file = StepFile::parse(text)?;
+    let mut reader = Reader::new(&file, opts.chord_tol_mm);
+    let placed = placed_solids(&file, &reader, opts);
+    if placed.is_empty() {
+        return Err(BuildError::NoGeometry);
+    }
+    let mut faces = Vec::new();
+    let mut per_solid: HashMap<u32, Vec<super::brep::Face>> = HashMap::new();
+    for (solid, xf) in &placed {
+        if let Some(e) = opts.interrupted(cancel) {
+            return Err(e);
+        }
+        if !per_solid.contains_key(solid) {
+            let mut list = Vec::new();
+            if let Some(e) = file.entity(*solid)
+                && !matches!(e.name(), "TESSELLATED_SOLID" | "TESSELLATED_SHELL")
+            {
+                let shells: Vec<u32> = match e.name() {
+                    "SHELL_BASED_SURFACE_MODEL" => {
+                        e.args().get(1).map(Param::refs).unwrap_or_default()
+                    }
+                    _ => e
+                        .args()
+                        .get(1)
+                        .and_then(Param::as_ref)
+                        .into_iter()
+                        .collect(),
+                };
+                for f in shells
+                    .iter()
+                    .filter_map(|&s| file.entity(s))
+                    .flat_map(|sh| sh.args().get(1).map(Param::refs).unwrap_or_default())
+                {
+                    if list.len() >= opts.max_faces {
+                        return Err(BuildError::TooComplex);
+                    }
+                    if let Some(face) = reader.face(f) {
+                        list.push(face);
+                    }
+                }
+            }
+            per_solid.insert(*solid, list);
+        }
+        faces.extend(per_solid[solid].iter().map(|f| place_face(f, xf)));
+        if faces.len() > opts.max_faces {
+            return Err(BuildError::TooComplex);
+        }
+    }
+    Ok((faces, reader.unit_unknown))
+}
+
+fn place_frame(f: &Frame, xf: &Xf) -> Frame {
+    Frame {
+        o: xf.apply(f.o),
+        x: xf.apply_dir(f.x),
+        y: xf.apply_dir(f.y),
+        z: xf.apply_dir(f.z),
+    }
+}
+
+fn place_face(face: &super::brep::Face, xf: &Xf) -> super::brep::Face {
+    use super::brep::Surface;
+    let surface = match face.surface {
+        Surface::Plane(f) => Surface::Plane(place_frame(&f, xf)),
+        Surface::Cylinder(f, r) => Surface::Cylinder(place_frame(&f, xf), r),
+        other => other,
+    };
+    super::brep::Face {
+        loops: face
+            .loops
+            .iter()
+            .map(|l| l.iter().map(|&p| xf.apply(p)).collect())
+            .collect(),
+        surface,
+        nurbs: face.nurbs.clone(),
+        same_sense: face.same_sense,
+    }
+}
+
 /// `TRIANGULATED_FACE(name, coordinates, pnmax, normals, link, pnindex, triangles)`
 fn triangulated_face(file: &StepFile, scale: f64, id: u32) -> Option<Soup> {
     let e = file.entity(id)?;

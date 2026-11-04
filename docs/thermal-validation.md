@@ -45,8 +45,10 @@ Errors are signed, relative to the reference unless marked abs.
 | Same vented box | 2D engine | vent flow | -11.2% then -13.5% (3D 0.00320 and 0.00312 vs 0.00361 m3/s) |
 | Same vented box | 2D engine | heat leaving through vents | +8.5% then +4.8% (42.5 and 41.0 W vs 39.1 W); heat imbalance +0.2% |
 | Single device 50 W in a sealed cabinet, 700 / 1000 / 1400 cells (CFD-C2, `validation_device.rs`) | 2D engine | housing rise | +4.5% / +5.1% / +5.1% (60.2 K vs 57.3 K); plate share 0.264 to 0.266 vs 0.268 |
-| Full cabinet 50 W, 1500 / 6000 / 20000 cells | 2D engine | housing rise | +5.1% / +10.7% / +14.3%: creeps up with the mesh, not mesh independent; test limit 20% |
-| Cabinet solver as the app runs it (`tests/validation_cabinet.rs`, CFD-INT), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement, so `ENCLOSURE_VALIDATED` stays false. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
+| Full cabinet 50 W, 1500 / 6000 / 20000 cells, with the film reference (lane H6) | 2D engine | housing rise | +3.7% / +4.7% / +4.7%: flat with the mesh; was +5.1% / +10.7% / +14.3% before the fix (see "Mesh creep: closed by the film reference") |
+| Sealed cabinet 50 W, mesh study (`examples/mesh_study`, lane H6) | 2D engine reads 82.3 C | housing temperature at 1000 / 6000 / 20000 / 60000 cells | 84.5 / 85.0 / 85.0 / 87.6 C; before: 85.2 / 88.4 / 90.4 / 99.1 C; plate share 0.26 to 0.27 throughout |
+| Sealed enclosures at real sizes, six cases (`novo-thermal/tests/validation_iec.rs`, lane H6) | IEC 60890 hand calculation (b factors, k) written out in the test | k Ae and rise P / (k Ae); 2D mean air rise | rise equals the hand value to 1e-6; 2D mean air rise -9% to -22% (never above) |
+| Cabinet solver as the app runs it, BEFORE the film reference (`tests/validation_cabinet.rs`, CFD-INT; historical, superseded by the next rows), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement then; with the film reference the housing is +3.7 to +4.7% and flat (sealed 1500 to 20000 cells, vented +4.0 to +4.1% at 1500 to 6000), air -10 to -18% at 1500 to 6000 cells. `ENCLOSURE_VALIDATED` stays false because nothing is measured. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
 | Cooling what-if fixes, 3D against 2D (`validation_whatif.rs`, 3000 cells): sealed 600 x 800 x 300 mm box, one 120 W device at 35 C outside, the what-if's vent and fan fixes | 2D engine | housing temperature; housing K gained; order of the fixes | housing +4.9% as it is, -1.0% with filter fan in and vent out, +4.9% with two vents; K gained: vents +5.3% (6.5 K vs 6.2 K), fan pair +59% (24.2 K vs 15.2 K: the 2D model read the fan benefit low, before the jet speed term; see "Fan gain: the jet speed term"); 3 of 3 pairs more than 3 K apart in 2D are ordered the same in 3D (model vs model, not a measurement) |
 | Fan gain sweep, 3D against 2D, BEFORE the jet speed term, historical (`validation_fan_gain.rs`, ignored test, 3000 cells, 36 cases, about 18 minutes in debug): fan 60 / 120 / 250 m3/h, 60 / 120 W, boxes 600x800x300, 800x1200x300 and 600x600x400 mm, fan low in with vent on top or fan on top with vent low | 2D engine | housing K gained by the fan fix, 3D / 2D (3D at 3000 cells; its gain rises 9 to 11% from 3000 to 12000 cells, see below) | mean 1.90, median 1.89, range 0.94 to 3.09; the 2D model reads the gain low against the 3D solver in 33 to 34 of 36 cases (the three 600x600x400 cases at 60 m3/h are within about 0.1 of 1). By flow: 60 m3/h 0.94 to 2.07 (mean 1.46), 120: 1.36 to 2.56 (1.90), 250: 1.68 to 3.09 (2.35). By box: 600x800x300 mean 1.94, 800x1200x300 mean 2.34, 600x600x400 mean 1.42. The two fan positions agree within 0.25. No single factor fits (model vs model, not a measurement) |
 | Fan gain sweep, 3D against 2D, current main (`validation_fan_gain.rs`, same 36 cases, rerun 2026-10-26 in release, about 15 minutes; frozen in `tests/fan_gain.rs`) | 2D engine with the jet speed term | housing K gained by the fan fix, 3D / 2D | mean 0.97, median 1.01, range 0.69 to 1.28; the 2D model reads the gain low in 19 of 36 cases and high in 17, so it is not biased either way. By flow: 60 m3/h 0.69 to 1.28 (mean 1.00), 120: 0.78 to 1.15 (1.00), 250: 0.77 to 1.01 (0.90). By box: 600x800x300 mean 0.99, 800x1200x300 mean 1.12 (2D low by up to 22%), 600x600x400 mean 0.79 (2D high by up to 45%, always on the optimistic side). Two fan positions differ by at most 0.15. The device sits near the fan-to-vent line here; away from it see "Fan gain: where the device sits". Model vs model, not a measurement |
@@ -76,8 +78,7 @@ The 2D estimate assumes mixed air at the vents. Where a heat source sits below a
 low, while the walls (+4% to +7% in the wall-seen rise) and the total heat balance agree. This is a model difference, not
 a proven error of either side: nobody has measured this box. The wall-seen metric is the honest comparison for
 housing temperature; the volume mean is not expected to match. The wall conductance counts the vent openings, so the
-wall-seen rise reads a few percent low by construction. The full cabinet row creeps up with the mesh (+5% to +14%),
-so the 20% test band is a guard, not an accuracy claim.
+wall-seen rise reads a few percent low by construction. The full cabinet row used to creep up with the mesh (+5% to +14%); it is now flat (see below).
 
 ## Chimney: model, not exact
 
@@ -184,6 +185,52 @@ What this says:
 - At 120 m3/h (3D over 2D; not pinned by a test, seen once): near the vent 1.11 / 1.12 / 0.86 / (not run for the fourth box), middle 0.99 / 0.20 / 0.71, near the fan 1.26 / 1.27 / 0.86, beside the line 0.76 / 0.67 (first box), 0.63 / 0.71 (tall box), 0.68 / 0.59 (deep box); boxes in the order of the table. So beside the line the 3D solver gave a third to three quarters of the 2D gain (0.33 to 0.76).
 
 A position weight was tried (the code was not kept: it was a throwaway test and the numbers below are not reproducible from the repository): the jet speed times a lateral Gaussian around the fan-to-vent line and an axial fall-off from either opening, with a depth exponent (five parameters, fitted on 48 cases of this sweep and the previous one, `rms ln` of the 3D/2D ratio 0.47 before, 0.29 after). It was not kept: the fit ran the depth exponent to its upper bound, made the cases of the previous section worse (the tall box rose to 1.4 to 1.7), and on the held-out box it helped near the vent (1.01 against 1.32) but made the middle and the fan end worse (0.70 and 0.62 where the merged term gives 0.82 and 0.83) while the beside-the-line cases still read far too high. A fit like that would be tuned to this sweep. What is kept is the finding and the wording: the what-if says a device beside the stream between fan and vent may gain much less than shown. `tests/fan_position.rs` pins this (on the line the median 3D/2D within 0.8 to 1.2; beside it below 0.85) so a change that moves it is noticed. The 3D solver is itself a reduced model, so which side is closer to a real cabinet is not known.
+
+## Mesh creep: closed by the film reference (lane H6, 2026-11-04)
+
+Cause: the convective film of a device (`h`, defined against the air outside the boundary layer) was applied
+between the device and the first air cell, and its correlation read the temperature of the first air cells. On a finer
+grid that cell sits closer to the surface, inside a hotter layer, so the film counted a warmer air and the housing rose
+about 3 K per doubling of the cell count (85 C at 1000 cells, 99 C at 60000).
+
+Fix (`flow/solver.rs`, `FILM_REF_M` = 30 mm): the film reads the air temperature interpolated 30 mm out along the surface
+normal (a cell that already lies beyond 30 mm is read as before, so coarse grids are unchanged). The face keeps the plain
+film to the first cell; the difference `h_conv (T_cell - T_ref)` is moved from the device to that cell as a lagged source
+term, so heat is conserved. The film correlation (`device_h`) also takes its air temperature at that distance. The older
+quadratic-profile correction for a resolved layer is no longer used where the reference applies.
+
+Results (sealed 50 W, 2D engine 82.3 C): see the rows above. Remaining creep: about 0.5 K up to 20000 cells and 2.6 K more
+at 60000 cells (a 60 W-class cabinet with 3 to 10 mm cells next to the device). Reference distance trial: 30 mm gives 84.5 to 85.0 C
+(1000 to 20000 cells), 60 mm 82.9 to 84.1 C, 100 mm 82.7 to 85.7 C (without the correlation change). 30 mm was chosen for
+the flattest curve. It is a tuning choice, not a measurement. The fan-gain sweep (36 cases, `validation_fan_gain.rs`) moved
+from mean 0.97 / median 1.01 / range 0.69 to 1.28 to mean 0.92 / median 0.96 / range 0.63 to 1.26 (3D gain over 2D gain):
+the 2D jet-speed calibration stays valid within that shift; the what-if row "filter fan in, vent out" now reads +14% against
+2D for housing (was -1%).
+
+## IEC 60890 edition
+
+The app implements the surface-factor method (b: top 1.4 / 0.7, sides and front 0.9 / 0.5, bottom 0.5 or 0 on the floor,
+k 5.5 steel and 12 aluminium, rise = P / (k Ae)), linear in the loss. RiTherm follows IEC TR 60890:2022, the
+temperature-rise-curve method (Ae, k, dt0.5, c factor, dt1.0). The two differ in shape; the RiTherm cross-check is a
+comparison of two planning methods, not of model against measurement.
+
+## When the validated flag may change
+
+`ENCLOSURE_VALIDATED` in `novo-cfd/src/cabinet/statement.rs` decides whether the app may call an enclosure temperature
+validated. Rule, enforced by `tests/validation_gate.rs`:
+
+1. The flag may be true only if `crates/novo-cfd/validation/references.txt` holds at least one reference of kind
+   `measured` (logged temperatures of a real cabinet with known losses, size, mounting and ambient) or `licensed`
+   (a published table or standard we hold a licence for) with status `passed`, and its test file exists.
+2. Analytic cases, the IEC hand calculation, comparisons against the 2D engine and third-party models (RiTherm) are listed
+   in the register and printed as `VALIDATION` rows but never count towards the flag, however many pass.
+3. The PR that flips the flag also changes the accuracy text in `statement.rs`, names the reference (aggregated, no
+   customer names, no third-party result tables) and attaches the `VALIDATION` rows.
+4. A new lane adds a case by adding a line to the register and a `validation_*.rs` test that prints `VALIDATION` rows;
+   it starts with status `planned` or `passed` for the kinds it can already meet.
+5. Private data (RiTherm results, customer cabinets) stay in the project files, not in this repository.
+
+Today nothing `measured` or `licensed` exists, so the flag stays false.
 
 ## Forced convection and internal fans (lane H8, `novo-thermal`)
 
