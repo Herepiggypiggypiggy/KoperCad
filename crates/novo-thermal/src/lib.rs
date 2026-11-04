@@ -20,6 +20,7 @@ pub mod lump;
 pub mod model;
 pub mod placement;
 pub mod placement_project;
+pub mod radiation;
 mod report;
 pub mod result;
 mod setup;
