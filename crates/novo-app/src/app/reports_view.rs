@@ -446,7 +446,10 @@ impl NovoApp {
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
                         if id == novo_reports::query::SavedQueries::ID {
-                            novo_theme::widgets::help_mark(ui, empty_report_hint(&id));
+                            ui.horizontal(|ui| {
+                                ui.weak("No saved reports");
+                                novo_theme::widgets::help_mark(ui, empty_report_hint(&id));
+                            });
                         } else {
                             ui.weak(empty_report_hint(&id));
                         }

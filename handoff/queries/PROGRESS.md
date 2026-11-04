@@ -4,3 +4,4 @@
 2026-11-04 09:35 UTC CI fix: narrower dependencies for queries report, report-list tests updated
 2026-11-04 11:11 UTC follow-up PR: empty state behind ?, Write query clears name, content widths, entity-coverage test, CLI export queries + test, Ctrl+K/menu report.queries
 2026-11-04 11:15 UTC follow-up PR: empty state behind ?, Write query clears name, content widths, entity-coverage test, CLI export queries + test, Ctrl+K and menu report.queries
+2026-11-04 11:20 UTC empty state keeps a visible short title beside ?
