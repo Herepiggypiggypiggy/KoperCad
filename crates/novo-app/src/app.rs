@@ -33,6 +33,7 @@ mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_group;
 mod cabinet_inspector;
+mod cabinet_maker_plate;
 mod cabinet_menu;
 mod cabinet_panel;
 mod cabinet_rail_ends;
@@ -51,6 +52,7 @@ mod cable_cores_tests;
 #[cfg(test)]
 mod cable_proposals_fixture_tests;
 mod calculations;
+mod calculations_mechanical;
 #[cfg(test)]
 mod calculations_tests;
 mod centre;
@@ -374,6 +376,7 @@ mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod winch_scenarios;
+mod window_help;
 mod wire_it_export;
 mod wire_panel;
 #[cfg(test)]

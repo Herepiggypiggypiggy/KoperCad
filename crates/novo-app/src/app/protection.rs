@@ -23,6 +23,7 @@ use novo_checks::protection::devices::MakerTables;
 use novo_checks::protection::model::{
     self, ProjectDevice, SUPPLY_SHORT_CIRCUIT_KA, Study, StudyReport,
 };
+use novo_checks::protection::plot::{self, CableCurve, CoordinationPlot, MotorStart};
 use novo_checks::protection::sccr::{self, Source as SccrSource};
 use novo_checks::protection::selectivity::{Backup, BackupBasis, Basis, Settings, Verdict};
 use novo_core::{DeviceId, Value};
@@ -71,6 +72,13 @@ pub(super) struct ProtectionState {
     tables_loaded: bool,
     /// The analyses, for the study and supply current they were run on.
     pub(super) results: Option<Results>,
+    /// The single-line diagram at a project revision: the cables and motors
+    /// behind each device.
+    line: Option<(u64, novo_checks::single_line::SingleLine)>,
+    /// Draw the cable damage curves of the ticked devices.
+    pub(super) show_cables: bool,
+    /// Draw the motor starts behind the ticked devices.
+    pub(super) show_motors: bool,
     /// Where the tabs and the supply box were drawn, for the lesson pointer.
     marks: Vec<(&'static str, egui::Rect, &'static str, bool)>,
 }
@@ -149,6 +157,8 @@ pub(super) struct Results {
     supply_ka: Option<f64>,
     pub(super) chain: StudyReport,
     pub(super) rating: sccr::Report,
+    /// Cable damage curves, motor starts and the checks against them.
+    pub(super) plot: CoordinationPlot,
 }
 
 impl ProtectionState {
@@ -166,6 +176,9 @@ impl ProtectionState {
             tables_note: None,
             tables_loaded: false,
             results: None,
+            line: None,
+            show_cables: true,
+            show_motors: true,
             marks: Vec::new(),
         }
     }
@@ -245,6 +258,9 @@ impl NovoApp {
         if let Some(k) = state.supply_override {
             study.supply_ka = Some(k);
         }
+        if state.line.as_ref().is_none_or(|(r, _)| *r != revision) {
+            state.line = Some((revision, novo_reports::single_line::build(project)));
+        }
         let stale = state
             .results
             .as_ref()
@@ -255,6 +271,11 @@ impl NovoApp {
                 supply_ka: study.supply_ka,
                 chain: study.report(&state.tables, &Settings::default()),
                 rating: study.sccr(&project.info().name),
+                plot: state
+                    .line
+                    .as_ref()
+                    .map(|(_, line)| CoordinationPlot::read(project, &study, line))
+                    .unwrap_or_default(),
             });
         }
         let rows = limiter_rows(project, &study);
@@ -368,10 +389,36 @@ fn color_of(index: usize) -> Color32 {
     SERIES[index % SERIES.len()]
 }
 
+fn status_color(status: plot::Status) -> Color32 {
+    let p = crate::theme::ui_palette();
+    match status {
+        plot::Status::Pass => p.success,
+        plot::Status::Warning => p.warning,
+        plot::Status::Fail => p.error,
+    }
+}
+
+fn status_word(status: plot::Status) -> &'static str {
+    match status {
+        plot::Status::Pass => "OK",
+        plot::Status::Warning => "Check",
+        plot::Status::Fail => "Fails",
+    }
+}
+
+/// The cable and motor curves to draw, with their device's colour.
+struct Overlay<'a> {
+    cables: Vec<(&'a CableCurve, Color32)>,
+    motors: Vec<(&'a MotorStart, Color32)>,
+}
+
 fn curves_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
+    // Taken out so the lists can change `state` while the data is read.
+    let results = state.results.take();
+    let data = results.as_ref().map(|r| &r.plot);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(210.0);
+            ui.set_width(230.0);
             novo_theme::widgets::section_label(ui, "DEVICES");
             egui::ScrollArea::vertical()
                 .id_salt("protection_devices")
@@ -394,7 +441,38 @@ fn curves_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
                                 r.on_hover_text(d.assumed.join("\n"));
                                 ui.weak("*");
                             }
+                            if let Some(status) = data.and_then(|p| p.status_of(i)) {
+                                ui.colored_label(status_color(status), status_word(status));
+                            }
                         });
+                    }
+                    if let Some(data) = data
+                        && (!data.cables.is_empty() || !data.motors.is_empty())
+                    {
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            novo_theme::widgets::section_label(ui, "ALSO DRAW");
+                            novo_theme::widgets::help_mark(ui, &CoordinationPlot::basis().join("\n\n"));
+                        });
+                        ui.checkbox(&mut state.show_cables, "Cable damage curves");
+                        ui.checkbox(&mut state.show_motors, "Motor starts");
+                        ui.add_space(8.0);
+                        novo_theme::widgets::section_label(ui, "AGAINST CABLE AND MOTOR (BAND LIMITS, NOT MAKER CURVES)");
+                        ui.weak("Estimate from typical values, not a protection design or a safety function.");
+                        ui.weak("Cable time: heating formula on the section in the diagram, not a maker curve.");
+                        for c in &data.checks {
+                            let Some(d) = study.devices.get(c.device) else {
+                                continue;
+                            };
+                            if !state.shown.contains(&d.id) {
+                                continue;
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                ui.colored_label(status_color(c.status), status_word(c.status));
+                                ui.label(format!("{} \u{2192} {}", d.tag, c.subject))
+                                    .on_hover_text(&c.text);
+                            });
+                        }
                     }
                     ui.add_space(6.0);
                     ui.weak(
@@ -411,8 +489,43 @@ fn curves_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
             .filter(|(_, d)| state.shown.contains(&d.id))
             .map(|(i, d)| (d, color_of(i)))
             .collect();
-        plot(ui, &series, ik_a);
+        let shown = |i: usize| {
+            study
+                .devices
+                .get(i)
+                .is_some_and(|d| state.shown.contains(&d.id))
+        };
+        let overlay = data.map_or(
+            Overlay {
+                cables: Vec::new(),
+                motors: Vec::new(),
+            },
+            |p| Overlay {
+                cables: if state.show_cables {
+                    p.cables
+                        .iter()
+                        .filter(|c| shown(c.device))
+                        .map(|c| (c, color_of(c.device)))
+                        .collect()
+                } else {
+                    Vec::new()
+                },
+                motors: if state.show_motors {
+                    p.motors
+                        .iter()
+                        .filter_map(|m| {
+                            let nearest = *m.devices.iter().find(|d| shown(**d))?;
+                            Some((m, color_of(nearest)))
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                },
+            },
+        );
+        plot(ui, &series, &overlay, ik_a);
     });
+    state.results = results;
 }
 
 fn fmt_current(a: f64) -> String {
@@ -466,7 +579,12 @@ fn decade_label_time(exp: i32) -> String {
 
 /// The log-log plot: each device a band from its fastest to its slowest trip
 /// time, the supply fault current a dashed line.
-fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f64>) {
+fn plot(
+    ui: &mut egui::Ui,
+    series: &[(&ProjectDevice, Color32)],
+    overlay: &Overlay<'_>,
+    ik_a: Option<f64>,
+) {
     let size = Vec2::new(
         ui.available_width().max(320.0),
         ui.available_height().max(300.0),
@@ -482,10 +600,13 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
     let lowest = series
         .iter()
         .map(|(d, _)| d.device.lowest_trip_a())
+        .chain(overlay.cables.iter().map(|(c, _)| c.range_a().0))
+        .chain(overlay.motors.iter().map(|(m, _)| m.rated_a))
         .fold(f64::INFINITY, f64::min);
     let highest = series
         .iter()
         .map(|(d, _)| d.device.rated_a() * 60.0)
+        .chain(overlay.motors.iter().map(|(m, _)| m.start_a * 1.5))
         .fold(0.0, f64::max)
         .max(ik_a.unwrap_or(0.0) * 1.5);
     let x0 = if lowest.is_finite() {
@@ -609,6 +730,60 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             );
         }
     }
+    // Cable damage: dashed, in the colour of the device that protects it.
+    for (n, (cable, color)) in overlay.cables.iter().enumerate() {
+        let (from, to) = cable.range_a();
+        let (from, to) = (from.max(lo_a), to.min(hi_a));
+        if to <= from {
+            continue;
+        }
+        let points: Vec<Pos2> = (0..=60)
+            .map(|k| {
+                let i = from * (to / from).powf(f64::from(k) / 60.0);
+                Pos2::new(to_x(i), to_y(cable.i2t / (i * i)))
+            })
+            .collect();
+        for shape in egui::Shape::dashed_line(&points, Stroke::new(1.8, *color), 7.0, 4.0) {
+            plot_painter.add(shape);
+        }
+        plot_painter.text(
+            Pos2::new(points[0].x + 4.0, points[0].y - 3.0 - 13.0 * n as f32),
+            egui::Align2::LEFT_BOTTOM,
+            format!(
+                "cable {} mm\u{b2}, heating formula",
+                trim(cable.section_mm2)
+            ),
+            font.clone(),
+            *color,
+        );
+    }
+    // Motor starts: the block of starting current over starting time.
+    for (motor, color) in &overlay.motors {
+        let points: Vec<Pos2> = motor
+            .outline()
+            .into_iter()
+            .map(|(i, t)| Pos2::new(to_x(i), to_y(t)))
+            .collect();
+        plot_painter.add(egui::Shape::line(points.clone(), Stroke::new(2.4, *color)));
+        for p in &points {
+            plot_painter.circle_filled(*p, 2.5, *color);
+        }
+        plot_painter.text(
+            Pos2::new(points[1].x + 5.0, points[1].y),
+            egui::Align2::LEFT_CENTER,
+            format!(
+                "{} start{}",
+                motor.tag,
+                if motor.ratio_assumed || motor.time_assumed {
+                    " (assumed)"
+                } else {
+                    ""
+                }
+            ),
+            font.clone(),
+            *color,
+        );
+    }
     // The supply fault current.
     if let Some(ik) = ik_a.filter(|k| *k > lo_a && *k < hi_a) {
         let x = to_x(ik);
@@ -656,6 +831,17 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
         let i = 10f64.powf(exp);
         response.on_hover_ui_at_pointer(|ui| {
             ui.label(egui::RichText::new(fmt_current(i)).strong());
+            for (cable, color) in &overlay.cables {
+                if let Some(t) = cable.time_at(i) {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            *color,
+                            format!("cable {} mm\u{b2}", trim(cable.section_mm2)),
+                        );
+                        ui.label(format!("damaged after {}", fmt_time(t)));
+                    });
+                }
+            }
             for (d, color) in series {
                 let text = match d.device.curve.trip_time_range(i) {
                     None => "does not trip".to_string(),

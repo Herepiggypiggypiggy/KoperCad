@@ -401,6 +401,17 @@ fn pane_height(ctx: &egui::Context, name: &str) -> f32 {
         .map_or(PANE_DEFAULT_HEIGHT, |(_, h)| h)
 }
 
+/// A pane that asked for the whole height of its slot (a long form with a
+/// chat) gets it the first time it docks; a height the person gave it stays.
+pub(super) fn open_tall(ctx: &egui::Context, name: &str) {
+    let all: Vec<(String, f32)> = ctx
+        .data_mut(|d| d.get_persisted(heights_id()))
+        .unwrap_or_default();
+    if !all.iter().any(|(n, _)| n == name) {
+        set_pane_height(ctx, name, Some(PANE_MAX_HEIGHT));
+    }
+}
+
 fn set_pane_height(ctx: &egui::Context, name: &str, height: Option<f32>) {
     let mut all: Vec<(String, f32)> = ctx
         .data_mut(|d| d.get_persisted(heights_id()))
@@ -695,6 +706,7 @@ pub(super) fn show_docked<R>(
     let mut ask = None;
     let mut closed = false;
     let mut fold_clicked = false;
+    let add = |ui: &mut egui::Ui| super::window_help::scope(ctx, name, || add(ui));
     let mut out = egui::Area::new(id.with("docked"))
         .order(egui::Order::Background)
         .fixed_pos(sub.min)
@@ -735,8 +747,22 @@ pub(super) fn show_docked<R>(
                     )
                     .on_hover_text(if is_fold { "Unfold" } else { "Fold up" });
                 fold_clicked = fold.clicked();
+                let help = super::window_help::text(ctx, name);
+                let title_x = if let Some(help) = &help {
+                    super::window_help::header_button(
+                        ui,
+                        egui::Rect::from_center_size(
+                            header.left_center() + egui::vec2(4.0 + BUTTON * 1.5, 0.0),
+                            egui::vec2(BUTTON, BUTTON),
+                        ),
+                        help,
+                    );
+                    8.0 + BUTTON * 2.0
+                } else {
+                    8.0 + BUTTON
+                };
                 ui.painter().text(
-                    header.left_center() + egui::vec2(8.0 + BUTTON, 0.0),
+                    header.left_center() + egui::vec2(title_x, 0.0),
                     egui::Align2::LEFT_CENTER,
                     title,
                     egui::FontId::proportional(13.0),
@@ -851,7 +877,12 @@ pub(super) fn show_docked<R>(
 /// The dock buttons in the title bar of a floating panel: painted on the
 /// window's own layer and hit-tested by hand, since egui's title bar has no
 /// room for more buttons of ours. Returns the slot that was clicked.
-pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Order) -> Option<Slot> {
+pub(super) fn title_buttons(
+    ctx: &egui::Context,
+    id: egui::Id,
+    name: &str,
+    order: egui::Order,
+) -> Option<Slot> {
     let title = ctx.read_response(id.with("__title_click"))?;
     let layer = egui::LayerId::new(order, id);
     let pal = crate::theme::ui_palette();
@@ -860,6 +891,13 @@ pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Orde
     let clicked = ctx.input(|i| i.pointer.primary_clicked());
     let right = title.rect.right() - 4.0;
     let mut chosen = None;
+    if let Some(help) = super::window_help::text(ctx, name) {
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(right - BUTTON / 2.0 - 2.0 * BUTTON, title.rect.center().y),
+            egui::vec2(BUTTON, BUTTON),
+        );
+        super::window_help::title_button(ctx, layer, name, rect, &help);
+    }
     for (k, slot) in [Slot::Right, Slot::Left].into_iter().enumerate() {
         let rect = egui::Rect::from_center_size(
             egui::pos2(
@@ -1543,6 +1581,28 @@ mod tests {
             pane.right() > SCREEN.x - 2.0 && canvas.right() < SCREEN.x - 200.0,
             "{pane:?} {canvas:?}"
         );
+    }
+
+    #[test]
+    fn a_tall_dialog_asks_for_the_whole_slot_once_and_keeps_a_height_the_person_set() {
+        let ctx = egui::Context::default();
+        assert_eq!(pane_height(&ctx, "window:Ask Claude"), PANE_DEFAULT_HEIGHT);
+        open_tall(&ctx, "window:Ask Claude");
+        assert_eq!(pane_height(&ctx, "window:Ask Claude"), PANE_MAX_HEIGHT);
+        set_pane_height(&ctx, "window:Ask Claude", Some(400.0));
+        open_tall(&ctx, "window:Ask Claude");
+        assert_eq!(pane_height(&ctx, "window:Ask Claude"), 400.0);
+        // Alone in the slot, it is laid out as tall as the slot.
+        let (rects, _) = stack_layout(700.0, &[(PANE_MAX_HEIGHT, false)]);
+        assert_eq!(rects[0], (0.0, 700.0), "{rects:?}");
+        // With a second pane docked, that one keeps a usable height, not a
+        // title row; the stack scrolls by the little that does not fit.
+        let (rects, over) = stack_layout(
+            700.0,
+            &[(PANE_MAX_HEIGHT, false), (PANE_DEFAULT_HEIGHT, false)],
+        );
+        assert!(rects[1].1 >= PANE_MIN_HEIGHT - 0.01, "{rects:?}");
+        assert!(rects[0].1 > 500.0 && over < 100.0, "{rects:?} {over}");
     }
 
     #[test]
