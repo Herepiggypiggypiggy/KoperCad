@@ -1044,6 +1044,7 @@ impl NovoApp {
                 self.canvas.document_changed(doc, &changes);
                 self.backend.record(&changes);
                 self.reports_heard(&changes);
+                self.message(Level::Info, if redo { "Redone" } else { "Undone" });
             }
             Ok(None) => {}
             Err(e) => {
