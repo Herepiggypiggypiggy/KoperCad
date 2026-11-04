@@ -340,6 +340,23 @@ pub fn forget_profile(root: &Path, id: &str) -> io::Result<()> {
     }
 }
 
+/// The supplier a file in a landing folder came from, as the address kept
+/// in its source record: `<...>/browser/landing/<id>/<file>` gives that
+/// supplier's start page. `None` for any other file. Every window download
+/// is recorded this way, so the personal-model rule (`is_personal_model`)
+/// keeps it out of Share bundles whatever the file says about itself.
+pub fn landed_source_url(path: &Path) -> Option<String> {
+    let id_dir = path.parent()?;
+    let id = id_dir.file_name()?.to_str()?;
+    let landing = id_dir.parent()?;
+    let browser = landing.parent()?;
+    if landing.file_name()? != "landing" || browser.file_name()? != "browser" {
+        return None;
+    }
+    let (list, _) = load(Some(&user_list_path(browser)));
+    list.into_iter().find(|s| s.id == id).map(|s| s.start_url)
+}
+
 /// The suffix a download is written under until it is complete; the watcher
 /// never takes a file with it.
 pub const PARTIAL_SUFFIX: &str = ".part";
@@ -667,6 +684,24 @@ mod tests {
         assert!(landed.join("a.step").exists());
         forget_profile(root, "rittal").unwrap();
         assert!(forget_profile(root, "../x").is_err());
+    }
+
+    #[test]
+    fn a_landed_file_names_its_supplier() {
+        let p = Path::new("/u/KoperCAD/browser/landing/siemens/1-a.step");
+        assert_eq!(
+            landed_source_url(p).as_deref(),
+            Some("https://mall.industry.siemens.com/")
+        );
+        assert_eq!(landed_source_url(Path::new("/u/Downloads/a.step")), None);
+        assert_eq!(
+            landed_source_url(Path::new("/u/browser/landing/nobody/a.step")),
+            None
+        );
+        assert_eq!(
+            landed_source_url(Path::new("/u/other/landing/siemens/a.step")),
+            None
+        );
     }
 
     #[test]

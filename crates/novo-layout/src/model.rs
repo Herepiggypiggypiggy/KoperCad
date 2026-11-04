@@ -157,6 +157,52 @@ fn structure(project: &Project, id: StructureId) -> Option<&Structure> {
 }
 
 /// The layout stored for an enclosure; `None` when it has no plate yet.
+/// Structure property: the mounting plate part in use (`Rittal 8806000`),
+/// for display. Set with [`set_plate_part`].
+pub const PLATE_PART: &str = "plate.part";
+/// Structure property: the round holes the plate is delivered with, as
+/// `x,y,d; x,y,d` in plate mm from the top left seen from the front.
+pub const PLATE_FACTORY_HOLES: &str = "plate.factory_holes";
+
+/// Uses a maker's mounting plate for the panel: the plate gets the part's
+/// size (the margin is kept) and the holes the plate is delivered with are
+/// remembered, so the drilling plan can show them and flag a planned hole
+/// that lands on one. `holes` is the `x,y,d; ...` text, or `None` when the
+/// part has none. One undo step with the caller's transaction.
+pub fn set_plate_part(
+    tx: &mut Tx<'_>,
+    id: StructureId,
+    label: &str,
+    width: f64,
+    height: f64,
+    holes: Option<&str>,
+) -> Result<usize> {
+    let margin = tx
+        .project()
+        .get::<novo_core::Structure>(id)
+        .and_then(|s| s.plate)
+        .map_or(0.0, |p| p.margin);
+    // Rails and ducts that ran across the old plate follow the new one.
+    let resized = set_plate_following(
+        tx,
+        id,
+        MountingPlate {
+            width,
+            height,
+            margin,
+        },
+    )?;
+    tx.set_property(id, PLATE_PART, Some(Value::Text(label.to_owned())))?;
+    tx.set_property(
+        id,
+        PLATE_FACTORY_HOLES,
+        holes
+            .filter(|h| !h.trim().is_empty())
+            .map(|h| Value::Text(h.to_owned())),
+    )?;
+    Ok(resized)
+}
+
 pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
     let s = structure(project, id)?;
     let plate = s.plate?;
@@ -193,6 +239,13 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
         })
         .collect();
     layout.enclosure = enclosure_of(project, id);
+    if let Some(Value::Text(t)) = s.properties.get(PLATE_FACTORY_HOLES) {
+        layout.factory_holes = crate::drill::parse_holes(t)
+            .0
+            .into_iter()
+            .map(|h| (h.dx, h.dy, h.dia))
+            .collect();
+    }
     (layout.openings, layout.opening_problems) = openings_of(project, id);
     let known = surface_names(project, id, layout.enclosure.as_ref(), &layout.plate);
     layout

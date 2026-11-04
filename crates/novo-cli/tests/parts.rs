@@ -247,3 +247,41 @@ fn etim_release_install_then_a_bmecat_1_2_file_with_codes_imports_with_price_and
     assert!(saved.contains("\"per\": 100"), "{saved}");
     assert!(saved.contains("\"width_mm\""), "{saved}");
 }
+
+#[test]
+fn step_health_reports_a_folder_and_exits_one_when_a_file_is_unreadable() {
+    let pack = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../novo-interop/tests/data/step-pack"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let report = dir.path().join("health.md");
+    let (code, out) = novo(&[
+        "parts",
+        "step-health",
+        pack,
+        "--report",
+        report.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains("5 files: 2 read cleanly, 1 with gaps, 2 cannot be read."),
+        "{out}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&report).unwrap(),
+        format!("{out}\n").trim_end_matches('\n').to_owned() + "\n"
+    );
+    // A folder with only a good file exits 0.
+    let good = dir.path().join("good");
+    std::fs::create_dir(&good).unwrap();
+    std::fs::copy(format!("{pack}/block-plain.stp"), good.join("a.stp")).unwrap();
+    let (code, out) = novo(&["parts", "step-health", good.to_str().unwrap()]);
+    assert_eq!(code, 0, "{out}");
+    let (code, _) = novo(&[
+        "parts",
+        "step-health",
+        dir.path().join("none").to_str().unwrap(),
+    ]);
+    assert_eq!(code, 3);
+}

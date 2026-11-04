@@ -297,6 +297,23 @@ impl Server {
                     .collect();
                 text(lines.join("\n"))
             }
+            "check_text" => {
+                let max = a
+                    .get("max_words")
+                    .and_then(Value::as_u64)
+                    .map_or(crate::qa::TEXT_WORDS, |v| v as usize);
+                let r = self.send(json!({"cmd": "ui_tree"}))?;
+                let nodes = r["nodes"].as_array().cloned().unwrap_or_default();
+                let hits = crate::qa::text_hits(&nodes, max);
+                if hits.is_empty() {
+                    return text(format!("no label longer than {max} words on screen"));
+                }
+                let lines: Vec<String> = hits
+                    .iter()
+                    .map(|(sev, kind, title, detail)| format!("{sev} [{kind}] {title}: {detail}"))
+                    .collect();
+                text(lines.join("\n"))
+            }
             "finding" => {
                 let sev = a["severity"].as_str().unwrap_or("S3");
                 if !matches!(sev, "S1" | "S2" | "S3" | "S4") {
@@ -902,6 +919,12 @@ fn tools() -> Value {
             "check_layout",
             "Cheap layout check of the current screen from the widget tree: controls cut off by the window edge, overlapping controls, tiny targets, icon-only buttons. Heuristic: look at a screenshot too.",
             json!({}),
+            json!([])
+        ),
+        tool(
+            "check_text",
+            "Explanation text on the current screen: labels longer than max_words (default 8) from the widget tree. Explanations belong behind the window's ? icon.",
+            json!({"max_words": num}),
             json!([])
         ),
         tool(

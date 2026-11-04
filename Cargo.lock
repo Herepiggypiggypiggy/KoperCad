@@ -3094,6 +3094,7 @@ dependencies = [
  "novo-reports",
  "novo-revisions",
  "novo-storage",
+ "novo-symbols",
  "novo-workflow",
  "novo-xref",
  "serde_json",
@@ -3161,6 +3162,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-flags"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "novo-heatview"
 version = "0.1.0"
 dependencies = [
@@ -3192,6 +3201,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 1.1.8+spec-1.1.0",
+ "zip 9.1.3",
 ]
 
 [[package]]

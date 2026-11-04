@@ -75,6 +75,9 @@ pub struct CabinetLayout {
     /// plate, door, walls, roof, floor and extra plates), for the drill
     /// sheets. Empty without an enclosure.
     pub surface_sizes: BTreeMap<String, (f64, f64)>,
+    /// Round holes the mounting plate is delivered with (x, y, diameter in
+    /// plate mm), from the plate part's maker model. Empty when unknown.
+    pub factory_holes: Vec<(f64, f64, f64)>,
 }
 
 impl CabinetLayout {
@@ -92,6 +95,7 @@ impl CabinetLayout {
             door_devices: Vec::new(),
             off_plate: BTreeMap::new(),
             surface_sizes: BTreeMap::new(),
+            factory_holes: Vec::new(),
         }
     }
 
