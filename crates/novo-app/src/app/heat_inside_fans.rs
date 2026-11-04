@@ -239,7 +239,7 @@ impl super::NovoApp {
 pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclosure) {
     let pal = crate::theme::ui_palette();
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(egui::RichText::new("Fans inside").strong());
         super::dialog_ui::help(
             ui,
