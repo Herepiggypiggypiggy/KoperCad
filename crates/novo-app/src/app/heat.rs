@@ -2142,6 +2142,10 @@ fn thin_ticks(ticks: Vec<f64>, range: range::Range, height: f32, gap: f32) -> Ve
 }
 
 /// The one line the legend starts with while the map is a preview.
+/// Short tag that stays on screen while a result rests on an estimate; the
+/// sentences behind it sit under the panel's "?".
+const ESTIMATE_TAG: &str = "(estimate)";
+
 const PREVIEW_NOTE: &str = "Preview, not a solver result";
 
 fn legend(
@@ -2307,8 +2311,16 @@ fn legend(
                 crate::theme::ui_palette().text_primary,
             ));
         }
-        // Sentences that explain a caveat sit behind the panel's "?".
-        if let Some(note) = estimate_note(input) {
+        // Sentences that explain a caveat sit behind the panel's "?"; a short
+        // visible tag stays next to the results while any number rests on an
+        // estimate (planning loss figures or catalogue enclosure numbers).
+        let note = estimate_note(input);
+        let enclosure_estimate = matches!(&cache.source, Source::Solved(sol)
+            if sol.messages.iter().any(|m| m == novo_layout::spec::ESTIMATE_NOTICE));
+        if note.is_some() || enclosure_estimate {
+            ui.label(small(ESTIMATE_TAG, crate::theme::ui_palette().warning));
+        }
+        if let Some(note) = note {
             super::window_help::add(ctx, note);
         }
         if unknown > 0 {
