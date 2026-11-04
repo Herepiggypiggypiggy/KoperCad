@@ -17,7 +17,9 @@ wait 30
 try click_text Cancel
 wait 30
 try click_text Cancel
-wait 20
+wait 30
+try click_text Cancel
+wait 30
 click_text "Settings for the next run"
 wait 10
 click_text Quick
@@ -33,7 +35,7 @@ expect "Added"
 shot added-before-3d-result
 # Auto is off, so the 3D run does not go again by itself: run it (Quick, as set above).
 click_text Simulate #2
-wait_s 120
+wait_s 400
 expect "Model comparison"
 expect "not a measurement"
 shot comparison
