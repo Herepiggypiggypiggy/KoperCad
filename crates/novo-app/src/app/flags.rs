@@ -34,6 +34,14 @@ pub(super) struct FlagUi {
     /// The EMC suggestion the open popover can preview (worked out once per
     /// popover, not per frame): the flag it was worked out for and the fix.
     emc_fix: Option<(FlagId, Option<novo_emc::Fix>)>,
+    /// The transient flags of refused edits (lane T7).
+    pub(super) edit: super::flags_edit::EditFlags,
+    /// Failed jobs: what Retry and Open folder need (lane T12).
+    pub(super) jobs: HashMap<FlagId, super::flags_jobs::JobInfo>,
+    /// The failed jobs, oldest first.
+    pub(super) job_order: Vec<FlagId>,
+    /// The drafts each simulation window raised (lane T10), by window.
+    pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
 }
 
 impl Default for FlagUi {
@@ -44,6 +52,10 @@ impl Default for FlagUi {
             index: HashMap::new(),
             open: None,
             emc_fix: None,
+            edit: Default::default(),
+            jobs: HashMap::new(),
+            job_order: Vec::new(),
+            sim: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -276,7 +288,7 @@ impl NovoApp {
 
     /// The marks of the flags anchored on drawn objects of `page`.
     pub(super) fn flag_marks(&mut self, page: PageId) -> Vec<novo_canvas::Mark> {
-        use novo_canvas::{Mark, model::item_id};
+        use novo_canvas::Mark;
         self.sync_flags();
         let Some(doc) = self.backend.document() else {
             return Vec::new();
@@ -284,41 +296,19 @@ impl NovoApp {
         let project = doc.project();
         let mut marks = Vec::new();
         for flag in self.wb.flags.store.list(false) {
-            for anchor in &flag.anchors {
-                let id = match anchor {
-                    Anchor::Symbol(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(novo_core::SymbolId)
-                        .filter(|s| project.symbol(*s).is_some_and(|s| s.page == page))
-                        .map(AnyId::Symbol),
-                    Anchor::Wire(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(novo_core::WireId)
-                        .filter(|w| project.wire(*w).is_some_and(|w| w.page == page))
-                        .map(AnyId::Wire),
-                    _ => None,
-                };
-                // A device or terminal is drawn by its symbols on this page.
-                let drawn: Vec<AnyId> = match anchor {
-                    Anchor::Device(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(|d| {
-                            project
-                                .symbols_of_device(novo_core::DeviceId(d))
-                                .into_iter()
-                                .filter(|s| s.page == page)
-                                .map(|s| AnyId::Symbol(s.id))
-                                .collect()
-                        })
-                        .unwrap_or_default(),
-                    _ => Vec::new(),
-                };
-                for id in id.into_iter().chain(drawn) {
-                    marks.push(Mark::on(mark_kind(flag), item_id(id)).with_key(flag.id.0));
-                }
+            // A refusal says its reason in the popover only: no second line on the canvas.
+            let quiet = flag.source == Source::Edit;
+            let hover = std::iter::once(flag.title.clone())
+                .chain(flag.detail.0.iter().cloned())
+                .collect::<Vec<_>>()
+                .join(": ");
+            for target in super::flags_edit::mark_targets(project, flag, page) {
+                marks.push(Mark {
+                    kind: mark_kind(flag),
+                    target,
+                    text: if quiet { String::new() } else { hover.clone() },
+                    key: flag.id.0,
+                });
             }
         }
         marks
@@ -404,12 +394,18 @@ impl NovoApp {
                                     "Preview the fix"
                                 }
                                 Action::Fix(c) if c == FIX_EMC_PREVIEW => continue,
+                                Action::Open(k) if k == super::flags_jobs::OPEN_FOLDER => {
+                                    "Open folder"
+                                }
+                                Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
                                 Action::Open(_) => match home_of(&flag) {
                                     Some((_, label)) => label,
                                     None => continue,
                                 },
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
+                                Action::Retry => "Retry",
+                                Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
                                     "Explain with Claude"
@@ -452,12 +448,19 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        if self.run_job_action(flag.id, &action) {
+            return;
+        }
         match action {
-            Action::Locate => {
-                if let Some(i) = index {
-                    self.go_problem(i);
+            Action::Locate => match index {
+                Some(i) => self.go_problem(i),
+                // In 3D the parts are selected there; elsewhere the device is
+                // shown on its page.
+                None if self.workspace() == super::workspace::Workspace::View3d => {
+                    self.locate_flag_in_3d(flag)
                 }
-            }
+                None => self.locate_flag(flag),
+            },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
             Action::Fix(cmd) if cmd == FIX_PIN_NAMES => {
                 if let Some(i) = index {

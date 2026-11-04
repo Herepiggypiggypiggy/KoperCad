@@ -182,6 +182,8 @@ pub struct Setup {
     pub k_ae: f64,
     /// The shell in use (the user's or the default of the enclosure).
     pub shell: crate::shell::ShellModel,
+    /// Rise of the air each face sees (sun, lane H3), K; zeros without sun.
+    pub face_offset: [f64; 6],
     pub on_plate: Vec<bool>,
     /// Heat capacity of an air cell, J/K, per cell (open volume).
     pub c_air: Vec<f64>,
@@ -676,6 +678,7 @@ impl Setup {
             jet_mixing_m2s,
             jet_speed_ms,
             k_ae,
+            face_offset: shell.outside.sun_offset_k,
             shell,
             on_plate,
             c_air,

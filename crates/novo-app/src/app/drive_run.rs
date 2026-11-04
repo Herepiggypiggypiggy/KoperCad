@@ -1014,6 +1014,8 @@ impl NovoApp {
         });
         let running = run.active.is_some();
         let notice = run.notice.clone();
+        let sim_flags = self.sim_flags_of(super::sim_flags::DRIVE);
+        let mut flag_click = None;
         let names: Vec<String> = axes
             .iter()
             .map(|a| a.id.clone())
@@ -1074,12 +1076,8 @@ impl NovoApp {
                     .map(|(_, t)| t.as_str())
                     .collect();
                 egui::Frame::new().fill(palette.raised).show(ui, |ui| {
-                    for (level, text) in notice.iter().filter(|(l, _)| !matches!(l, Level::Info)) {
-                        let w = match level {
-                            Level::Error => novo_theme::widgets::Level::Error,
-                            _ => novo_theme::widgets::Level::Warning,
-                        };
-                        novo_theme::widgets::banner(ui, w, text, |_| {});
+                    if let Some(c) = super::sim_flags::strip(ui, &sim_flags) {
+                        flag_click = Some(c);
                     }
                     if !fit.is_empty() {
                         let mut text = String::from("What the motor fit assumed:");
@@ -1218,6 +1216,9 @@ impl NovoApp {
                 super::window_help::add(ui.ctx(), model);
             });
         self.wb.drive_run.duty = duty;
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
+        }
         if !open {
             self.wb.drive_run.open = false;
         }
@@ -1233,7 +1234,7 @@ impl NovoApp {
     }
 
     /// Builds the loop from the travel axes of the project and checks their bindings.
-    fn start_drive_run(&mut self) {
+    pub(super) fn start_drive_run(&mut self) {
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -1254,13 +1255,23 @@ impl NovoApp {
                 Level::Warning,
                 "No axis can run: see the notes above.".into(),
             ));
-            self.wb.drive_run.notice = notes;
+            self.wb.drive_run.notice = super::sim_flags::set_notes(
+                &mut self.wb.flags,
+                project,
+                super::sim_flags::DRIVE,
+                notes,
+            );
             return;
         }
         let mut lp = match TravelLoop::new(StepConfig::default()) {
             Ok(lp) => lp,
             Err(why) => {
-                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                self.wb.drive_run.notice = super::sim_flags::set_notes(
+                    &mut self.wb.flags,
+                    project,
+                    super::sim_flags::DRIVE,
+                    vec![(Level::Error, why.to_string())],
+                );
                 return;
             }
         };
@@ -1268,7 +1279,12 @@ impl NovoApp {
         let mut hl = match DriveHoistLoop::new(StepConfig::default()) {
             Ok(hl) => hl,
             Err(why) => {
-                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                self.wb.drive_run.notice = super::sim_flags::set_notes(
+                    &mut self.wb.flags,
+                    project,
+                    super::sim_flags::DRIVE,
+                    vec![(Level::Error, why.to_string())],
+                );
                 return;
             }
         };
@@ -1276,7 +1292,12 @@ impl NovoApp {
         let mut cw = match ClWinchLoop::new(StepConfig::default()) {
             Ok(cw) => cw,
             Err(why) => {
-                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                self.wb.drive_run.notice = super::sim_flags::set_notes(
+                    &mut self.wb.flags,
+                    project,
+                    super::sim_flags::DRIVE,
+                    vec![(Level::Error, why.to_string())],
+                );
                 return;
             }
         };
@@ -1284,7 +1305,12 @@ impl NovoApp {
         let mut cp = match ClPairLoop::new(StepConfig::default()) {
             Ok(cp) => cp,
             Err(why) => {
-                self.wb.drive_run.notice = vec![(Level::Error, why.to_string())];
+                self.wb.drive_run.notice = super::sim_flags::set_notes(
+                    &mut self.wb.flags,
+                    project,
+                    super::sim_flags::DRIVE,
+                    vec![(Level::Error, why.to_string())],
+                );
                 return;
             }
         };
@@ -1302,7 +1328,12 @@ impl NovoApp {
                 .into_iter()
                 .map(|f| (Level::Warning, format!("{}: {}", f.module, f.message))),
         );
-        self.wb.drive_run.notice = notes;
+        self.wb.drive_run.notice = super::sim_flags::set_notes(
+            &mut self.wb.flags,
+            project,
+            super::sim_flags::DRIVE,
+            notes,
+        );
         self.wb.drive_run.active = Some(Active {
             lp,
             hl,

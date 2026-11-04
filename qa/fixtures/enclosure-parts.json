@@ -1,0 +1,29 @@
+{
+  "format": 2,
+  "parts": [
+    {
+      "manufacturer": "Demo",
+      "order_number": "TS-600x1800x500",
+      "description": "Floor-standing enclosure 600 x 1800 x 500 mm (QA fixture, hand-made data)",
+      "keywords": ["enclosure"],
+      "data": {
+        "body_kind": "enclosure",
+        "outer_width_mm": 600.0,
+        "outer_height_mm": 1800.0,
+        "outer_depth_mm": 500.0
+      }
+    },
+    {
+      "manufacturer": "Demo",
+      "order_number": "WM-600x760x210",
+      "description": "Wall-mounted enclosure 600 x 760 x 210 mm (QA fixture, hand-made data)",
+      "keywords": ["enclosure"],
+      "data": {
+        "body_kind": "enclosure",
+        "outer_width_mm": 600.0,
+        "outer_height_mm": 760.0,
+        "outer_depth_mm": 210.0
+      }
+    }
+  ]
+}

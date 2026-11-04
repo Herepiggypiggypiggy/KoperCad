@@ -132,8 +132,7 @@ fn a_drawn_problem_gets_a_triangle_with_a_key_and_a_popover() {
         })
         .collect();
     assert!(!triangles.is_empty(), "the free points are flagged");
-    // The reason shows only in the popover: a mark carries no hover text.
-    assert!(triangles.iter().all(|m| m.key != 0 && m.text.is_empty()));
+    assert!(triangles.iter().all(|m| m.key != 0 && !m.text.is_empty()));
     let id = novo_flags::FlagId(triangles[0].key);
     assert!(
         d.app.wb.flags.store.get(id).is_some(),

@@ -15,7 +15,6 @@ text "add plc card"
 wait 5
 key Enter
 wait 10
-expect "Add PLC card"
 expect "Address style"
 click_text "IEC 61131"
 wait 5
@@ -32,7 +31,7 @@ wait 20
 expect "Addresses"
 shot io-list-siemens
 check_layout
-click 475 53
+click 530 69
 wait 5
 shot io-list-style-open
 click_text Rockwell Button

@@ -14,6 +14,16 @@ pub(super) struct Lv {
     _dir: tempfile::TempDir,
 }
 impl Lv {
+    /// A new empty project, no lesson.
+    pub fn blank() -> Lv {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, super::Action::NewProject);
+        let mut lv = Lv { d, _dir: dir };
+        lv.frames(3);
+        lv
+    }
     pub fn start(id: &str) -> Lv {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));

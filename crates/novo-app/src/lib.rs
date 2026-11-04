@@ -32,6 +32,7 @@ mod packaging_tests;
 mod place_palette;
 mod settings;
 pub mod startup;
+pub mod supplier_browser;
 mod theme;
 mod update_check;
 

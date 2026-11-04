@@ -27,6 +27,10 @@ enum CardAction {
     Pad(super::controller_pad::PadAction),
     /// Where the Gamepad section is drawn, for the lesson anchor.
     PadAnchor(egui::Rect),
+    /// The flags of the broken bindings, as drawn this frame.
+    Flags(Vec<novo_flags::FlagDraft>),
+    /// A triangle on a signal row was clicked.
+    FlagOpen(novo_flags::FlagId, egui::Pos2),
 }
 
 /// The keys of the keyboard map (see [`key_map`]).
@@ -296,6 +300,14 @@ impl NovoApp {
                 CardAction::Pad(super::controller_pad::PadAction::OpenWizard) => {
                     self.wb.live.ctl.pad_open_wizard();
                 }
+                CardAction::Flags(drafts) => {
+                    super::sim_flags::set_flags(
+                        &mut self.wb.flags,
+                        super::sim_flags::CONTROLLER,
+                        drafts,
+                    );
+                }
+                CardAction::FlagOpen(id, at) => self.wb.flags.open = Some((id, at)),
                 CardAction::PadAnchor(rect) => {
                     self.anchor("live.controller.gamepad", rect, "Gamepad section");
                 }
@@ -449,7 +461,7 @@ fn draw_card(
     filter_bar(ui, ctl);
     signals_block(ui, ctl, &id, project);
     ui.separator();
-    bindings_block(ui, ctl, &id, project);
+    bindings_block(ui, ctl, &id, project, actions);
     machine_block(ui, ctl, project);
     ownership_lines(ui, ctl, &id);
     let findings = ctl.findings(project);
@@ -972,8 +984,15 @@ fn signals_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project:
         });
 }
 
-fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project: &Project) {
+fn bindings_block(
+    ui: &mut egui::Ui,
+    ctl: &mut ControllerLive,
+    id: &str,
+    project: &Project,
+    actions: &mut Vec<CardAction>,
+) {
     let palette = crate::theme::ui_palette();
+    let mut drafts: Vec<novo_flags::FlagDraft> = Vec::new();
     egui::CollapsingHeader::new("Bindings")
         .id_salt(("controller_bindings", id))
         .default_open(true)
@@ -1044,7 +1063,6 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                             let mut chosen: Option<(Target, bool)> = None;
                             let mut unbind = false;
                             let color = match &state {
-                                Some(Resolved::Broken(_)) => palette.error,
                                 Some(_) => palette.text_primary,
                                 None => palette.text_tertiary,
                             };
@@ -1080,8 +1098,37 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                                     }
                                     machine_picker(ui, &modules, &mut chosen);
                                 });
-                            if let Some(Resolved::Broken(why)) = &state {
-                                ui.colored_label(palette.error, "!").on_hover_text(why);
+                            if let (Some(Resolved::Broken(why)), Some((target, _))) =
+                                (&state, &current)
+                            {
+                                let draft = super::sim_flags::broken_binding_draft(
+                                    project, id, name, target, why,
+                                );
+                                let flag_id = novo_flags::Flag::from_draft(draft.clone()).id;
+                                let (slot, tri) = ui.allocate_exact_size(
+                                    egui::vec2(20.0, 20.0),
+                                    egui::Sense::click(),
+                                );
+                                novo_theme::widgets::flag_triangle(
+                                    ui.painter(),
+                                    slot.center(),
+                                    15.0,
+                                    true,
+                                    false,
+                                    novo_theme::Palette::of(ui),
+                                );
+                                tri.widget_info(|| {
+                                    egui::WidgetInfo::labeled(
+                                        egui::WidgetType::Button,
+                                        true,
+                                        format!("Error: {}", draft.title),
+                                    )
+                                });
+                                let tri = tri.on_hover_text(why);
+                                if tri.clicked() {
+                                    actions.push(CardAction::FlagOpen(flag_id, slot.left_bottom()));
+                                }
+                                drafts.push(draft);
                             }
                             if unbind {
                                 changes.push((key.clone(), None));
@@ -1100,6 +1147,7 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
             }
             plc_row(ui, ctl, id, project);
         });
+    actions.push(CardAction::Flags(drafts));
 }
 
 /// The machine part of the target picker: one fold per module with its ports. A chain port also
