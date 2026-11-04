@@ -2322,6 +2322,7 @@ dependencies = [
  "novo-reports",
  "novo-revisions",
  "novo-storage",
+ "novo-symbols",
  "novo-workflow",
  "novo-xref",
  "serde_json",
