@@ -379,3 +379,48 @@ fn a_circuit_lands_where_the_pointer_last_was_and_says_what_is_left_to_connect()
         d.app.messages.iter().map(|m| &m.text).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn a_pointer_beside_the_sheet_still_puts_the_circuit_on_the_sheet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let breaker = d.place("mcb3", 20.0, 20.0);
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .select_ids(&[AnyId::Symbol(breaker)]);
+    d.app.run_command(&ctx, "macro.save", Some("Breaker"));
+    let draft = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(draft);
+    let page = d.app.current_page.unwrap();
+    let (w, h) = d.doc().project().page(page).unwrap().format.size_mm();
+    for spot in [(-300.0, -300.0), (w + 300.0, h + 300.0), (-300.0, 100.0)] {
+        d.app.wb.last_pointer = Some((page, novo_core::Point::new(spot.0, spot.1)));
+        let before: Vec<_> = d.doc().project().symbols().map(|s| s.id).collect();
+        d.app.run_command(&ctx, "macro.place", Some("Breaker"));
+        d.app.wb.macro_place.select("Breaker.kcmacro");
+        d.frame();
+        d.app.place_picked_macro();
+        let placed: Vec<_> = d
+            .doc()
+            .project()
+            .symbols()
+            .filter(|s| !before.contains(&s.id))
+            .map(|s| s.placement.origin)
+            .collect();
+        assert!(!placed.is_empty(), "placed from {spot:?}");
+        assert!(
+            placed
+                .iter()
+                .all(|p| (0.0..=w).contains(&p.x) && (0.0..=h).contains(&p.y)),
+            "on the sheet for a pointer at {spot:?}: {placed:?}"
+        );
+    }
+}

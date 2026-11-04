@@ -9,8 +9,6 @@ text "motor starter dol"
 wait 5
 key Enter
 wait 10
-click_text Options
-wait 10
 try click_text "Motor starter DOL" Label
 wait 10
 click_text Place Button
@@ -22,7 +20,7 @@ wait 10
 shot rail-still
 key w
 wait 3
-click 287 116
+click 390 312
 wait 5
 shot wire-started-rail-stays
 expect "Esc or right-click cancels"

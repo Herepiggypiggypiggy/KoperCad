@@ -9,8 +9,6 @@ text "motor starter dol"
 wait 5
 key Enter
 wait 10
-click_text Options
-wait 10
 try click_text "Motor starter DOL" Label
 wait 10
 click_text Place Button
@@ -18,7 +16,7 @@ wait 20
 # egui counts a third click when the click before the pair is under 0.6 s old, so wait real time first.
 click 700 400
 wait_s 1
-click 268 201 double
+click 371 398 double
 wait 8
 shot double
 expect "Enter renames"
