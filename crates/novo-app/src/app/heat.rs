@@ -210,6 +210,11 @@ impl HeatState {
         self.layout.left_out = on;
     }
 
+    /// Tells the cooling selection which enclosure the cabinet has chosen.
+    pub(super) fn set_spec(&mut self, spec: Option<novo_layout::spec::EnclosureSpec>) {
+        self.cooling.set_spec(spec);
+    }
+
     pub(super) fn new() -> HeatState {
         HeatState {
             on: false,

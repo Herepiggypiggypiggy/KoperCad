@@ -1804,6 +1804,11 @@ impl NovoApp {
                     let dragging = self.cabinet.drag.is_some();
                     self.cabinet.heat.machine = generation;
                     self.cabinet.heat.set_left_out(!left_out.is_empty());
+                    self.cabinet.heat.set_spec(
+                        heat_project
+                            .get::<novo_core::Structure>(s)
+                            .map(|st| novo_layout::spec::EnclosureSpec::read(&st.properties)),
+                    );
                     self.cabinet.heat.sync_live(
                         heat_project,
                         s,
