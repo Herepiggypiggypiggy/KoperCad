@@ -159,7 +159,8 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
                 Column::new("mm2", "mm²", 7.0).right(),
                 Column::new("colour", "Colour", 10.0),
                 Column::new("cut", "Cut mm", 10.0).right(),
-                Column::new("ferrule", "Ferrule", 16.0),
+                Column::new("ferrule", "Ends", 16.0),
+                Column::new("sleeve", "Sleeve text", 14.0),
                 Column::new("bundle", "Bundle", 8.0),
                 Column::new("track", "Track", 12.0),
             ],
@@ -197,6 +198,12 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
                     }),
                     Cell::text(length_text(j)),
                     Cell::text(ferrule_text(j)),
+                    // Only when the sleeve says something other than the number.
+                    Cell::text(if j.sleeve == j.number {
+                        String::new()
+                    } else {
+                        j.sleeve.clone()
+                    }),
                     j.bundle_text().into(),
                     Cell::text(j.track.clone()),
                 ],
