@@ -706,6 +706,13 @@ impl<'a> Dialog<'a> {
         self
     }
 
+    /// Docked, opens as tall as its slot allows (a window whose buttons sit
+    /// below a long list); floating, nothing changes.
+    pub(super) fn tall_when_docked(mut self) -> Self {
+        self.tall = true;
+        self
+    }
+
     /// Opens floating, not docked; the buttons in the title bar still dock it.
     pub(super) fn floating(mut self) -> Self {
         self.floats = true;

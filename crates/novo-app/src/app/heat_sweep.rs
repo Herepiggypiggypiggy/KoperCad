@@ -41,6 +41,8 @@ pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the list of options gets before it scrolls, points: the window
 /// stays small enough to leave the drawing visible.
 const MAX_BODY: f32 = 440.0;
+/// Height kept under the list for the footer line and the Close button.
+const FOOTER_ROOM: f32 = 130.0;
 
 /// What a finished sweep found and what it needs to be applied.
 pub(super) struct Found {
@@ -441,9 +443,12 @@ impl CoolingAdvice {
             )
         };
         super::panel::dialog(ctx, "Cooling advice", [WINDOW_WIDTH, 0.0])
+            .tall_when_docked()
             .open(super::panel::esc(ctx, &mut open))
-            // The list scrolls inside; the buttons below it stay in view.
-            .scroll([false, false])
+            // The list scrolls inside; the buttons below it stay in view. A
+            // dock slot shorter than that scrolls the whole window rather than
+            // cutting the buttons off.
+            .scroll([false, true])
             .default_pos(at)
             .show(ctx, |ui| {
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
@@ -489,6 +494,11 @@ impl CoolingAdvice {
                 // after Add, so the window does not grow past the screen.
                 let spare = if pinned { 290.0 } else { 130.0 };
                 let room = (ctx.content_rect().bottom() - at.y - spare).clamp(120.0, MAX_BODY);
+                // Docked, the window is as tall as its dock slot, whatever `at`
+                // says: leave the footer and Close their room inside it.
+                let docked = super::panel_dock::slot_of(ctx, "window:Cooling advice").is_some();
+                let slot = (ui.available_height() - FOOTER_ROOM).max(80.0);
+                let room = if docked { slot } else { room.min(slot) };
                 egui::ScrollArea::vertical()
                     .max_height(room)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)

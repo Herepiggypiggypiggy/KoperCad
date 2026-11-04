@@ -243,8 +243,9 @@ impl LayoutSearch {
         let mut open = true;
         let pal = crate::theme::ui_palette();
         super::panel::dialog(ctx, "Cooler layout", [WIDTH, 0.0])
+            .tall_when_docked()
             .open(super::panel::esc(ctx, &mut open))
-            .scroll([false, false])
+            .scroll([false, true])
             .default_pos(at)
             .show(ctx, |ui| {
                 super::heat_cooling::left_out_line(ui, self.left_out);
@@ -471,7 +472,7 @@ fn grid_of_numbers(ui: &mut egui::Ui, s: &Suggestion) {
         .show(ui, |ui| {
             ui.label("");
             ui.label(egui::RichText::new("Now").small());
-            ui.label(egui::RichText::new("After the moves").small());
+            ui.label(egui::RichText::new("After").small());
             ui.end_row();
             ui.label("Devices over their limit");
             ui.label(s.before.devices_over.to_string());
@@ -487,11 +488,16 @@ fn grid_of_numbers(ui: &mut egui::Ui, s: &Suggestion) {
             ui.label(format!("{:.1} °C", s.before.max_air_c));
             ui.label(format!("{:.1} °C", s.after.max_air_c));
             ui.end_row();
-            ui.label("Distance the devices move");
-            ui.label("");
-            ui.label(format!("{:.1} m of travel", s.moved_mm / 1000.0));
-            ui.end_row();
         });
+    // Outside the grid so a narrow docked window wraps it instead of
+    // clipping the third column.
+    ui.add(
+        egui::Label::new(format!(
+            "Distance the devices move: {:.1} m of travel",
+            s.moved_mm / 1000.0
+        ))
+        .wrap(),
+    );
 }
 
 fn move_text(search: &LayoutSearch, m: &Move) -> String {
