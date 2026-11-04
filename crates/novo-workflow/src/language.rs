@@ -648,6 +648,16 @@ pub const DUTCH: &[Aliases] = &[
         &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
     ),
     nl(
+        "heat.export_vtk",
+        &[],
+        &["warmteresultaat exporteren", "paraview export"],
+    ),
+    nl(
+        "heat.open_paraview",
+        &[],
+        &["warmteresultaat in paraview", "paraview openen"],
+    ),
+    nl(
         "heat.cooling_whatif",
         &[],
         &["koeling wat als", "koelingswizard", "warmste dag"],

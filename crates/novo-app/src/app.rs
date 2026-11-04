@@ -145,6 +145,7 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_export;
 mod heat_flow;
 #[cfg(test)]
 mod heat_flow_tests;
@@ -2174,6 +2175,8 @@ impl NovoApp {
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
+        let asked = std::mem::take(&mut self.cabinet.heat.app_commands);
+        self.wb.queued.extend(asked);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
         }
