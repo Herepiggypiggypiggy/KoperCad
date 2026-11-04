@@ -3,8 +3,13 @@
 # T5: no red toast. The failed job is a red triangle in the top bar beside the Issues pill; its popover names the file and offers Try again and Dismiss. The same export to a good place clears it.
 open qa/fixtures/connection-points.novo
 wait 30
-# A folder below a file cannot be created.
-answer_dialog /dev/null/wire-it-list.pdf
+# A first export makes a plain file; a folder below a file cannot be created, so the second one fails.
+answer_dialog ~/blocker.pdf
+key ctrl+k
+text "Export the Wire-it list"
+key Enter
+wait 30
+answer_dialog ~/blocker.pdf/wire-it-list.pdf
 key ctrl+k
 text "Export the Wire-it list"
 key Enter
