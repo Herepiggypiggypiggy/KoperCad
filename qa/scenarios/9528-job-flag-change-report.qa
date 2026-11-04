@@ -1,0 +1,29 @@
+@title A change report that cannot be written is a job flag with a popover
+@area Files
+@env KOPERCAD_QA_FAIL=export.change_report
+# T12: the refusal is forced (QA-only variable, debug builds): comparing with the latest revision failed.
+open_starter_example
+wait 20
+key ctrl+k
+wait 4
+text Issue revision
+wait 4
+key Enter
+wait 10
+text Test change for the change report
+wait 3
+key Enter
+wait 15
+key ctrl+k
+text Export change report
+wait 5
+key Enter
+wait 15
+click_text "Change report not written" Button
+wait 8
+expect "Forced for the QA picture"
+expect "Dismiss"
+shot change-report-flag-popover
+check_layout
+key Escape
+wait 6

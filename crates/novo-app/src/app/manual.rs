@@ -122,7 +122,8 @@ impl NovoApp {
     /// Writes the manual and opens the page for `topic` (the front page for
     /// `None`).
     pub(super) fn open_manual(&mut self, topic: Option<&'static str>) {
-        let Some(dir) = manual_dir() else {
+        let forced = super::flags_jobs::qa_forced_error("manual.open");
+        let Some(dir) = manual_dir().filter(|_| forced.is_none()) else {
             self.job_fail(
                 "manual.open",
                 "Manual not opened",
