@@ -3,6 +3,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() -> eframe::Result {
+    // The supplier browser window is this program started with a flag: it
+    // opens its own window and never the drawing application.
+    if let Some(code) = novo_app::supplier_browser::run_if_requested() {
+        std::process::exit(code);
+    }
     novo_app::apply_profile_flag();
     novo_app::diag::init();
     // A native crash in the graphics driver leaves no report, so the program
