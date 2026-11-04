@@ -205,10 +205,25 @@ impl Report for SavedQueries {
     }
 
     fn dependencies(&self) -> Dependencies {
-        // A query can read any table, and the presets live in the project info.
-        Dependencies::everything()
-            .with_kinds(&[EntityKind::Cable, EntityKind::Terminal])
-            .with_info()
+        // The tables read what the wire list and device list read (the
+        // netlist, routes and rails included), and the presets live in the
+        // project info. Free text on a page is not in any table.
+        use EntityKind::*;
+        Dependencies::on(&[
+            Page,
+            Device,
+            Symbol,
+            Junction,
+            Wire,
+            Potential,
+            Terminal,
+            Cable,
+            CabinetPlacement,
+            Rail,
+            Part,
+            Structure,
+        ])
+        .with_info()
     }
 
     fn proposed_by_default(&self) -> bool {
