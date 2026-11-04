@@ -76,3 +76,19 @@ pub fn thermal_for(
 pub fn provenance_line(weakest: Source) -> String {
     format!("Enclosure size: {}.", weakest.words())
 }
+
+/// The lines to show with a cooling answer: where the size comes from and,
+/// while any number of the record is a catalogue or default value, the
+/// estimate notice ([`EnclosureSpec::notice`]). The weakest source alone
+/// would hide a catalogue width behind a typed depth. Empty when the record
+/// has no outside size.
+pub fn size_lines(spec: &EnclosureSpec) -> Vec<String> {
+    let Ok(o) = outside(spec) else {
+        return Vec::new();
+    };
+    let mut lines = vec![provenance_line(o.weakest)];
+    if let Some(n) = spec.notice() {
+        lines.push(n.to_owned());
+    }
+    lines
+}

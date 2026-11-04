@@ -143,10 +143,13 @@ impl CoolingSettings {
             .map(|m| m.to_string())
     }
 
-    /// Where the size comes from, when it comes from the enclosure record.
-    pub(super) fn size_source(&self) -> Option<String> {
-        let o = novo_layout::spec_cooling::outside(self.spec.as_ref()?).ok()?;
-        Some(novo_layout::spec_cooling::provenance_line(o.weakest))
+    /// Where the size comes from and the estimate notice, when the size
+    /// comes from the enclosure record.
+    pub(super) fn size_lines(&self) -> Vec<String> {
+        self.spec
+            .as_ref()
+            .map(novo_layout::spec_cooling::size_lines)
+            .unwrap_or_default()
     }
 }
 
@@ -258,9 +261,7 @@ pub(super) fn report_lines(sol: &Solution, settings: &mut CoolingSettings) -> Ve
         return Vec::new();
     };
     let mut lines = selection.report_lines(&basis);
-    if let Some(line) = settings.size_source() {
-        lines.push(line);
-    }
+    lines.extend(settings.size_lines());
     if sol.duct_loss_w > 0.0 {
         lines.push(format!(
             "The heat includes {:.0} W from wires in ducts (planning upper value).",
@@ -348,7 +349,7 @@ pub(super) fn show(
                 ui.label(small("Out of date", pal.warning));
                 super::window_help::add(ui.ctx(), "Out of date: the layout changed since this run.");
             }
-            if let Some(line) = settings.size_source() {
+            for line in settings.size_lines() {
                 ui.label(small(&line, pal.text_secondary));
             }
             ui.add_space(2.0);
@@ -587,11 +588,14 @@ mod tests {
         );
         settings.set_spec(Some(mk(600.0, 1000.0, 300.0)));
         assert_eq!(
-            settings.size_source().as_deref(),
-            Some("Enclosure size: catalogue.")
+            settings.size_lines(),
+            vec![
+                "Enclosure size: catalogue.".to_owned(),
+                novo_layout::spec::ESTIMATE_NOTICE.to_owned()
+            ]
         );
         settings.set_spec(None);
-        assert!(settings.size_source().is_none() && settings.spec_problem().is_none());
+        assert!(settings.size_lines().is_empty() && settings.spec_problem().is_none());
     }
 
     #[test]

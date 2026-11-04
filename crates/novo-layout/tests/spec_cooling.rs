@@ -43,3 +43,25 @@ fn the_weakest_source_travels_with_the_answer() {
     assert_eq!(t.weakest, Source::Default);
     assert_eq!(provenance_line(t.weakest), "Enclosure size: default.");
 }
+
+#[test]
+fn a_catalogue_size_with_a_typed_depth_still_shows_the_estimate_notice() {
+    let mut s = spec(600.0, 1000.0, 300.0, Source::Catalogue);
+    s.depth = Some(Field::new(300.0, Source::Typed));
+    let lines = size_lines(&s);
+    assert_eq!(lines[0], "Enclosure size: typed by you.");
+    assert_eq!(lines[1], ESTIMATE_NOTICE);
+    // All typed or from the STEP: no notice.
+    assert_eq!(
+        size_lines(&spec(600.0, 1000.0, 300.0, Source::Step)).len(),
+        1
+    );
+    assert_eq!(
+        size_lines(&spec(600.0, 1000.0, 300.0, Source::Typed)).len(),
+        1
+    );
+    // No size: nothing to say here (the missing number is reported instead).
+    let mut none = s.clone();
+    none.depth = None;
+    assert!(size_lines(&none).is_empty());
+}
