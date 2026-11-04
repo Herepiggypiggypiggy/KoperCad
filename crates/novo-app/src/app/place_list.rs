@@ -481,4 +481,87 @@ mod tests {
         // Both devices share one project part.
         assert_eq!(project.parts().count(), 1);
     }
+
+    fn snapshot(d: &Drive) -> String {
+        // The records only: undo does not rewind the id counter, revision or caches.
+        let text = format!("{:?}", d.app.backend.document().unwrap().project());
+        let from = text.find(" pages: ").expect("pages field");
+        let to = text.find(", index: ").expect("index field");
+        text[from..to].to_owned()
+    }
+
+    fn open_window(d: &mut Drive, text: &str) -> Vec<novo_parts::place_list::Resolved> {
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "place.list", None);
+        d.frame();
+        let mut win = d.app.wb.place_list.take().unwrap();
+        win.set_text(text);
+        d.app.wb.place_list = Some(win);
+        d.frame();
+        d.frame();
+        d.app
+            .wb
+            .place_list
+            .as_ref()
+            .unwrap()
+            .preview
+            .as_ref()
+            .unwrap()
+            .lines
+            .clone()
+    }
+
+    #[test]
+    fn undo_restores_the_project_and_a_preview_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        let lines = open_window(&mut d, "F1 mcb x3\nK1 contactor\n");
+        d.frame();
+        let start = snapshot(&d);
+        // A preview (the window's own dry run) leaves the project as it was.
+        let (_, report) = d
+            .app
+            .place_list_preview("F1 mcb x3\nK1 contactor\n")
+            .unwrap();
+        assert_eq!(report.unwrap().devices, 4);
+        assert_eq!(snapshot(&d), start);
+        assert!(d.app.place_list_apply(&lines));
+        assert_ne!(snapshot(&d), start);
+        d.app.run(&ctx, Action::Undo);
+        assert_eq!(snapshot(&d), start);
+    }
+
+    #[test]
+    fn a_tag_already_used_is_numbered_automatically() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        let first = open_window(&mut d, "K1 contactor");
+        assert!(d.app.place_list_apply(&first));
+        let again = open_window(&mut d, "K1 contactor");
+        // The preview already reports the clash.
+        let report = d
+            .app
+            .wb
+            .place_list
+            .as_ref()
+            .unwrap()
+            .preview
+            .as_ref()
+            .unwrap()
+            .report
+            .clone();
+        assert_eq!(report.unwrap().clashes, vec!["K1".to_string()]);
+        assert!(d.app.place_list_apply(&again));
+        let project = d.app.backend.document().unwrap().project();
+        let mut tags: Vec<String> = project.devices().map(|x| x.tag.to_string()).collect();
+        tags.sort();
+        assert_eq!(tags.len(), 2, "{tags:?}");
+        assert_eq!(tags.iter().filter(|t| *t == "-K1").count(), 1, "{tags:?}");
+    }
 }
