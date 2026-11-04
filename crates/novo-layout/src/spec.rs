@@ -244,7 +244,7 @@ impl CableEntry {
 
     fn decode(text: &str) -> Option<CableEntry> {
         let mut it = text.splitn(6, ' ');
-        let wall = it.next()?.to_owned();
+        let wall = it.next()?.replace('_', " ");
         let mut n = || it.next()?.parse::<f64>().ok().filter(|v| v.is_finite());
         let (x, y, diameter) = (n()?, n()?, n()?);
         let source = Source::from_key(it.next()?).unwrap_or(Source::Typed);
@@ -324,19 +324,25 @@ impl EnclosureSpec {
             .then_some(Missing("plate setback"))
     }
 
-    /// The weakest source among the known numbers; `None` without numbers.
-    pub fn weakest(&self) -> Option<Source> {
+    /// The sources of every known number, parts and entries included.
+    fn sources(&self) -> impl Iterator<Item = Source> + '_ {
         self.numbers()
-            .iter()
+            .into_iter()
             .filter_map(|f| f.map(|f| f.source))
-            .max()
+            .chain(self.parts.iter().map(|p| p.source))
+            .chain(self.entries.iter().map(|e| e.source))
     }
 
-    /// The line to show while any value is a catalogue or default value.
+    /// The weakest source among the known numbers, factory parts and cable
+    /// entries; `None` without any.
+    pub fn weakest(&self) -> Option<Source> {
+        self.sources().max()
+    }
+
+    /// The line to show while any value, factory part or cable entry is a
+    /// catalogue or default value.
     pub fn notice(&self) -> Option<&'static str> {
-        self.numbers()
-            .iter()
-            .filter_map(|f| f.map(|f| f.source))
+        self.sources()
             .any(|s| matches!(s, Source::Catalogue | Source::Default))
             .then_some(ESTIMATE_NOTICE)
     }
@@ -569,6 +575,41 @@ mod factory_tests {
         assert!(FactoryPart::decode("duct 1 2 0 v 40 60 catalogue").is_none());
         assert!(FactoryPart::decode("pipe 1 2 5 v 40 60 catalogue").is_none());
         assert!(CableEntry::decode("bottom x 1 2 step").is_none());
+    }
+
+    #[test]
+    fn a_two_word_wall_reads_back() {
+        let mut s = spec();
+        s.entries[0].wall = "bottom wall".into();
+        let mut props = Properties::default();
+        s.write(&mut props);
+        let read = EnclosureSpec::read(&props);
+        assert_eq!(read.entries[0].wall, "bottom wall");
+        assert_eq!(read.entries[0].name, "gland plate, bottom");
+    }
+
+    #[test]
+    fn a_catalogue_part_or_entry_shows_the_notice() {
+        let measured = |mut s: EnclosureSpec| {
+            for p in &mut s.parts {
+                p.source = Source::Step;
+            }
+            for e in &mut s.entries {
+                e.source = Source::Step;
+            }
+            s
+        };
+        // Numbers all from the STEP; only a part or an entry is catalogue.
+        let mut s = measured(spec());
+        assert_eq!(s.notice(), None);
+        assert_eq!(s.weakest(), Some(Source::Step));
+        s.parts[0].source = Source::Catalogue;
+        assert_eq!(s.notice(), Some(ESTIMATE_NOTICE));
+        assert_eq!(s.weakest(), Some(Source::Catalogue));
+        let mut s = measured(spec());
+        s.entries[0].source = Source::Default;
+        assert_eq!(s.notice(), Some(ESTIMATE_NOTICE));
+        assert_eq!(s.weakest(), Some(Source::Default));
     }
 
     #[test]
