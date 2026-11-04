@@ -30,6 +30,8 @@ wait 10
 expect "Dust on it"
 expect "clean"
 shot filter-new
+scroll 170 560 -300
+wait 10
 click_text "0 %"
 key ctrl+a
 text 100
