@@ -452,10 +452,15 @@ impl NovoApp {
             .iter()
             .filter(|f| f.status == FileStatus::Written)
             .count();
-        if written == 0 {
-            self.message(
+        let forced = super::flags_jobs::qa_forced_error("export.handover");
+        if written == 0 || forced.is_some() {
+            self.job_fail(
+                "export.handover",
+                "Handover is empty",
                 Level::Warning,
-                "Nothing to put in a handover package yet: draw something first",
+                forced.unwrap_or_else(|| {
+                    "Nothing to put in a handover package yet: draw something first.".to_owned()
+                }),
             );
             return None;
         }
@@ -482,7 +487,9 @@ impl NovoApp {
         };
         let contents = handover_summary(self.backend.document()?.project(), &input);
         if let Err(e) = self.handover_pdf(&folder.join("0 Contents.pdf"), &[&contents], &date) {
-            self.message(
+            self.job_fail(
+                "export.handover",
+                "Handover not written",
                 Level::Error,
                 format!("Could not write the contents page: {e}"),
             );
@@ -541,6 +548,7 @@ impl NovoApp {
         if !stuck.is_empty() {
             text.push_str(&format!(". Could not remove {}", stuck.join(", ")));
         }
+        self.job_ok("export.handover");
         self.message_file(text, folder);
         self.wb.last_export = Some(folder.to_owned());
         Some(folder.to_owned())

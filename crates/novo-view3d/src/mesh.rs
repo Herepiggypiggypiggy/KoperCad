@@ -44,7 +44,7 @@ impl MeshData {
         m
     }
 
-    fn add_box(&mut self, lo: Vec3, hi: Vec3) {
+    pub(crate) fn add_box(&mut self, lo: Vec3, hi: Vec3) {
         self.bounds.extend(lo);
         self.bounds.extend(hi);
         // Face = (normal, four corners counter-clockwise seen from outside).
