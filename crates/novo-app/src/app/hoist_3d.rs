@@ -13,7 +13,7 @@ use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
 use novo_view3d::camera::ViewPreset;
 use novo_view3d::crane::{
     CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, LimitFlag, LimitMark, TravelMark, build,
-    hook_bounds, rope_length_mm,
+    hook_bounds, machine_bounds, rope_length_mm,
 };
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
@@ -645,17 +645,17 @@ impl NovoApp {
                 let now = ui.input(|i| i.time);
                 if g.needs_fit {
                     g.needs_fit = false;
-                    g.view.fit(&scene, now, reduced);
                     g.pending_preset = g.pending_preset.or(Some(ViewPreset::Iso));
                 }
                 if let Some(p) = g.pending_preset.take() {
-                    g.view.go_to(p, &scene, now, reduced);
+                    g.view
+                        .go_to_bounds(p, &machine_bounds(&scene), now, reduced);
                 }
                 if std::mem::take(&mut g.frame_hook) {
                     let b = hook_bounds(&g.layout, &state);
                     g.view.frame_bounds(&b, now, reduced);
                 }
-                let height = (ui.available_height() - 190.0).max(160.0);
+                let height = (ui.available_height() - 36.0).max(200.0);
                 ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
                     g.view.show(
                         ui,
@@ -722,6 +722,8 @@ impl Hoist3d {
         self.revision += 1;
         let mut scene = build(&self.layout, state);
         scene.revision = self.revision;
+        // The crane parts are meshes: make the ones this scene asks for and the library lacks.
+        novo_view3d::crane_parts::ensure(Arc::make_mut(&mut self.library), &scene);
         let scene = Arc::new(scene);
         self.built = Some((self.layout, state.clone(), scene.clone()));
         scene
