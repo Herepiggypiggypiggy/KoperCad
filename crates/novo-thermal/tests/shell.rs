@@ -215,3 +215,21 @@ fn an_infinite_blockage_cannot_reach_the_solver_as_nan() {
     let low = sc.lowered();
     assert!(low.obstacles.iter().all(|o| o.blockage().is_finite()));
 }
+
+#[test]
+fn a_door_frame_bridge_loses_more_heat_through_the_door() {
+    let plain = quick(base());
+    let mut sc = base();
+    let mut shell = ShellModel::from_enclosure(&sc.enclosure);
+    shell.add_insulation(LayerMaterial::Foam, 20.0, true);
+    sc.params.shell = Some(shell.clone());
+    let closed = quick(sc.clone());
+    shell.door_edge = Some(DoorEdge { psi_w_per_mk: 0.5 });
+    sc.params.shell = Some(shell);
+    let bridged = quick(sc);
+    assert!(bridged.balance.front_w > closed.balance.front_w + 1.0);
+    let f = bridged.shell.door();
+    assert!(f.edge_heat_w > 0.0 && f.edge_heat_w < f.heat_w);
+    // no bridge: nothing reported, and the default is untouched
+    assert_eq!(plain.shell.door().edge_heat_w, 0.0);
+}
