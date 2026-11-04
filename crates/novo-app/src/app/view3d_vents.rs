@@ -146,9 +146,11 @@ fn body(
     seal_row(ui, settings, e);
     if settings.vents.is_empty() {
         ui.add_space(4.0);
-        ui.label(muted(
-            "None: the enclosure is sealed. Add a grille low and another high, or a filter fan and an exhaust grille.",
-        ));
+        ui.label(muted(if settings.seal.is_some() {
+            "No openings: only the door seal leaks. Add a grille low and another high, or a filter fan and an exhaust grille."
+        } else {
+            "None: the enclosure is sealed. Add a grille low and another high, or a filter fan and an exhaust grille."
+        }));
     }
     let mut remove = None;
     settings.hovered = None;
