@@ -13,6 +13,7 @@
 
 mod advice;
 pub mod bridge;
+pub mod busbar;
 pub mod cooling;
 mod flow;
 mod linalg;

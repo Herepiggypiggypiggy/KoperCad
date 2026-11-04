@@ -31,6 +31,11 @@ pub(super) struct CalcWindow {
     only_issues: bool,
     /// The sheet for a project revision and starter choice.
     cache: Option<(u64, StarterChoice, CalcSheet)>,
+    busbar: super::calculations_busbar::BusbarForm,
+    busbar_cache: Option<(
+        super::calculations_busbar::BusbarForm,
+        super::calculations_busbar::BusbarReport,
+    )>,
 }
 
 impl CalcWindow {
@@ -41,7 +46,7 @@ impl CalcWindow {
     }
 }
 
-const TABS: [&str; 3] = ["Circuits", "Motor starters", "Panel SCCR"];
+const TABS: [&str; 4] = ["Circuits", "Motor starters", "Panel SCCR", "Busbar heat"];
 
 /// The warning every calculation view carries.
 pub(super) const PLANNING_NOTE: &str = "Ampacity tables and defaults are planning values, not checked against the standard. Read the clauses in your licensed copy before relying on a number.";
@@ -238,7 +243,13 @@ impl NovoApp {
                     egui::ScrollArea::vertical().show(ui, |ui| match win.tab {
                         0 => circuits(ui, &sheet, &mut win.only_issues, &mut go),
                         1 => starters(ui, &sheet, &mut win.choice),
-                        _ => panel(ui, &sheet),
+                        2 => panel(ui, &sheet),
+                        _ => super::calculations_busbar::tab(
+                            ui,
+                            &mut win.busbar,
+                            &mut win.busbar_cache,
+                            &mut copy,
+                        ),
                     });
                 });
         }
