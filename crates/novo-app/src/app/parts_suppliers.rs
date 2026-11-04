@@ -260,6 +260,7 @@ impl Suppliers {
         supplier_site::landing_dir(self.root.as_deref()?, id).ok()
     }
 
+    #[cfg(test)]
     pub fn source(&self) -> Option<Source> {
         self.session.as_ref().map(|s| s.source)
     }
