@@ -143,6 +143,7 @@ fn body(
             }
         });
     });
+    seal_row(ui, settings, e);
     if settings.vents.is_empty() {
         ui.add_space(4.0);
         ui.label(muted(
@@ -234,7 +235,6 @@ fn body(
             ),
         );
     }
-    seal_row(ui, settings, e);
     if let Some(sg) = suggestion {
         ui.add_space(4.0);
         egui::Frame::group(ui.style()).show(ui, |ui| {

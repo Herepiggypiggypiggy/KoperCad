@@ -1,22 +1,29 @@
 @title 3D Heat: door seal leaks and a dusty filter mat on a grille
 @area 3D
-# H4: Vents and fans panel. A grille gets a filter mat with a dust slider; the Door seal row turns leaks on with an IP class. Both are model values.
+# H4: Vents and fans panel. The Door seal row turns leaks on with an IP class; a grille gets a filter mat with a dust slider. Both are model values.
 open_starter_example
 wait 20
 click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+expect "Door seal"
+click_text "Leaks"
+wait 10
+expect "Leaks about"
+expect "(model)"
+shot door-seal-on
 click_text "Add opening"
 wait 10
 click_text "Grille, high on the right wall"
 wait 20
-shot grille-added
+move 170 560
+scroll 170 560 -300
+wait 10
 expect "Filter mat"
-expect "Door seal"
+shot grille-added
 click_text "None"
 wait 10
-shot filter-menu
 click_text "G4 coarse mat"
 wait 10
 expect "Dust on it"
@@ -29,11 +36,6 @@ key Enter
 wait 10
 expect "change it"
 shot filter-due
-click_text "Leaks"
-wait 10
-expect "Leaks about"
-expect "(model)"
-shot door-seal-on
 check_layout
 click_text "Simulate"
 wait 90
