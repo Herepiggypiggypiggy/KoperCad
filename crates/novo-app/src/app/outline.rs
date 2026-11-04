@@ -2639,18 +2639,19 @@ impl NovoApp {
                     super::enclosure_pick::show(ui, &mut form.picker, &form.choices);
                     match form.picker.picked.and_then(|i| form.choices.get(i)) {
                         Some(c) => {
-                            for line in super::enclosure_pick::state_lines(c) {
-                                ui.weak(line);
-                            }
-                            if let Some(notice) = c.spec.notice() {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(notice)
-                                            .color(crate::theme::ui_palette().warning),
-                                    )
-                                    .wrap(),
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(super::enclosure_pick::summary(c));
+                                if c.spec.notice().is_some() {
+                                    ui.colored_label(
+                                        crate::theme::ui_palette().warning,
+                                        "(estimate)",
+                                    );
+                                }
+                                novo_theme::widgets::help_mark(
+                                    ui,
+                                    &super::enclosure_pick::detail(c),
                                 );
-                            }
+                            });
                         }
                         None => {
                             ui.weak(format!(

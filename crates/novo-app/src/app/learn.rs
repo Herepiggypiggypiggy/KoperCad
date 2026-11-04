@@ -80,6 +80,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.proposals",
     "palette.field",
     "issue.pill",
+    "job.pill",
     "whats_new.pill",
     "help.button",
     "drawer.terminals",
@@ -216,6 +217,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "calc.tab.circuits",
     "calc.tab.starters",
     "calc.tab.sccr",
+    "calc.tab.busbar_impedance",
     "autopilot.window",
     "autopilot.accept_all",
 ];

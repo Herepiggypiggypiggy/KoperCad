@@ -19,3 +19,5 @@
 - Migrated files (toast Level::Warning/Error sites: 0 left; census `problem_census_schematic_edits`, ceiling 0): inspector, clipboard, duplicate, pages, outline, macro_actions, macro_browser, macro_editor, tidy, pin_offer, potentials. Class J rows ("Could not change it: ...") use the same transient triangle, red.
 - Not touched: banners and in-window notices inside the macro dialogs and macro editor (class P inside a form, left for the lane that owns the dialog), numbering.rs and link.rs (T8), class N info refusals (stay in the status bar), class T text (text sweep thread).
 - QA: 9470 (1366x768), 9471 (1920x1080): bad tag on the stop button, triangle, popover, Esc, next click removes it.
+## 2026-11-04 Lane T12 (import, export, reports): job flags
+- `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9522, 9523.

@@ -31,6 +31,10 @@ pub(super) struct FlagUi {
     pub(super) open: Option<(FlagId, egui::Pos2)>,
     /// The transient flags of refused edits (lane T7).
     pub(super) edit: super::flags_edit::EditFlags,
+    /// Failed jobs: what Retry and Open folder need (lane T12).
+    pub(super) jobs: HashMap<FlagId, super::flags_jobs::JobInfo>,
+    /// The failed jobs, oldest first.
+    pub(super) job_order: Vec<FlagId>,
     /// The drafts each simulation window raised (lane T10), by window.
     pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
 }
@@ -43,6 +47,8 @@ impl Default for FlagUi {
             index: HashMap::new(),
             open: None,
             edit: Default::default(),
+            jobs: HashMap::new(),
+            job_order: Vec::new(),
             sim: std::collections::BTreeMap::new(),
         }
     }
@@ -263,6 +269,12 @@ impl NovoApp {
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
+                                Action::Retry => "Retry",
+                                Action::Open(k) if k == super::flags_jobs::OPEN_FOLDER => {
+                                    "Open folder"
+                                }
+                                Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
+                                Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
                                     "Explain with Claude"
@@ -304,6 +316,9 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        if self.run_job_action(flag.id, &action) {
+            return;
+        }
         match action {
             Action::Locate => match index {
                 Some(i) => self.go_problem(i),

@@ -597,7 +597,12 @@ devices and wires (or the page, when nothing is selected) then appear only with 
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not export the PDF: {e}"));
+                self.job_fail(
+                    "export.variant_pdf",
+                    "Variant PDF failed",
+                    Level::Error,
+                    format!("Could not export the PDF: {e}"),
+                );
                 None
             }
         }
@@ -631,7 +636,12 @@ devices and wires (or the page, when nothing is selected) then appear only with 
         let bytes = match write_grid(&rows) {
             Ok(b) => b,
             Err(e) => {
-                self.message(Level::Error, format!("Could not write the spec sheet: {e}"));
+                self.job_fail(
+                    "export.spec",
+                    "Spec sheet not written",
+                    Level::Error,
+                    format!("Could not write the spec sheet: {e}"),
+                );
                 return None;
             }
         };
@@ -646,9 +656,12 @@ devices and wires (or the page, when nothing is selected) then appear only with 
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.spec",
+                    "Spec sheet not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }

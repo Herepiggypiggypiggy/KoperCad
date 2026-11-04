@@ -13,6 +13,9 @@ use novo_thermal::cooling::{self, Basis, Product, Selection, Source};
 
 use super::heat_run::Solution;
 
+/// Short tag shown where the long estimate sentence moved behind the "?".
+const ESTIMATE_TAG: &str = "(estimate)";
+
 /// File name inside the KoperCAD folder under `%APPDATA%`.
 pub const LIST_FILE: &str = "cooling.csv";
 
@@ -349,8 +352,17 @@ pub(super) fn show(
                 ui.label(small("Out of date", pal.warning));
                 super::window_help::add(ui.ctx(), "Out of date: the layout changed since this run.");
             }
-            for line in settings.size_lines() {
-                ui.label(small(&line, pal.text_secondary));
+            // The source line stays; the long estimate sentence sits behind the
+            // "?" and a short tag says it is there.
+            let size_lines = settings.size_lines();
+            if let Some(first) = size_lines.first() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(small(first, pal.text_secondary));
+                    if size_lines.len() > 1 {
+                        ui.label(small(ESTIMATE_TAG, pal.warning));
+                        super::window_help::add(ui.ctx(), novo_layout::spec::ESTIMATE_NOTICE);
+                    }
+                });
             }
             ui.add_space(2.0);
             ui.horizontal_wrapped(|ui| {

@@ -51,6 +51,7 @@ mod cable_cores;
 mod cable_cores_tests;
 #[cfg(test)]
 mod cable_proposals_fixture_tests;
+mod calc_busbar;
 mod calculations;
 mod calculations_busbar;
 mod calculations_mechanical;
@@ -135,6 +136,7 @@ mod example_pump;
 mod faults;
 mod flags;
 mod flags_edit;
+mod flags_jobs;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -467,6 +469,8 @@ mod faults_tests;
 mod first_view_tests;
 #[cfg(test)]
 mod flags_edit_tests;
+#[cfg(test)]
+mod flags_jobs_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]
@@ -1186,15 +1190,9 @@ impl NovoApp {
         self.raise(Level::Info, text.into(), Some(file.to_owned()));
     }
 
-    /// An info toast with a button.
-    pub(super) fn raise_action(&mut self, text: String, action: MessageAction) {
-        self.raise_with(Level::Info, text, None, Some(action));
-    }
-
-    /// Writes a message to the log and the history without a toast: for a
-    /// refusal that is a triangle. Returns the plain text the person reads.
-    /// A toast with the same text that is still on screen is left alone.
-    pub(super) fn log_only(&mut self, level: Level, text: String) -> String {
+    /// Puts a message in the log only (no toast): a failed job shows as a flag.
+    /// Returns the plain words it logged. Never touches another message.
+    fn log_only(&mut self, level: Level, text: String) -> String {
         match level {
             Level::Info => log::info!("{text}"),
             Level::Warning => log::warn!("{text}"),
@@ -1215,6 +1213,11 @@ impl NovoApp {
             self.messages.drain(..excess);
         }
         text
+    }
+
+    /// An info toast with a button.
+    pub(super) fn raise_action(&mut self, text: String, action: MessageAction) {
+        self.raise_with(Level::Info, text, None, Some(action));
     }
 
     fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
@@ -1639,6 +1642,9 @@ impl NovoApp {
     /// A different project was opened, created or closed: nothing cached
     /// for the old one carries over.
     fn document_replaced(&mut self) {
+        // A failed job belongs to the project it failed in: Retry must not run
+        // for another one.
+        self.forget_jobs();
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
@@ -2519,6 +2525,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.job_pill(ui);
                 self.help_button(ui);
                 if fit.whats_new_pill {
                     self.whats_new_pill(ui);
