@@ -2,7 +2,7 @@
 
 Platform linux, window sizes 1366x768, 1920x1080. 2 run(s): 2 passed, 0 failed; 1 finding(s) (0 blocking, S1 to S3).
 
-Program: `/tmp/kc-target/debug/kopercad`, built 1793779689 (unix time), source at git 0ff61bdafc.
+Program: `/tmp/kc-target/debug/kopercad`, built 1793790668 (unix time), source at git 6d0d955bf7.
 
 App: 1366.0x768.0 points at scale 1.0.
 
@@ -10,14 +10,14 @@ App: 1366.0x768.0 points at scale 1.0.
 
 | Scenario | Area | Size | Result | Findings | Pictures |
 |---|---|---|---|---|---|
-| Parts window: Get parts from supplier menu and the fallback without a web view (18640-parts-get-from-supplier) | Parts | 1366x768 | pass | - | 5 |
-| Parts window: Get parts from supplier menu and the fallback without a web view (18640-parts-get-from-supplier) | Parts | 1920x1080 | pass | F-001 | 6 |
+| Parts window: Get parts from supplier menu and the fallback without a web view (18640-parts-get-from-supplier) | Parts | 1366x768 | pass | - | 6 |
+| Parts window: Get parts from supplier menu and the fallback without a web view (18640-parts-get-from-supplier) | Parts | 1920x1080 | pass | F-001 | 7 |
 
 ## Findings
 
 | # | Sev | Area | Size | Title | Evidence |
 |---|---|---|---|---|---|
-| F-001 | S4 | Parts | 1920x1080 | 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture) | shots/18640-parts-get-from-supplier-1920x1080-06-finding-1.png |
+| F-001 | S4 | Parts | 1920x1080 | 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture) | shots/18640-parts-get-from-supplier-1920x1080-07-finding-1.png |
 
 ### F-001 S4 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)
 
@@ -59,11 +59,15 @@ Steps:
 32. `expect "WebView2"`
 33. `expect "Files taken"`
 34. `shot fallback-no-webview`
-35. `check_layout`
+35. `click_text Stop Button`
+36. `wait 8`
+37. `expect_not "WebView2"`
+38. `shot strip-closed`
+39. `check_layout`
 
 - Expected: every control fully visible and not overlapped
 - Saw: ' New' over 'Parts'
 
-![F-001](shots/18640-parts-get-from-supplier-1920x1080-06-finding-1.png)
+![F-001](shots/18640-parts-get-from-supplier-1920x1080-07-finding-1.png)
 
 Severity: S1 data loss, crash or cannot start. S2 a core workflow cannot be finished, a wrong number is shown as fact, or the window is blank. S3 everything else that is wrong or confusing. S4 polish and accessibility.
