@@ -28,7 +28,7 @@ wait 6
 expect "Price EUR"
 expect "is not a possible"
 shot row-popover
-key Escape
+click_text "Warning: Check this row" Button #1
 wait 6
 click_text "Add 5 parts to the catalog"
 wait 20
@@ -48,11 +48,11 @@ wait 20
 click_text Rows Button
 wait 10
 expect "0 new"
-click_text "Warning: Check this row" Button #1
+click_text "Error: Not imported" Button #1
 wait 6
 expect "digits are lost"
 shot row-popover-second
-key Escape
+click_text "Error: Not imported" Button #1
 wait 6
 shot second-import
 check_layout

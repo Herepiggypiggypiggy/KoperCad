@@ -24,17 +24,13 @@ wait 10
 click_text "Warning: Repeated order numbers" Button #1
 wait 6
 expect "more than one row"
-key Escape
+click_text "Warning: Repeated order numbers" Button #1
 wait 6
 click_text "Warning: Check this row" Button #1
 wait 6
 expect "is not a date"
-key Escape
-wait 6
-click_text "Warning: Check this row" Button #2
-wait 6
 expect "not for pieces"
-key Escape
+click_text "Warning: Check this row" Button #1
 wait 6
 shot rows-last
 check_layout

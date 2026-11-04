@@ -14,7 +14,7 @@ expect "3 holes on 1 parts"
 click_text "Warning: Assumed" Button #1
 wait 6
 expect "Connection point and hole positions are kept in the maker's own frame"
-key Escape
+click_text "Warning: Assumed" Button #1
 wait 6
 expect "Kept as written, not understood"
 expect "part/colour"
