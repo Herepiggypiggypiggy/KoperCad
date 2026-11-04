@@ -247,11 +247,12 @@ pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclos
              parts. Enter the maker's flow in free air and shut-off pressure. The 2D estimate \
              shows the air they move and the cooler film on parts in their stream; the \
              flow through the fan is set by the loop the air finds, not by a vent. Model, \
-             not measured: how much a given fan lowers a given part. The 3D solver does not \
-             move air with them yet.",
+             not measured: how much a given fan lowers a given part. Flow and pressure are the \
+             maker's free-air values; Installed lowers them. A new fan starts with assumed \
+             values. Used by the 2D estimate only; the 3D picture does not show them yet.",
         );
         ui.label(
-            egui::RichText::new("(model)")
+            egui::RichText::new("(model, 2D estimate only)")
                 .small()
                 .color(pal.text_secondary),
         );
@@ -264,17 +265,6 @@ pub(super) fn section(ui: &mut egui::Ui, settings: &mut HeatSettings, e: &Enclos
             settings.inside_selected = Some(settings.inside.len() - 1);
         }
     });
-    if !settings.inside.is_empty() {
-        ui.label(
-            egui::RichText::new(
-                "Model, not measurement. Flow and pressure are the maker's free-air values; \
-                 Installed lowers them. A new fan starts with assumed values. \
-                 Used by the 2D estimate only; the 3D picture does not show them yet.",
-            )
-            .small()
-            .color(pal.text_secondary),
-        );
-    }
     let mut remove = None;
     for i in 0..settings.inside.len() {
         let f = settings.inside[i];

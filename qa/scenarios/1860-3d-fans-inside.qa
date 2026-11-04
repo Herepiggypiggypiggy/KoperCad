@@ -11,12 +11,9 @@ wait 20
 scroll 170 560 -400
 wait 10
 expect "Fans inside"
-expect "(model)"
+expect "(model, 2D estimate only)"
 click_text "Add fan inside"
 wait 10
-scroll 170 560 -400
-wait 10
-expect "Model, not measurement"
 expect "Fan inside, right (model)"
 expect "Off the plate"
 shot fan-inside-added
