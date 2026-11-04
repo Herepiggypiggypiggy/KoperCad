@@ -258,7 +258,10 @@ fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
     d.frame();
     d.frame();
     assert!(d.app.wb.macro_place.ghost.is_some());
-    assert_eq!(d.app.macro_ghost_name(), Some("Motor starter DOL"));
+    assert_eq!(
+        d.app.macro_ghost_name().map(|(n, _)| n),
+        Some("Motor starter DOL")
+    );
     assert!(
         d.app
             .mode_chips()
@@ -442,4 +445,70 @@ fn a_pointer_beside_the_sheet_still_puts_the_circuit_on_the_sheet() {
             "on the sheet for a pointer at {spot:?}: {placed:?}"
         );
     }
+}
+
+#[test]
+fn a_circuit_ghost_near_the_sheet_edge_is_drawn_where_it_will_land() {
+    use novo_workflow::palette::Target;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    d.app
+        .run_target(&ctx, Target::Macro("Motor starter DOL".into()));
+    d.frame();
+    let page = d.app.current_page.unwrap();
+    let (w, h) = d.doc().project().page(page).unwrap().format.size_mm();
+    // The pointer low and to the right: over the title block.
+    let at = novo_core::Point::new(w - 30.0, h - 20.0);
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().unwrap();
+        let doc = app.backend.document_mut().unwrap();
+        view.editor.hover(doc, page, at, 2.0);
+    }
+    // The frame loop does this each frame; a frame with no real pointer
+    // would clear the pointer, so call it directly.
+    d.app.keep_macro_ghost_on_sheet();
+    let ghost: Vec<novo_core::Point> = {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().unwrap();
+        let doc = app.backend.document_mut().unwrap();
+        view.editor
+            .preview(doc, page)
+            .symbols
+            .iter()
+            .map(|s| s.placement.origin)
+            .collect()
+    };
+    assert!(!ghost.is_empty());
+    assert!(
+        ghost
+            .iter()
+            .all(|p| p.x > 0.0 && p.x < w - 10.0 && p.y > 0.0 && p.y < h - 10.0),
+        "the ghost stays on the sheet: {ghost:?}"
+    );
+    assert!(
+        d.app.macro_ghost_name().is_some_and(|(_, moved)| moved),
+        "the chip says it was moved"
+    );
+    let ghost_left = ghost.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let ghost_top = ghost.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    d.click(at);
+    d.frame();
+    let placed: Vec<novo_core::Point> = d
+        .doc()
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin)
+        .collect();
+    let left = placed.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let top = placed.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    assert!(
+        (left - ghost_left).abs() < 0.01 && (top - ghost_top).abs() < 0.01,
+        "it lands where the ghost was drawn: ({left}, {top}) against ({ghost_left}, {ghost_top})"
+    );
 }

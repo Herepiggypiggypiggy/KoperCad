@@ -76,6 +76,8 @@ pub(crate) struct Ghost {
     options: PlaceOptions,
     /// The pointer's last place on the drawing, on screen.
     pub(super) screen: Option<egui::Pos2>,
+    /// The ghost is drawn moved from the pointer to stay on the sheet.
+    pub(super) moved: bool,
 }
 
 impl PlaceWindow {
@@ -764,6 +766,12 @@ impl NovoApp {
             return;
         };
         let win = &mut self.wb.macro_place;
+        if !win.started {
+            win.started = true;
+            if let Some(Err(e)) = win.library.as_ref().map(|l| l.install_standard()) {
+                win.status = format!("Starter macros: {e}");
+            }
+        }
         let Some(entry) = win
             .library
             .as_ref()
@@ -803,7 +811,43 @@ impl NovoApp {
             definition,
             options,
             screen: None,
+            moved: false,
         });
+    }
+
+    /// Every frame: keeps the ghost on the sheet and clear of the title
+    /// block, the way the click will place it, so what is drawn is what lands.
+    pub(super) fn keep_macro_ghost_on_sheet(&mut self) {
+        let Some(ghost) = &self.wb.macro_place.ghost else {
+            return;
+        };
+        let bounds = macro_place::definition_bounds(&ghost.definition);
+        let size = self
+            .macro_target_page()
+            .and_then(|p| self.backend.document()?.project().page(p))
+            .map(|p| p.format.size_mm());
+        let Some(view) = self.canvas.schematic() else {
+            return;
+        };
+        let reach = macro_place::SYMBOL_REACH;
+        let hold = view.editor.cursor().map(|at| {
+            let top_left = macro_place::fit_on_sheet(
+                novo_core::Point::new(at.x - reach, at.y - reach),
+                bounds.size,
+                size,
+                0.0,
+            );
+            (
+                at,
+                novo_core::Point::new(top_left.x + reach, top_left.y + reach),
+            )
+        });
+        view.editor.hold_paste_at(hold.map(|(_, h)| h));
+        let moved =
+            hold.is_some_and(|(at, h)| (at.x - h.x).abs() > 0.5 || (at.y - h.y).abs() > 0.5);
+        if let Some(ghost) = self.wb.macro_place.ghost.as_mut() {
+            ghost.moved = moved;
+        }
     }
 
     /// The click that places the ghost circuit, or the Esc that dropped it.
@@ -870,9 +914,14 @@ impl NovoApp {
         self.wb.macro_place.select(&ghost.path);
     }
 
-    /// The name of the circuit on the pointer, for the status bar chip.
-    pub(super) fn macro_ghost_name(&self) -> Option<&str> {
-        self.wb.macro_place.ghost.as_ref().map(|g| g.name.as_str())
+    /// The name of the circuit on the pointer, for the status bar chip, and
+    /// whether it is drawn moved to fit the sheet.
+    pub(super) fn macro_ghost_name(&self) -> Option<(&str, bool)> {
+        self.wb
+            .macro_place
+            .ghost
+            .as_ref()
+            .map(|g| (g.name.as_str(), g.moved))
     }
 
     /// Places what the window previewed, as one undo step, and selects it.

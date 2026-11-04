@@ -982,6 +982,7 @@ impl NovoApp {
         if let (Some(at), Some(page)) = (self.wb.pointer_world, self.current_page) {
             self.wb.last_pointer = Some((page, at));
         }
+        self.keep_macro_ghost_on_sheet();
         // A circuit ghost remembers where it was on screen.
         if let (Some(ghost), Some(at), Some((_, rect))) =
             (self.wb.macro_place.ghost.as_mut(), at, self.wb.canvas_area)

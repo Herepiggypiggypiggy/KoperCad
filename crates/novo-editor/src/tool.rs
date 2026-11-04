@@ -146,6 +146,9 @@ pub struct PasteTool {
     pub paths: Vec<Vec<Point>>,
     /// The source point the pointer holds (the top-left corner).
     pub origin: Point,
+    /// Where to draw the paste instead of at the pointer (the app keeps a
+    /// circuit on the sheet); a click is still reported at the pointer.
+    pub hold: Option<Point>,
 }
 
 /// Drawing a cable: a line over wires (DESIGN.md, C in the keys table and
@@ -849,7 +852,16 @@ impl Editor {
             symbols,
             paths,
             origin,
+            hold: None,
         }));
+    }
+
+    /// Draws the paste in hand at `at` instead of at the pointer (`None`:
+    /// at the pointer). Nothing happens when no paste is in hand.
+    pub fn hold_paste_at(&mut self, at: Option<Point>) {
+        if let Tool::Paste(p) = &mut self.tool {
+            p.hold = at;
+        }
     }
 
     /// Arms the text tool (`draw.text`): the next click on the page says
@@ -3143,7 +3155,7 @@ impl Editor {
                 }
             }
             Tool::Paste(p) => {
-                let by = cursor - p.origin;
+                let by = p.hold.unwrap_or(cursor) - p.origin;
                 preview.symbols = p
                     .symbols
                     .iter()
