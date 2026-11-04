@@ -19,14 +19,14 @@ wait 30
 shot before-pressing
 # Radio step 2 (S2): the drive proves its torque, the relay contact in the drawing closes the brake
 # contactor, the brake opens, the hook rises.
-mouse_down 370 352
+mouse_down 370 370
 wait 400
 shot torque-proof-and-brake-opens
 wait 700
 expect "running"
 expect_not "brake closed · 0 rpm"
 shot running
-mouse_up 370 352
+mouse_up 370 370
 wait 800
 expect "brake closed"
 check_layout

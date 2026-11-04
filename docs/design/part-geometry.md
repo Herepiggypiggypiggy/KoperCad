@@ -68,3 +68,7 @@ Proposed entries (to be built by the UI integration threads, not in this PR):
 - Status of a failed model uses the cached failure message; "Retry" calls `forget(key)`.
 
 Status of the engine: complete and tested; no UI yet. The owner decided maker meshes are wanted (3d-view.md section 12 answered yes).
+
+## Model health and STEP colours
+
+`part3d::health::step_health` runs the reader and reports entities found, geometry kinds it does not read exactly, solids, faces (and how many were only drawn flat), size, schema, writer, product names and colours. `part3d::style` reads `PRODUCT` names and `STYLED_ITEM` colours (also per face and through mapped items). Users find it in Parts, Add CAD files (a line per STEP file, details behind "?") and with `kopercad-cli parts step-health <folder>`; the default folder is `Documents\KoperCAD-tests\step-samples`. Test files are synthetic (`crates/novo-interop/tests/data/step-pack`); real maker files stay local.

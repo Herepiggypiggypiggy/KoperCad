@@ -18,6 +18,7 @@ pub mod openings;
 pub mod rad;
 pub mod result;
 pub mod sched;
+pub mod shell_view;
 pub mod solids;
 pub mod solver;
 mod stub;

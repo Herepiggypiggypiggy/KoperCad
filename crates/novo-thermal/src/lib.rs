@@ -25,6 +25,7 @@ pub mod placement_project;
 mod report;
 pub mod result;
 mod setup;
+pub mod shell;
 pub mod sweep;
 mod thermal;
 pub mod whatif;

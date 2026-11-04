@@ -108,6 +108,7 @@ mod sheets;
 pub mod single_line;
 mod strip_diagram;
 mod table;
+mod termination;
 mod toc;
 mod wire_defaults;
 pub mod wire_rules;
@@ -151,6 +152,10 @@ pub use strip_diagram::{
     sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
 };
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
+pub use termination::{
+    CrimpLine, SLEEVE_TEXT_KEY, TERMINATION_A_KEY, TERMINATION_B_KEY, Termination, TerminationKind,
+    bare_ends, crimp_list, stated_sleeve, stated_termination,
+};
 pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{

@@ -93,6 +93,16 @@ impl Report for Labels {
             };
             for row in &table.rows {
                 let (number, from, to) = (at(row, "number"), at(row, "from"), at(row, "to"));
+                // The sleeve prints its own text when the designer stated one.
+                let wire_ids: Vec<novo_core::WireId> = row
+                    .sources
+                    .iter()
+                    .filter_map(|s| match s {
+                        novo_core::AnyId::Wire(w) => Some(*w),
+                        _ => None,
+                    })
+                    .collect();
+                let number = crate::stated_sleeve(project, &wire_ids).unwrap_or(number);
                 for (near, far) in [(&from, &to), (&to, &from)] {
                     wires.push(
                         lines(&[number.clone(), far.clone(), near.clone()]),
@@ -128,7 +138,7 @@ impl Report for Labels {
             let sleeve = |e: &crate::WireEnd| e.sleeve_text().unwrap_or_else(|| "-".to_owned());
             cuts.push(
                 lines(&[
-                    job.number.clone(),
+                    job.sleeve.clone(),
                     first.join("  "),
                     format!("{} > {}", sleeve(&job.end_a), sleeve(&job.end_b)),
                 ]),

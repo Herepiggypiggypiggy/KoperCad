@@ -143,59 +143,26 @@ pub struct Walls {
     pub h: [f64; 6],
 }
 
-/// Wall films of `scn`, scaled by `Params::wall_k_scale`.
+/// Wall films of `scn`: the layered shell's conductance of each face
+/// (`novo_thermal::shell`, scaled by `Params::wall_k_scale`) over the interior
+/// face area. For the default shell this is the IEC 60890 `k b A_out / A_in`.
 pub fn wall_conductances(scn: &Scenario) -> Walls {
+    use novo_thermal::shell::{BOTTOM, FRONT, FaceAreas, LEFT, REAR, RIGHT, TOP};
     let e = &scn.enclosure;
-    let inst = e.installation;
-    let k = e.material.k() * scn.params.wall_k_scale;
-    let (wo, ho, d_o) = (
-        e.width_mm / 1000.0,
-        e.height_mm / 1000.0,
-        e.depth_mm / 1000.0,
-    );
-    let (wi, hi, di) = (
-        e.interior_width_mm() / 1000.0,
-        e.interior_height_mm() / 1000.0,
-        e.interior_depth_mm() / 1000.0,
-    );
-    let pick = |covered: bool, free: f64, cov: f64| if covered { cov } else { free };
-    // (face, b factor, outside area, inside area); IEC 60890 factors
-    let faces = [
-        (
-            Face::XMin,
-            pick(inst.left_covered, 0.9, 0.5),
-            d_o * ho,
-            di * hi,
-        ),
-        (
-            Face::XMax,
-            pick(inst.right_covered, 0.9, 0.5),
-            d_o * ho,
-            di * hi,
-        ),
-        (
-            Face::YMin,
-            pick(inst.top_covered, 1.4, 0.7),
-            wo * d_o,
-            wi * di,
-        ),
-        (
-            Face::YMax,
-            if inst.on_floor { 0.0 } else { 0.5 },
-            wo * d_o,
-            wi * di,
-        ),
-        (
-            Face::ZMin,
-            pick(inst.rear_covered, 0.9, 0.5),
-            wo * ho,
-            wi * hi,
-        ),
-        (Face::ZMax, 0.9, wo * ho, wi * hi),
+    let gf = scn.shell().conductances_w_per_k(e, scn.params.wall_k_scale);
+    let a = FaceAreas::of(e);
+    // The solver's faces: x = left/right, y = top/bottom, z = rear/door.
+    let order = [
+        (Face::XMin, LEFT),
+        (Face::XMax, RIGHT),
+        (Face::YMin, TOP),
+        (Face::YMax, BOTTOM),
+        (Face::ZMin, REAR),
+        (Face::ZMax, FRONT),
     ];
     let mut h = [0.0; 6];
-    for (f, b, a_out, a_in) in faces {
-        h[f as usize] = k * b * a_out / a_in.max(1e-9);
+    for (f, sf) in order {
+        h[f as usize] = gf[sf] / a.inner[sf].max(1e-9);
     }
     Walls { h }
 }
@@ -477,8 +444,10 @@ fn plate_sheet(scn: &Scenario, cm: &mesh::Mesh, walls: &Walls, speedup: f64) -> 
     // the covered part, exactly as in the 2D engine.
     let kb = walls.h[Face::ZMin as usize];
     let h_air = scn.params.h_in.max(1.2 * kb);
+    // With a plate setback the plate reaches the wall through the air gap
+    // (shell model), not through the wall's inner film.
     let u_out = if kb > 0.0 {
-        1.0 / (1.0 / kb - 1.0 / h_air)
+        scn.shell().plate_to_outside_or(kb, h_air)
     } else {
         0.0
     };

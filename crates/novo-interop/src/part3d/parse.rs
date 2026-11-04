@@ -188,6 +188,11 @@ impl<'a> StepFile<'a> {
         self.index.is_empty()
     }
 
+    /// Every entity name that occurs (upper case), in no particular order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.by_name.keys().map(String::as_str)
+    }
+
     /// Ids of every entity that has a part called `name` (upper case).
     pub fn ids_of(&self, name: &str) -> &[u32] {
         self.by_name.get(name).map_or(&[], Vec::as_slice)
