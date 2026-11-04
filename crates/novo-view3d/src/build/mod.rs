@@ -88,7 +88,26 @@ pub struct DoorSpec {
 pub struct Shell {
     pub depth: f64,
     pub door: Option<DoorSpec>,
+    /// The real body of a chosen enclosure; `None` draws the box of the
+    /// plate and `depth` as before.
+    pub body: Option<Body>,
 }
+
+/// Outside of a chosen enclosure and the inside the door closes over, in
+/// millimetres. The plate is taken to sit in the middle of the inside.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Body {
+    pub width: f64,
+    pub height: f64,
+    pub depth: f64,
+    pub wall: f64,
+    /// Back wall to plate surface.
+    pub setback: f64,
+}
+
+/// A door on a real body stands this far off the body's front face, so the
+/// two translucent faces never share a plane (they would flicker).
+pub const BODY_DOOR_GAP_MM: f64 = 0.5;
 
 impl Default for Shell {
     fn default() -> Shell {
@@ -98,6 +117,7 @@ impl Default for Shell {
                 hinge: HingeSide::Left,
                 open_deg: 0.0,
             }),
+            body: None,
         }
     }
 }
@@ -208,12 +228,25 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
     let depth = options.shell.depth.max(0.0);
     let centre = |z: f64| frame.world(plate.width / 2.0, plate.height / 2.0, z);
 
-    let mut shell = Item::new(
-        ItemId::new(ItemKind::Enclosure, 0),
-        Shape::Box,
-        Pose::at(centre(0.0)),
-        Vec3::new(frame.width, frame.height, depth as f32),
-    );
+    // Back of the body to the front of the door, plate surface at z = 0.
+    let mut shell = match options.shell.body {
+        Some(b) => Item::new(
+            ItemId::new(ItemKind::Enclosure, 0),
+            Shape::Box,
+            Pose::at(centre(-(b.setback + b.wall))),
+            Vec3::new(
+                b.width as f32,
+                b.height as f32,
+                (depth + b.setback + b.wall) as f32,
+            ),
+        ),
+        None => Item::new(
+            ItemId::new(ItemKind::Enclosure, 0),
+            Shape::Box,
+            Pose::at(centre(0.0)),
+            Vec3::new(frame.width, frame.height, depth as f32),
+        ),
+    };
     shell.translucent = true;
     scene.push(shell);
     scene.push(Item::new(
@@ -330,24 +363,33 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
     }
 
     if let Some(door) = options.shell.door {
+        // On a real body the door covers the whole front, flush with the
+        // outside of the box.
+        let (door_w, door_h, gap) = options
+            .shell
+            .body
+            .map_or((plate.width, plate.height, 0.0), |b| {
+                (b.width, b.height, BODY_DOOR_GAP_MM)
+            });
+        let left = plate.width / 2.0 - door_w / 2.0;
         let (pivot_x, angle) = match door.hinge {
             // Seen from the front +X is to the right. A left-hinged door
             // swings out (+Z) with a negative turn about +Y.
-            HingeSide::Left => (0.0, -door.open_deg.to_radians()),
-            HingeSide::Right => (plate.width, door.open_deg.to_radians()),
+            HingeSide::Left => (left, -door.open_deg.to_radians()),
+            HingeSide::Right => (left + door_w, door.open_deg.to_radians()),
         };
         let mut item = Item::new(
             ItemId::new(ItemKind::Door, 0),
             Shape::Box,
-            Pose::at(centre(depth)),
-            Vec3::new(frame.width, frame.height, DOOR_THICKNESS_MM as f32),
+            Pose::at(centre(depth + gap)),
+            Vec3::new(door_w as f32, door_h as f32, DOOR_THICKNESS_MM as f32),
         );
         item.translucent = true;
         item.group = Some(DOOR_HINGE);
         scene.push(item);
         scene.groups.push(Group {
             id: DOOR_HINGE,
-            pivot: Vec3::new(pivot_x as f32, 0.0, depth as f32),
+            pivot: Vec3::new(pivot_x as f32, 0.0, (depth + gap) as f32),
             axis: Vec3::Y,
             angle: angle as f32,
         });
