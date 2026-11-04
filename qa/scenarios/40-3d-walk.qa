@@ -18,10 +18,12 @@ wait 8
 shot views
 key Escape
 wait 6
-click_text Dimensions
+click_text Layers
+wait 8
+click_text "Dimensions in 3D"
 wait 10
 shot dimensions
-click_text Section
+click_text "Section plane"
 wait 8
 shot section
 key Escape

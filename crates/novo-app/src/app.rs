@@ -3169,6 +3169,7 @@ impl eframe::App for NovoApp {
             }
         }
         crate::display::track(ui.ctx());
+        self.wb.live.popup_at_start = egui::Popup::is_any_open(ui.ctx());
         // The window's close button asks like File > Quit does.
         let ctx = ui.ctx().clone();
         if !self.quitting

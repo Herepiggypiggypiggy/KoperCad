@@ -228,6 +228,7 @@ pub(super) fn reset(ctx: &egui::Context) {
         d.insert_persisted(list_id(), Vec::<(String, u8)>::new());
         d.insert_persisted(floated_id(), Vec::<String>::new());
         d.insert_persisted(folded_id(), Vec::<String>::new());
+        d.insert_persisted(heights_id(), Vec::<(String, f32)>::new());
     });
     set_navigator_right(ctx, false);
 }
@@ -380,6 +381,79 @@ fn split(rect: egui::Rect, slot: Slot, w: &[f32], at: usize) -> egui::Rect {
 /// slot a short stub of the header so the panes beside it keep their room.
 const FOLDED_WIDTH: f32 = 180.0;
 
+/// The height an unfolded pane of a side slot opens at.
+const PANE_DEFAULT_HEIGHT: f32 = 340.0;
+/// The most height a pane can be dragged to.
+const PANE_MAX_HEIGHT: f32 = 4000.0;
+
+fn heights_id() -> egui::Id {
+    egui::Id::new("dock_pane_heights")
+}
+
+/// The height the unfolded pane `name` of a side slot asks for. Persisted: a
+/// pane keeps the height the person gave it, whatever the others do.
+fn pane_height(ctx: &egui::Context, name: &str) -> f32 {
+    let all: Vec<(String, f32)> = ctx
+        .data_mut(|d| d.get_persisted(heights_id()))
+        .unwrap_or_default();
+    all.into_iter()
+        .find(|(n, _)| n == name)
+        .map_or(PANE_DEFAULT_HEIGHT, |(_, h)| h)
+}
+
+fn set_pane_height(ctx: &egui::Context, name: &str, height: Option<f32>) {
+    let mut all: Vec<(String, f32)> = ctx
+        .data_mut(|d| d.get_persisted(heights_id()))
+        .unwrap_or_default();
+    all.retain(|(n, _)| n != name);
+    if let Some(h) = height {
+        all.push((name.to_owned(), h.clamp(PANE_MIN_HEIGHT, PANE_MAX_HEIGHT)));
+    }
+    if all.len() > MAX_ENTRIES {
+        all.remove(0);
+    }
+    ctx.data_mut(|d| d.insert_persisted(heights_id(), all));
+}
+
+fn scroll_id(slot: Slot) -> egui::Id {
+    egui::Id::new(("dock_stack_scroll", slot.code()))
+}
+
+fn stack_scroll(ctx: &egui::Context, slot: Slot) -> f32 {
+    ctx.data(|d| d.get_temp(scroll_id(slot))).unwrap_or(0.0)
+}
+
+/// A side slot's panes as a stack from the top: each pane with its offset from
+/// the top of the stack and its height, and how much the stack is taller than
+/// `total`. A folded pane is its header; the others have the height they ask
+/// for, and when they do not all fit they shrink together (each keeps
+/// [`PANE_MIN_HEIGHT`]) before the stack scrolls. Nothing is stretched: what
+/// is left below the last pane stays empty.
+/// `items` are the (asked height, folded) of the panes in order.
+fn stack_layout(total: f32, items: &[(f32, bool)]) -> (Vec<(f32, f32)>, f32) {
+    let header = HEADER + 1.0;
+    let fixed: f32 = items.iter().filter(|(_, f)| *f).count() as f32 * header;
+    let asked: f32 = items.iter().filter(|(_, f)| !*f).map(|(h, _)| *h).sum();
+    let room = (total - fixed).max(0.0);
+    let scale = if asked > room && asked > 0.0 {
+        room / asked
+    } else {
+        1.0
+    };
+    let mut top = 0.0;
+    let mut out = Vec::with_capacity(items.len());
+    for (h, folded) in items {
+        let height = if *folded {
+            header
+        } else {
+            (h * scale).max(PANE_MIN_HEIGHT.min(*h))
+        };
+        out.push((top, height));
+        top += height;
+    }
+    (out, (top - total).max(0.0))
+}
+
 /// Like [`split`], with folded panes taking only their header: the others
 /// share what is left in proportion to their weights.
 fn split_folded(rect: egui::Rect, slot: Slot, w: &[f32], folded: &[bool], at: usize) -> egui::Rect {
@@ -481,6 +555,30 @@ fn divider(
     }
 }
 
+/// The bottom edge of an unfolded pane of a side slot: dragged, it gives the
+/// pane more or less height (the panes below move with it, nothing else
+/// changes); a double click gives it the default height again.
+fn resize_handle(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    ctx: &egui::Context,
+    name: &str,
+    sub: egui::Rect,
+) {
+    let grip = egui::Rect::from_x_y_ranges(sub.x_range(), sub.bottom() - DIVIDER..=sub.bottom());
+    let response = ui.interact(grip, id.with("resize"), egui::Sense::click_and_drag());
+    if response.hovered() || response.dragged() {
+        ctx.set_cursor_icon(egui::CursorIcon::ResizeVertical);
+        ui.painter()
+            .rect_filled(grip, 0.0, crate::theme::ui_palette().accent);
+    }
+    if response.double_clicked() {
+        set_pane_height(ctx, name, None);
+    } else if response.dragged() {
+        set_pane_height(ctx, name, Some(sub.height() + response.drag_delta().y));
+    }
+}
+
 /// The slots that have a panel in them: each is a side or bottom panel of the
 /// window, resizable by its edge (a double click on the edge resets it).
 /// Call it once per frame, after the other side panels and drawers and
@@ -563,7 +661,31 @@ pub(super) fn show_docked<R>(
         order.iter().map(|n| is_folded(ctx, n)).collect()
     };
     let is_fold = folded.get(at).copied().unwrap_or(false);
-    let sub = split_folded(slot_area, slot, &w, &folded, at);
+    let mut overflow = 0.0;
+    let sub = if slot == Slot::Bottom {
+        split_folded(slot_area, slot, &w, &folded, at)
+    } else {
+        // A side slot is a stack from the top: stable order, folded panes
+        // are their header in place, an unfolded one grows downward.
+        let items: Vec<(f32, bool)> = if order.is_empty() {
+            vec![(pane_height(ctx, name), false)]
+        } else {
+            order
+                .iter()
+                .zip(&folded)
+                .map(|(n, f)| (pane_height(ctx, n), *f))
+                .collect()
+        };
+        let (rects, over) = stack_layout(slot_area.height(), &items);
+        overflow = over;
+        let scroll = stack_scroll(ctx, slot).clamp(0.0, over);
+        let (top, height) = rects.get(at).copied().unwrap_or((0.0, slot_area.height()));
+        egui::Rect::from_min_size(
+            egui::pos2(slot_area.left(), slot_area.top() + top - scroll),
+            egui::vec2(slot_area.width(), height),
+        )
+    };
+    let clip = sub.intersect(slot_area);
     let pal = crate::theme::ui_palette();
     let PaneOptions {
         closable,
@@ -580,7 +702,7 @@ pub(super) fn show_docked<R>(
         .constrain(false)
         .show(ctx, |ui| {
             ui.scope_builder(egui::UiBuilder::new().max_rect(sub), |ui| {
-                ui.set_clip_rect(sub);
+                ui.set_clip_rect(clip);
                 ui.painter().rect_filled(sub, 0.0, pal.panel);
                 let header = egui::Rect::from_min_size(sub.min, egui::vec2(sub.width(), HEADER));
                 ui.painter().rect_filled(header, 0.0, pal.raised);
@@ -704,8 +826,22 @@ pub(super) fn show_docked<R>(
                         }
                     })
                     .inner;
-                if at + 1 < of && !is_fold && !folded.get(at + 1).copied().unwrap_or(false) {
-                    divider(ui, id, slot, slot_area, sub, at, &w);
+                if slot == Slot::Bottom {
+                    if at + 1 < of && !is_fold && !folded.get(at + 1).copied().unwrap_or(false) {
+                        divider(ui, id, slot, slot_area, sub, at, &w);
+                    }
+                } else if !is_fold {
+                    resize_handle(ui, id, ctx, name, sub);
+                }
+                // The wheel over a header scrolls a stack taller than its slot.
+                if overflow > 0.0 && ui.rect_contains_pointer(header.intersect(slot_area)) {
+                    let dy = ctx.input(|i| i.smooth_scroll_delta.y);
+                    if dy != 0.0 {
+                        let now = stack_scroll(ctx, slot);
+                        ctx.data_mut(|d| {
+                            d.insert_temp(scroll_id(slot), (now - dy).clamp(0.0, overflow));
+                        });
+                    }
                 }
                 inner
             })
@@ -989,10 +1125,11 @@ mod tests {
             pane.left() < 1.0 && (pane.width() - SIDE_DEFAULT).abs() < 2.0,
             "{pane:?}"
         );
+        // Top-anchored at its default height: the rest of the strip stays empty.
+        assert!(pane.top() < 1.0, "{pane:?}");
         assert!(
-            (pane.height() - out.canvas.height()).abs() < 2.0,
-            "{pane:?} {:?}",
-            out.canvas
+            (pane.height() - PANE_DEFAULT_HEIGHT).abs() < 2.0,
+            "{pane:?}"
         );
     }
 
@@ -1020,8 +1157,9 @@ mod tests {
         let out = h.settle(ONE);
         let pane = out.panels[0].expect("the docked card is shown");
         assert!((pane.width() - SIDE_DEFAULT).abs() < 2.0, "{pane:?}");
+        assert!(pane.top() < 1.0, "{pane:?}");
         assert!(
-            (pane.height() - out.canvas.height()).abs() < 2.0,
+            (pane.height() - PANE_DEFAULT_HEIGHT).abs() < 2.0,
             "{pane:?}"
         );
         set(&h.ctx, "dock_test_a", None);
@@ -1067,16 +1205,16 @@ mod tests {
     }
 
     #[test]
-    fn two_panels_in_a_slot_share_it_equally() {
+    fn two_panels_in_a_side_slot_stack_from_the_top() {
         let mut h = Harness::new();
         h.settle(TWO);
         set(&h.ctx, "dock_test_a", Some(Slot::Left));
         set(&h.ctx, "dock_test_b", Some(Slot::Left));
         let out = h.settle(TWO);
         let (a, b) = (out.panels[0].unwrap(), out.panels[1].unwrap());
-        assert!((a.height() - b.height()).abs() < 2.0, "{a:?} {b:?}");
-        assert!(a.bottom() <= b.top() + 1.0, "{a:?} {b:?}");
-        assert!((a.height() + b.height() - out.canvas.height()).abs() < 3.0);
+        assert!((a.top() - out.canvas.top()).abs() < 2.0, "{a:?}");
+        assert!((a.bottom() - b.top()).abs() < 2.0, "{a:?} {b:?}");
+        assert!((a.height() - PANE_DEFAULT_HEIGHT).abs() < 2.0, "{a:?}");
         // Along the bottom they sit side by side.
         set(&h.ctx, "dock_test_a", Some(Slot::Bottom));
         set(&h.ctx, "dock_test_b", Some(Slot::Bottom));
@@ -1218,7 +1356,7 @@ mod tests {
     }
 
     #[test]
-    fn dragging_the_divider_moves_height_from_one_pane_to_the_other() {
+    fn dragging_a_pane_edge_resizes_it_and_the_panes_below_move_along() {
         let mut h = Harness::new();
         let (before, at) = stacked(&mut h);
         h.drag(TWO, at, at + egui::vec2(0.0, 80.0));
@@ -1229,31 +1367,23 @@ mod tests {
             (a1.height() - a0.height() - 80.0).abs() < 3.0,
             "{a0:?} {a1:?}"
         );
-        assert!(
-            (b0.height() - b1.height() - 80.0).abs() < 3.0,
-            "{b0:?} {b1:?}"
-        );
+        assert!((b1.top() - b0.top() - 80.0).abs() < 3.0, "{b0:?} {b1:?}");
+        assert!((b1.height() - b0.height()).abs() < 3.0, "{b0:?} {b1:?}");
     }
 
     #[test]
-    fn a_pane_keeps_a_minimum_when_the_divider_is_dragged_far() {
+    fn a_pane_keeps_a_minimum_when_its_edge_is_dragged_far_up() {
         let mut h = Harness::new();
         let (_, at) = stacked(&mut h);
-        h.drag(TWO, at, at + egui::vec2(0.0, 2000.0));
+        h.drag(TWO, at, egui::pos2(at.x, 0.0));
         let after = h.settle(TWO);
-        let b = after.panels[1].unwrap();
-        assert!(b.height() >= PANE_MIN_HEIGHT - 2.0, "{b:?}");
-        h.drag(
-            TWO,
-            egui::pos2(at.x, after.panels[0].unwrap().bottom() - 3.0),
-            egui::pos2(at.x, 0.0),
-        );
-        let after = h.settle(TWO);
-        assert!(after.panels[0].unwrap().height() >= PANE_MIN_HEIGHT - 2.0);
+        let a = after.panels[0].unwrap();
+        assert!(a.height() >= PANE_MIN_HEIGHT - 2.0, "{a:?}");
+        assert!(a.height() <= PANE_MIN_HEIGHT + 2.0, "{a:?}");
     }
 
     #[test]
-    fn a_double_click_on_the_divider_makes_the_panes_equal_again() {
+    fn a_double_click_on_a_pane_edge_gives_the_default_height_again() {
         let mut h = Harness::new();
         let (before, at) = stacked(&mut h);
         h.drag(TWO, at, at + egui::vec2(0.0, 80.0));
@@ -1264,6 +1394,107 @@ mod tests {
         let after = h.settle(TWO);
         let (a0, a1) = (before.panels[0].unwrap(), after.panels[0].unwrap());
         assert!((a0.height() - a1.height()).abs() < 3.0, "{a0:?} {a1:?}");
+    }
+
+    const THREE: &[&str] = &["dock_test_a", "dock_test_b", "dock_test_c"];
+
+    /// Panes `a`, `b`, `c` docked at the right, in that order.
+    fn three_docked(h: &mut Harness) {
+        h.settle(THREE);
+        for n in THREE {
+            set(&h.ctx, n, Some(Slot::Right));
+        }
+    }
+
+    /// The panes are one stack from the top of the slot, in the order they
+    /// were docked, whatever is folded: no gap, no pane pushed to the bottom.
+    fn assert_top_stack(out: &Out, folded: &[bool]) {
+        let mut y = out.canvas.top();
+        for (i, r) in out.panels.iter().enumerate() {
+            let r = r.expect("pane");
+            assert!(
+                (r.top() - y).abs() < 2.0,
+                "pane {i} at {r:?}, expected top {y}"
+            );
+            if folded[i] {
+                assert!(r.height() <= HEADER + 2.0, "pane {i} folded: {r:?}");
+            }
+            y = r.bottom();
+        }
+        assert!(y <= out.canvas.bottom() + 1.0, "stack ends at {y}");
+    }
+
+    #[test]
+    fn folding_and_unfolding_keeps_the_stack_top_aligned_and_in_order() {
+        let mut h = Harness::new();
+        three_docked(&mut h);
+        assert_top_stack(&h.settle(THREE), &[false; 3]);
+        let heights = |o: &Out| {
+            o.panels
+                .iter()
+                .map(|r| r.unwrap().height())
+                .collect::<Vec<_>>()
+        };
+        for pattern in [
+            [true, true, true],
+            [true, false, true],
+            [false, true, false],
+            [true, true, false],
+            [false, false, false],
+        ] {
+            for (n, f) in THREE.iter().zip(pattern) {
+                set_folded(&h.ctx, n, f);
+            }
+            assert_top_stack(&h.settle(THREE), &pattern);
+        }
+        // Unfolding the last pane grows it downward: the others stay put.
+        for n in THREE {
+            set_folded(&h.ctx, n, true);
+        }
+        let all_folded = h.settle(THREE);
+        set_folded(&h.ctx, "dock_test_c", false);
+        let out = h.settle(THREE);
+        for i in 0..2 {
+            assert!(
+                (out.panels[i].unwrap().top() - all_folded.panels[i].unwrap().top()).abs() < 1.0
+            );
+        }
+        assert!(heights(&out)[2] > HEADER * 3.0);
+    }
+
+    #[test]
+    fn a_folded_pane_between_two_open_ones_stays_where_it_is() {
+        let mut h = Harness::new();
+        three_docked(&mut h);
+        set_folded(&h.ctx, "dock_test_b", true);
+        let out = h.settle(THREE);
+        let (a, b, c) = (
+            out.panels[0].unwrap(),
+            out.panels[1].unwrap(),
+            out.panels[2].unwrap(),
+        );
+        assert!((a.height() - PANE_DEFAULT_HEIGHT).abs() < 3.0 || a.height() < PANE_DEFAULT_HEIGHT);
+        assert!(b.height() <= HEADER + 2.0 && (b.top() - a.bottom()).abs() < 2.0);
+        assert!((c.top() - b.bottom()).abs() < 2.0, "{b:?} {c:?}");
+    }
+
+    #[test]
+    fn a_stack_taller_than_its_slot_shrinks_then_scrolls() {
+        let (rects, over) = stack_layout(700.0, &[(340.0, false), (340.0, false)]);
+        assert_eq!(over, 0.0);
+        assert!((rects[1].0 - 340.0).abs() < 0.01);
+        // Three open panes shrink together to fit.
+        let (rects, over) = stack_layout(700.0, &[(340.0, false); 3]);
+        assert_eq!(over, 0.0, "{rects:?}");
+        assert!((rects[2].0 + rects[2].1 - 700.0).abs() < 0.5, "{rects:?}");
+        // Six cannot keep their minimum: the stack scrolls.
+        let (rects, over) = stack_layout(700.0, &[(340.0, false); 6]);
+        assert!(over > 0.0, "{rects:?}");
+        assert!(rects.iter().all(|(_, h)| *h >= PANE_MIN_HEIGHT - 0.01));
+        // Folded panes keep to their header.
+        let (rects, _) = stack_layout(700.0, &[(340.0, true), (340.0, false), (340.0, true)]);
+        assert!((rects[1].0 - (HEADER + 1.0)).abs() < 0.01);
+        assert!((rects[2].0 - (HEADER + 1.0 + 340.0)).abs() < 0.01);
     }
 
     #[test]
@@ -1403,22 +1634,19 @@ mod tests {
     }
 
     #[test]
-    fn a_folded_pane_keeps_only_its_header_and_the_other_pane_takes_the_room() {
+    fn a_folded_pane_keeps_only_its_header_and_the_one_below_moves_up() {
         let mut h = Harness::new();
         h.settle(TWO);
         set(&h.ctx, "dock_test_a", Some(Slot::Right));
         set(&h.ctx, "dock_test_b", Some(Slot::Right));
         let both = h.settle(TWO);
-        let (a, b) = (both.panels[0].unwrap(), both.panels[1].unwrap());
-        assert!((a.height() - b.height()).abs() < 2.0, "{a:?} {b:?}");
         set_folded(&h.ctx, "dock_test_a", true);
         let out = h.settle(TWO);
         let (a, b) = (out.panels[0].unwrap(), out.panels[1].unwrap());
         assert!(a.height() <= HEADER + 2.0, "folded pane: {a:?}");
-        assert!(
-            b.height() > both.panels[1].unwrap().height() + 100.0,
-            "{b:?}"
-        );
+        assert!((a.top() - out.canvas.top()).abs() < 2.0, "{a:?}");
+        assert!((b.top() - a.bottom()).abs() < 2.0, "{a:?} {b:?}");
+        assert!(b.top() < both.panels[1].unwrap().top() - 100.0);
         set_folded(&h.ctx, "dock_test_a", false);
         let out = h.settle(TWO);
         assert!(out.panels[0].unwrap().height() > HEADER * 3.0);

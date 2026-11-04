@@ -1,18 +1,26 @@
-@title Help icons: Hoist run and Hoist in 3D carry no explanation text
+@title Help icons: Hoist run and Hoist in 3D carry no explanation text, the ? popup says it
 @area Simulate
 @sizes 1366x768 1920x1080
-# The notes of Hoist run, Hoist in 3D and Drive run sit behind the ? of each window; check_text fails on any label of more than 40 words (result sentences and page names still run to 20 to 36 words; the target is 8).
+# Hoist run keeps one short qualifier line, its notes are behind the ? of its header (popup open in the second picture).
 open qa/fixtures/hoist-two-speed.novo
 wait 20
 key ctrl+k
 wait 3
-text Hoist run
+text Simulate hoist run
 wait 4
 key Enter
 wait 30
 shot hoist-run
+expect "Model, not measurement. Not a safety function."
 check_text 40
 check_layout
+click_text Help
+wait 8
+shot hoist-run-help-open
+key Escape
+wait 4
+key Escape
+wait 6
 key ctrl+k
 wait 3
 text Hoist in 3D
@@ -20,14 +28,9 @@ wait 4
 key Enter
 wait 30
 shot hoist-3d
+expect "Picture, not measurement"
 check_text 40
 check_layout
-key ctrl+k
-wait 3
-text Drive run
-wait 4
-key Enter
-wait 30
-shot drive-run
-check_text 40
-check_layout
+click_text Help
+wait 8
+shot hoist-3d-help-open

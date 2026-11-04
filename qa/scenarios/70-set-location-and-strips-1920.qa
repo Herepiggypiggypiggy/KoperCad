@@ -15,13 +15,13 @@ key Home
 wait 20
 shot a-before
 click 560 640
-click 906 589 shift
+click 889 596 shift
 wait 10
 shot b-two-selected
 wait 20
 expect "Set location of 2 selected"
 
-click 570 786
+click 620 786
 text +FIELD
 key Enter
 wait 20

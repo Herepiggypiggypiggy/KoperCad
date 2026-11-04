@@ -264,6 +264,16 @@ fn verdict_line(
     .on_hover_text(
         "From the solver's per-device margins. A model estimate, not a measurement: limits come from the parts data.",
     );
+    // The short qualifier stays on screen; the wording is behind the "?".
+    ui.label(
+        egui::RichText::new(if stale {
+            "Out of date · model estimate"
+        } else {
+            "Model estimate"
+        })
+        .small()
+        .color(pal.text_secondary),
+    );
     super::window_help::add(
         ui.ctx(),
         if running {

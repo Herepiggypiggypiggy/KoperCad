@@ -1,6 +1,6 @@
 //! CFD for large cabinets (lane CFD-LARGE).
 //!
-//! A real machine cabinet (the CV-200: 115 devices, 9 rails, 11 ducts on a
+//! A real machine cabinet (115 devices, 9 rails, 11 ducts on a
 //! 1.8 x 1.9 m plate) gives a rectilinear grid of 1.5 million cells at the
 //! Coarse level: every face of every small body (breakers, relays, terminals)
 //! is a plane that runs through the whole domain, so the cell count is set
