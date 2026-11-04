@@ -89,6 +89,9 @@ impl NovoApp {
         let selection = self.selection_summary();
         let values = self.status_values();
         let chips = self.mode_chips();
+        // A refused edit: a triangle chip in the bar, gone with the next input.
+        let refusal = self.refusal_view();
+        let mut refusal_rect = None;
         // The simulation status: a slot of the bar in the two cabinet views.
         let sim = matches!(self.workspace(), Workspace::Cabinet | Workspace::View3d)
             .then(|| self.cabinet.heat.sim_status());
@@ -126,6 +129,9 @@ impl NovoApp {
                     }
                     for chip in &chips {
                         right += measure(&chip.label, small.clone()) + 24.0;
+                    }
+                    if let Some((_, title, _)) = &refusal {
+                        right += measure(title, small.clone()) + 48.0;
                     }
                     if let Some(status) = &sim {
                         right += measure(
@@ -232,6 +238,12 @@ impl NovoApp {
                                 run = Some(chip.command);
                             }
                         }
+                        if let Some((severity, title, detail)) = &refusal {
+                            refusal_rect = Some(
+                                super::flags_inline::note_row(ui, *severity, false, title, detail)
+                                    .rect,
+                            );
+                        }
                         if let Some(status) = &sim {
                             sim_ask = super::sim_chip::bar_slot(ui, status, heat_visible);
                         }
@@ -250,6 +262,7 @@ impl NovoApp {
         {
             refusal_card(ui.ctx(), canvas, &tool.text);
         }
+        self.refusal_tick(ui.ctx(), refusal_rect);
         if let Some(command) = run {
             self.wb.queued.push(command);
         }

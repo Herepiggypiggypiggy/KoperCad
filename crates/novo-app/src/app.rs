@@ -2103,7 +2103,6 @@ impl NovoApp {
         self.learn_overlay(&ctx, canvas_rect);
         self.build_mode(&ctx, canvas_rect);
         self.toasts(&ctx, canvas_rect);
-        self.refusal_chip(&ctx, canvas_rect);
 
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);

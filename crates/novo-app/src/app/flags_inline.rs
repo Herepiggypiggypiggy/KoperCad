@@ -9,8 +9,8 @@
 //! - [`flag_row`] / [`note_row`]: the triangle followed by the title in the
 //!   normal text colour. The numbers are in the detail, not on the row.
 //! - A transient refusal ([`NovoApp::refuse`]): an edit that was refused (a
-//!   rename onto a name that is taken) shows one triangle chip at the corner
-//!   of the canvas. It goes with the next key press or click, or after
+//!   rename onto a name that is taken) shows one triangle chip in the status bar
+//!   (no floating chip over the canvas). It goes with the next key press or click, or after
 //!   [`REFUSAL_LIFE`]. It is not a toast and not in the count: nothing is
 //!   wrong with the drawing, the edit just did not happen.
 
@@ -95,7 +95,7 @@ pub(super) fn note_row(
     title: &str,
     detail: &[String],
 ) -> egui::Response {
-    ui.horizontal(|ui| {
+    let row = ui.horizontal(|ui| {
         let tri = triangle(ui, severity, unchecked, title);
         let text = ui.add(egui::Label::new(title).sense(egui::Sense::click()));
         detail_popup(&tri, detail);
@@ -104,8 +104,9 @@ pub(super) fn note_row(
             egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&tri));
         }
         tri
-    })
-    .inner
+    });
+    // The whole row, so a click on the words counts as on the chip.
+    row.response
 }
 
 /// A row for a flag of the store.
@@ -127,7 +128,6 @@ pub(super) struct Refusal {
     at: Instant,
     /// Frames drawn, so the key press that caused it does not clear it.
     frames: u32,
-    open: bool,
 }
 
 /// The refusals the app holds (at most one: the newest wins).
@@ -169,6 +169,12 @@ impl NovoApp {
         let detail: String = detail.into();
         log::warn!("{title}: {detail}");
         let detail = crate::app::error_words::plain(&detail);
+        // With the status bar off (Focus mode) there is nowhere to draw the
+        // chip: say it as a toast rather than not at all.
+        if !self.status_bar_shown() {
+            self.message(super::Level::Warning, format!("{title}: {detail}"));
+            return;
+        }
         self.wb.flags.refusals.0 = Some(Refusal {
             severity,
             title: title.to_owned(),
@@ -179,13 +185,19 @@ impl NovoApp {
             },
             at: Instant::now(),
             frames: 0,
-            open: false,
         });
     }
 
-    /// Draws the refusal at the bottom right of the canvas and clears it on
-    /// the next key press or click elsewhere, or when it is old.
-    pub(super) fn refusal_chip(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+    /// The refusal to draw in the status bar: severity, title, detail.
+    pub(super) fn refusal_view(&self) -> Option<(Severity, String, Vec<String>)> {
+        let r = self.wb.flags.refusals.0.as_ref()?;
+        Some((r.severity, r.title.clone(), r.detail.clone()))
+    }
+
+    /// Run once a frame after the status bar: clears the refusal on the
+    /// next key press, or a click outside its chip (`chip` is where the bar
+    /// drew it), or when it is old.
+    pub(super) fn refusal_tick(&mut self, ctx: &egui::Context, chip: Option<egui::Rect>) {
         let Some(r) = self.wb.flags.refusals.0.as_mut() else {
             return;
         };
@@ -194,35 +206,8 @@ impl NovoApp {
             return;
         }
         ctx.request_repaint_after(REFUSAL_LIFE.saturating_sub(r.at.elapsed()));
-        let mut clicked_chip = false;
-        let area = egui::Area::new(egui::Id::new("refusal_chip"))
-            .order(egui::Order::Foreground)
-            .pivot(egui::Align2::RIGHT_BOTTOM)
-            .fixed_pos(canvas.right_bottom() - egui::vec2(12.0, 12.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_max_width(320.0);
-                    let tri = ui.horizontal(|ui| {
-                        let tri = triangle(ui, r.severity, false, &r.title);
-                        let text = ui.add(egui::Label::new(&r.title).sense(egui::Sense::click()));
-                        clicked_chip = tri.clicked() || text.clicked();
-                        tri
-                    });
-                    let _ = tri;
-                    if r.open {
-                        for line in &r.detail {
-                            ui.label(line);
-                        }
-                    }
-                });
-            });
-        if clicked_chip {
-            r.open = !r.open;
-            return;
-        }
+        // The frame that raised it and the next one do not clear it.
         r.frames += 1;
-        // A key press clears it wherever the pointer is; a click only when
-        // it lands outside the chip.
         let (key, click) = ctx.input(|i| {
             let any = |f: fn(&egui::Event) -> bool| i.events.iter().any(f);
             (
@@ -230,10 +215,10 @@ impl NovoApp {
                 any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. })),
             )
         });
-        let inside = ctx
-            .pointer_interact_pos()
-            .is_some_and(|p| area.response.rect.contains(p));
-        if r.frames > 1 && (key || (click && !inside)) {
+        let inside = chip
+            .zip(ctx.pointer_interact_pos())
+            .is_some_and(|(rect, p)| rect.contains(p));
+        if r.frames > 2 && (key || (click && !inside)) {
             self.wb.flags.refusals.0 = None;
         }
     }
