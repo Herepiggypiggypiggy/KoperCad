@@ -1,0 +1,27 @@
+@title Parts pass: after a macro, the toast opens the Devices drawer on devices without a part
+@area Schematic
+@sizes 1366x768 1920x1080
+# Workflow gap row 5: placing a macro leaves devices without parts; one toast takes you to them.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button
+wait 20
+expect "without a part"
+shot offer-toast
+click_text "Choose parts" Button
+wait 10
+expect "Accept all"
+expect "Device"
+shot pass-open
+key Down
+wait 3
+key Enter
+wait 5
+shot pass-after-enter

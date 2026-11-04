@@ -247,6 +247,7 @@ mod parts_bundle;
 mod parts_cad;
 mod parts_identity;
 mod parts_import;
+mod parts_pass;
 mod parts_pins;
 #[cfg(test)]
 mod parts_pins_tests;
@@ -618,13 +619,23 @@ pub struct Message {
     /// A file this message is about (an export): its toast offers to open
     /// the folder and stays up longer than a plain info message.
     pub file: Option<PathBuf>,
+    /// A button the toast offers, if any.
+    pub action: Option<MessageAction>,
+}
+
+/// What a toast's button does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MessageAction {
+    /// Opens the Devices drawer on the devices without a part.
+    ChooseParts,
 }
 
 impl Message {
     /// How long its toast stays up.
     fn expiry(&self) -> Option<Duration> {
         Some(match (self.level, &self.file) {
-            (Level::Info, None) => TOAST_INFO,
+            (Level::Info, None) if self.action.is_none() => TOAST_INFO,
+            (Level::Info, None) => TOAST_FILE,
             (Level::Info, Some(_)) => TOAST_FILE,
             (Level::Warning, _) => TOAST_WARNING,
             (Level::Error, _) => TOAST_ERROR,
@@ -1157,7 +1168,22 @@ impl NovoApp {
         self.raise(Level::Info, text.into(), Some(file.to_owned()));
     }
 
+    /// An info toast with a button.
+    pub(super) fn raise_action(&mut self, text: String, action: MessageAction) {
+        self.raise_with(Level::Info, text, None, Some(action));
+    }
+
     fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
+        self.raise_with(level, text, file, None);
+    }
+
+    fn raise_with(
+        &mut self,
+        level: Level,
+        text: String,
+        file: Option<PathBuf>,
+        action: Option<MessageAction>,
+    ) {
         match level {
             Level::Info => log::info!("{text}"),
             Level::Warning => log::warn!("{text}"),
@@ -1171,7 +1197,13 @@ impl NovoApp {
             .messages
             .iter_mut()
             .rev()
-            .find(|m| !m.dismissed && m.level == level && m.text == text && m.file == file)
+            .find(|m| {
+                !m.dismissed
+                    && m.level == level
+                    && m.text == text
+                    && m.file == file
+                    && m.action == action
+            })
             .filter(|m| m.expiry().is_none_or(|e| m.at.elapsed() < e))
         {
             same.count += 1;
@@ -1185,6 +1217,7 @@ impl NovoApp {
             dismissed: false,
             count: 1,
             file,
+            action,
         });
         if self.messages.len() > MESSAGE_HISTORY {
             let excess = self.messages.len() - MESSAGE_HISTORY;
@@ -2851,7 +2884,11 @@ impl NovoApp {
                 }
                 // The status bar shows plain info messages when it is on; a
                 // written file always gets its toast, with the folder action.
-                if m.level == Level::Info && m.file.is_none() && self.status_bar_shown() {
+                if m.level == Level::Info
+                    && m.file.is_none()
+                    && m.action.is_none()
+                    && self.status_bar_shown()
+                {
                     return false;
                 }
                 let life = m.expiry().unwrap_or(TOAST_INFO);
@@ -2880,6 +2917,7 @@ impl NovoApp {
         }
         let mut dismiss = Vec::new();
         let mut open = None;
+        let mut act = None;
         // Never wider than the canvas: a 683 point window has less room than
         // the usual 420.
         let width = 420.0_f32.min((canvas.width() - 24.0).max(160.0));
@@ -2918,6 +2956,11 @@ impl NovoApp {
                         {
                             open = file.parent().map(Path::to_owned);
                         }
+                        if let Some(action) = m.action
+                            && ui.button("Choose parts").clicked()
+                        {
+                            act = Some((i, action));
+                        }
                     });
                     let response = frame.response.interact(egui::Sense::click());
                     if response.on_hover_text("Click to dismiss").clicked() {
@@ -2927,6 +2970,12 @@ impl NovoApp {
             });
         for i in dismiss {
             self.messages[i].dismissed = true;
+        }
+        if let Some((i, action)) = act {
+            self.messages[i].dismissed = true;
+            match action {
+                MessageAction::ChooseParts => self.start_parts_pass(),
+            }
         }
         if let Some(dir) = open
             && let Err(e) = parts_bulk::open_folder(&dir)
