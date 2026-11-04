@@ -244,12 +244,22 @@ pub(super) fn show(ui: &mut egui::Ui, picker: &mut Picker, choices: &[Choice]) -
     picker.picked != before
 }
 
-/// One line per value saying where it came from, plus the estimate notice.
+/// The words next to a value: a catalogue number that came from the user's own
+/// parts says so.
+fn words(c: &Choice, f: &Field) -> &'static str {
+    if f.source == Source::Catalogue && c.origin == "Your parts" {
+        "from your parts"
+    } else {
+        f.source.words()
+    }
+}
+
+/// One line per value saying where it came from (behind the "?").
 pub(super) fn state_lines(c: &Choice) -> Vec<String> {
     let mut out = Vec::new();
     let mut line = |name: &str, f: &Option<Field>| {
         if let Some(f) = f {
-            out.push(format!("{name} {} mm, {}", f.value, f.source.words()));
+            out.push(format!("{name} {} mm, {}", f.value, words(c, f)));
         }
     };
     line("Width", &c.spec.width);
@@ -267,6 +277,28 @@ pub(super) fn state_lines(c: &Choice) -> Vec<String> {
         }
     ));
     out
+}
+
+/// The one line shown for a pick: size and plate.
+pub(super) fn summary(c: &Choice) -> String {
+    format!(
+        "{}  ·  plate {} x {} mm",
+        c.size_text(),
+        c.plate.width,
+        c.plate.height
+    )
+}
+
+/// What the "?" says: the estimate sentence (when it applies) and where each
+/// value came from.
+pub(super) fn detail(c: &Choice) -> String {
+    let mut text = String::new();
+    if let Some(notice) = c.spec.notice() {
+        text.push_str(notice);
+        text.push_str("\n\n");
+    }
+    text.push_str(&state_lines(c).join("\n"));
+    text
 }
 
 #[cfg(test)]
@@ -336,11 +368,36 @@ mod tests {
     }
 
     #[test]
+    fn the_detail_leads_with_the_estimate_sentence_and_the_summary_is_one_line() {
+        let mut catalog = Catalog::default();
+        catalog.upsert(part("8000", "enclosure", 600.0));
+        let c = &from_parts(&catalog)[0];
+        assert!(detail(c).starts_with("Estimate from catalogue data"));
+        assert!(!summary(c).contains('\n'));
+        assert!(summary(c).contains("plate 500 x 1600"));
+    }
+
+    #[test]
+    fn a_list_entry_keeps_the_typed_words() {
+        let e = EnclosureSize {
+            name: "Mine".into(),
+            width: 600.0,
+            height: 800.0,
+            depth: 250.0,
+            plate_width: 500.0,
+            plate_height: 700.0,
+            margin: 5.0,
+            material: novo_layout::sizing::Material::Steel,
+        };
+        assert!(state_lines(&from_list(&[e])[0])[0].contains("typed by you"));
+    }
+
+    #[test]
     fn state_lines_say_where_each_number_came_from() {
         let mut catalog = Catalog::default();
         catalog.upsert(part("8000", "enclosure", 600.0));
         let lines = state_lines(&from_parts(&catalog)[0]);
-        assert!(lines[0].contains("catalogue"));
+        assert!(lines[0].contains("from your parts"));
         assert!(lines.last().unwrap().contains("default"));
     }
 }

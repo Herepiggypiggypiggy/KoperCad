@@ -32,6 +32,8 @@ pub(crate) enum Model {
     Standards,
     /// Busbar short-circuit force and deflection of rails and plates.
     Structural,
+    /// Bar and cable impedance, skin and proximity effect, current sharing.
+    Busbar,
 }
 
 /// One row of the "About the numbers" page.
@@ -48,7 +50,7 @@ pub(crate) struct Row {
 }
 
 /// Every number the product labels, in the order of the page.
-pub(crate) const ROWS: [Row; 9] = [
+pub(crate) const ROWS: [Row; 10] = [
     Row {
         model: Model::Ampacity,
         number: "Cable and wire ampacity, voltage drop tables",
@@ -111,6 +113,13 @@ pub(crate) const ROWS: [Row; 9] = [
         label: "model, closed form",
         text: "Textbook formulas: force between parallel conductors, elastic beam and plate bending. The busbar check is quasi-static (the swinging factor of IEC 60865-1 is an input, not computed), has one bar per phase and treats the bars as thin wires. Material strengths are typical values; use the maker's certificate. A design aid, never a short-circuit withstand certificate.",
         shown: "Check > Calculations > Mechanical",
+    },
+    Row {
+        model: Model::Busbar,
+        number: "Bar and cable resistance, reactance and current sharing",
+        label: "model, quasi-static",
+        text: "Partial-element filament model of straight parallel conductors; exact against the textbook closed forms it is tested on (inductance of bars, DC resistance, skin effect of a round wire, two-branch sharing). Not modelled: steel plate or enclosure near the bars, bends, taps, bolted joints and contact resistance, stranding, capacitance. A planning number, never a measurement.",
+        shown: "Check > Calculations > Busbar impedance",
     },
 ];
 
@@ -226,6 +235,7 @@ mod tests {
             Model::DoorWire,
             Model::Standards,
             Model::Structural,
+            Model::Busbar,
         ] {
             assert_eq!(ROWS.iter().filter(|r| r.model == m).count(), 1, "{m:?}");
             assert!(!m.label().is_empty() && !m.text().is_empty());

@@ -182,7 +182,9 @@ impl NovoApp {
         };
         let (id, index) = (revision.id, revision.index.clone());
         let Some(snapshot) = self.backend.revision_snapshot(id) else {
-            self.message(
+            self.job_fail(
+                "compare.revision",
+                "Compare not possible",
                 Level::Warning,
                 format!("Revision {index} has no kept copy to compare with"),
             );

@@ -412,6 +412,17 @@ pub(super) fn open_tall(ctx: &egui::Context, name: &str) {
     }
 }
 
+/// A pane gets `height` the first time it docks (a height the person gave it
+/// stays). For forms that need more than the default but not the whole slot.
+pub(super) fn open_at(ctx: &egui::Context, name: &str, height: f32) {
+    let all: Vec<(String, f32)> = ctx
+        .data_mut(|d| d.get_persisted(heights_id()))
+        .unwrap_or_default();
+    if !all.iter().any(|(n, _)| n == name) {
+        set_pane_height(ctx, name, Some(height.min(PANE_MAX_HEIGHT)));
+    }
+}
+
 fn set_pane_height(ctx: &egui::Context, name: &str, height: Option<f32>) {
     let mut all: Vec<(String, f32)> = ctx
         .data_mut(|d| d.get_persisted(heights_id()))
@@ -1603,6 +1614,16 @@ mod tests {
         );
         assert!(rects[1].1 >= PANE_MIN_HEIGHT - 0.01, "{rects:?}");
         assert!(rects[0].1 > 500.0 && over < 100.0, "{rects:?} {over}");
+    }
+
+    #[test]
+    fn a_form_opens_at_its_height_once_and_keeps_one_the_person_set() {
+        let ctx = egui::Context::default();
+        open_at(&ctx, "modal:plc_card", 520.0);
+        assert_eq!(pane_height(&ctx, "modal:plc_card"), 520.0);
+        set_pane_height(&ctx, "modal:plc_card", Some(400.0));
+        open_at(&ctx, "modal:plc_card", 520.0);
+        assert_eq!(pane_height(&ctx, "modal:plc_card"), 400.0);
     }
 
     #[test]
