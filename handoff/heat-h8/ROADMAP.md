@@ -13,7 +13,7 @@ Question (Tadjiro 2026-11-04): does forced convection from internal fans cool co
 
 ## Next
 1. Draw the fan and its jet in the Cabinet canvas and the 3D view; Heat layer jet arrows (coordinate with H7). Drag to move.
-2. 3D CFD PR (new branch from main after #1861 merges): 3D CFD (`novo-cfd`): internal fan as a momentum/pressure-jump patch on an interior face pair; device films use the resolved jet; compare with the 2D jet speed field.
+2. 3D CFD: DONE in PR 3 (`flow::InteriorFan`, momentum patch plus implicit slope, scenario mapping, operating point exact to 0.01 %, jet compared with the 2D model). Still to do: device films read the resolved jet; turbulence-model jet spreading test.
 3. Hot-spot air speed check against a fan case with measured/known axial-fan jet data (needs a datasheet-grade source; none in repo yet).
 4. Heatsink data on parts (fins, gap) so `heatsinks` is filled from the catalog, not by hand.
 5. Wake turbulence in the 3D films (from the resolved turbulence kinetic energy when a turbulence model runs).
