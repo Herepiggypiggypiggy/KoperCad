@@ -370,7 +370,9 @@ impl NovoApp {
             });
         match spawned {
             Ok(_) => self.wb.eplan_parts_job = Some(EplanPartsJob { rx, file }),
-            Err(e) => self.message(
+            Err(e) => self.job_fail(
+                "import.eplan_parts",
+                "Parts import failed",
                 Level::Error,
                 format!("Could not start reading {file}: {e}. Close other programs and try again."),
             ),
@@ -390,7 +392,7 @@ impl NovoApp {
         self.wb.eplan_parts_job = None;
         match answer {
             Ok(import) => self.wb.eplan_parts = Some(import),
-            Err(e) => self.message(Level::Error, e),
+            Err(e) => self.job_fail("import.eplan_parts", "Parts import failed", Level::Error, e),
         }
     }
 
@@ -419,7 +421,7 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(Level::Error, e);
+                self.job_fail("import.eplan_parts", "Parts import failed", Level::Error, e);
                 false
             }
         }
@@ -431,7 +433,12 @@ impl NovoApp {
             return false;
         };
         let Some(path) = import.catalog_path.clone().or_else(user_catalog_path) else {
-            self.message(Level::Error, "No profile folder to save the catalog in");
+            self.job_fail(
+                "import.eplan_parts",
+                "Parts import failed",
+                Level::Error,
+                "No profile folder to save the catalog in",
+            );
             return false;
         };
         let mut catalog = existing_catalog(Some(&path));
@@ -446,14 +453,21 @@ impl NovoApp {
             catalog.upsert(merged.unwrap_or_else(|| part.clone()));
         }
         if let Err(e) = catalog.save(&path) {
-            self.message(Level::Error, format!("Could not save the catalog: {e}"));
+            self.job_fail(
+                "import.eplan_parts",
+                "Parts import failed",
+                Level::Error,
+                format!("Could not save the catalog: {e}"),
+            );
             return false;
         }
         if import.aliases != MakerAliases::default()
             && let Some(p) = &import.alias_path
             && let Err(e) = import.aliases.save(p)
         {
-            self.message(
+            self.job_fail(
+                "import.eplan_parts",
+                "Parts import failed",
                 Level::Warning,
                 format!("Could not save the maker names: {e}"),
             );

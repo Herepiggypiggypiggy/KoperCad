@@ -159,7 +159,8 @@ impl NovoApp {
     pub(super) fn terminal_edit_command(&mut self, id: &str, argument: Option<&str>) {
         self.sync_strip_follow();
         let Some(strip) = self.drawer_strip() else {
-            self.refuse(
+            self.refuse_titled(
+                Level::Warning,
                 "No terminal strip yet",
                 "Place a terminal (I, terminal) or accept a proposal.",
             );
@@ -254,7 +255,11 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.refuse_red(label, e);
+                self.refuse_titled(
+                    Level::Error,
+                    label,
+                    crate::app::error_words::plain(&e.to_string()),
+                );
                 false
             }
         }
@@ -262,7 +267,8 @@ impl NovoApp {
 
     fn set_kind(&mut self, targets: &[TerminalId], kind: TerminalKind) {
         if targets.is_empty() {
-            self.refuse(
+            self.refuse_titled(
+                Level::Warning,
                 "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
@@ -292,7 +298,8 @@ impl NovoApp {
 
     fn set_level(&mut self, targets: &[TerminalId], level: u8) {
         if targets.is_empty() {
-            self.refuse(
+            self.refuse_titled(
+                Level::Warning,
                 "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
@@ -311,14 +318,19 @@ impl NovoApp {
     /// that group.
     fn set_jumper(&mut self, targets: &[TerminalId], jumper: Option<u32>) {
         if targets.is_empty() {
-            self.refuse(
+            self.refuse_titled(
+                Level::Warning,
                 "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
             return;
         }
         if jumper == Some(0) {
-            self.refuse("Jumper number too low", "Jumper numbers start at 1.");
+            self.refuse_titled(
+                Level::Warning,
+                "Jumper number too low",
+                "Jumper numbers start at 1.",
+            );
             return;
         }
         self.edit_strip("Set terminal jumper", |tx| {
@@ -328,7 +340,8 @@ impl NovoApp {
 
     fn move_in_strip(&mut self, strip: DeviceId, targets: &[TerminalId], up: bool) {
         if targets.is_empty() {
-            self.refuse(
+            self.refuse_titled(
+                Level::Warning,
                 "No terminal chosen",
                 "Tick terminals in the table (or select them) first",
             );
@@ -1094,7 +1107,7 @@ mod tests {
             if command == "terminal.restore_declined" {
                 assert_eq!(d.app.messages().last().unwrap().text, said, "{command}");
             } else {
-                assert_eq!(d.app.wb.flags.refusals.detail(), [said], "{command}");
+                assert_eq!(d.app.refusal_flag().unwrap().detail.0, [said], "{command}");
             }
             assert!(lesson.contains(said), "the lesson does not quote: {said}");
         }

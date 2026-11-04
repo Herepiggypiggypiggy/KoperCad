@@ -42,7 +42,14 @@ use crate::wirecut::{WireCutJob, duct_capacities_mm2, duct_names, wire_cut_jobs}
 pub const DONE_KEY: &str = "wireit.done";
 
 /// Basis texts of a length that is not a measurement of the finished wire.
-const WEAK_BASES: [&str; 4] = ["estimate", "free air", "routed, no depth", "door, no gap"];
+const WEAK_BASES: [&str; 6] = [
+    "estimate",
+    "free air",
+    "routed, no depth",
+    "door, no gap",
+    "~ door + depth (catalogue)",
+    "~ door, spec has no depth",
+];
 
 /// Which pass of the bench sequence a wire belongs to, in the order the
 /// passes run.

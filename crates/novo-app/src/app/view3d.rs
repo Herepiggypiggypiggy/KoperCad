@@ -29,6 +29,7 @@ use super::heat_probe::{self, ProbeState};
 use super::heat_spots;
 use super::view3d_align;
 use super::view3d_controls::{self, Controls};
+use super::view3d_flags;
 use super::view3d_heat;
 use super::view3d_heat_labels;
 use super::view3d_hints::Hints;
@@ -106,6 +107,8 @@ pub(crate) struct View3dMode {
     /// The openings as drawn, their overlays, and the air measured through
     /// them for a result (the result id and the openings it was read for).
     pub(super) vent_markers: Vec<heat_openings::Marker>,
+    /// Refusals of this view's edits, drawn as yellow triangles until the next input.
+    pub(super) flags: view3d_flags::Transients,
     pub(super) vent_marks: Vec<novo_view3d::Overlay>,
     /// Whether `vent_marks` was last drawn with fans turning.
     vent_spun: bool,
@@ -235,6 +238,7 @@ impl Default for View3dMode {
             heat_shown: None,
             vent_enclosure: None,
             vent_markers: Vec::new(),
+            flags: view3d_flags::Transients::default(),
             vent_marks: Vec::new(),
             vent_spun: false,
             drill: Default::default(),
@@ -368,6 +372,7 @@ impl NovoApp {
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
         self.sync_openings(ui.ctx());
         self.whatif_apply();
+        self.sync_flags();
         // Compared once per project revision, and only with the strip showing.
         let build_stale = if self.view3d.controls.assembly.is_some() {
             self.workpack_stale_note()
@@ -1556,6 +1561,17 @@ impl NovoApp {
                 }
             }
         }
+        if let Some(line) = model::shell_problem(project, id) {
+            // A chosen enclosure lacks a number: no guessed body is drawn.
+            let pal = crate::theme::ui_palette();
+            ui.painter().text(
+                out.rect.left_bottom() + egui::vec2(12.0, -12.0),
+                egui::Align2::LEFT_BOTTOM,
+                line,
+                egui::FontId::proportional(13.0),
+                pal.warning,
+            );
+        }
         if mode.emc.on
             && let Some(pic) = mode.emc.picture().cloned()
         {
@@ -1676,8 +1692,36 @@ impl NovoApp {
                 _ => {}
             }
         }
+        // Problem triangles on the parts they concern (lane T3): the flags of
+        // the store, then the refusals of this view's edits.
+        let flag_hit = {
+            let extra: Vec<(novo_flags::Anchor, glam::Vec3)> = mode
+                .vent_markers
+                .iter()
+                .map(|m| (novo_flags::Anchor::Opening(m.index.to_string()), m.centre))
+                .collect();
+            let layer = view3d_flags::Layer {
+                view: &mode.view,
+                rect: out.rect,
+                scene,
+                extra: &extra,
+            };
+            if mode.controls.duct_fill
+                && let Some((_, _, fills)) = &mode.duct_fill
+            {
+                super::view3d_duct_fill::paint(ui, &layer, &super::view3d_duct_fill::cues(fills));
+            }
+            let mut shown = self.wb.flags.store.list(false);
+            shown.extend(mode.flags.live(ui.ctx()));
+            view3d_flags::paint(ui, &layer, &shown)
+        };
+        if let Some(hit) = flag_hit.filter(|h| !h.transient) {
+            self.wb.flags.open = Some((hit.flag, hit.at));
+        }
+        // The device tip would cover an open flag popover.
         if let Some(hover) = out.hover.filter(|h| h.kind == ItemKind::Device)
             && !mode.mv.dragging()
+            && self.wb.flags.open.is_none()
         {
             let solution = self.cabinet.heat.solution();
             let row = solution.as_ref().and_then(|sol| {
@@ -2081,6 +2125,22 @@ impl NovoApp {
                 *rail,
                 &tag_of,
             );
+            let typed_problems = std::mem::take(&mut self.cabinet.rails.typed_problems);
+            if !typed_problems.is_empty() {
+                let title = if stored.ducts.iter().any(|d| d.id == *rail) {
+                    "Duct values clash"
+                } else {
+                    "Rail values clash"
+                };
+                let anchor = if title.starts_with("Duct") {
+                    novo_flags::Anchor::Duct(rail.to_string())
+                } else {
+                    novo_flags::Anchor::Rail(rail.to_string())
+                };
+                self.view3d
+                    .flags
+                    .typing(title, &typed_problems, vec![anchor]);
+            }
         }
         if let Some(ask) = ask {
             let layout = load(project, id);

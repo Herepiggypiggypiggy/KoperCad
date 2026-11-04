@@ -38,7 +38,12 @@ impl NovoApp {
             }
             None => {
                 let Some(dir) = projects_dir() else {
-                    self.message(Level::Error, "Could not find the Documents folder");
+                    self.job_fail(
+                        "export.change_report",
+                        "Change report failed",
+                        Level::Error,
+                        "Could not find the Documents folder",
+                    );
                     return None;
                 };
                 free_path(&dir, &format!("{name} changes {index}"))
@@ -89,12 +94,18 @@ impl NovoApp {
                 } else {
                     ""
                 };
+                self.job_ok("export.change_report");
                 self.message_file(format!("{verb} {}{none}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not write the report: {e}"));
+                self.job_fail(
+                    "export.change_report",
+                    "Change report failed",
+                    Level::Error,
+                    format!("Could not write the report: {e}"),
+                );
                 None
             }
         }

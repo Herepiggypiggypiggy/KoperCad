@@ -278,11 +278,14 @@ fn a_refused_cable_rename_is_a_chip_not_a_toast() {
     let ctx = f.ctx.clone();
     let toasts = f.d.app.messages().len();
     f.d.app.run_command(&ctx, "cable.rename", Some("=="));
-    assert_eq!(f.d.app.wb.flags.refusals.title(), Some("Not a cable tag"));
+    assert_eq!(
+        f.d.app.refusal_flag().map(|r| r.title.as_str()),
+        Some("Not a cable tag")
+    );
     assert_eq!(f.d.app.messages().len(), toasts, "no toast was raised");
     f.d.frame();
     assert!(
-        !f.d.app.wb.flags.refusals.is_empty(),
-        "the chip stays a frame"
+        f.d.app.refusal_flag().is_some(),
+        "the triangle stays a frame"
     );
 }

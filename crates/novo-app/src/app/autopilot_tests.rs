@@ -178,7 +178,11 @@ fn the_command_opens_the_window_and_the_bench_names_it() {
     let gaps = super::bench::readiness(&jobs, true);
     assert!(
         gaps.iter()
-            .any(|g| g.fix == Some(("Autopilot", "wires.autopilot"))),
+            .any(|g| g.fix_pair().is_some_and(|(label, command)| {
+                label.starts_with("Size ")
+                    && label.ends_with(" wires")
+                    && command == "wires.autopilot"
+            })),
         "{gaps:?}"
     );
 }

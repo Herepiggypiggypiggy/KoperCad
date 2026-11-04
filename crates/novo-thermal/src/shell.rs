@@ -282,6 +282,19 @@ impl Window {
     }
 }
 
+/// Heat that bypasses the door panel along its frame: the gasket, hinges and
+/// the door's edge flange. Modelled as a linear thermal bridge, the usual
+/// way a window or door frame is counted: conductance = `psi_w_per_mk` times
+/// the door perimeter. **Conduction only**: air leaking through the seal is
+/// lane H4.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DoorEdge {
+    /// Linear transmittance, W per metre of door edge and kelvin. A foam
+    /// gasket on a steel frame is of the order of 0.05 to 0.2 (planning value,
+    /// not measured).
+    pub psi_w_per_mk: f64,
+}
+
 /// The two surface films, W/m2K. `h_in` is convection plus radiation of the
 /// inner surface to the air and the contents, `h_out` of the outer surface to
 /// the surroundings. Lane H3 replaces `h_out` by a temperature dependent value.
@@ -291,16 +304,64 @@ pub struct Films {
     pub h_out: f64,
 }
 
-/// The surroundings. **Stored only by H1**; lane H3 uses these.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+/// How the outer film is found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutsideFilm {
+    /// The IEC 60890 calibration: one constant film and the factors `b` of
+    /// the installation (default; results equal the one-number wall).
+    #[default]
+    Iec,
+    /// Lane H3: film from the actual outer surface temperature (natural and
+    /// wind convection, radiation to room or sky), mounting gaps, sun. A
+    /// model; see [`crate::outside`].
+    Physical,
+}
+
+/// The surroundings (lane H3). Used when `film` is [`OutsideFilm::Physical`];
+/// the other fields are stored only otherwise.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Outside {
     /// Effective sky temperature for the radiation of the roof and walls,
     /// degrees C; `None` = the ambient air.
     pub sky_c: Option<f64>,
+    /// Wind or room air speed along the faces, m/s.
     pub wind_m_s: f64,
-    /// Solar irradiance on the faces that see the sun, W/m2.
+    /// Solar irradiance on a face that sees the sun fully, W/m2.
     pub sun_w_m2: f64,
+    pub film: OutsideFilm,
+    /// Air gap to a wall or neighbour in front of each face, mm (order of
+    /// [`FACE_NAMES`]); `Some(0.0)` = touching. `None` = open, unless the
+    /// installation says the face is covered (then [`ASSUMED_COVER_GAP_MM`]).
+    pub gaps_mm: [Option<f64>; 6],
+    /// Share of `sun_w_m2` that falls on each face, 0..1 (roof about 1, a
+    /// wall facing the sun about 0.5).
+    pub sun_share: [f64; 6],
+    /// Set by [`crate::outside::resolve`]: the outer film per face, W/m2K.
+    pub h_out_face: Option<[f64; 6]>,
+    /// Set by [`crate::outside::resolve`]: the rise of the air temperature a
+    /// face sees because of the sun (sol-air), K.
+    pub sun_offset_k: [f64; 6],
 }
+
+impl Default for Outside {
+    fn default() -> Self {
+        Outside {
+            sky_c: None,
+            wind_m_s: 0.0,
+            sun_w_m2: 0.0,
+            film: OutsideFilm::Iec,
+            gaps_mm: [None; 6],
+            sun_share: [0.0; 6],
+            h_out_face: None,
+            sun_offset_k: [0.0; 6],
+        }
+    }
+}
+
+/// Gap used for a face the installation marks as covered when no gap is
+/// given (assumed, shown as such): a cabinet screwed to a wall stands off by
+/// its feet or rails.
+pub const ASSUMED_COVER_GAP_MM: f64 = 20.0;
 
 /// Where a group of shell values comes from, for the honest label in the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -339,6 +400,8 @@ pub struct ShellModel {
     /// [`TOP`], [`BOTTOM`].
     pub faces: [FaceSpec; 6],
     pub window: Option<Window>,
+    /// Thermal bridge along the door frame. `None` = no extra path.
+    pub door_edge: Option<DoorEdge>,
     /// Air gap between the mounting plate and the rear wall, mm. `None` = the
     /// plate lies on the wall (the plate path is the rear coefficient, as in
     /// the IEC calibration).
@@ -360,7 +423,7 @@ pub struct ShellCaps {
     pub emissivity: bool,
     pub door_window: bool,
     pub setback: bool,
-    /// Lane H3: sun, wind, sky. False until delivered.
+    /// Lane H3: sun, wind, sky, mounting gaps.
     pub outside: bool,
 }
 
@@ -406,6 +469,7 @@ impl ShellModel {
         ShellModel {
             faces: std::array::from_fn(|_| face.clone()),
             window: None,
+            door_edge: None,
             plate_setback_mm: None,
             plate_emissivity: 0.3,
             films,
@@ -421,7 +485,7 @@ impl ShellModel {
             emissivity: true,
             door_window: true,
             setback: true,
-            outside: false,
+            outside: true,
         }
     }
 
@@ -442,20 +506,67 @@ impl ShellModel {
             .map_or(0.0, |w| w.area_fraction.clamp(0.0, 1.0))
     }
 
-    fn u_of(&self, r_layers: f64) -> f64 {
-        1.0 / (1.0 / self.films.h_in + r_layers + 1.0 / self.films.h_out)
+    /// The films of a face: the shell's, with the outer film of lane H3 when
+    /// it has been resolved.
+    pub fn films_of(&self, face: usize) -> Films {
+        Films {
+            h_in: self.films.h_in,
+            h_out: self
+                .outside
+                .h_out_face
+                .map_or(self.films.h_out, |h| h[face].max(1.0e-6)),
+        }
+    }
+
+    fn u_of(&self, face: usize, r_layers: f64) -> f64 {
+        let f = self.films_of(face);
+        1.0 / (1.0 / f.h_in + r_layers + 1.0 / f.h_out)
+    }
+
+    /// Surface factors of the faces: the IEC `b` of the installation, or with
+    /// the physical outer film 1 (the film and the gaps carry the mounting)
+    /// and 0 for a cabinet standing on the floor.
+    pub fn b_factors(&self, e: &Enclosure) -> [f64; 6] {
+        match self.outside.film {
+            OutsideFilm::Iec => crate::setup::surface_factors(e.installation),
+            OutsideFilm::Physical => {
+                let mut b = [1.0; 6];
+                if e.installation.on_floor {
+                    b[BOTTOM] = 0.0;
+                }
+                b
+            }
+        }
+    }
+
+    /// Gap in front of a face, mm, with whether it is assumed: from
+    /// `gaps_mm`, else the covered flag of the installation, else `None`
+    /// (open).
+    pub fn gap_of(&self, e: &Enclosure, face: usize) -> Option<(f64, bool)> {
+        if let Some(g) = self.outside.gaps_mm[face] {
+            return Some((g.max(0.0), false));
+        }
+        let i = e.installation;
+        let covered = match face {
+            REAR => i.rear_covered,
+            LEFT => i.left_covered,
+            RIGHT => i.right_covered,
+            TOP => i.top_covered,
+            _ => false,
+        };
+        covered.then_some((ASSUMED_COVER_GAP_MM, true))
     }
 
     /// Air-to-air coefficient of the panel (no window) of a face, W/m2K.
     pub fn u_panel(&self, face: usize) -> f64 {
-        self.u_of(self.faces[face].r_layers())
+        self.u_of(face, self.faces[face].r_layers())
     }
 
     /// Air-to-air coefficient of the window, if any.
     pub fn u_window(&self) -> Option<f64> {
         self.window
             .as_ref()
-            .map(|w| self.u_of(w.layers.iter().map(Layer::r).sum()))
+            .map(|w| self.u_of(FRONT, w.layers.iter().map(Layer::r).sum()))
     }
 
     /// Area weighted air-to-air coefficient of a face (the door includes its
@@ -478,8 +589,22 @@ impl ShellModel {
     /// the default shell the sum is `k * A_effective` exactly.
     pub fn conductances_w_per_k(&self, e: &Enclosure, scale: f64) -> [f64; 6] {
         let a = FaceAreas::of(e);
-        let b = crate::setup::surface_factors(e.installation);
-        std::array::from_fn(|f| self.u_face(f) * scale * b[f] * a.outer[f])
+        let b = self.b_factors(e);
+        std::array::from_fn(|f| {
+            self.u_face(f) * scale * b[f] * a.outer[f]
+                + if f == FRONT {
+                    self.door_edge_w_per_k(e) * scale
+                } else {
+                    0.0
+                }
+        })
+    }
+
+    /// Conductance of the door frame bridge, W/K (0 without one).
+    pub fn door_edge_w_per_k(&self, e: &Enclosure) -> f64 {
+        self.door_edge.map_or(0.0, |d| {
+            d.psi_w_per_mk.max(0.0) * 2.0 * (e.width_mm + e.height_mm) / 1000.0
+        })
     }
 
     /// Heat capacity of the wall of each face, J/K.
@@ -599,6 +724,8 @@ pub struct FaceTemps {
     /// outer film).
     pub outer_radiation_w: f64,
     pub outer_convection_w: f64,
+    /// Part of `heat_w` that goes through the door frame bridge, W (door only).
+    pub edge_heat_w: f64,
 }
 
 /// Whether a value is a model or an exact result.
@@ -655,7 +782,7 @@ pub fn report(
     samples: &[FaceSamples; 6],
     plate_rear_c: Option<f64>,
 ) -> ShellReport {
-    let b = crate::setup::surface_factors(e.installation);
+    let b = model.b_factors(e);
     let caps_j = model.capacity_per_face_j_per_k(e);
     let wf = model.window_fraction();
     let faces: [FaceTemps; 6] = std::array::from_fn(|f| {
@@ -672,11 +799,13 @@ pub fn report(
         } else {
             (ambient_c, ambient_c, ambient_c)
         };
+        // The air the face sees: ambient plus the sun's rise (sol-air).
+        let ambient_c = ambient_c + model.outside.sun_offset_k[f];
         let heat_w = sm.iter().map(|s| s.0 * (s.1 - ambient_c)).sum::<f64>();
         let temps = |t_in: f64, u_panel: f64| {
             path_temps(
                 &model.faces[f].layers,
-                model.films,
+                model.films_of(f),
                 u_panel * (t_in - ambient_c),
                 t_in,
             )
@@ -690,7 +819,12 @@ pub fn report(
         let window = if f == FRONT {
             model.window.as_ref().filter(|_| wf > 0.0).map(|w| {
                 let uw = model.u_window().unwrap_or(up) * scale;
-                let p = path_temps(&w.layers, model.films, uw * (t_mean - ambient_c), t_mean);
+                let p = path_temps(
+                    &w.layers,
+                    model.films_of(FRONT),
+                    uw * (t_mean - ambient_c),
+                    t_mean,
+                );
                 (
                     p.inner_surface_c,
                     if dead { t_mean } else { p.outer_surface_c },
@@ -702,9 +836,9 @@ pub fn report(
         // Radiation share of the outer film at the mean outer surface.
         let t_o = outer(&mean, t_mean);
         let tm = 0.5 * (t_o + ambient_c) + 273.15;
-        let h_rad =
-            (4.0 * SIGMA * model.faces[f].emissivity_out * tm.powi(3)).min(0.9 * model.films.h_out);
-        let rad_share = h_rad / model.films.h_out;
+        let h_rad = (4.0 * SIGMA * model.faces[f].emissivity_out * tm.powi(3))
+            .min(0.9 * model.films_of(f).h_out);
+        let rad_share = h_rad / model.films_of(f).h_out;
         FaceTemps {
             face: f,
             exposed_share: b[f],
@@ -721,6 +855,11 @@ pub fn report(
             window,
             outer_radiation_w: heat_w * rad_share,
             outer_convection_w: heat_w * (1.0 - rad_share),
+            edge_heat_w: if f == FRONT {
+                model.door_edge_w_per_k(e) * scale * (t_mean - ambient_c)
+            } else {
+                0.0
+            },
         }
     });
     ShellReport {
@@ -1022,6 +1161,24 @@ mod tests {
         let sheet_kg = 7850.0 * 0.002 * a.outer.iter().sum::<f64>();
         s.mass_kg = Some(sheet_kg);
         assert!((s.mass_check(&e).unwrap() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn door_edge_bridge_adds_psi_times_perimeter() {
+        let e = enclosure(Material::Steel, Installation::FreeStanding);
+        let mut s = ShellModel::from_enclosure(&e);
+        let base = s.conductances_w_per_k(&e, 1.0);
+        s.door_edge = Some(DoorEdge { psi_w_per_mk: 0.1 });
+        let with = s.conductances_w_per_k(&e, 1.0);
+        // perimeter 2 * (0.8 + 1.0) = 3.6 m
+        assert!((with[FRONT] - base[FRONT] - 0.36).abs() < 1e-12);
+        for f in [REAR, LEFT, RIGHT, TOP, BOTTOM] {
+            assert_eq!(with[f], base[f]);
+        }
+        let samples: [FaceSamples; 6] = std::array::from_fn(|_| vec![(with[FRONT], 50.0)]);
+        let r = report(&s, &e, 30.0, 1.0, &samples, None);
+        assert!((r.faces[FRONT].edge_heat_w - 0.36 * 20.0).abs() < 1e-9);
+        assert_eq!(r.faces[LEFT].edge_heat_w, 0.0);
     }
 
     #[test]
