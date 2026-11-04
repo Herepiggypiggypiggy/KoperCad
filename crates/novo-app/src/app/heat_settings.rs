@@ -154,6 +154,7 @@ pub(super) struct VentSpec {
     pub pressure_pa: f64,
     /// A filter mat over a grille or a plain fan; a filter fan's datasheet
     /// already has its mat.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<FilterClass>,
     /// Dust on the mat, 0 (new) to 1 (due for a change).
     pub filter_load: f64,
