@@ -52,6 +52,18 @@ pub(crate) enum Parts {
         #[arg(long, value_name = "FILE")]
         catalog: Option<PathBuf>,
     },
+    /// Check how well KoperCAD reads STEP models: for every `.stp`, `.step` or `.p21` file (also inside ZIPs) in a
+    /// folder, say whether it reads cleanly, what is approximated or missing, its
+    /// size, its product names and colours. Reads only; the files stay where they
+    /// are. Exit 1 when a file cannot be read.
+    StepHealth {
+        /// The folder of STEP files. Default: `KOPERCAD_STEP_SAMPLES`, else
+        /// `Documents\KoperCAD-tests\step-samples`.
+        dir: Option<PathBuf>,
+        /// Also write the report here as Markdown (`.md`).
+        #[arg(long, value_name = "FILE")]
+        report: Option<PathBuf>,
+    },
     /// Which file to download from which maker, and what needs a login.
     Guide {
         #[command(flatten)]
@@ -146,6 +158,27 @@ pub(crate) fn run(cmd: Parts, out: &mut dyn Write) -> Result<i32, Failure> {
             print(out, &format!("Installed: {}", model.summary()))?;
             print(out, &format!("Kept in {}", dir.display()))?;
             Ok(exit::OK)
+        }
+        Parts::StepHealth { dir, report } => {
+            let dir = dir
+                .or_else(novo_interop::part3d::health::default_samples_folder)
+                .ok_or_else(|| Failure::new(exit::READ, "no Documents folder; name a folder"))?;
+            if !dir.is_dir() {
+                return Err(Failure::new(
+                    exit::READ,
+                    format!("{} is not a folder", dir.display()),
+                ));
+            }
+            let results = novo_interop::part3d::health::health_of_folder(&dir);
+            let md = novo_interop::part3d::health::markdown_report(&results, &dir);
+            print(out, &md)?;
+            if let Some(path) = report {
+                std::fs::write(&path, &md).map_err(|e| fail(exit::WRITE, e))?;
+            }
+            let bad = results
+                .iter()
+                .any(|(_, h)| h.verdict == novo_interop::part3d::health::Verdict::Unreadable);
+            Ok(if bad { exit::PROBLEMS } else { exit::OK })
         }
         Parts::Guide { at } => {
             let dir = inbox(&at)?;

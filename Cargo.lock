@@ -2424,6 +2424,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml",
+ "zip 9.1.3",
 ]
 
 [[package]]
