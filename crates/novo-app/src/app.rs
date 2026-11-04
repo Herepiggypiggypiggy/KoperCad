@@ -304,6 +304,9 @@ mod shortcuts_sheet;
 mod sim_chip;
 #[cfg(test)]
 mod sim_chip_tests;
+mod sim_flags;
+#[cfg(test)]
+mod sim_flags_tests;
 mod simulate;
 mod single_line_view;
 #[cfg(test)]
