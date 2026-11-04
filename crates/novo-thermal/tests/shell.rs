@@ -122,3 +122,114 @@ fn wall_capacity_matches_the_layers() {
     let want = 7850.0 * 490.0 * 0.002 * area;
     assert!((r.shell.capacity_j_per_k / want - 1.0).abs() < 1e-9);
 }
+
+#[test]
+fn an_extra_heat_source_adds_its_heat_to_the_balance() {
+    let plain = quick(base());
+    let mut sc = base();
+    sc.params.sources.push(HeatSource {
+        id: 1,
+        rect: novo_layout::Rect {
+            x: 100.0,
+            y: 100.0,
+            w: 400.0,
+            h: 30.0,
+        },
+        power_w: 40.0,
+        blockage: None,
+    });
+    let hot = quick(sc);
+    // 80 W of device plus 40 W of busbar: the walls and openings carry 120 W.
+    assert!(
+        (hot.balance.loss_w - 120.0).abs() < 1e-6,
+        "{}",
+        hot.balance.loss_w
+    );
+    assert!(hot.balance.residual_rel.abs() < 0.02);
+    // The mean rise follows the total heat (IEC: rise proportional to loss).
+    let ratio = hot.balance.mean_rise_k / plain.balance.mean_rise_k;
+    assert!((ratio - 1.5).abs() < 0.2, "rise ratio {ratio}");
+    let amb = hot.ambient_c;
+    let walls: f64 = hot.shell.faces.iter().map(|f| f.heat_w).sum();
+    assert!((walls / 120.0 - 1.0).abs() < 0.02 && walls > 0.0 && amb > 0.0);
+}
+
+#[test]
+fn a_negative_source_is_refused() {
+    let mut sc = base();
+    sc.params.sources.push(HeatSource {
+        id: 1,
+        rect: novo_layout::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+        },
+        power_w: -5.0,
+        blockage: None,
+    });
+    assert!(simulate_steady(&sc).is_err());
+}
+
+fn source(power_w: f64, blockage: Option<f64>, w: f64) -> HeatSource {
+    HeatSource {
+        id: 1,
+        rect: novo_layout::Rect {
+            x: 100.0,
+            y: 100.0,
+            w,
+            h: 30.0,
+        },
+        power_w,
+        blockage,
+    }
+}
+
+#[test]
+fn bad_heat_sources_are_refused_by_every_entry() {
+    for bad in [
+        source(f64::NAN, None, 100.0),
+        source(-1.0, None, 100.0),
+        source(10.0, Some(f64::NAN), 100.0),
+        source(10.0, None, 0.0),
+    ] {
+        let mut sc = base();
+        sc.params.sources.push(bad);
+        assert!(sc.check_sources().is_err());
+        assert!(simulate_steady(&sc).is_err());
+        assert!(
+            simulate_transient(&sc, &TransientSettings::default()).is_err(),
+            "transient must refuse too"
+        );
+    }
+}
+
+#[test]
+fn an_infinite_blockage_cannot_reach_the_solver_as_nan() {
+    let mut sc = base();
+    sc.params
+        .sources
+        .push(source(10.0, Some(f64::INFINITY), 100.0));
+    assert!(sc.check_sources().is_err());
+    // lowering on its own (a caller that skipped the check) still gives a finite blockage
+    let low = sc.lowered();
+    assert!(low.obstacles.iter().all(|o| o.blockage().is_finite()));
+}
+
+#[test]
+fn a_door_frame_bridge_loses_more_heat_through_the_door() {
+    let plain = quick(base());
+    let mut sc = base();
+    let mut shell = ShellModel::from_enclosure(&sc.enclosure);
+    shell.add_insulation(LayerMaterial::Foam, 20.0, true);
+    sc.params.shell = Some(shell.clone());
+    let closed = quick(sc.clone());
+    shell.door_edge = Some(DoorEdge { psi_w_per_mk: 0.5 });
+    sc.params.shell = Some(shell);
+    let bridged = quick(sc);
+    assert!(bridged.balance.front_w > closed.balance.front_w + 1.0);
+    let f = bridged.shell.door();
+    assert!(f.edge_heat_w > 0.0 && f.edge_heat_w < f.heat_w);
+    // no bridge: nothing reported, and the default is untouched
+    assert_eq!(plain.shell.door().edge_heat_w, 0.0);
+}

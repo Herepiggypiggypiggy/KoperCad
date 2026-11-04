@@ -226,6 +226,10 @@ const REGROUPED: &[(&str, MenuPlace)] = &[
 const PALETTE_ONLY: &[(&str, &str)] = &[
     ("tool.repeat", "the key that repeats the last tool"),
     (
+        "place.list",
+        "typed in the command field (place list), then paste the lines into its window",
+    ),
+    (
         "project.variant",
         "takes a name in the command field (variant crane); without one it opens Project options",
     ),

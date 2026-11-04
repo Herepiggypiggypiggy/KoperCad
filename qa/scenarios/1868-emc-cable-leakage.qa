@@ -1,0 +1,22 @@
+@title EMC-21: shielded motor cable of stated length shows capacitance and leakage current
+@area Check
+@sizes 1366x768 1920x1080
+# The motor wire of the drive sits in an 80 m shielded cable (all round at both ends, no maker pF/m): EMC-21 works the capacitance out from the coaxial formula and says so.
+open qa/fixtures/emc-cabinet-motor-cable.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "EMC check"
+expect "EMC-21"
+shot 01-findings
+check_layout
+scroll 360 400 -450
+wait 10
+expect "to earth"
+expect "assumed"
+shot 02-leakage-detail
+check_layout
