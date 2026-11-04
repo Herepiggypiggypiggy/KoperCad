@@ -1,3 +1,5 @@
 2026-10-16 10:50 UTC  Started: read wirecut, labels, FU-WIRE; engines for ferrule standard, ferrule table, bench cut list and label sheets written, 15 report tests green.
 2026-10-16 11:00 UTC  R5 asked for two fixes (validity guard on bench cut export, machine CSV follows the draft); fixed in a follow-up commit on PR #659. R2 READY on 82849da.
 2026-10-30 11:00 UTC Ferrule/wire-prep follow-up (branch claude/project-thread-vn226u): FerruleSize gets crimp profile, die/setting and overall length; ferrule table and standard print them; new "cuts" label kind (one label per wire to cut: number, length, size, both sleeves). Old stored standards still read (serde defaults).
+
+- 2026-11-04: docked Bench output pane (scrolls both ways, so rows had endless width) now wraps its button rows at the visible width; fixes QA scenarios 38, 39, 185.
