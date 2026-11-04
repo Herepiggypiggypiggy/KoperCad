@@ -276,13 +276,17 @@ fn a_cable_finding_is_a_flag_of_the_cable_and_the_drawer_draws_its_triangle() {
 fn a_refused_cable_rename_is_a_chip_not_a_toast() {
     let (mut f, _dir) = fixture();
     let ctx = f.ctx.clone();
-    let toasts = f.d.app.messages().len();
+    let toasts = f.d.app.messages().iter().filter(|m| !m.dismissed).count();
     f.d.app.run_command(&ctx, "cable.rename", Some("=="));
     assert_eq!(
         f.d.app.refusal_flag().map(|r| r.title.as_str()),
         Some("Not a cable tag")
     );
-    assert_eq!(f.d.app.messages().len(), toasts, "no toast was raised");
+    assert_eq!(
+        f.d.app.messages().iter().filter(|m| !m.dismissed).count(),
+        toasts,
+        "no toast was raised"
+    );
     f.d.frame();
     assert!(
         f.d.app.refusal_flag().is_some(),
