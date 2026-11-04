@@ -90,6 +90,8 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// Mounting plate parts of the user's catalog, for the plate card.
+    pub(super) maker_plates: super::cabinet_maker_plate::MakerPlates,
     /// The surface picked in the header (`None` is the mounting plate) and
     /// the picker asked to open by `cabinet.surface`.
     pub(super) surface: Option<String>,
@@ -158,6 +160,7 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            maker_plates: Default::default(),
             surface: None,
             surface_open: false,
             surface_popup: None,
@@ -204,6 +207,8 @@ pub(super) enum Ask {
     SetPlate(StructureId),
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
+    /// Use a maker's mounting plate part: its size and its factory holes.
+    UsePlatePart(StructureId, super::cabinet_maker_plate::PlateChoice),
     PlaceAll,
     /// An arrange tool (`cabinet.arrange_*`) on these devices (none: all).
     AutoArrange(&'static str, Vec<u64>),
@@ -234,6 +239,8 @@ pub(super) enum Ask {
     SetEntryWall(StructureId, Option<novo_routing::entry::Wall>),
     ExportWireProduction,
     OpenBench,
+    /// Open the Parts window (a chip's fix for parts without terminal data).
+    OpenParts,
     ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
     Select(u64),
@@ -2175,6 +2182,7 @@ impl NovoApp {
                             state: &mut self.cabinet.door,
                             layout: &shown,
                             tag_of: &tag_of,
+                            plates: &mut self.cabinet.maker_plates,
                         },
                     )
                 {
@@ -3082,6 +3090,7 @@ impl NovoApp {
                         | Ask::CoolerLayout(..)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
+                        | Ask::UsePlatePart(..)
                         | Ask::SetEnclosure(_)
                 ))
         {
@@ -3123,9 +3132,13 @@ impl NovoApp {
                 self.message(Level::Info, TABLE_NEEDS_PLATE);
             }
             Ask::ToggleTable => self.cabinet.table ^= true,
-            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::TogglePlateCard => {
+                self.cabinet.plate_card ^= true;
+                self.cabinet.maker_plates.reset();
+            }
             Ask::CloseInspector => {
                 self.cabinet.plate_card = false;
+                self.cabinet.maker_plates.reset();
                 self.cabinet.view.selection.clear();
             }
             Ask::ExportPlate => {
@@ -3172,6 +3185,7 @@ impl NovoApp {
                 self.export_wire_production();
             }
             Ask::OpenBench => self.open_bench(),
+            Ask::OpenParts => self.open_parts_browser(),
             Ask::ExportWiringDxf(s) => {
                 self.export_wiring_dxf(s);
             }
@@ -3441,6 +3455,21 @@ impl NovoApp {
                         ),
                     );
                 }
+            }
+            Ask::UsePlatePart(s, choice) => {
+                self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
+                self.cabinet_edit("Use maker plate", move |tx| {
+                    novo_layout::model::set_plate_part(
+                        tx,
+                        s,
+                        &choice.label,
+                        choice.width,
+                        choice.height,
+                        choice.holes.as_deref(),
+                    )
+                    .map(|_| ())
+                });
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

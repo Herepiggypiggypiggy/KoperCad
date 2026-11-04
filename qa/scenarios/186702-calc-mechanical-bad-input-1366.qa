@@ -1,0 +1,27 @@
+@title Calculations > Mechanical: a rail with no load is not calculated
+@area Calculations
+@sizes 1366x768
+open_starter_example
+wait 20
+key ctrl+k
+wait 6
+text calculations
+wait 8
+key Enter
+wait 15
+click_text "Mechanical"
+wait 10
+scroll 400 450 -300
+wait 6
+scroll 400 450 -400
+wait 6
+shot rail-before
+double_click 329 489
+wait 4
+key ctrl+a
+text 0
+key Enter
+wait 6
+shot rail-no-load
+expect "Not calculated"
+check_layout
