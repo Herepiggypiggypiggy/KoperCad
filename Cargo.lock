@@ -2389,6 +2389,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-flags"
+version = "0.1.0"
+
+[[package]]
 name = "novo-heatview"
 version = "0.1.0"
 dependencies = [

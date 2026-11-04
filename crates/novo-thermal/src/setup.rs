@@ -71,6 +71,9 @@ pub struct DeviceCells {
     /// Plate cells under the footprint with their share of the plate path.
     pub plate: Vec<(usize, f64)>,
     pub footprint_m2: f64,
+    /// Footprint in the interior frame, mm, and height off the plate, mm.
+    pub rect: Rect,
+    pub height_mm: f64,
     pub exposed_m2: f64,
     /// Vertical extent of the footprint, m (for natural convection).
     pub length_m: f64,
@@ -123,6 +126,19 @@ pub const JET_MIXING_MAX: f64 = 0.06;
 /// measured.
 pub const JET_SPEED_COEFFICIENT: f64 = 3.0;
 
+/// One face of an internal fan: the flow from cell `i` to cell `j` is
+/// `sigma (p_i - p_j + force)` (straight-line fan curve, see
+/// [`crate::model::CirculationFan`]).
+#[derive(Debug, Clone, Copy)]
+pub struct CircFace {
+    pub i: usize,
+    pub j: usize,
+    pub sigma: f64,
+    pub force: f64,
+    /// Cross section of this share of the fan, m2.
+    pub area: f64,
+}
+
 pub struct Setup {
     pub air: Air,
     pub ambient: f64,
@@ -146,6 +162,13 @@ pub struct Setup {
     /// Plate to ambient through the rear wall, W/K per cell.
     pub g_pa: Vec<f64>,
     pub devices: Vec<DeviceCells>,
+    /// Heatsink per device (same order as `devices`).
+    pub sinks: Vec<Option<crate::forced::Heatsink>>,
+    /// Faces of the in-plane circulation fans.
+    pub circ: Vec<CircFace>,
+    /// Per circulation fan (scenario order): its indices in `circ`; empty for
+    /// a fan that blows across the depth (it only stirs).
+    pub circ_of: Vec<Vec<usize>>,
     /// Heat released straight into the air, W per cell: the wires lying in
     /// ducts (`Obstacle::loss_w`), spread over the cells the duct covers.
     pub sources: Vec<(usize, f64)>,
@@ -201,6 +224,44 @@ fn validate(s: &Scenario) -> Result<(), Error> {
     for f in &s.fans {
         if !(f.free_flow_m3h > 0.0 && f.max_pressure_pa > 0.0) {
             return bad("a fan needs a positive free flow and maximum pressure");
+        }
+    }
+    let (iw, ih) = (e.interior_width_mm(), e.interior_height_mm());
+    for f in &s.params.circulation_fans {
+        if !(finite(f.free_flow_m3h)
+            && finite(f.max_pressure_pa)
+            && f.free_flow_m3h > 0.0
+            && f.max_pressure_pa > 0.0)
+        {
+            return bad("a circulation fan needs a positive free flow and maximum pressure");
+        }
+        if !(finite(f.diameter_mm) && f.diameter_mm > 0.0)
+            || !(finite(f.installed_factor)
+                && f.installed_factor > 0.0
+                && f.installed_factor <= 1.5)
+        {
+            return bad("a circulation fan needs a size and an installed factor above 0");
+        }
+        if !(finite(f.x_mm) && finite(f.y_mm))
+            || !(0.0..=iw).contains(&f.x_mm)
+            || !(0.0..=ih).contains(&f.y_mm)
+        {
+            return bad("a circulation fan lies outside the enclosure");
+        }
+    }
+    for (_, h) in &s.params.heatsinks {
+        let ok = h.fins >= 2
+            && [
+                h.fin_height_mm,
+                h.fin_thickness_mm,
+                h.gap_mm,
+                h.length_mm,
+                h.k_w_mk,
+            ]
+            .iter()
+            .all(|v| finite(*v) && *v > 0.0);
+        if !ok {
+            return bad("a heatsink needs two fins or more and positive sizes");
         }
     }
     for v in &s.vents {
@@ -407,6 +468,8 @@ impl Setup {
                 air: air_w,
                 plate: plate_w,
                 footprint_m2,
+                rect: d.footprint,
+                height_mm: d.height(),
                 exposed_m2,
                 length_m: (d.footprint.h / 1000.0).max(0.02),
                 plate_overlap,
@@ -494,6 +557,56 @@ impl Setup {
             return Err(Error::Invalid("a vent has no free area".into()));
         }
 
+        // Circulation fans: a straight-line curve on the faces under the disc.
+        let mut circ: Vec<CircFace> = Vec::new();
+        let mut circ_of: Vec<Vec<usize>> = Vec::new();
+        let mut stir_flow_m3s = 0.0;
+        for f in &p.circulation_fans {
+            let (q, pm) = (f.q_max_m3s(), f.p_max_pa());
+            let mut idx = Vec::new();
+            use crate::model::BlowDirection as B;
+            let mut put = |i: usize, j: usize, share: f64, sign: f64, area: f64| {
+                idx.push(circ.len());
+                circ.push(CircFace {
+                    i,
+                    j,
+                    sigma: q * share / pm,
+                    force: sign * pm,
+                    area,
+                });
+            };
+            match f.direction {
+                B::Right | B::Left => {
+                    let col = ((f.x_mm / hx_mm).floor().max(0.0) as usize).min(nx - 2);
+                    let sign = if f.direction == B::Right { 1.0 } else { -1.0 };
+                    for (r, share) in span_cells(f.y_mm, f.diameter_mm, hy_mm, ny) {
+                        let i = r * nx + col;
+                        put(i, i + 1, share, sign, hy * depth);
+                    }
+                }
+                B::Down | B::Up => {
+                    let row = ((f.y_mm / hy_mm).floor().max(0.0) as usize).min(ny - 2);
+                    let sign = if f.direction == B::Down { 1.0 } else { -1.0 };
+                    for (c, share) in span_cells(f.x_mm, f.diameter_mm, hx_mm, nx) {
+                        let i = row * nx + c;
+                        put(i, i + nx, share, sign, hx * depth);
+                    }
+                }
+                B::ToDoor | B::ToPlate => stir_flow_m3s += q,
+            }
+            circ_of.push(idx);
+        }
+        let sinks: Vec<Option<crate::forced::Heatsink>> = s
+            .devices
+            .iter()
+            .map(|d| {
+                p.heatsinks
+                    .iter()
+                    .find(|(id, _)| *id == d.id)
+                    .map(|(_, h)| *h)
+            })
+            .collect();
+
         // Heat capacities.
         let rho_cp = air.rho_cp();
         // The walls store heat too; their temperature is taken to follow the
@@ -523,7 +636,8 @@ impl Setup {
                 .map(|f| f.free_flow_m3h / 3600.0)
                 .sum()
         };
-        let fan_flow_m3s = fan_flow(FanMode::Intake).max(fan_flow(FanMode::Exhaust));
+        let fan_flow_m3s =
+            fan_flow(FanMode::Intake).max(fan_flow(FanMode::Exhaust)) + stir_flow_m3s;
         let jet_mixing_m2s = (JET_MIXING_COEFFICIENT * fan_flow_m3s / depth).min(JET_MIXING_MAX);
 
         let cross_m2 = depth * (e.width_mm.min(e.height_mm) / 1000.0);
@@ -550,6 +664,9 @@ impl Setup {
             g_ap,
             g_pa,
             devices,
+            sinks,
+            circ,
+            circ_of,
             sources,
             ports,
             params: p.clone(),
