@@ -33,6 +33,7 @@ pub(super) struct CalcWindow {
     mech: super::calculations_mechanical::MechState,
     /// The sheet for a project revision and starter choice.
     cache: Option<(u64, StarterChoice, CalcSheet)>,
+    impedance: super::calc_busbar::BusbarState,
     busbar: super::calculations_busbar::BusbarForm,
     busbar_cache: Option<(
         super::calculations_busbar::BusbarForm,
@@ -48,10 +49,11 @@ impl CalcWindow {
     }
 }
 
-const TABS: [&str; 5] = [
+const TABS: [&str; 6] = [
     "Circuits",
     "Motor starters",
     "Panel SCCR",
+    "Busbar impedance",
     "Mechanical",
     "Busbar heat",
 ];
@@ -252,7 +254,8 @@ impl NovoApp {
                         0 => circuits(ui, &sheet, &mut win.only_issues, &mut go),
                         1 => starters(ui, &sheet, &mut win.choice),
                         2 => panel(ui, &sheet),
-                        3 => super::calculations_mechanical::mechanical(
+                        3 => super::calc_busbar::busbar_tab(ui, &mut win.impedance),
+                        4 => super::calculations_mechanical::mechanical(
                             ui,
                             &mut win.mech,
                             sheet.panel.available_ka,
@@ -273,6 +276,7 @@ impl NovoApp {
                 ("calc.tab.circuits", "Circuits tab"),
                 ("calc.tab.starters", "Motor starters tab"),
                 ("calc.tab.sccr", "Panel SCCR tab"),
+                ("calc.tab.busbar_impedance", "Busbar impedance tab"),
             ])
             .enumerate()
         {

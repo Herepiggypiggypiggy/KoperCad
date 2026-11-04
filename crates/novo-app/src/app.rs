@@ -51,6 +51,7 @@ mod cable_cores;
 mod cable_cores_tests;
 #[cfg(test)]
 mod cable_proposals_fixture_tests;
+mod calc_busbar;
 mod calculations;
 mod calculations_busbar;
 mod calculations_mechanical;
