@@ -31,6 +31,9 @@ pub(super) struct PlaceReport {
     /// automatically instead.
     pub(super) clashes: Vec<String>,
     pub(super) symbols: Vec<SymbolId>,
+    /// Set instead of placing anything when the lines add up to more than
+    /// the limit (a second guard; the reading already cuts the list).
+    pub(super) refused: Option<usize>,
 }
 
 /// Places every placeable line on `page` in a grid, in the caller's
@@ -49,6 +52,10 @@ pub(super) fn place_lines(
         .collect();
     let mut report = PlaceReport::default();
     let total: usize = todo.iter().map(|(l, _)| l.wanted.qty as usize).sum();
+    if total > place_list::MAX_DEVICES {
+        report.refused = Some(total);
+        return Ok(report);
+    }
     if total == 0 {
         return Ok(report);
     }
@@ -210,6 +217,16 @@ impl NovoApp {
             place_lines(tx, page, lines, catalog, library, &view)
         });
         match result {
+            Ok((report, _)) if report.refused.is_some() => {
+                self.message(
+                    Level::Error,
+                    format!(
+                        "Not placed: the list is over {} devices",
+                        place_list::MAX_DEVICES
+                    ),
+                );
+                false
+            }
             Ok((report, changes)) => {
                 self.changed_outside_canvas(&changes);
                 let ids: Vec<novo_core::AnyId> = report.symbols.iter().map(|&s| s.into()).collect();
@@ -547,5 +564,24 @@ mod tests {
         tags.sort();
         assert_eq!(tags.len(), 2, "{tags:?}");
         assert_eq!(tags.iter().filter(|t| *t == "-K1").count(), 1, "{tags:?}");
+    }
+
+    #[test]
+    fn a_list_over_the_limit_is_cut_and_never_places_too_many() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        let lines = open_window(&mut d, "mcb x200\nmcb x200\nmcb x200\n");
+        assert_eq!(novo_parts::place_list::device_count(&lines), 400);
+        assert!(!lines[2].placeable());
+        // Second guard: lines that were not cut by the reading are refused whole.
+        let mut all = lines.clone();
+        all[2].outcome = lines[0].outcome.clone();
+        let before = snapshot(&d);
+        assert!(!d.app.place_list_apply(&all));
+        assert_eq!(snapshot(&d), before);
+        assert!(d.app.place_list_apply(&lines));
     }
 }

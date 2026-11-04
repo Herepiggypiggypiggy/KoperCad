@@ -196,10 +196,20 @@ pub fn resolve<'c>(
     library: &Library,
     symbol_of_part: &dyn Fn(&'c CatalogPart) -> Option<String>,
 ) -> Vec<Resolved> {
+    // Lines are taken in order until the list would pass MAX_DEVICES; a line
+    // that would not fit whole is left out, never cut.
+    let mut total = 0usize;
     wanted
         .into_iter()
         .map(|w| {
-            let outcome = outcome_of(&w, catalog, library, symbol_of_part);
+            let mut outcome = outcome_of(&w, catalog, library, symbol_of_part);
+            if !matches!(outcome, Outcome::Unknown(_)) {
+                if total + w.qty as usize > MAX_DEVICES {
+                    outcome = Outcome::Unknown("over the 500 device limit");
+                } else {
+                    total += w.qty as usize;
+                }
+            }
             Resolved { wanted: w, outcome }
         })
         .collect()
@@ -361,6 +371,24 @@ mod tests {
             Outcome::Part { .. } => {}
             Outcome::Unknown(why) => panic!("{why}"),
         }
+    }
+
+    #[test]
+    fn a_list_is_cut_at_the_device_limit_by_whole_lines() {
+        let library = Library::builtin().unwrap();
+        let catalog = Catalog::starter();
+        let of = symbols_by_keyword(&library);
+        let got = resolve(
+            parse("mcb x200\nmcb x200\nmcb x200\nmcb x50"),
+            &catalog,
+            &library,
+            &of,
+        );
+        assert!(got[0].placeable() && got[1].placeable());
+        assert!(!got[2].placeable(), "200 more would pass 500");
+        assert!(!got[3].placeable() || device_count(&got) <= MAX_DEVICES);
+        assert!(device_count(&got) <= MAX_DEVICES);
+        assert_eq!(device_count(&got), 450);
     }
 
     #[test]
