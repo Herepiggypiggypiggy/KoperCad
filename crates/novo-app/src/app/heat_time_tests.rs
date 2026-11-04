@@ -9,7 +9,9 @@ use novo_cfd::{CfdSnapshot, Fidelity, TransientSummary};
 use super::heat::{HeatState, Meta};
 use super::heat_run::Solution;
 use super::heat_run_tests::scenario;
-use super::heat_time::{Event, TimeLine, default_solver, plot, spec_for_minutes};
+use super::heat_time::{
+    Event, TimeLine, default_solver, mass_hover, mass_line, plot, spec_for_minutes,
+};
 
 fn meta() -> Meta {
     Meta {
@@ -224,4 +226,21 @@ fn a_snapshot_type_is_shared_not_copied() {
     let t = filled(2);
     assert!(Arc::ptr_eq(&t.frames[0].solution, &t.frames[1].solution));
     let _: &CfdSnapshot = &t.frames[0].solution.snapshot;
+}
+
+#[test]
+fn a_run_computes_the_shell_mass_line_and_clear_forgets_it() {
+    let mut t = TimeLine::new();
+    assert!(t.mass.is_none());
+    t.start(
+        Arc::new(novo_cfd::StubSolver),
+        scenario(),
+        spec_for_minutes(60.0),
+        meta(),
+    );
+    let m = t.mass.as_ref().expect("the shell mass run is cheap");
+    assert!(mass_line(m).starts_with("Shell mass: 90 % in "));
+    assert!(mass_hover(m).contains("not validated"));
+    t.clear();
+    assert!(t.mass.is_none());
 }
