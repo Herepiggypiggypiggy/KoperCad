@@ -1,0 +1,40 @@
+@title 3D Heat: pinned probes, plot along a line and air volume numbers
+@area 3D
+@sizes 1366x768 1920x1080
+# PR #1866. Probe on, click the air, Pin keeps the point; Line plots temperature along two clicks; the Numbers menu gives litres of air above a level. Window points are for the 3D canvas centre; adjust if the layout moves.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+click_text Probe
+wait 10
+click 600 380
+wait 10
+expect "Probe:"
+click_text Pin
+wait 10
+shot pinned
+click_text Line
+wait 10
+click 500 350
+click 700 420
+wait 20
+expect "Plot along line"
+expect "Along"
+shot line-plot
+click_text Numbers
+wait 10
+expect "Air hotter than"
+expect "Pinned probes"
+shot numbers
+check_layout
