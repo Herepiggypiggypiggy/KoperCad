@@ -1,0 +1,44 @@
+@title Wire ends: ring lug and sleeve text on a wire show in the Bench output crimp list
+@area Schematic
+@sizes 1366x768
+# Select a wire, Inspector > Wire ends: End A ring M5 and a sleeve text; Reports > Bench output > Ferrules lists "Lugs to crimp".
+open_starter_example
+wait 30
+click 24 82
+wait 5
+click 358 293
+wait 15
+expect "Wire ends"
+expect "Sleeve text"
+expect "End A"
+shot inspector-wire-ends
+check_layout
+click_text Proposed #1
+wait 5
+click_text "Ring lug"
+wait 8
+click 1192 368
+text M5
+key Tab
+wait 5
+click 1146 422
+text L1.1-U
+key Tab
+wait 8
+shot ring-m5-and-sleeve-set
+check_layout
+click_text Reports #1
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Ferrules
+wait 40
+expect "Lugs to crimp"
+expect "Ring lug M5"
+scroll 1200 300 -600
+wait 10
+shot lugs-to-crimp
+check_layout
+click_text Labels
+wait 8
+shot labels-tab

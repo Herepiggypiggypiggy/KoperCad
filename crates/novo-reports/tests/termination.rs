@@ -200,3 +200,32 @@ fn the_sleeve_text_prints_while_the_wire_number_stays() {
         );
     }
 }
+
+#[test]
+fn a_project_without_the_new_keys_prints_the_same_bench_output() {
+    use novo_reports::{FerruleTable, bench_jobs, ferrule_counts};
+    let doc = cabinet();
+    let project = doc.project();
+    // No wire carries a new key.
+    assert!(project.wires().all(|w| {
+        [TERMINATION_A_KEY, TERMINATION_B_KEY, SLEEVE_TEXT_KEY]
+            .iter()
+            .all(|k| w.properties.get(*k).is_none())
+    }));
+    let jobs = bench_jobs(project);
+    let standard = FerruleStandard::default();
+    // The crimp list is exactly the ferrule table: no lug rows, no lug section.
+    let crimps = crimp_list(&jobs, &standard);
+    let ferrules = ferrule_counts(&jobs, &standard);
+    assert_eq!(crimps.len(), ferrules.len());
+    assert!(crimps.iter().all(|c| c.kind == TerminationKind::Ferrule));
+    let table = FerruleTable::build(project, &jobs, &standard);
+    assert!(table.section("lugs").is_none());
+    assert!(table.section("ferrules").is_some());
+    // Every end keeps the sleeve text of before and the sleeve is the number.
+    for j in &jobs {
+        assert_eq!(j.sleeve, j.number);
+        assert_eq!(j.end_a.sleeve_text(), j.end_a.ferrule);
+        assert_eq!(j.end_b.sleeve_text(), j.end_b.ferrule);
+    }
+}
