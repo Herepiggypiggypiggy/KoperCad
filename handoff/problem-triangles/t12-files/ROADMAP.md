@@ -4,7 +4,7 @@ Scope (LANE-PROMPTS.md): failed import/export/save/PDF/DXF/EPLAN/bench/workpack/
 
 | PR | Content | State |
 |---|---|---|
-| 1 | Job-flag mechanism (`app/flags_jobs.rs`), top bar job triangle, popover actions, every failed-job toast (class J, Level::Error/Warning via `message`) in the files area, census file | this PR |
-| 2 | Class P rows on the bench, ferrule and label tabs (banners and toasts): triangle on the field or tab | next |
+| 1 | Job-flag mechanism (`app/flags_jobs.rs`), top bar job triangle, popover actions, every failed-job toast (class J, Level::Error/Warning via `message`) in the files area, census file | merged #1910 |
+| 2 | Bench: readiness sentences and tab banners are `flag_chip` triangles (the all-clear banners are gone), export refusals are job flags | this PR |
 | 3 | Class P/R rows in print preview, plot sets, PDF options, reports view, finish_export caveats | next |
 | 4 | Class P rows in variants, revisions, handover, workpack, sheet import dialog, EPLAN import dialog | next |
