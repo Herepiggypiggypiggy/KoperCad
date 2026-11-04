@@ -205,6 +205,31 @@ pub fn build(
         });
     }
 
+    // Circulation fans: flow through the fan faces and the pressure they build.
+    let circulation: Vec<CirculationFlow> = scn
+        .params
+        .circulation_fans
+        .iter()
+        .enumerate()
+        .map(|(k, fan)| {
+            let q = flow::circulation_flow(s, &st.flow, k);
+            let (mut dp_w, mut w) = (0.0, 0.0);
+            for &ci in &s.circ_of[k] {
+                let cf = &s.circ[ci];
+                let sign = cf.force.signum();
+                let part = sign * cf.sigma * (st.flow.p[cf.i] - st.flow.p[cf.j] + cf.force);
+                dp_w += part.max(1e-12) * sign * (st.flow.p[cf.j] - st.flow.p[cf.i]);
+                w += part.max(1e-12);
+            }
+            CirculationFlow {
+                index: k,
+                flow_m3h: q * 3600.0,
+                pressure_pa: dp_w / w.max(1e-12),
+                share_of_free_flow: (q / fan.q_max_m3s()).clamp(0.0, 1.0),
+            }
+        })
+        .collect();
+
     let air_field = grid_field(s, st.t_air.clone());
     let (half, top) = profile(&air_field);
     let max_speed = velocity.max_magnitude();
@@ -268,6 +293,7 @@ pub fn build(
         recommendations: Vec::new(),
         balance,
         openings,
+        circulation,
         max_speed_ms: max_speed,
         air_at_half_height_c: half,
         air_at_top_c: top,

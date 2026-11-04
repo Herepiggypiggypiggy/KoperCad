@@ -240,6 +240,21 @@ pub struct OpeningFlow {
     pub pressure_pa: f64,
 }
 
+/// Operating point of one circulation fan (no opening to the outside).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CirculationFlow {
+    /// Index in `Params::circulation_fans`.
+    pub index: usize,
+    /// Volume flow through the fan, m3/h. 0 for a fan that blows across the
+    /// depth (the 2D slice only stirs with it).
+    pub flow_m3h: f64,
+    /// Pressure the fan builds against the loop, Pa (area weighted).
+    pub pressure_pa: f64,
+    /// Share of the free flow it delivers, 0 to 1: how hard the loop
+    /// resists. Near 1 = the air finds an easy way round.
+    pub share_of_free_flow: f64,
+}
+
 /// Energy balance of the whole enclosure, W. Closes by construction up to
 /// the solver tolerance; `residual_w` shows how well.
 #[derive(Debug, Clone, PartialEq)]
@@ -348,6 +363,8 @@ pub struct ThermalResult {
     pub recommendations: Vec<Recommendation>,
     pub balance: Balance,
     pub openings: Vec<OpeningFlow>,
+    /// Operating point of each circulation fan.
+    pub circulation: Vec<CirculationFlow>,
     /// Fastest air in the enclosure, m/s.
     pub max_speed_ms: f64,
     /// Air temperature at 0.5 and 1.0 of the interior height measured from
