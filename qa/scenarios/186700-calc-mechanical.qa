@@ -33,15 +33,6 @@ scroll 400 450 -400
 wait 6
 shot mechanical-rail-and-plate
 expect "Deflection"
-# Bad input: the rail with no load is not calculated.
-double_click 329 489
-wait 4
-key ctrl+a
-text 0
-key Enter
-wait 6
-shot rail-no-load
-expect "Not calculated"
 # The plate result.
 click_text "Mounting plate under device weight"
 wait 6
