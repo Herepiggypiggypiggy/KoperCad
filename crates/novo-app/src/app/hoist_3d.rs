@@ -682,6 +682,10 @@ impl NovoApp {
                     notes.push_str(&format!("\n\u{2022} {line}"));
                 }
                 super::window_help::add(ui.ctx(), notes);
+                super::window_help::add(
+                    ui.ctx(),
+                    "The yellow line on the floor marks the safety zone around the crane.",
+                );
             });
         if !open {
             self.wb.hoist.three_d.open = false;
