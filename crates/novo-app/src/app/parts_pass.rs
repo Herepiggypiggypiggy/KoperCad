@@ -187,7 +187,7 @@ pub(super) fn pass_tab(
             .num_columns(3)
             .spacing([24.0, 4.0])
             .show(ui, |ui| {
-                for head in ["Device", "Description", "Part"] {
+                for head in ["Device", "Description", "Proposed part"] {
                     ui.small(head);
                 }
                 ui.end_row();
@@ -431,6 +431,7 @@ mod tests {
         d.app.backend.document_mut().unwrap().undo().unwrap();
         let project = d.app.backend.document().unwrap().project();
         assert_eq!(open_count(project), 3);
+        assert!(project.devices().all(|dev| dev.parts.is_empty()));
     }
 
     #[test]
