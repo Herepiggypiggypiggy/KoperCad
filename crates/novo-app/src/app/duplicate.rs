@@ -37,7 +37,7 @@ impl NovoApp {
                     view.select_ids(&copy.new_ids());
                 }
             }
-            Err(e) => self.message(Level::Error, format!("Could not duplicate: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not duplicate: {e}")),
         }
     }
 }

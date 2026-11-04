@@ -1,0 +1,42 @@
+@title Calculations > Busbar impedance: bar impedance and current sharing with the model label
+@area Windows
+open_starter_example
+wait 20
+key ctrl+k
+text calculations
+key enter
+wait 10
+click_text "Busbar impedance"
+wait 20
+expect model, quasi-static
+shot busbars-one-bar
+check_layout
+# Two bars per phase: the share of each bar appears.
+click_text "2 bars"
+wait 10
+scroll 400 450 -600
+wait 5
+expect hottest
+expect Share
+shot busbars-two-bars-stacked
+check_layout
+scroll 400 450 600
+wait 5
+click_text "side by side"
+wait 10
+shot busbars-unequal-sharing
+check_layout
+scroll 400 450 -600
+wait 5
+shot busbars-per-bar-lower
+check_layout
+click_text "Frequency sweep"
+wait 40
+shot busbars-sweep
+check_layout
+click_text "Copy as text"
+wait 5
+click_text Circuits
+wait 10
+shot circuits-still-there
+check_layout

@@ -342,7 +342,7 @@ impl NovoApp {
                     format!("{name} is now {new_name}; place the macro again for the new revision"),
                 );
             }
-            Err(e) => self.message(Level::Warning, format!("Could not rename {name}: {e}")),
+            Err(e) => self.refuse_tool(Level::Warning, format!("Could not rename {name}: {e}")),
         }
     }
 

@@ -204,14 +204,24 @@ impl NovoApp {
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(e) => {
-                self.message(Level::Error, format!("Could not read {name}: {e}"));
+                self.job_fail(
+                    "import.sheet",
+                    "Spreadsheet import failed",
+                    Level::Error,
+                    format!("Could not read {name}: {e}"),
+                );
                 return;
             }
         };
         let book = match read_file(&name, &bytes) {
             Ok(book) => book,
             Err(e) => {
-                self.message(Level::Error, format!("Could not import {name}: {e}"));
+                self.job_fail(
+                    "import.sheet",
+                    "Spreadsheet import failed",
+                    Level::Error,
+                    format!("Could not import {name}: {e}"),
+                );
                 return;
             }
         };
@@ -242,7 +252,9 @@ impl NovoApp {
         let bytes = match xlsx_bytes(&rejected) {
             Ok(bytes) => bytes,
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "export.rejected_rows",
+                    "Rejected rows not saved",
                     Level::Error,
                     format!("Could not save the rejected rows: {e}"),
                 );
@@ -273,9 +285,12 @@ impl NovoApp {
                 Some(path)
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.rejected_rows",
+                    "Rejected rows not saved",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    &path,
                 );
                 None
             }
@@ -422,13 +437,21 @@ impl NovoApp {
                         format!("Imported {n} change{s} from spreadsheet"),
                     );
                 }
-                Some(Err(e)) => {
-                    self.message(Level::Error, format!("Could not import spreadsheet: {e}"))
-                }
+                Some(Err(e)) => self.job_fail(
+                    "import.sheet",
+                    "Spreadsheet import failed",
+                    Level::Error,
+                    format!("Could not import spreadsheet: {e}"),
+                ),
                 None => {}
             },
             Ok(None) => self.message(Level::Info, "Nothing to import"),
-            Err(e) => self.message(Level::Error, format!("Could not import spreadsheet: {e}")),
+            Err(e) => self.job_fail(
+                "import.sheet",
+                "Spreadsheet import failed",
+                Level::Error,
+                format!("Could not import spreadsheet: {e}"),
+            ),
         }
     }
 }

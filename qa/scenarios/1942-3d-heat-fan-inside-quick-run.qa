@@ -1,0 +1,28 @@
+@title 3D Heat: a fan inside the cabinet goes into a Quick 3D run and the run finishes
+@area 3D
+@sizes 1366x768 1920x1080
+# Lane H8, 3D solver: the fans of the Fans inside section are mapped into the 3D grid. Same walk as 1602 with one fan added before the run; the run must finish and show no error. Compare with 1602 (no fan).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+# Opening Heat on a small cabinet starts an automatic run, which greys out the Quality row: stop it first.
+click_text Cancel
+wait 10
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+scroll 170 560 -400
+wait 10
+click_text "Add fan inside"
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+move 700 650
+wait 10
+shot fan-run-done
+check_layout

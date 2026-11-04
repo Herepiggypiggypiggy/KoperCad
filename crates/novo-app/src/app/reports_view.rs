@@ -815,7 +815,12 @@ impl NovoApp {
                     format!("Added page {} {}", spec.name, spec.title),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
+            Err(e) => self.job_fail(
+                "report.add_page",
+                "Report page not added",
+                Level::Error,
+                format!("Could not add the page: {e}"),
+            ),
         }
     }
 
@@ -884,7 +889,12 @@ impl NovoApp {
             ReportFormat::Excel => match novo_reports::xlsx_bytes(&translated) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    self.message(Level::Error, format!("Could not export to Excel: {e}"));
+                    self.job_fail(
+                        "export.report_excel",
+                        "Excel export failed",
+                        Level::Error,
+                        format!("Could not export to Excel: {e}"),
+                    );
                     return None;
                 }
             },
@@ -898,14 +908,18 @@ impl NovoApp {
         };
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
+                self.job_ok("export.report");
                 self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.report",
+                    "Report not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }
@@ -996,7 +1010,12 @@ impl NovoApp {
             None => match super::projects_dir() {
                 Some(dir) => dir,
                 None => {
-                    self.message(Level::Error, "Could not find the Documents folder");
+                    self.job_fail(
+                        "export.report",
+                        "Report not written",
+                        Level::Error,
+                        "Could not find the Documents folder",
+                    );
                     return None;
                 }
             },
