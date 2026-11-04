@@ -129,7 +129,7 @@ impl HeatState {
         // The vents of the settings are part of the cabinet being solved.
         let vents = {
             let mut h = std::collections::hash_map::DefaultHasher::new();
-            format!("{:?}{:?}", self.settings.vents, self.settings.inside).hash(&mut h);
+            format!("{:?}", self.settings.vents).hash(&mut h);
             h.finish()
         };
         let key = (

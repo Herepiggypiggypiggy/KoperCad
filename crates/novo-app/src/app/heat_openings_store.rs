@@ -73,7 +73,6 @@ impl super::NovoApp {
     /// The reading and writing of [`Self::sync_openings`], for a caller that
     /// has no frame (the Cooling advice adding a pair from the Cabinet).
     pub(super) fn sync_openings_now(&mut self) {
-        self.sync_inside_fans_now();
         let Some(document) = self.backend.document() else {
             return;
         };

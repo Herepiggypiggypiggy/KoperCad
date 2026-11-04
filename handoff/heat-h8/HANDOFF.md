@@ -2,11 +2,11 @@
 
 Branch `claude/project-thread-775snv` (kopercad). Thread id cmsg_01TV2QyH4AYw9X2aTmgUsuhCY2DuLPR4VNhj3dZwiQJf7m. Main heat thread cmsg_01TV2QyH4AYw9X2aTmgUsuhCL7FH6aNrvjWWRxkLjoj7gk.
 
-State: PR #1861 holds the engine and the UI entry (Fans inside section). 3D CFD not started; needs a new branch from main after merge (no stacked PRs). Fans inside are 2D only; the 3D solver ignores `circulation_fans`.
+State: PR 1 (engine) pushed, see PROGRESS.md for the head SHA. UI (PR 2) and 3D CFD (PR 3) not started.
 
 Resume: `cargo test -p novo-thermal --test circulation` and `--lib forced`.
 
-Code: `crates/novo-thermal/src/forced.rs` (correlations), `model.rs` (`CirculationFan`, `BlowDirection`, three new `Params` fields), `setup.rs` (`CircFace`, validation), `flow.rs` (fan faces, `circulation_flow`), `thermal.rs` (`device_h_turbulent`, `circulation_jets`, `wake_tu`, heatsink in `update_device_h`), `report.rs` (`circulation` result), app side `novo-app/src/app/heat_inside_fans.rs` (+ `HeatSettings::inside`, `apply`, panel hook in `view3d_vents.rs`, project sync in `heat_openings_store.rs`).
+Code: `crates/novo-thermal/src/forced.rs` (correlations), `model.rs` (`CirculationFan`, `BlowDirection`, three new `Params` fields), `setup.rs` (`CircFace`, validation), `flow.rs` (fan faces, `circulation_flow`), `thermal.rs` (`device_h_turbulent`, `circulation_jets`, `wake_tu`, heatsink in `update_device_h`), `report.rs` (`circulation` result).
 
 Traps:
 - Fans live in `Params`, not `Scenario`, on purpose (115 `Scenario {` literals; H1 adds `ShellModel`).
