@@ -257,8 +257,13 @@ pub(super) fn tab(
                 o.peak_x_m * 1000.0,
                 o.mean_c
             );
-            let p = crate::theme::ui_palette();
-            ui.colored_label(if over { p.error } else { p.success }, text);
+            ui.label(text);
+            if over {
+                ui.colored_label(
+                    crate::theme::ui_palette().warning,
+                    format!("Above the {} °C limit you typed.", form.limit_c),
+                );
+            }
             ui.label(format!(
                 "Heat: bar {:.1} W, joints {:.1} W, into the cabinet air {:.1} W, out through the ends {:.1} W",
                 o.bar_loss_w,
@@ -272,12 +277,12 @@ pub(super) fn tab(
                     o.skin_factor
                 ));
             }
-            profile(ui, o, form.limit_c);
         }
         Err(e) => {
             ui.colored_label(crate::theme::ui_palette().error, e.to_string());
         }
     }
+    ui.weak("Model, not a measurement. A planning estimate for the numbers typed here, not a pass or fail against a rating.");
     match r.max_current_a {
         Some(a) => ui.label(format!(
             "At most {a:.0} A keeps the hottest point at {} °C",
@@ -296,17 +301,20 @@ pub(super) fn tab(
         )),
         None => ui.label(format!("From cold it stays under {} °C", form.limit_c)),
     };
+    if let Ok(o) = &r.steady {
+        profile(ui, o, form.limit_c);
+    }
     ui.horizontal(|ui| {
         if ui.button("Copy as text").clicked() {
             *copy = Some(report_text(form, r));
         }
-        ui.weak("Planning estimate. Neighbouring phases, short-circuit heating and the standard's temperature limits are not covered.");
+        ui.weak("Not covered: neighbouring phases, short-circuit heating, the standard's temperature limits.");
     });
 }
 
 /// The temperature along the bar as a small line graph with the limit.
 fn profile(ui: &mut egui::Ui, o: &Output, limit_c: f64) {
-    let size = egui::vec2(ui.available_width().min(520.0), 110.0);
+    let size = egui::vec2(ui.available_width().min(520.0), 56.0);
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = crate::theme::ui_palette();
     let painter = ui.painter_at(rect);
@@ -341,6 +349,13 @@ fn profile(ui: &mut egui::Ui, o: &Output, limit_c: f64) {
         .zip(&o.temp_c)
         .map(|(x, t)| at(*x, *t))
         .collect();
+    painter.text(
+        at(0.0, limit_c) + egui::vec2(2.0, 1.0),
+        egui::Align2::LEFT_TOP,
+        format!("limit {limit_c:.0} °C"),
+        egui::FontId::proportional(11.0),
+        p.error,
+    );
     painter.add(egui::Shape::line(pts, egui::Stroke::new(2.0, p.warning)));
 }
 
