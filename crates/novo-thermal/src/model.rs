@@ -237,6 +237,10 @@ pub struct Params {
     pub discharge_coefficient: f64,
     /// Multiplier on the wall heat transfer coefficient (IEC 60890 k).
     pub wall_k_scale: f64,
+    /// The shell as layers (lane H1). `None` = the default shell of the
+    /// enclosure, calibrated to the IEC 60890 coefficient of its material, so
+    /// results equal the one-number wall.
+    pub shell: Option<crate::shell::ShellModel>,
     /// Solver stop: largest temperature change between iterations, K.
     pub tolerance_k: f64,
     pub max_iterations: usize,
@@ -250,6 +254,16 @@ pub struct Params {
     /// forced film toward the turbulent plate value. Off keeps the clean
     /// laminar plate (the long-standing behaviour).
     pub wake_turbulence: bool,
+}
+
+impl Scenario {
+    /// The shell in use: the user's, or the default one of the enclosure.
+    pub fn shell(&self) -> crate::shell::ShellModel {
+        self.params
+            .shell
+            .clone()
+            .unwrap_or_else(|| crate::shell::ShellModel::from_enclosure(&self.enclosure))
+    }
 }
 
 impl Default for Params {
@@ -267,6 +281,7 @@ impl Default for Params {
             radiation_view_factor: 0.5,
             discharge_coefficient: 0.6,
             wall_k_scale: 1.0,
+            shell: None,
             tolerance_k: 0.01,
             max_iterations: 60,
             circulation_fans: Vec::new(),

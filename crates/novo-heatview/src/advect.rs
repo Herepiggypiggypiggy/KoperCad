@@ -341,6 +341,7 @@ mod tests {
                 conductivity_w_mk: 0.026,
             }],
             wall_flux_w_m2: vec![0.0; n],
+            plate_rear_c: None,
             devices: Vec::new(),
             hot_spots: Vec::new(),
             opening_flows: Vec::new(),
