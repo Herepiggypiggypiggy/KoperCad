@@ -5,6 +5,8 @@
 # T14: Help > Open log folder cannot start a file manager (PATH is empty): the toast becomes a yellow red/yellow triangle next to the Issues pill.
 click_text "New project"
 wait 20
+click_text "Cabinet" Button
+wait 10
 key ctrl+k
 wait 4
 text open log folder
