@@ -1,26 +1,26 @@
 # KoperCAD QA run
 
-Platform linux, window sizes 1366x768. 1 run(s): 1 passed, 0 failed; 1 finding(s) (0 blocking, S1 to S3).
+Platform linux, window sizes 1920x1080. 1 run(s): 1 passed, 0 failed; 1 finding(s) (0 blocking, S1 to S3).
 
-Program: `/home/claude/target/debug/kopercad`, built 1793797638 (unix time), source at git 13da1cd6ad.
+Program: `/home/claude/target/debug/kopercad`, built 1793798230 (unix time), source at git 2fa443d859.
 
-App: 1366.0x768.0 points at scale 1.0.
+App: 1920.0x1080.0 points at scale 1.0.
 
 ## Scenarios
 
 | Scenario | Area | Size | Result | Findings | Pictures |
 |---|---|---|---|---|---|
-| EMC findings are triangles on the drawing, with a popover and a fix preview (1366x768) (9511-emc-triangles-popover-1366x768) | Check | 1366x768 | pass | F-001 | 4 |
+| EMC findings are triangles on the drawing, with a popover and a fix preview (1920x1080) (9512-emc-triangles-popover-1920x1080) | Check | 1920x1080 | pass | F-001 | 4 |
 
 ## Findings
 
 | # | Sev | Area | Size | Title | Evidence |
 |---|---|---|---|---|---|
-| F-001 | S4 | Check | 1366x768 | 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture) | shots/9511-emc-triangles-popover-1366x768-1366x768-04-finding-1.png |
+| F-001 | S4 | Check | 1920x1080 | 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture) | shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png |
 
 ### F-001 S4 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)
 
-Scenario `9511-emc-triangles-popover-1366x768` at 1366x768. Kind: layout-maybe.
+Scenario `9512-emc-triangles-popover-1920x1080` at 1920x1080. Kind: layout-maybe.
 
 Steps:
 
@@ -36,7 +36,7 @@ Steps:
 10. `wait 10`
 11. `shot emc-triangles`
 12. `check_layout`
-13. `click 255 158`
+13. `click 546 256`
 14. `wait 6`
 15. `expect "Open EMC check"`
 16. `expect "Sensitive device near drive"`
@@ -51,8 +51,8 @@ Steps:
 25. `check_layout`
 
 - Expected: every control fully visible and not overlapped
-- Saw: 'Cabinet' over 'Close window'
+- Saw: ' New' over 'Run the EMC rules with the design checks'
 
-![F-001](shots/9511-emc-triangles-popover-1366x768-1366x768-04-finding-1.png)
+![F-001](shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png)
 
 Severity: S1 data loss, crash or cannot start. S2 a core workflow cannot be finished, a wrong number is shown as fact, or the window is blank. S3 everything else that is wrong or confusing. S4 polish and accessibility.
