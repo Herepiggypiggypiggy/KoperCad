@@ -1,6 +1,6 @@
-# PR 1862 evidence (code head 603e30d7cd8df5fba8673bb9f0c3989adc7b30f9)
+# PR 1862 evidence (code head 27a53cb144da60342335516af4d422df4c0a6e12)
 
-Pictures and the kept drill plan PDFs are in this folder (shots/, files/). Binary built at the code head by scripts/qa.sh; report.md says "source at git 603e30d7cd".
+Pictures and the kept drill plan PDFs are in this folder (shots/, files/). Binary built at the code head by scripts/qa.sh; report.md says "source at git 27a53cb1cd".
 
 ## Where the user finds each feature
 - Rittal download: Parts window, select a Rittal part, Import. Scenario 1862-rittal-parts-window, 1366x768 and 1920x1080 (shots part-selected, waiting-with-steps).
@@ -15,3 +15,7 @@ Import opens https://rittal.partcommunity.com/3d-cad-models/?catalog=rittal&part
 - The scenarios use a hand-made catalog (qa/fixtures/rittal-parts.json), not Rittal data.
 - Unit tests use hand-made geometry. Separately, the reader was run by hand on three real Rittal downloads from the owner (private, not in the repo): see handoff/rittal-parts in the project mount.
 - Windows not run (Linux QA only).
+
+## Limits of the plate holes (also printed on the drill plan and in docs/RITTAL.md)
+- Check one hole against the real plate before drilling: positions follow the maker's model, which may be turned or mirrored.
+- Countersunk and blind holes are listed with their front diameter.
