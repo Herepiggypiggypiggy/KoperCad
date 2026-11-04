@@ -16,8 +16,24 @@ wait 10
 expect "Rittal PARTcommunity"
 expect "Use my normal browser"
 shot supplier-menu
+click_text "Downloads folder"
+wait 8
+shot submenu-downloads-folder
+click_text "Forget sign-in"
+wait 8
+shot submenu-forget-sign-in
+click 480 49
+wait 4
+click 212 157
+wait 8
+shot help-text
+click 480 49
+wait 4
+click_text "Get parts from supplier"
+wait 8
 click_text "Rittal PARTcommunity"
 wait 15
 expect "WebView2"
+expect "Files taken"
 shot fallback-no-webview
 check_layout

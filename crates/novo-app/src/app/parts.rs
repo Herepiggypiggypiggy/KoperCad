@@ -1956,29 +1956,21 @@ fn supplier_menu(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<Par
             &mut win.suppliers.use_system_browser,
             "Use my normal browser",
         );
-        ui.horizontal(|ui| {
-            ui.weak("Sign in and download yourself");
-            widgets::help_mark(ui, SUPPLIER_HELP);
-        });
     });
 }
 
-const SUPPLIER_HELP: &str = "The supplier's site opens in its own window. You sign in and download as you would in any browser; KoperCAD does not type, click or read the page, and never sees or keeps your password. Each supplier has its own private sign-in folder (Forget sign-in removes it). What you download is kept in a private folder on this computer, only STEP, DXF, ZIP, EDZ and catalog files, and Parts reads each file before it takes it. If the built-in browser cannot start (it needs the Microsoft WebView2 runtime, part of current Windows), your normal browser opens and Downloads is watched instead. Suppliers are listed in suppliers.json in KoperCAD's browser folder.";
+const SUPPLIER_HELP: &str = "The supplier's site opens in its own window. You sign in and download as you would in any browser; KoperCAD does not type, click or read the page, and never sees or keeps your password. Each supplier has its own private sign-in folder (Forget sign-in removes it). What you download is kept in a private folder on this computer, only STEP, DXF, ZIP, EDZ and catalog files, and Parts reads each file before it takes it. If the built-in browser cannot start (it needs the Microsoft WebView2 runtime, part of current Windows), your normal browser opens and your Downloads folder is watched for 30 minutes instead: any STEP, DXF, ZIP, EDZ or catalog file of that supplier's kinds saved there in that time is offered to Parts, which still reads it before taking it. Suppliers are listed in suppliers.json in KoperCAD's browser folder.";
 
 /// One line while a supplier's site is open: who, how many files were taken.
 fn suppliers_strip(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAction>) {
     let name = win.suppliers.open_name().map(str::to_owned);
     ui.horizontal(|ui| {
         supplier_menu(ui, win, actions);
+        widgets::help_mark(ui, SUPPLIER_HELP);
         if let Some(name) = &name {
             ui.spinner();
-            let how = if win.suppliers.source() == Some(super::parts_suppliers::Source::Window) {
-                "sign in and download there"
-            } else {
-                "sign in and download in your browser"
-            };
             ui.label(format!(
-                "{name}: {how}. Files taken: {}",
+                "{name} is open. Files taken: {}",
                 win.suppliers.handed_over()
             ));
             if ui.button("Stop").clicked() {
