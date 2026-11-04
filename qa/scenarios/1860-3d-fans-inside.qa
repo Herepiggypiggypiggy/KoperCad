@@ -1,0 +1,29 @@
+@title 3D Heat: add a fan inside the cabinet, the Fans inside section shows the row and the model label
+@area 3D
+@sizes 1366x768
+# Lane H8. Fans inside are circulation fans with no opening; 2D estimate only, labelled model, with assumed start values.
+open_starter_example
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+scroll 170 560 -400
+wait 10
+expect "Fans inside"
+expect "(model)"
+click_text "Add fan inside"
+wait 10
+scroll 170 560 -400
+wait 10
+expect "Model, not measurement"
+expect "Fan inside, right (model)"
+expect "Off the plate"
+shot fan-inside-added
+check_layout
+scroll 170 560 -400
+wait 10
+click_text "Remove"
+wait 10
+expect_not "Fan inside, right"
+shot fan-inside-removed

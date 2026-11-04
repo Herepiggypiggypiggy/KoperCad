@@ -284,6 +284,7 @@ fn body(
         ui.add_space(4.0);
         ui.label(muted(&line));
     }
+    super::heat_inside_fans::section(ui, settings, e);
     egui::CollapsingHeader::new("What is this?")
         .id_salt("view3d_vents_about")
         .show(ui, |ui| {
