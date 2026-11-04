@@ -348,7 +348,7 @@ impl Default for Mesh {
 
 /// The most filaments one solve takes (the dense matrix grows with the
 /// square; above this the mesh is made coarser and a warning says so).
-pub const MAX_FILAMENTS: usize = 900;
+pub const MAX_FILAMENTS: usize = 450;
 
 /// A run to solve.
 #[derive(Debug, Clone, PartialEq)]
@@ -1163,6 +1163,33 @@ mod tests {
         );
         assert!(overlap(&ok).is_none());
         assert!(solve(&ok).is_some());
+    }
+
+    #[test]
+    fn worst_case_run_solves_and_reports_its_time() {
+        // 3 phases of 4 stacked bars at 1 kHz: the mesh cap and the filament
+        // cap keep the dense solve bounded.
+        let s = Setup::three_phase(
+            Material::Copper,
+            100.0,
+            10.0,
+            4,
+            5.0,
+            true,
+            150.0,
+            2000.0,
+            1000.0,
+            3000.0,
+            70.0,
+        );
+        let t = std::time::Instant::now();
+        let sol = solve(&s).unwrap();
+        eprintln!(
+            "worst case solve: {:?}, {} filaments",
+            t.elapsed(),
+            sol.filaments.len()
+        );
+        assert!(sol.filaments.len() <= MAX_FILAMENTS);
     }
 
     #[test]

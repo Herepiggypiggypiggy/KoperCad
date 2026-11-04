@@ -31,6 +31,7 @@ pub(super) struct BusbarState {
     line_volts: f64,
     cache: Option<(Setup, Option<Solution>)>,
     sweep: Option<(Setup, Vec<Solution>)>,
+    pending: Option<(Setup, std::sync::mpsc::Receiver<Option<Solution>>)>,
 }
 
 impl Default for BusbarState {
@@ -50,6 +51,7 @@ impl Default for BusbarState {
             line_volts: 400.0,
             cache: None,
             sweep: None,
+            pending: None,
         }
     }
 }
@@ -76,24 +78,46 @@ impl BusbarState {
         )
     }
 
-    /// The solution for the current inputs (solved again only when they change).
-    #[cfg(test)]
-    pub(super) fn solution(&mut self) -> Option<&Solution> {
-        self.refresh(false);
-        self.cache.as_ref().and_then(|(_, s)| s.as_ref())
-    }
-
-    /// Solve again when an input changed. While a field is being dragged
-    /// (`busy`) the last result stays, so dragging does not stutter.
+    /// Solve again when an input changed, on a worker thread so the window
+    /// never waits for a large run. While a field is being dragged (`busy`)
+    /// nothing new starts and the last result stays.
     fn refresh(&mut self, busy: bool) {
+        if let Some((_, rx)) = &self.pending {
+            match rx.try_recv() {
+                Ok(solved) => {
+                    if let Some((setup, _)) = self.pending.take() {
+                        self.cache = Some((setup, solved));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(_) => self.pending = None,
+            }
+        }
         let setup = self.setup();
-        if busy && self.cache.is_some() {
+        let stale = self.cache.as_ref().is_none_or(|(s, _)| *s != setup);
+        if !stale || (busy && self.cache.is_some()) {
             return;
         }
-        if self.cache.as_ref().is_none_or(|(s, _)| *s != setup) {
-            let solved = busbar::solve(&setup);
-            self.cache = Some((setup, solved));
-        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let job = setup.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(busbar::solve(&job));
+        });
+        self.pending = Some((setup, rx));
+    }
+
+    /// Whether a solve is running.
+    fn solving(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// The solution for the current inputs, solved here and now (tests).
+    #[cfg(test)]
+    pub(super) fn solution(&mut self) -> Option<&Solution> {
+        let setup = self.setup();
+        let solved = busbar::solve(&setup);
+        self.cache = Some((setup, solved));
+        self.cache.as_ref().and_then(|(_, s)| s.as_ref())
     }
 }
 
@@ -158,7 +182,10 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         badge(ui, Model::Busbar);
         let hover = NOT_MODELLED.join("\n");
         ui.label("?")
-            .on_hover_text(format!("{}\n\nNot modelled:\n{hover}", busbar::MODEL_LABEL));
+            .on_hover_text(format!(
+                "{}\n\nCables are solid conductors here: the AC factor of a stranded cable is a little lower.\n\nNot modelled:\n{hover}",
+                busbar::MODEL_LABEL
+            ));
     });
     ui.weak("Straight parallel bars, no steel nearby, no joints or bends. Planning numbers.");
     egui::Grid::new("busbar_inputs")
@@ -245,6 +272,14 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         });
     let busy = ui.input(|i| i.pointer.any_down());
     st.refresh(busy);
+    if st.solving() {
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(50));
+        if st.cache.is_none() {
+            ui.weak("Solving...");
+            return;
+        }
+    }
     ui.separator();
     let Some((setup, sol)) = st.cache.clone() else {
         return;

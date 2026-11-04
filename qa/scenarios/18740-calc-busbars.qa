@@ -7,7 +7,7 @@ text calculations
 key enter
 wait 10
 click_text Busbars
-wait 10
+wait 20
 expect model, quasi-static
 expect Planning numbers
 shot busbars-one-bar
@@ -35,6 +35,8 @@ click_text "Frequency sweep"
 wait 40
 shot busbars-sweep
 check_layout
+click_text "Copy as text"
+wait 5
 click_text Circuits
 wait 10
 shot circuits-still-there
