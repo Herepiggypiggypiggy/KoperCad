@@ -607,6 +607,7 @@ pub(super) fn dialog<'a>(
         open: None,
         scrolls: true,
         floats: wide,
+        tall: size[1] >= 1000.0,
     }
 }
 
@@ -650,6 +651,9 @@ pub(super) struct Dialog<'a> {
     scrolls: bool,
     /// A window that opens floating (wide ones, or `floating`).
     floats: bool,
+    /// Asked for "as tall as the screen allows": docked, it opens that tall
+    /// instead of at the default pane height.
+    tall: bool,
 }
 
 impl<'a> Dialog<'a> {
@@ -721,6 +725,7 @@ impl<'a> Dialog<'a> {
             open,
             scrolls,
             floats,
+            tall,
         } = self;
         let pane_id = self::id(&name);
         if !floats
@@ -731,6 +736,9 @@ impl<'a> Dialog<'a> {
             super::panel_dock::set(ctx, &name, Some(super::panel_dock::Slot::Right));
         }
         if let Some(slot) = super::panel_dock::slot_of(ctx, &name) {
+            if tall {
+                super::panel_dock::open_tall(ctx, &name);
+            }
             let shown = super::panel_dock::show_docked(
                 ctx,
                 pane_id,

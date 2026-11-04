@@ -401,6 +401,17 @@ fn pane_height(ctx: &egui::Context, name: &str) -> f32 {
         .map_or(PANE_DEFAULT_HEIGHT, |(_, h)| h)
 }
 
+/// A pane that asked for the whole height of its slot (a long form with a
+/// chat) gets it the first time it docks; a height the person gave it stays.
+pub(super) fn open_tall(ctx: &egui::Context, name: &str) {
+    let all: Vec<(String, f32)> = ctx
+        .data_mut(|d| d.get_persisted(heights_id()))
+        .unwrap_or_default();
+    if !all.iter().any(|(n, _)| n == name) {
+        set_pane_height(ctx, name, Some(PANE_MAX_HEIGHT));
+    }
+}
+
 fn set_pane_height(ctx: &egui::Context, name: &str, height: Option<f32>) {
     let mut all: Vec<(String, f32)> = ctx
         .data_mut(|d| d.get_persisted(heights_id()))
@@ -1543,6 +1554,20 @@ mod tests {
             pane.right() > SCREEN.x - 2.0 && canvas.right() < SCREEN.x - 200.0,
             "{pane:?} {canvas:?}"
         );
+    }
+
+    #[test]
+    fn a_tall_dialog_asks_for_the_whole_slot_once_and_keeps_a_height_the_person_set() {
+        let ctx = egui::Context::default();
+        assert_eq!(pane_height(&ctx, "window:Ask Claude"), PANE_DEFAULT_HEIGHT);
+        open_tall(&ctx, "window:Ask Claude");
+        assert_eq!(pane_height(&ctx, "window:Ask Claude"), PANE_MAX_HEIGHT);
+        set_pane_height(&ctx, "window:Ask Claude", Some(400.0));
+        open_tall(&ctx, "window:Ask Claude");
+        assert_eq!(pane_height(&ctx, "window:Ask Claude"), 400.0);
+        // Alone in the slot, it is laid out as tall as the slot.
+        let (rects, _) = stack_layout(700.0, &[(PANE_MAX_HEIGHT, false)]);
+        assert!(rects[0].1 > 4000.0 * 0.0 + 600.0, "{rects:?}");
     }
 
     #[test]
