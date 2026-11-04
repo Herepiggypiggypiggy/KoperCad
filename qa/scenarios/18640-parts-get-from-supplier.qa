@@ -36,4 +36,8 @@ wait 15
 expect "WebView2"
 expect "Files taken"
 shot fallback-no-webview
+click_text Stop Button
+wait 8
+expect_not "WebView2"
+shot strip-closed
 check_layout

@@ -126,8 +126,10 @@ impl Suppliers {
         self.session.as_ref().map_or(0, |s| s.handed)
     }
 
+    /// Closes the strip: the session ends and its fallback note goes with it.
     pub fn stop(&mut self) {
         self.session = None;
+        self.note = None;
     }
 
     /// Opens `supplier_id` at its search for `order` (when it has one). The
@@ -208,6 +210,7 @@ impl Suppliers {
             return out;
         };
         if s.started.elapsed() > SESSION_LIMIT {
+            self.note = None;
             return out;
         }
         // The window failed after it started (no runtime, bad folder):
@@ -405,8 +408,18 @@ mod tests {
         assert!(s.open_name().is_some());
         s.stop();
         assert!(s.open_name().is_none());
+        assert!(s.note.is_none());
         assert_eq!(s.pump(1.0), Pumped::default());
         assert_eq!(s.open("nobody", None, None, Source::Window), None);
+    }
+
+    #[test]
+    fn stopping_removes_the_fallback_note() {
+        let (mut s, _dir) = make(no_runtime);
+        s.open("wago", None, None, Source::Window);
+        assert!(s.note.is_some());
+        s.stop();
+        assert!(s.note.is_none());
     }
 
     #[test]
