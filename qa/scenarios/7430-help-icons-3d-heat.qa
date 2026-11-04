@@ -37,6 +37,7 @@ click 700 690
 wait 6
 click 317 343
 wait 8
+expect "Where air gets in"
 shot help-b
 click 700 690
 wait 6

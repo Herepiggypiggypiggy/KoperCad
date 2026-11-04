@@ -24,12 +24,15 @@ click_text Simulate #2
 wait_s 200
 click 1294 311
 wait 10
+expect "Simulate solves the air flow"
 shot popup-top
 scroll 1190 520 -300
 wait 6
+expect "Enclosure temperatures are not yet validated"
 shot popup-scrolled
 scroll 1190 520 -3000
 wait 6
+expect "Started from the 2D estimate"
 shot popup-end
 click 700 690
 wait 6
