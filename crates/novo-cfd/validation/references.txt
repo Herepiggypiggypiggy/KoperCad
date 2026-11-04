@@ -16,5 +16,5 @@ sealed-iec-60890 | standard | passed | validation_enclosure.rs | sealed box mean
 device-vs-2d | model_vs_model | passed | validation_device.rs | housing rise and plate share against the 2D engine, mesh spread
 cabinet-vs-2d | model_vs_model | passed | validation_cabinet.rs | cabinet solver against the 2D engine and IEC 60890
 mesh-independence | model_vs_model | passed | validation_mesh_creep.rs | housing rise stays within a band from 1000 to 20000 cells
-ritherm-cross-check | third_party_model | manual | validation_iec.rs | checked by hand against private RiTherm output (IEC TR 60890:2022, nine cases), not reproducible from the repository; validation_iec.rs pins our IEC hand values: 0.5 to 3 % below RiTherm's mean air rise, 6 % on the small box; never counts
+ritherm-cross-check | third_party_model | manual | validation_iec.rs | checked by hand against a private RiTherm note, see project files; not reproducible from the repository; validation_iec.rs pins our own IEC hand values; never counts
 measured-cabinet | measured | planned | validation_gate.rs | one real cabinet with logged temperatures; needed to flip the flag
