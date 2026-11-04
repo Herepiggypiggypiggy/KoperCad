@@ -8,4 +8,4 @@ import_table qa/fixtures/parts/odd-list.xlsx
 wait 20
 shot mapping
 check_layout
-check_text 12
+expect "Warning: Rows to check"

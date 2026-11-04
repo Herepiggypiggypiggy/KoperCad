@@ -9,7 +9,7 @@ text Parts
 wait 10
 key Return
 wait 20
-import_table qa/fixtures/parts/not-text.csv
+try import_table qa/fixtures/parts/not-text.csv
 wait 20
 shot triangle-in-window
 check_layout

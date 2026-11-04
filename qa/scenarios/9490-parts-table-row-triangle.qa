@@ -20,12 +20,12 @@ wait 10
 shot rows-with-triangles
 check_layout
 expect "Error: Not imported"
-expect_not "not a possible size"
+expect_not "no order number"
 click_text "Error: Not imported" Button #1
 wait 6
 shot popover
-expect "not a possible size"
+expect "no order number"
 key Escape
 wait 6
-expect_not "not a possible size"
+expect_not "no order number"
 shot popover-closed
