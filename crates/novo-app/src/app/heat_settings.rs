@@ -526,6 +526,12 @@ pub(super) struct HeatSettings {
     pub seal: Option<Seal>,
     /// The opening the panel has open and the 3D view highlights.
     pub selected: Option<usize>,
+    /// Fans inside the cabinet, with no opening (lane H8).
+    pub inside: Vec<super::heat_inside_fans::InsideFan>,
+    /// The fan inside the panel has open.
+    pub inside_selected: Option<usize>,
+    /// What the project holds for the shown enclosure, as last read or written.
+    pub(super) inside_stored: Option<(novo_core::StructureId, String)>,
     /// A drag or a typed value is under way: it is one undo step.
     editing: bool,
     /// What the project holds for the shown enclosure, as last read or
@@ -547,6 +553,9 @@ impl Default for HeatSettings {
             vents: Vec::new(),
             seal: None,
             selected: None,
+            inside: Vec::new(),
+            inside_selected: None,
+            inside_stored: None,
             editing: false,
             stored: None,
             hovered: None,
@@ -574,9 +583,18 @@ impl HeatSettings {
             .extend(self.vents.iter().filter_map(|v| v.to_vent(&e)));
         s.fans
             .extend(self.vents.iter().filter_map(|v| v.to_fan(&e)));
+        s.params
+            .circulation_fans
+            .extend(self.inside.iter().map(|f| f.to_model(&e)));
         if let Some(seal) = &self.seal {
             s.vents.extend(gaps::leak_vents(&e, seal, &s.params));
         }
+    }
+
+    /// A change to a fan inside is under way: keeps the project write until
+    /// the gesture ends, like the openings.
+    pub(super) fn begin_inside_edit(&mut self) {
+        self.editing = true;
     }
 
     /// Remembers the openings as they are, to come back to with `undo`. Call
@@ -994,6 +1012,36 @@ mod tests {
         let mut sc = scenario();
         s.apply(&mut sc);
         assert!(sc.vents.is_empty() && sc.fans.is_empty());
+        assert!(sc.params.circulation_fans.is_empty());
+    }
+
+    #[test]
+    fn a_fan_inside_reaches_the_run_as_a_circulation_fan_and_not_as_an_opening() {
+        use super::super::heat_inside_fans::{Dir, InsideFan};
+        let e = enclosure();
+        let mut s = HeatSettings {
+            inside: vec![InsideFan {
+                x_mm: 300.0,
+                y_mm: 400.0,
+                dir: Dir::ToPlate,
+                installed_pct: 80.0,
+                off_plate_mm: 150.0,
+                ..InsideFan::default()
+            }],
+            ..HeatSettings::default()
+        };
+        let mut sc = scenario();
+        s.apply(&mut sc);
+        assert!(sc.vents.is_empty() && sc.fans.is_empty());
+        let f = &sc.params.circulation_fans[0];
+        assert_eq!(f.direction, novo_thermal::model::BlowDirection::ToPlate);
+        assert!((f.installed_factor - 0.8).abs() < 1e-12);
+        assert_eq!(f.z_mm, Some(150.0));
+        // Kept inside the cabinet whatever was typed.
+        s.inside[0].x_mm = 1.0e9;
+        let mut sc = scenario();
+        s.apply(&mut sc);
+        assert!(sc.params.circulation_fans[0].x_mm <= e.interior_width_mm());
     }
 
     #[test]

@@ -19,6 +19,8 @@ pub enum Source {
     Commissioning,
     Job,
     Shell,
+    /// An edit that was refused (a transient flag on the selection or the tool).
+    Edit,
 }
 
 impl Source {
@@ -37,6 +39,7 @@ impl Source {
             Source::Commissioning => "commissioning".into(),
             Source::Job => "job".into(),
             Source::Shell => "shell".into(),
+            Source::Edit => "edit".into(),
         }
     }
 
@@ -55,6 +58,7 @@ impl Source {
             Source::Commissioning => "Commissioning",
             Source::Job => "Job",
             Source::Shell => "App",
+            Source::Edit => "Edit",
         }
     }
 }

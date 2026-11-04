@@ -176,7 +176,7 @@ pub(super) fn key_of(
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (structure, project.revision(), ambient.to_bits()).hash(&mut h);
-    format!("{:?}", settings.vents).hash(&mut h);
+    format!("{:?}{:?}", settings.vents, settings.inside).hash(&mut h);
     for f in fans {
         (&f.name, f.airflow_m3h.to_bits()).hash(&mut h);
     }

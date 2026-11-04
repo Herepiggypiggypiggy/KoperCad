@@ -139,6 +139,7 @@ mod example_pump;
 mod faults;
 mod flag_rows;
 mod flags;
+mod flags_edit;
 mod flags_jobs;
 mod handover;
 mod heat;
@@ -158,6 +159,7 @@ mod heat_export;
 mod heat_flow;
 #[cfg(test)]
 mod heat_flow_tests;
+mod heat_inside_fans;
 mod heat_layout;
 #[cfg(test)]
 mod heat_layout_tests;
@@ -352,6 +354,9 @@ mod view3d_controls;
 mod view3d_drag_gaps;
 mod view3d_duct_fill;
 mod view3d_duplicate;
+mod view3d_flags;
+#[cfg(test)]
+mod view3d_flags_tests;
 mod view3d_heat;
 mod view3d_heat_labels;
 mod view3d_hints;
@@ -470,6 +475,8 @@ mod example_tests;
 mod faults_tests;
 #[cfg(test)]
 mod first_view_tests;
+#[cfg(test)]
+mod flags_edit_tests;
 #[cfg(test)]
 mod flags_jobs_tests;
 #[cfg(test)]
@@ -1045,6 +1052,7 @@ impl NovoApp {
                 self.canvas.document_changed(doc, &changes);
                 self.backend.record(&changes);
                 self.reports_heard(&changes);
+                self.message(Level::Info, if redo { "Redone" } else { "Undone" });
             }
             Ok(None) => {}
             Err(e) => {
@@ -2130,6 +2138,7 @@ impl NovoApp {
                     self.after_canvas_frame();
                     self.flag_click();
                     self.wb.canvas_area = Some((ui.layer_id(), ui.min_rect()));
+                    self.flag_corner(ui.ctx());
                 } else {
                     self.start_screen(ui, &mut picked);
                 }
@@ -2137,6 +2146,7 @@ impl NovoApp {
             .response
             .rect;
 
+        self.expire_refusal(&ctx);
         self.flag_popover(&ctx);
         if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
