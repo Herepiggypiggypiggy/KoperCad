@@ -1,0 +1,32 @@
+@title Cooling selection names the missing outside depth of the enclosure record
+@area 3D
+@sizes 1366x768 1920x1080
+# The record has no outside depth: one line says so and gives no answer (the red label moves to a flag in lane T6).
+open qa/fixtures/cabinet-cooling-spec-no-depth.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+move 700 650
+wait 10
+click_text "Cooling selection"
+wait 10
+shot missing-depth
+expect "The enclosure has no outside depth."
+check_layout
