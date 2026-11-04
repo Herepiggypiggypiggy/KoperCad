@@ -301,6 +301,8 @@ impl Solver for CabinetSolver {
         control: &Control,
         publish: &mut dyn FnMut(&CfdSnapshot),
     ) -> Result<CfdSnapshot, CfdError> {
+        let lowered = scenario.lowered();
+        let scenario = &*lowered;
         control.set_phase("Planning the grid");
         let mesh = self.mesh_for(fidelity)?;
         let reduce_it = match self.large {

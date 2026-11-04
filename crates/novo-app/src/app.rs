@@ -279,6 +279,7 @@ mod rail_cabinet;
 mod rail_reports;
 mod rail_schematic;
 mod reports;
+mod reports_queries;
 mod reports_view;
 mod review_notes;
 mod revisions;

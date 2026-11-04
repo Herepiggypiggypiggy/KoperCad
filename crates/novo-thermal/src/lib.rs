@@ -47,7 +47,8 @@ pub(crate) fn run_steady_from(
     scn: &Scenario,
     init: Option<&thermal::State>,
 ) -> Result<(Setup, thermal::State), Error> {
-    let s = Setup::new(scn)?;
+    let lowered = scn.lowered();
+    let s = Setup::new(&lowered)?;
     let st = thermal::steady_from(&s, 1.0, init);
     Ok((s, st))
 }
@@ -161,8 +162,8 @@ pub fn simulate_transient(
         ));
     }
     let resolved = outside::resolve(scn)?;
-    let scn = &resolved;
-    let s = Setup::new(scn)?;
+    let lowered = resolved.lowered();
+    let s = Setup::new(&lowered)?;
     let load_at = |t: f64| -> f64 {
         settings
             .load_schedule
