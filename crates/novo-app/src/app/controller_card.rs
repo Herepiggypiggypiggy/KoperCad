@@ -411,9 +411,6 @@ fn draw_card_body(
             None,
         ));
     }
-    if let Some(c) = super::sim_flags::strip(ui, &super::sim_flags::card_level(flags)) {
-        actions.push(CardAction::FlagOpen(c.0, c.1));
-    }
     instance_row(ui, ctl, actions);
     let Some(id) = ctl.selected.clone() else {
         ui.add_space(4.0);
@@ -508,6 +505,10 @@ fn draw_card_body(
             vec![f.text],
             f.key.as_ref().map(|k| k.controller.as_str()),
         ));
+    }
+    // Where the lines of the checks were: the rows above keep their places.
+    if let Some(c) = super::sim_flags::strip(ui, &super::sim_flags::card_level(flags)) {
+        actions.push(CardAction::FlagOpen(c.0, c.1));
     }
     ui.separator();
     ui.horizontal(|ui| {

@@ -10,7 +10,12 @@ key shift+l
 wait 30
 shot live-no-supply
 tree supply
+expect "No supply in the drawing"
+click_text "Warning: No supply in the drawing" Button
+wait 6
 expect "No supply is defined in this drawing"
+key Escape
+wait 4
 expect "Place a feed"
 expect "Add supply circuit"
 expect "no supply is defined yet"
