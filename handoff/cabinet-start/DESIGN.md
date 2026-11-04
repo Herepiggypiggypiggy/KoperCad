@@ -37,11 +37,13 @@ Stored on the Structure (first as typed `properties` keys prefixed `encl.`, beca
 | door | hinge side, max angle, inner depth, number of doors | catalogue |
 | openings | vents, gland plates, cut-outs, fan/filter positions (wall, centre, size) | STEP body + accessories |
 | accessories | roof, plinth, door lock, cooling unit, each with an article number | panel choices |
+| envelope | for the 3D heat view: mesh of the body or parametric ribs, roof, plinth, door swing (heat-shell-ui.md section 7, #1856) | catalogue / STEP |
+| installation | free standing, wall mounted, row, covered faces, plinth, finish, absorptance (wiring lane reads these; `assumed` fallback) | panel, defaults assumed |
 | step_ref | file name and SHA-256 of the user's STEP; the file itself is never stored in the project | drag and drop |
-| provenance | per field: `catalogue`, `step`, or `typed`; shown behind "?" and in reports | panel |
+| provenance | per field: `catalogue`, `step` (read from the maker's STEP), `measured` (user measured it) or `assumed` (typed or default); saved with the project; shown behind "?" and in reports | panel |
 
 Honesty rule: a number read from the STEP wins over the catalogue, a catalogue number wins over a typed one,
-and a field whose source is `typed` is flagged in the cabinet report so nobody mistakes it for the maker's.
+and a field whose source is `assumed` is flagged in the cabinet report so nobody mistakes it for the maker's.
 
 ## Catalogue data
 
