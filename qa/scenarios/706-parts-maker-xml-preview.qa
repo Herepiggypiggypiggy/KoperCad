@@ -11,7 +11,11 @@ key Enter
 wait 20
 expect "Read from 1 file(s): 2 connection points on 1 parts"
 expect "3 holes on 1 parts"
-expect "Assumed: Connection point and hole positions are kept in the maker's own frame"
+click_text "Warning: Assumed" Button #1
+wait 6
+expect "Connection point and hole positions are kept in the maker's own frame"
+key Escape
+wait 6
 expect "Kept as written, not understood"
 expect "part/colour"
 expect_enabled "Add to catalog"

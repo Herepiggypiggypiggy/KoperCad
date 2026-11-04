@@ -651,7 +651,6 @@ fn portal_summary(ui: &mut egui::Ui, portal: &PortalRead) {
                     "Assumed",
                     [a.to_string()],
                 );
-                ui.weak(a.to_string());
             }
             if portal.unrecognised.is_empty() {
                 ui.weak("Every attribute was placed.");
