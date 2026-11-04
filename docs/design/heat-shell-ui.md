@@ -1,6 +1,6 @@
 # Heat shell UI (lane H7)
 
-Status: design, written against the H1 contract proposal in `handoff/heat-research/ROADMAP.md`. No engine change here. Today the shell is one IEC 60890 number per face (`ThermalBc::Overall`, `Params::wall_k_scale`); wall temperatures do not exist yet.
+Status: design; H1 contract is as built in PR #1865 (`Params::shell`, `ThermalResult::shell`, face order door, rear, left, right, top, bottom). Originally written against the H1 contract proposal in `handoff/heat-research/ROADMAP.md`. No engine change here. Today the shell is one IEC 60890 number per face (`ThermalBc::Overall`, `Params::wall_k_scale`); wall temperatures do not exist yet.
 
 ## Rules
 
@@ -65,6 +65,18 @@ Until H1, the builder returns faces `None`, `split` from `Balance`, and `caps` a
 - Heat flow per path kind (convection, radiation, conduction through wall, openings) per face, summing to loss.
 - Stable enum for face order (match the existing `front/rear/left/right/top/bottom` balance fields).
 - Defaults reproduce today's totals within 2 %, so the Shell section can ship before the layered model without moving any result.
+
+## 7. Real enclosure feed: provenance and CAD envelope
+
+The simulation runs on the enclosure the user chose at cabinet start (see "Real enclosure feed" in `handoff/heat-research/ROADMAP.md`). The UI shows where each value came from:
+
+- **Provenance dot per field** in the Shell section: `catalogue` (from the chosen enclosure record), `measured` (user typed a measured value) and `assumed` (today's default because the record has no value). One small dot with a colour from `ui_palette()` and a `?` that names the source; no sentence beside the field. Typing over a catalogue value turns the dot to `measured`. A reset arrow returns it to `catalogue`.
+- Provenance lives next to the value in the project (`Provenance { Catalogue, Measured, Assumed }` per field), so a saved file keeps it. Heat results carry the lowest provenance among the inputs of a term; a term built on any `assumed` input keeps the `?` badge text "assumed inputs".
+- Fields covered: outside and interior size, wall material and thickness per face, finish, insulation or double wall, door (hinge side, gasket, window area), openings and IP rating, plate size, thickness, material and setback, installation, enclosure weight.
+
+**3D heat view draws the real CAD envelope** (ribs, roof, plinth, door swing) from the enclosure record's model instead of a plain box when one exists, with the face temperature tint on its surfaces. Without a record it draws the box, and the provenance dots read `assumed`. Same envelope is exported for H2 view factors, so what is drawn is what is simulated.
+
+Needs from the chain thread: the enclosure record with a provenance flag per field and an envelope mesh (or parametric ribs/plinth); from H1: `ShellModel` built from that record.
 
 ## 6. Steps
 
