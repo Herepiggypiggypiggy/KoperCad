@@ -8,6 +8,16 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+# Opening Heat starts an automatic run: stop it, switch Auto off so it does not restart, and stop again.
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 40
 click_text "Settings for the next run"
 wait 10
 click_text Quick
@@ -21,7 +31,9 @@ click_text "Add these two to Vents and fans"
 wait 10
 expect "Added"
 shot added-before-3d-result
-wait_s 330
+# Auto is off, so the 3D run does not go again by itself: run it (Quick, as set above).
+click_text Simulate #2
+wait_s 400
 expect "Model comparison"
 expect "not a measurement"
 shot comparison
