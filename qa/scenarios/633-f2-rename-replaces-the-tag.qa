@@ -4,7 +4,7 @@
 # Click test C-08: F2 on a device opened the tag field with the old tag unselected and typing appended ("-K1K99"). The tag is selected now.
 open_starter_example
 wait 20
-click 352 229
+click 358 246
 wait 8
 key F2
 wait 8

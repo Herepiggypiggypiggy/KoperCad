@@ -10,7 +10,7 @@ text import io list
 wait 6
 key Enter
 wait 20
-expect "Import I/O list"
+expect "Add cards and pages"
 expect "Digital channels per card"
 shot io-list-review
 check_layout

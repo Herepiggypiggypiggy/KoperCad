@@ -14,7 +14,7 @@ expect "Mounting plate (mm)"
 shot 01-plate-card-with-close
 check_layout
 # The close button sits at the right of the title bar.
-click 1885 194
+click 1886 210
 wait 15
 expect_not "Mounting plate (mm)"
 shot 02-closed
