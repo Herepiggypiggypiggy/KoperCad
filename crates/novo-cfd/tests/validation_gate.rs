@@ -15,7 +15,7 @@ const KINDS: [&str; 6] = [
     "measured",
     "licensed",
 ];
-const STATUS: [&str; 3] = ["passed", "failed", "planned"];
+const STATUS: [&str; 4] = ["passed", "failed", "planned", "manual"];
 
 struct Reference {
     id: String,
@@ -50,6 +50,7 @@ fn the_register_is_well_formed_and_points_at_real_tests() {
     ids.dedup();
     assert_eq!(ids.len(), refs.len(), "duplicate id");
     let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let thermal = Path::new(env!("CARGO_MANIFEST_DIR")).join("../novo-thermal/tests");
     for r in &refs {
         assert!(
             KINDS.contains(&r.kind.as_str()),
@@ -64,7 +65,7 @@ fn the_register_is_well_formed_and_points_at_real_tests() {
             r.status
         );
         assert!(
-            here.join(&r.test).exists(),
+            here.join(&r.test).exists() || thermal.join(&r.test).exists(),
             "{}: test file {} is missing",
             r.id,
             r.test
