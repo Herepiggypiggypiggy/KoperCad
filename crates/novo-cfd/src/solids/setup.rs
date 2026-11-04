@@ -510,6 +510,7 @@ impl FlowSetup {
             };
         }
         cfg.openings = patches_from_scenario(scn)?;
+        cfg.interior_fans = crate::flow::interior_fans_from_scenario(scn)?;
         if st.plate == PlateModel::Sheet {
             cfg.plate = plate_sheet(scn, &classified, &walls, st.solid_speedup);
         }

@@ -489,9 +489,11 @@ impl NovoApp {
             return false;
         }
         let Some(converter) = dwg::find_installed(self.settings.dwg_converter.as_deref()) else {
-            self.message(
+            self.job_fail(
+                "import.dwg",
+                "No DWG converter",
                 Level::Warning,
-                format!("No DWG converter found. {}", dwg::guidance()),
+                format!("No DWG converter found. {}.", dwg::guidance()),
             );
             return false;
         };
@@ -561,6 +563,7 @@ impl NovoApp {
         match dwg::ConverterKind::of_program(program) {
             Some(kind) => {
                 self.settings.dwg_converter = Some(program.to_path_buf());
+                self.job_ok("import.dwg");
                 self.message(
                     Level::Info,
                     format!("DWG files will be converted with {}", kind.label()),
@@ -568,9 +571,11 @@ impl NovoApp {
                 true
             }
             None => {
-                self.message(
+                self.job_fail(
+                    "import.dwg",
+                    "Not a DWG converter",
                     Level::Warning,
-                    "That is not dwg2dxf or the ODA File Converter. Choose one of those programs",
+                    "That is not dwg2dxf or the ODA File Converter. Choose one of those programs.",
                 );
                 false
             }

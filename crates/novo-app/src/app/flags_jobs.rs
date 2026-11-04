@@ -49,6 +49,19 @@ pub(super) fn retry_command(job: &str) -> Option<&'static str> {
     })
 }
 
+/// QA pictures of refusals the app cannot reach in a short script: in a
+/// debug build, `KOPERCAD_QA_FAIL=export.change_report,manual.open` makes
+/// those jobs refuse with a fixed sentence. Release builds ignore it.
+pub(super) fn qa_forced_error(job: &str) -> Option<String> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let keys = std::env::var("KOPERCAD_QA_FAIL").ok()?;
+    keys.split(',')
+        .any(|k| k.trim() == job)
+        .then(|| format!("Forced for the QA picture ({job})"))
+}
+
 impl NovoApp {
     /// A job failed: the flag on the job, and the plain words in the log.
     /// `Info` is not a problem and stays a plain message.

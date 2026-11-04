@@ -24,3 +24,4 @@
 
 - T12 PR 2 (bench): `widgets::flag_chip` for inline problems on a section (triangle, short title, popover with the sentence); bench banners and readiness gaps migrated; census files 18 to 13. QA 9524/9525.
 - T12 PR 3: plot sets, report templates and bench packet refusals are job flags; census files 13 to 8.
+- T12 PR 4: DWG converter, handover, revision, change report, designer and manual refusals are job flags; files area down to the one written-with-warnings toast.

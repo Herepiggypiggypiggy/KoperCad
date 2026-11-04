@@ -54,6 +54,15 @@ impl NovoApp {
 
     /// Writes the report of the changes since the latest revision to `path`.
     pub fn export_change_report_to(&mut self, path: &Path) -> Option<PathBuf> {
+        if let Some(why) = super::flags_jobs::qa_forced_error("export.change_report") {
+            self.job_fail(
+                "export.change_report",
+                "Change report not written",
+                Level::Warning,
+                why,
+            );
+            return None;
+        }
         let doc = self.backend.document()?;
         let project = doc.project();
         let latest = project.latest_revision()?;
@@ -66,7 +75,12 @@ impl NovoApp {
         ) {
             Ok(c) => c,
             Err(e) => {
-                self.message(Level::Warning, e.to_string());
+                self.job_fail(
+                    "export.change_report",
+                    "Change report not written",
+                    Level::Warning,
+                    e.to_string(),
+                );
                 return None;
             }
         };
