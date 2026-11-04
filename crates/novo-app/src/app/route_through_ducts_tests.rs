@@ -240,3 +240,50 @@ fn write_slotted_ducts_fixture() {
     let _ = std::fs::remove_file(&path);
     d.app.backend.save(&path).unwrap();
 }
+
+/// Duct categories are optional: typed words read back, a duct that states
+/// none routes as before, and one that states a kind steers wires without
+/// ever leaving one unrouted.
+#[test]
+fn duct_categories_are_off_by_default_and_never_refuse_a_wire() {
+    use super::cabinet_rails::parse_carries;
+    use novo_routing::model::RouteClass;
+    assert_eq!(parse_carries(""), Some(vec![]));
+    assert_eq!(parse_carries("any"), Some(vec![]));
+    assert_eq!(
+        parse_carries("signal, power"),
+        Some(vec![RouteClass::Power, RouteClass::Signal])
+    );
+    assert_eq!(parse_carries("heavy"), None);
+
+    let (_dir, mut d) = placed_example();
+    let before = route_project(d.doc().project());
+    let ducts: Vec<_> = d
+        .doc()
+        .project()
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .map(|r| r.id)
+        .collect();
+    // Every duct states "earth only": every other wire prefers to stay out of
+    // all of them, which cannot be done, so they still go through.
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Categories", |tx| {
+            for id in &ducts {
+                tx.set_property(
+                    *id,
+                    novo_routing::model::DUCT_CARRIES,
+                    Some(novo_core::Value::Text("earth".into())),
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let after = route_project(d.doc().project());
+    assert_eq!(before.routes.len(), after.routes.len());
+    assert_eq!(before.unrouted, after.unrouted);
+    assert!(after.routes.values().all(|r| !r.blocked));
+}

@@ -233,6 +233,84 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
     }
 }
 
+/// Report id of the wiring sign-off sheet.
+pub const SIGNOFF_ID: &str = "wiring-signoff";
+/// Section key of the sign-off page list.
+pub const SIGNOFF_PAGES_KEY: &str = "signoff:pages";
+/// Section key of the signature lines.
+pub const SIGNOFF_SIGN_KEY: &str = "signoff:sign";
+
+/// The wiring sign-off sheet, last in the packet: one tick row per circuit
+/// sheet (wired, tested), then lines for the name, signature and date of the
+/// person who wired and the one who tested. It states what was done at the
+/// bench and is not an inspection record or a claim of compliance. `None`
+/// when there is no circuit sheet to sign off.
+pub fn signoff_sheet(project: &Project, jobs: &[WireCutJob]) -> Option<ReportOutput> {
+    let circuits = circuit_sheets(project, jobs);
+    if circuits.sections.is_empty() {
+        return None;
+    }
+    let mut pages = Section::new(
+        SIGNOFF_PAGES_KEY,
+        "Wiring sign-off · tick each circuit sheet when it is wired and tested",
+        vec![
+            Column::new("wired", "Wired", 14.0),
+            Column::new("tested", "Tested", 14.0),
+            Column::new("sheet", "Circuit sheet", 110.0),
+            Column::new("wires", "Wires", 14.0).right(),
+            Column::new("initials", "Initials", 24.0),
+            Column::new("date", "Date", 20.0),
+        ],
+    );
+    let mut total = 0usize;
+    for section in &circuits.sections {
+        let wires = section.rows.iter().filter(|r| is_wire_row(r)).count();
+        total += wires;
+        let title = section.title.split(" · ").next().unwrap_or(&section.title);
+        pages.push(
+            vec![
+                Cell::text(TICK_BOX),
+                Cell::text(TICK_BOX),
+                Cell::text(title),
+                Cell::Int(wires as i64),
+                Cell::Empty,
+                Cell::Empty,
+            ],
+            Vec::new(),
+        );
+    }
+    let mut sign = Section::new(
+        SIGNOFF_SIGN_KEY,
+        &format!(
+            "Signatures · {total} wires on {} sheets",
+            circuits.sections.len()
+        ),
+        vec![
+            Column::new("role", "", 40.0),
+            Column::new("name", "Name", 60.0),
+            Column::new("signature", "Signature", 60.0),
+            Column::new("date", "Date", 32.0),
+        ],
+    );
+    for role in ["Wired by", "Tested by", "Accepted by"] {
+        sign.push(
+            vec![Cell::text(role), Cell::Empty, Cell::Empty, Cell::Empty],
+            Vec::new(),
+        );
+    }
+    Some(ReportOutput {
+        report: SIGNOFF_ID.into(),
+        title: "Wiring sign-off".into(),
+        revision: project.revision(),
+        sections: vec![pages, sign],
+    })
+}
+
+/// Whether a circuit sheet row is a wire (its step cell says `Wire`).
+fn is_wire_row(row: &crate::table::Row) -> bool {
+    matches!(row.cells.get(1), Some(Cell::Text(t)) if t == "Wire")
+}
+
 /// One line of the cover's contents.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoverLine {
