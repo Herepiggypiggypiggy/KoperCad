@@ -22,3 +22,13 @@ key Escape
 wait 6
 expect_not "Wires without a cross-section get no ferrule"
 shot bench-chip-closed
+# The second chip opens and closes cleanly too.
+click_text "Lengths estimated" Button
+wait 8
+expect "lengths are estimates"
+shot bench-chip2-popover
+check_layout
+key Escape
+wait 6
+expect_not "lengths are estimates"
+shot bench-chip2-closed
