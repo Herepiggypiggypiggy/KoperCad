@@ -216,6 +216,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "calc.tab.circuits",
     "calc.tab.starters",
     "calc.tab.sccr",
+    "calc.tab.busbars",
     "autopilot.window",
     "autopilot.accept_all",
 ];

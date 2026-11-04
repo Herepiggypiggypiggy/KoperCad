@@ -14,6 +14,7 @@
 //! * The score of a subject is the sum of its findings' points, capped at
 //!   100, and every point is listed with its reason in [`Score::reasons`].
 
+pub mod busbar;
 pub mod class;
 pub mod field;
 pub mod geometry;
