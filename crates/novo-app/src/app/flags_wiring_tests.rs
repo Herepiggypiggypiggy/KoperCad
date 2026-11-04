@@ -150,7 +150,7 @@ fn a_failed_export_is_a_job_flag_until_the_same_job_succeeds() {
     // A path below a plain file cannot be created.
     let blocker = dir.path().join("blocker");
     std::fs::write(&blocker, b"x").unwrap();
-    let toasts = d.app.messages.len();
+    let toasts = d.app.messages().iter().filter(|m| !m.dismissed).count();
     let bad = blocker.join("cut.csv");
     assert!(d.app.export_wire_cut_to(&bad).is_none());
     let anchor = Anchor::Job(job::WIRE_CUT.to_owned());
@@ -171,7 +171,11 @@ fn a_failed_export_is_a_job_flag_until_the_same_job_succeeds() {
         Some(&JobRetry::WireCut),
         "Retry runs the same export"
     );
-    assert_eq!(d.app.messages.len(), toasts, "no red toast beside the flag");
+    assert_eq!(
+        d.app.messages().iter().filter(|m| !m.dismissed).count(),
+        toasts,
+        "no red toast beside the flag"
+    );
     // It shows in the top bar and keeps showing across frames.
     d.frame();
     assert!(d.app.wb.flags.store.at(&anchor, false).len() == 1);

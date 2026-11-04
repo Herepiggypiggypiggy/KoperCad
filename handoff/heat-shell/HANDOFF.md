@@ -15,6 +15,9 @@ Face order everywhere: `FRONT`(door)=0, `REAR`, `LEFT`, `RIGHT`, `TOP`, `BOTTOM`
 ## Extra heat sources (follow-up PR)
 `Params::sources: Vec<HeatSource{id, rect, power_w, blockage}>` (in Params, not Scenario, to keep the 118 struct literals compiling). `Scenario::lowered()` turns each into a porous Duct obstacle carrying `power_w`; called at the entry of `Setup::new` users (lib.rs), `CabinetSolver::solve` and `solve_transient`. Callers pass the part that reaches the air (busbar `heat_to_air_w`). Not modelled: heat capacity of the source, heat to the plate, film/radiation of the body (H8). Tests: `tests/shell.rs` in novo-thermal and novo-cfd.
 
+## Door frame bridge (follow-up PR)
+`ShellModel::door_edge: Option<DoorEdge{psi_w_per_mk}>`: linear bridge, conductance = psi x door perimeter (outside W+H), added to the FRONT face conductance in 2D and 3D (`conductances_w_per_k`). `FaceTemps::edge_heat_w` reports the part through the frame. Conduction only; air leaking through the seal is lane H4. Door-mounted devices are not modelled.
+
 ## Traps
 - IEC k is air to air: the default shell calibrates the films, never add films on top. `wall_k_scale` multiplies U.
 - `exposed_share` is the IEC factor b: a covered face carries its flux through that share; the floor of a floor-standing cabinet has b=0 and its outer temperature equals the inside value.

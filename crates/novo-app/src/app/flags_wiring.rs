@@ -150,41 +150,18 @@ impl NovoApp {
         detail: &str,
         retry: JobRetry,
     ) {
-        // The advice for an operating system error, as the toast gave it.
-        let detail = super::error_words::plain(detail);
-        log::warn!("{title}: {detail}");
-        let id = self.wb.flags.store.set(FlagDraft {
-            severity: if red { Severity::Red } else { Severity::Yellow },
-            unchecked: false,
-            source: Source::Job,
-            rule: job.to_owned(),
-            anchors: vec![Anchor::Job(job.to_owned())],
-            title: title.to_owned(),
-            detail: Detail::new([detail]),
-            actions: vec![Action::Retry, Action::Copy],
-            waiver_key: None,
-            life: Life::Until,
-        });
-        self.wb.flags.retry.insert(id, retry);
+        // The flag is the one every failed job gets (flags_jobs): the pill in the
+        // top bar, with Retry, Copy details and Dismiss. Retry runs `retry`.
+        self.wb
+            .flags
+            .retry
+            .insert(super::flags_jobs::job_flag_id(job), retry);
+        self.job_fail_red(job, title, red, detail);
     }
 
     /// The job went well: its flag goes.
     pub(super) fn job_clear(&mut self, job: &'static str) {
-        let ids: Vec<FlagId> = self
-            .wb
-            .flags
-            .store
-            .at(&Anchor::Job(job.to_owned()), true)
-            .iter()
-            .map(|f| f.id)
-            .collect();
-        for id in ids {
-            self.wb.flags.store.clear(id);
-            self.wb.flags.retry.remove(&id);
-            if self.wb.flags.open.is_some_and(|(open, _)| open == id) {
-                self.wb.flags.open = None;
-            }
-        }
+        self.job_ok(job);
     }
 
     /// Runs a job again from its popover.
@@ -207,32 +184,6 @@ impl NovoApp {
                 self.export_workshop();
             }
         }
-    }
-
-    /// The worst job flag beside the Issues pill: one triangle with a count
-    /// when several jobs failed. A click opens the worst one.
-    pub(super) fn job_roll_up(&mut self, ui: &mut egui::Ui) {
-        let jobs: Vec<Flag> = self
-            .wb
-            .flags
-            .store
-            .list(false)
-            .into_iter()
-            .filter(|f| f.source == Source::Job)
-            .cloned()
-            .collect();
-        let Some(worst) = jobs
-            .iter()
-            .min_by_key(|f| f.severity != Severity::Red)
-            .cloned()
-        else {
-            return;
-        };
-        let response = triangle_button(ui, &worst);
-        if jobs.len() > 1 {
-            ui.weak(jobs.len().to_string());
-        }
-        ask_popover(&mut self.wb.flags.open, worst.id, &response);
     }
 
     /// Raises the flag of a field the wire panel refused.

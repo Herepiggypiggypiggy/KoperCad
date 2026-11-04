@@ -1063,6 +1063,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     cmd("proposal.next", "Next proposal", "Draw", &[], Needs::Page),
     verb(
         cmd(
+            "place.list",
+            "Place devices from a pasted list...",
+            "Draw",
+            &[
+                "paste list",
+                "parts list",
+                "bill of materials in",
+                "from excel",
+                "place many",
+                "bulk place",
+            ],
+            Needs::Page,
+        ),
+        &["place list", "paste list"],
+    ),
+    verb(
+        cmd(
             "draw.tidy",
             "Tidy routes",
             "Draw",
@@ -3819,6 +3836,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "Export",
             &[
                 "workshop",
+                "print for the bench",
                 "drilling template",
                 "drill template",
                 "cut-out",
@@ -3835,6 +3853,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &[
             "export workshop",
+            "print for the bench",
             "workshop pack",
             "drilling template",
             "drill template",

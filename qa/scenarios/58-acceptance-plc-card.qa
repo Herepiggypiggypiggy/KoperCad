@@ -21,7 +21,7 @@ text plc overview
 wait 6
 key Enter
 wait 20
-expect "PLC overview"
+expect "Renumber I/O"
 expect "-A1"
 shot overview-below-menu
 check_layout

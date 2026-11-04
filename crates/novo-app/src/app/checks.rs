@@ -198,7 +198,7 @@ impl NovoApp {
             self.show_issues(true);
         }
         self.punch_pill(ui);
-        self.job_roll_up(ui);
+        self.job_pill(ui);
     }
 
     /// In the Commissioning workspace, the pill above counts design checks
@@ -384,7 +384,16 @@ impl NovoApp {
                                     novo_theme::Palette::of(ui),
                                 );
                             }
-                            ui.selectable_label(false, text)
+                            // A horizontal layout never wraps: give the label a
+                            // top-down cell of the width left after the triangle,
+                            // so a long message wraps there as it did before.
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| ui.selectable_label(false, text),
+                            )
+                            .inner
                         })
                         .inner;
                     self.problem_flash(ui, *i, &row);
