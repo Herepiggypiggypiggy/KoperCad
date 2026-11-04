@@ -2,7 +2,7 @@
 
 Platform linux, window sizes 1366x768, 1920x1080. 4 run(s): 4 passed, 0 failed; 0 finding(s) (0 blocking, S1 to S3).
 
-Program: `/home/claude/tgt/debug/kopercad`, built 1793796304 (unix time), source at git 1be84bbfce.
+Program: `/home/claude/tgt/debug/kopercad`, built 1793823555 (unix time), source at git da0da349fa.
 
 App: 1366.0x768.0 points at scale 1.0.
 
@@ -12,8 +12,8 @@ App: 1366.0x768.0 points at scale 1.0.
 |---|---|---|---|---|---|
 | PLC overview and a bad card layout: triangles, not coloured sentences (9480-plc-overview-triangle-rows) | Schematic | 1366x768 | pass | - | 2 |
 | PLC overview and a bad card layout: triangles, not coloured sentences (9480-plc-overview-triangle-rows) | Schematic | 1920x1080 | pass | - | 2 |
-| A refused terminal edit is a triangle chip with the reason in it, not a toast (9481-refused-edit-chip) | Schematic | 1366x768 | pass | - | 3 |
-| A refused terminal edit is a triangle chip with the reason in it, not a toast (9481-refused-edit-chip) | Schematic | 1920x1080 | pass | - | 3 |
+| A refused terminal edit is a transient triangle in the canvas corner, not a toast (9481-refused-edit-chip) | Schematic | 1366x768 | pass | - | 2 |
+| A refused terminal edit is a transient triangle in the canvas corner, not a toast (9481-refused-edit-chip) | Schematic | 1920x1080 | pass | - | 2 |
 
 ## Findings
 

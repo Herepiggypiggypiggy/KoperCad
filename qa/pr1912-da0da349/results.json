@@ -10,13 +10,13 @@
     ]
   },
   "binary": {
-    "built": "1793796304 (unix time)",
-    "git_head": "1be84bbfce",
+    "built": "1793823555 (unix time)",
+    "git_head": "da0da349fa",
     "path": "/home/claude/tgt/debug/kopercad",
     "warning": null
   },
   "findings": [],
-  "generated": 1793796305,
+  "generated": 1793823557,
   "platform": "linux",
   "scenarios": [
     {
@@ -24,7 +24,7 @@
       "files": [],
       "findings": [],
       "name": "9480-plc-overview-triangle-rows",
-      "seconds": 15.1,
+      "seconds": 16.2,
       "shots": [
         "shots/9480-plc-overview-triangle-rows-1366x768-01-bad-layout-chip.png",
         "shots/9480-plc-overview-triangle-rows-1366x768-02-plc-overview.png"
@@ -34,7 +34,7 @@
       "steps": [
         {
           "error": null,
-          "ms": 623,
+          "ms": 468,
           "n": 1,
           "note": null,
           "status": "ok",
@@ -42,7 +42,7 @@
         },
         {
           "error": null,
-          "ms": 719,
+          "ms": 559,
           "n": 2,
           "note": null,
           "status": "ok",
@@ -50,7 +50,7 @@
         },
         {
           "error": null,
-          "ms": 1359,
+          "ms": 1443,
           "n": 3,
           "note": null,
           "status": "ok",
@@ -58,7 +58,7 @@
         },
         {
           "error": null,
-          "ms": 284,
+          "ms": 288,
           "n": 4,
           "note": null,
           "status": "ok",
@@ -66,7 +66,7 @@
         },
         {
           "error": null,
-          "ms": 540,
+          "ms": 575,
           "n": 5,
           "note": null,
           "status": "ok",
@@ -74,7 +74,7 @@
         },
         {
           "error": null,
-          "ms": 791,
+          "ms": 740,
           "n": 6,
           "note": null,
           "status": "ok",
@@ -82,7 +82,7 @@
         },
         {
           "error": null,
-          "ms": 384,
+          "ms": 351,
           "n": 7,
           "note": null,
           "status": "ok",
@@ -90,7 +90,7 @@
         },
         {
           "error": null,
-          "ms": 323,
+          "ms": 320,
           "n": 8,
           "note": null,
           "status": "ok",
@@ -98,7 +98,7 @@
         },
         {
           "error": null,
-          "ms": 649,
+          "ms": 643,
           "n": 9,
           "note": null,
           "status": "ok",
@@ -106,7 +106,7 @@
         },
         {
           "error": null,
-          "ms": 202,
+          "ms": 216,
           "n": 10,
           "note": null,
           "status": "ok",
@@ -114,7 +114,7 @@
         },
         {
           "error": null,
-          "ms": 184,
+          "ms": 171,
           "n": 11,
           "note": null,
           "status": "ok",
@@ -122,7 +122,7 @@
         },
         {
           "error": null,
-          "ms": 611,
+          "ms": 560,
           "n": 12,
           "note": null,
           "status": "ok",
@@ -130,7 +130,7 @@
         },
         {
           "error": null,
-          "ms": 335,
+          "ms": 323,
           "n": 13,
           "note": null,
           "status": "ok",
@@ -138,7 +138,7 @@
         },
         {
           "error": null,
-          "ms": 504,
+          "ms": 592,
           "n": 14,
           "note": null,
           "status": "ok",
@@ -146,7 +146,7 @@
         },
         {
           "error": null,
-          "ms": 672,
+          "ms": 687,
           "n": 15,
           "note": null,
           "status": "ok",
@@ -154,7 +154,7 @@
         },
         {
           "error": null,
-          "ms": 387,
+          "ms": 384,
           "n": 16,
           "note": null,
           "status": "ok",
@@ -162,7 +162,7 @@
         },
         {
           "error": null,
-          "ms": 647,
+          "ms": 591,
           "n": 17,
           "note": null,
           "status": "ok",
@@ -170,7 +170,7 @@
         },
         {
           "error": null,
-          "ms": 76,
+          "ms": 72,
           "n": 18,
           "note": null,
           "status": "ok",
@@ -178,7 +178,7 @@
         },
         {
           "error": null,
-          "ms": 715,
+          "ms": 639,
           "n": 19,
           "note": null,
           "status": "ok",
@@ -186,7 +186,7 @@
         },
         {
           "error": null,
-          "ms": 300,
+          "ms": 261,
           "n": 20,
           "note": null,
           "status": "ok",
@@ -200,7 +200,7 @@
       "files": [],
       "findings": [],
       "name": "9480-plc-overview-triangle-rows",
-      "seconds": 19.5,
+      "seconds": 17.4,
       "shots": [
         "shots/9480-plc-overview-triangle-rows-1920x1080-01-bad-layout-chip.png",
         "shots/9480-plc-overview-triangle-rows-1920x1080-02-plc-overview.png"
@@ -210,7 +210,7 @@
       "steps": [
         {
           "error": null,
-          "ms": 682,
+          "ms": 587,
           "n": 1,
           "note": null,
           "status": "ok",
@@ -218,7 +218,7 @@
         },
         {
           "error": null,
-          "ms": 1032,
+          "ms": 985,
           "n": 2,
           "note": null,
           "status": "ok",
@@ -226,7 +226,7 @@
         },
         {
           "error": null,
-          "ms": 1628,
+          "ms": 1546,
           "n": 3,
           "note": null,
           "status": "ok",
@@ -234,7 +234,7 @@
         },
         {
           "error": null,
-          "ms": 451,
+          "ms": 391,
           "n": 4,
           "note": null,
           "status": "ok",
@@ -242,7 +242,7 @@
         },
         {
           "error": null,
-          "ms": 739,
+          "ms": 684,
           "n": 5,
           "note": null,
           "status": "ok",
@@ -250,7 +250,7 @@
         },
         {
           "error": null,
-          "ms": 956,
+          "ms": 887,
           "n": 6,
           "note": null,
           "status": "ok",
@@ -258,7 +258,7 @@
         },
         {
           "error": null,
-          "ms": 510,
+          "ms": 507,
           "n": 7,
           "note": null,
           "status": "ok",
@@ -266,7 +266,7 @@
         },
         {
           "error": null,
-          "ms": 621,
+          "ms": 528,
           "n": 8,
           "note": null,
           "status": "ok",
@@ -274,7 +274,7 @@
         },
         {
           "error": null,
-          "ms": 1408,
+          "ms": 1163,
           "n": 9,
           "note": null,
           "status": "ok",
@@ -282,7 +282,7 @@
         },
         {
           "error": null,
-          "ms": 347,
+          "ms": 364,
           "n": 10,
           "note": null,
           "status": "ok",
@@ -290,7 +290,7 @@
         },
         {
           "error": null,
-          "ms": 308,
+          "ms": 267,
           "n": 11,
           "note": null,
           "status": "ok",
@@ -298,7 +298,7 @@
         },
         {
           "error": null,
-          "ms": 884,
+          "ms": 740,
           "n": 12,
           "note": null,
           "status": "ok",
@@ -306,7 +306,7 @@
         },
         {
           "error": null,
-          "ms": 435,
+          "ms": 363,
           "n": 13,
           "note": null,
           "status": "ok",
@@ -314,7 +314,7 @@
         },
         {
           "error": null,
-          "ms": 691,
+          "ms": 631,
           "n": 14,
           "note": null,
           "status": "ok",
@@ -322,7 +322,7 @@
         },
         {
           "error": null,
-          "ms": 992,
+          "ms": 804,
           "n": 15,
           "note": null,
           "status": "ok",
@@ -330,7 +330,7 @@
         },
         {
           "error": null,
-          "ms": 611,
+          "ms": 467,
           "n": 16,
           "note": null,
           "status": "ok",
@@ -338,7 +338,7 @@
         },
         {
           "error": null,
-          "ms": 1167,
+          "ms": 860,
           "n": 17,
           "note": null,
           "status": "ok",
@@ -346,7 +346,7 @@
         },
         {
           "error": null,
-          "ms": 104,
+          "ms": 88,
           "n": 18,
           "note": null,
           "status": "ok",
@@ -354,7 +354,7 @@
         },
         {
           "error": null,
-          "ms": 1191,
+          "ms": 995,
           "n": 19,
           "note": null,
           "status": "ok",
@@ -362,7 +362,7 @@
         },
         {
           "error": null,
-          "ms": 364,
+          "ms": 312,
           "n": 20,
           "note": null,
           "status": "ok",
@@ -376,18 +376,17 @@
       "files": [],
       "findings": [],
       "name": "9481-refused-edit-chip",
-      "seconds": 14.3,
+      "seconds": 11.5,
       "shots": [
-        "shots/9481-refused-edit-chip-1366x768-01-refusal-chip.png",
-        "shots/9481-refused-edit-chip-1366x768-02-refusal-detail.png",
-        "shots/9481-refused-edit-chip-1366x768-03-refusal-gone.png"
+        "shots/9481-refused-edit-chip-1366x768-01-refusal-triangle.png",
+        "shots/9481-refused-edit-chip-1366x768-02-refusal-gone.png"
       ],
       "size": "1366x768",
       "status": "pass",
       "steps": [
         {
           "error": null,
-          "ms": 652,
+          "ms": 596,
           "n": 1,
           "note": null,
           "status": "ok",
@@ -395,7 +394,7 @@
         },
         {
           "error": null,
-          "ms": 663,
+          "ms": 575,
           "n": 2,
           "note": null,
           "status": "ok",
@@ -403,7 +402,7 @@
         },
         {
           "error": null,
-          "ms": 1428,
+          "ms": 1327,
           "n": 3,
           "note": null,
           "status": "ok",
@@ -411,7 +410,7 @@
         },
         {
           "error": null,
-          "ms": 599,
+          "ms": 649,
           "n": 4,
           "note": null,
           "status": "ok",
@@ -419,7 +418,7 @@
         },
         {
           "error": null,
-          "ms": 748,
+          "ms": 732,
           "n": 5,
           "note": null,
           "status": "ok",
@@ -427,7 +426,7 @@
         },
         {
           "error": null,
-          "ms": 439,
+          "ms": 367,
           "n": 6,
           "note": null,
           "status": "ok",
@@ -435,7 +434,7 @@
         },
         {
           "error": null,
-          "ms": 388,
+          "ms": 324,
           "n": 7,
           "note": null,
           "status": "ok",
@@ -443,31 +442,31 @@
         },
         {
           "error": null,
-          "ms": 76,
+          "ms": 676,
           "n": 8,
           "note": null,
           "status": "ok",
-          "step": "expect \"Warning: No terminal strip yet\""
+          "step": "shot refusal-triangle"
         },
         {
           "error": null,
-          "ms": 819,
+          "ms": 333,
           "n": 9,
           "note": null,
           "status": "ok",
-          "step": "shot refusal-chip"
+          "step": "check_layout"
         },
         {
           "error": null,
-          "ms": 467,
+          "ms": 234,
           "n": 10,
           "note": null,
           "status": "ok",
-          "step": "click_text \"No terminal strip yet\""
+          "step": "key Escape"
         },
         {
           "error": null,
-          "ms": 220,
+          "ms": 163,
           "n": 11,
           "note": null,
           "status": "ok",
@@ -475,96 +474,55 @@
         },
         {
           "error": null,
-          "ms": 80,
+          "ms": 188,
           "n": 12,
           "note": null,
           "status": "ok",
-          "step": "expect \"Place a terminal\""
+          "step": "key Escape"
         },
         {
           "error": null,
-          "ms": 783,
+          "ms": 183,
           "n": 13,
           "note": null,
           "status": "ok",
-          "step": "shot refusal-detail"
+          "step": "wait 5"
         },
         {
           "error": null,
-          "ms": 272,
+          "ms": 68,
           "n": 14,
           "note": null,
           "status": "ok",
-          "step": "check_layout"
+          "step": "expect_not \"No terminal strip yet\""
         },
         {
           "error": null,
-          "ms": 231,
+          "ms": 623,
           "n": 15,
-          "note": null,
-          "status": "ok",
-          "step": "key Escape"
-        },
-        {
-          "error": null,
-          "ms": 189,
-          "n": 16,
-          "note": null,
-          "status": "ok",
-          "step": "wait 5"
-        },
-        {
-          "error": null,
-          "ms": 218,
-          "n": 17,
-          "note": null,
-          "status": "ok",
-          "step": "key Escape"
-        },
-        {
-          "error": null,
-          "ms": 191,
-          "n": 18,
-          "note": null,
-          "status": "ok",
-          "step": "wait 5"
-        },
-        {
-          "error": null,
-          "ms": 80,
-          "n": 19,
-          "note": null,
-          "status": "ok",
-          "step": "expect_not \"Warning: No terminal strip yet\""
-        },
-        {
-          "error": null,
-          "ms": 688,
-          "n": 20,
           "note": null,
           "status": "ok",
           "step": "shot refusal-gone"
         }
       ],
-      "title": "A refused terminal edit is a triangle chip with the reason in it, not a toast"
+      "title": "A refused terminal edit is a transient triangle in the canvas corner, not a toast"
     },
     {
       "area": "Schematic",
       "files": [],
       "findings": [],
       "name": "9481-refused-edit-chip",
-      "seconds": 18.1,
+      "seconds": 13.4,
       "shots": [
-        "shots/9481-refused-edit-chip-1920x1080-01-refusal-chip.png",
-        "shots/9481-refused-edit-chip-1920x1080-02-refusal-detail.png",
-        "shots/9481-refused-edit-chip-1920x1080-03-refusal-gone.png"
+        "shots/9481-refused-edit-chip-1920x1080-01-refusal-triangle.png",
+        "shots/9481-refused-edit-chip-1920x1080-02-refusal-gone.png"
       ],
       "size": "1920x1080",
       "status": "pass",
       "steps": [
         {
           "error": null,
-          "ms": 796,
+          "ms": 739,
           "n": 1,
           "note": null,
           "status": "ok",
@@ -572,7 +530,7 @@
         },
         {
           "error": null,
-          "ms": 1045,
+          "ms": 924,
           "n": 2,
           "note": null,
           "status": "ok",
@@ -580,7 +538,7 @@
         },
         {
           "error": null,
-          "ms": 1670,
+          "ms": 1343,
           "n": 3,
           "note": null,
           "status": "ok",
@@ -588,7 +546,7 @@
         },
         {
           "error": null,
-          "ms": 779,
+          "ms": 660,
           "n": 4,
           "note": null,
           "status": "ok",
@@ -596,7 +554,7 @@
         },
         {
           "error": null,
-          "ms": 836,
+          "ms": 776,
           "n": 5,
           "note": null,
           "status": "ok",
@@ -604,7 +562,7 @@
         },
         {
           "error": null,
-          "ms": 639,
+          "ms": 504,
           "n": 6,
           "note": null,
           "status": "ok",
@@ -612,7 +570,7 @@
         },
         {
           "error": null,
-          "ms": 568,
+          "ms": 546,
           "n": 7,
           "note": null,
           "status": "ok",
@@ -620,31 +578,31 @@
         },
         {
           "error": null,
-          "ms": 110,
+          "ms": 1156,
           "n": 8,
           "note": null,
           "status": "ok",
-          "step": "expect \"Warning: No terminal strip yet\""
+          "step": "shot refusal-triangle"
         },
         {
           "error": null,
-          "ms": 1277,
+          "ms": 308,
           "n": 9,
           "note": null,
           "status": "ok",
-          "step": "shot refusal-chip"
+          "step": "check_layout"
         },
         {
           "error": null,
-          "ms": 564,
+          "ms": 291,
           "n": 10,
           "note": null,
           "status": "ok",
-          "step": "click_text \"No terminal strip yet\""
+          "step": "key Escape"
         },
         {
           "error": null,
-          "ms": 372,
+          "ms": 264,
           "n": 11,
           "note": null,
           "status": "ok",
@@ -652,78 +610,38 @@
         },
         {
           "error": null,
-          "ms": 167,
+          "ms": 307,
           "n": 12,
           "note": null,
           "status": "ok",
-          "step": "expect \"Place a terminal\""
+          "step": "key Escape"
         },
         {
           "error": null,
-          "ms": 1319,
+          "ms": 240,
           "n": 13,
           "note": null,
           "status": "ok",
-          "step": "shot refusal-detail"
+          "step": "wait 5"
         },
         {
           "error": null,
-          "ms": 368,
+          "ms": 88,
           "n": 14,
           "note": null,
           "status": "ok",
-          "step": "check_layout"
+          "step": "expect_not \"No terminal strip yet\""
         },
         {
           "error": null,
-          "ms": 395,
+          "ms": 1079,
           "n": 15,
-          "note": null,
-          "status": "ok",
-          "step": "key Escape"
-        },
-        {
-          "error": null,
-          "ms": 348,
-          "n": 16,
-          "note": null,
-          "status": "ok",
-          "step": "wait 5"
-        },
-        {
-          "error": null,
-          "ms": 579,
-          "n": 17,
-          "note": null,
-          "status": "ok",
-          "step": "key Escape"
-        },
-        {
-          "error": null,
-          "ms": 444,
-          "n": 18,
-          "note": null,
-          "status": "ok",
-          "step": "wait 5"
-        },
-        {
-          "error": null,
-          "ms": 96,
-          "n": 19,
-          "note": null,
-          "status": "ok",
-          "step": "expect_not \"Warning: No terminal strip yet\""
-        },
-        {
-          "error": null,
-          "ms": 1347,
-          "n": 20,
           "note": null,
           "status": "ok",
           "step": "shot refusal-gone"
         }
       ],
-      "title": "A refused terminal edit is a triangle chip with the reason in it, not a toast"
+      "title": "A refused terminal edit is a transient triangle in the canvas corner, not a toast"
     }
   ],
   "sizes": [
