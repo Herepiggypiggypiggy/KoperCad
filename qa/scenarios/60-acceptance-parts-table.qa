@@ -48,11 +48,11 @@ wait 20
 click_text Rows Button
 wait 10
 expect "0 new"
-click_text "Error: Not imported" Button #1
+click_text "Error: Not imported" Button #3
 wait 6
 expect "digits are lost"
 shot row-popover-second
-click_text "Error: Not imported" Button #1
+click_text "Error: Not imported" Button #3
 wait 6
 shot second-import
 check_layout
