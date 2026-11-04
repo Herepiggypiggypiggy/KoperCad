@@ -13,7 +13,7 @@ shot wide-and-flat
 check_layout
 resize 1366 768
 wait 6
-click_text "Search"
+click_text "Ctrl+K" #1
 wait 4
 shot search-opens-after-resize
 key Escape

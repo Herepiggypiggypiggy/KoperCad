@@ -15,7 +15,7 @@ click_text Place Button
 wait 20
 key w
 wait 3
-click 1007 441
+click 483 131
 wait 5
 shot wire-started
 expect "Esc or right-click cancels"
@@ -25,7 +25,7 @@ shot wire-cancelled
 expect_not "Esc or right-click cancels"
 key w
 wait 3
-click 1007 441
+click 483 131
 wait 5
 shot wire-started-again
 expect "Esc or right-click cancels"
