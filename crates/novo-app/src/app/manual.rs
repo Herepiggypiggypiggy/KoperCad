@@ -123,7 +123,12 @@ impl NovoApp {
     /// `None`).
     pub(super) fn open_manual(&mut self, topic: Option<&'static str>) {
         let Some(dir) = manual_dir() else {
-            self.message(Level::Warning, "No place for the manual on this computer");
+            self.job_fail(
+                "manual.open",
+                "Manual not opened",
+                Level::Warning,
+                "No place for the manual on this computer",
+            );
             return;
         };
         let version = env!("CARGO_PKG_VERSION");

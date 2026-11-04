@@ -66,7 +66,12 @@ impl NovoApp {
         ) {
             Ok(c) => c,
             Err(e) => {
-                self.message(Level::Warning, e.to_string());
+                self.job_fail(
+                    "export.change_report",
+                    "Change report not written",
+                    Level::Warning,
+                    e.to_string(),
+                );
                 return None;
             }
         };

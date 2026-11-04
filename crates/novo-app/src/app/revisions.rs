@@ -222,7 +222,12 @@ impl NovoApp {
                 if let BackendError::IssuedNotLocked(_, changes) = &e {
                     self.changed_outside_canvas(changes);
                 }
-                self.message(Level::Error, e.to_string());
+                self.job_fail(
+                    "revision.issue",
+                    "Revision not issued",
+                    Level::Error,
+                    e.to_string(),
+                );
             }
             Err(e) => {
                 self.job_fail(

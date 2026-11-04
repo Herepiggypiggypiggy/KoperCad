@@ -427,7 +427,9 @@ impl NovoApp {
         let mut list = match store::project_templates(project) {
             Ok(l) => l,
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "designer.save",
+                    "Templates not saved",
                     Level::Error,
                     format!("The project's templates cannot be read, not overwriting them: {e}"),
                 );

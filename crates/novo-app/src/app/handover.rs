@@ -453,7 +453,9 @@ impl NovoApp {
             .filter(|f| f.status == FileStatus::Written)
             .count();
         if written == 0 {
-            self.message(
+            self.job_fail(
+                "export.handover",
+                "Nothing for the handover package",
                 Level::Warning,
                 "Nothing to put in a handover package yet: draw something first",
             );
