@@ -190,6 +190,10 @@ impl NovoApp {
             self.wb.issue = Some(draft);
             return;
         }
+        if let Some(why) = super::flags_jobs::qa_forced_error("revision.issue") {
+            self.job_fail("revision.issue", "Revision not issued", Level::Error, why);
+            return;
+        }
         let index = draft.index.trim().to_owned();
         let author = draft.author.trim().to_owned();
         let result = self.backend.issue_revision_locking(
@@ -222,7 +226,12 @@ impl NovoApp {
                 if let BackendError::IssuedNotLocked(_, changes) = &e {
                     self.changed_outside_canvas(changes);
                 }
-                self.message(Level::Error, e.to_string());
+                self.job_fail(
+                    "revision.issue",
+                    "Revision not issued",
+                    Level::Error,
+                    format!("{e}."),
+                );
             }
             Err(e) => {
                 self.job_fail(

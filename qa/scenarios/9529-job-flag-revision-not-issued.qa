@@ -1,0 +1,20 @@
+@title A revision that cannot be issued is a job flag with a popover
+@area Files
+@env KOPERCAD_QA_FAIL=revision.issue
+open_starter_example
+wait 20
+key ctrl+k
+text issue First issue
+wait 4
+key Enter
+wait 10
+click_text "Issue A" Button
+wait 15
+click_text "Revision not issued" Button
+wait 8
+expect "Forced for the QA picture"
+expect "Dismiss"
+shot revision-flag-popover
+check_layout
+key Escape
+wait 6

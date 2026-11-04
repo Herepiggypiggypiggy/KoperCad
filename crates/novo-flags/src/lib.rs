@@ -17,7 +17,7 @@ mod severity;
 mod store;
 
 pub use anchor::Anchor;
-pub use flag::{Action, Detail, Flag, FlagDraft, Life, Source};
+pub use flag::{Action, Detail, Flag, FlagDraft, Life, Source, TITLE_MAX};
 pub use id::FlagId;
 pub use severity::{Mapping, Severity, map_word};
 pub use store::{Area, Counts, FlagStore, RollUp};

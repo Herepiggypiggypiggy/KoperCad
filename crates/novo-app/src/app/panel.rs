@@ -761,6 +761,7 @@ impl<'a> Dialog<'a> {
             // floating one on top (not while a text field has the keyboard).
             let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape))
                 && !ctx.egui_wants_keyboard_input()
+                && !novo_theme::widgets::popup_owns_escape(ctx)
                 && super::panel_dock::last_window(ctx).as_deref() == Some(name.as_str());
             if (take_closed(ctx, &name) || escape)
                 && let Some(open) = open
