@@ -1028,12 +1028,17 @@ impl NovoApp {
     /// the canvas first. Taken before the canvas runs, which would read it
     /// as its own Escape ladder while the pointer is over the drawing.
     pub(super) fn escape_popups(&mut self, ctx: &egui::Context) {
-        let open = self.wb.field.is_open() || self.wb.occurrences.is_some() || self.outline_open;
+        let open = self.wb.field.is_open()
+            || self.wb.occurrences.is_some()
+            || self.wb.flags.open.is_some()
+            || self.outline_open;
         if open && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             if self.wb.field.is_open() {
                 self.wb.field.close();
             } else if self.wb.occurrences.is_some() {
                 self.wb.occurrences = None;
+            } else if self.wb.flags.open.is_some() {
+                self.wb.flags.open = None;
             } else {
                 self.outline_open = false;
             }
