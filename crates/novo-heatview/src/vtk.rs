@@ -473,6 +473,7 @@ mod tests {
             heat_paths: vec![],
             radiation_on: false,
             opening_flows: vec![],
+            plate_rear_c: None,
         }
     }
 
