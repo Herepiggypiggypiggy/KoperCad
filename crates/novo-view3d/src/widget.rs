@@ -717,6 +717,21 @@ impl View3d {
         self.animate_to(to, now, reduced);
     }
 
+    /// A standard view framing `bounds` instead of the whole scene (a crane without its floor).
+    pub fn go_to_bounds(
+        &mut self,
+        preset: ViewPreset,
+        bounds: &crate::math::Aabb,
+        now: f64,
+        reduced: bool,
+    ) {
+        let mut to = self.camera;
+        feel::enter_standard(&mut to, preset);
+        to.fit_between(bounds, self.last_aspect, self.top_inset, self.bottom_inset);
+        self.auto_ortho = to.projection == Projection::Orthographic;
+        self.animate_to(to, now, reduced);
+    }
+
     /// Eases the camera to `to` (a saved view).
     pub fn go_to_camera(&mut self, to: Camera, now: f64, reduced: bool) {
         self.auto_ortho = to.projection == Projection::Orthographic;
