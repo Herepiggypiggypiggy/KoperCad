@@ -38,19 +38,26 @@ Stored on the Structure (first as typed `properties` keys prefixed `encl.`, beca
 | openings | vents, gland plates, cut-outs, fan/filter positions (wall, centre, size) | STEP body + accessories |
 | accessories | roof, plinth, door lock, cooling unit, each with an article number | panel choices |
 | envelope | for the 3D heat view: mesh of the body or parametric ribs, roof, plinth, door swing (heat-shell-ui.md section 7, #1856) | catalogue / STEP |
-| installation | free standing, wall mounted, row, covered faces, plinth, finish, absorptance (wiring lane reads these; `assumed` fallback) | panel, defaults assumed |
-| step_ref | file name and SHA-256 of the user's STEP; the file itself is never stored in the project | drag and drop |
-| provenance | per field: `catalogue`, `step` (read from the maker's STEP), `measured` (user measured it) or `assumed` (typed or default); saved with the project; shown behind "?" and in reports | panel |
+| installation | free standing, wall mounted, row, covered faces, plinth, finish, absorptance (wiring lane reads these; `default` fallback) | panel, defaults flagged |
+| step_ref | file name and SHA-256 of the user's STEP (covered by the Share bundle rule of #1862: never carried into a shared bundle); the file itself is never stored in the project | drag and drop |
+| provenance | per field: `catalogue`, `step` (read from the maker's STEP), `measured` (only when the user marks it as measured), `typed` (typed by the user) or `default` (program default); saved with the project; the one-line state below is always visible, the detail sits behind "?" and in reports | panel |
 
-Honesty rule: a number read from the STEP wins over the catalogue, a catalogue number wins over a typed one,
-and a field whose source is `assumed` is flagged in the cabinet report so nobody mistakes it for the maker's.
+Honesty rule: a number read from the STEP is used over the catalogue number, and a catalogue number over a typed one. When the STEP and the
+catalogue disagree by more than a tolerance (2 mm or 1 %, whichever is larger) the panel shows both numbers and says in words which
+was used. A field whose source is `typed` or `default` is flagged in the cabinet report so nobody mistakes it for the maker's.
+
+On screen, each value carries a one-line state in words: "catalogue", "from your STEP", "typed by you", "default" (or "measured by you").
+While any value is `catalogue` or `default`, the panel and the cabinet report show: "Estimate from catalogue data, not a measurement of your
+cabinet." Only the detail (which row, which file, tolerance) sits behind "?".
 
 ## Catalogue data
 
-Ship catalogue rows (article, series, outer size, plate size, wall, weight, door, mounting-plate article,
-accessory articles) without any Rittal CAD file. Row sources, in order: the user's Rittal BMEcat/ETIM import
-(`novo-parts`, ETIM reader exists), the Rittal Data Portal XML the parts importer already reads, and
-hand-checked rows from public datasheets for the common TS 8 / AX / KX sizes. Each row says which source it came from.
+Ship no catalogue row unless its source is known and its terms allow redistribution. Every row records source (URL or file) and the
+terms that were checked. If the maker's terms do not allow redistribution, none ships and the catalogue is filled only from the user's own
+BMEcat / Data Portal import on his machine. Rows (article, series, outer size, plate size, wall, weight, door, mounting-plate article,
+accessory articles) never include a Rittal CAD file. Row sources, in order: the user's Rittal BMEcat/ETIM import
+(`novo-parts`, ETIM reader exists), the Rittal Data Portal XML the parts importer already reads, and,
+only where the terms allow, rows from public datasheets for the common TS 8 / AX / KX sizes. Each row says which source it came from.
 No row is invented: a size missing from the sources is not listed; the "Other size" path stays (typed, flagged).
 
 ## The panel (same look as the start screen)
@@ -66,7 +73,7 @@ A centre window (`centre.rs`, the shared window) styled with the start-screen pa
    While no STEP is given the preview is the catalogue box (labelled "box from catalogue"); with the STEP
    it is the real body.
 5. **STEP step**: a drop target "Drop the STEP of 8455.600" with the article number big, a button that opens
-   the maker page in the user's browser (a plain link, nothing automated, nothing downloaded by the program),
+   the maker page with `open_page` of the in-app supplier browser (#1864): the user signs in and downloads, the program never scripts the page,
    and a result line (body found, interior, plate setback, openings). A STEP is optional: without it the
    cabinet is built from catalogue data and the chain tells where it is less exact.
 6. **Create cabinet** (primary button): one undoable command.
