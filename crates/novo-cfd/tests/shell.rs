@@ -183,3 +183,20 @@ fn the_3d_solver_refuses_a_bad_heat_source() {
     let r = small().solve(&sc, Fidelity::Coarse, &Control::new(), &mut |_| {});
     assert!(r.is_err());
 }
+
+#[test]
+fn the_door_bridge_raises_the_3d_door_film() {
+    use novo_cfd::solids::wall_conductances;
+    use novo_thermal::shell::{DoorEdge, ShellModel};
+    let a = scenario(false);
+    let mut b = scenario(false);
+    let mut shell = ShellModel::from_enclosure(&b.enclosure);
+    shell.door_edge = Some(DoorEdge { psi_w_per_mk: 0.2 });
+    b.params.shell = Some(shell);
+    let (wa, wb) = (wall_conductances(&a), wall_conductances(&b));
+    // z max is the door; every other face is unchanged
+    assert!(wb.h[5] > wa.h[5]);
+    for f in 0..5 {
+        assert_eq!(wa.h[f], wb.h[f]);
+    }
+}
