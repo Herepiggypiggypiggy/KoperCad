@@ -88,6 +88,8 @@ pub enum BridgeError {
     NoPlate,
     #[error("the enclosure interior (width, height, depth) is not set")]
     NoInterior,
+    #[error("{0}")]
+    SpecIncomplete(novo_layout::spec::Missing),
     #[error("{tag} loses {loss} W (over {max} W): check its loss value")]
     ImplausibleLoss {
         tag: String,
@@ -133,6 +135,12 @@ pub struct BridgeReport {
     /// Heat of the wires in this enclosure's ducts that went into the
     /// scenario, W (not part of `total_loss_w`).
     pub duct_loss_w: f64,
+    /// The weakest source among the numbers taken from the chosen enclosure
+    /// record (`novo_layout::spec`); `None` when the project has no record
+    /// and the typed options were used.
+    pub enclosure_source: Option<novo_layout::spec::Source>,
+    /// Maker article of the chosen enclosure, empty without a record.
+    pub enclosure_article: String,
 }
 
 impl BridgeReport {
@@ -176,6 +184,28 @@ impl BridgeReport {
         .into_iter()
         .flatten()
         .collect()
+    }
+
+    /// The messages plus, for a chosen enclosure, one line naming its
+    /// article and the weakest source of the numbers used (the estimate
+    /// notice while any is a catalogue or default value).
+    pub fn messages_with_enclosure(&self) -> Vec<String> {
+        let mut m = self.messages();
+        if let Some(src) = self.enclosure_source {
+            let article = if self.enclosure_article.is_empty() {
+                "chosen enclosure"
+            } else {
+                self.enclosure_article.as_str()
+            };
+            m.push(format!("Enclosure {article}: {}", src.words()));
+            if matches!(
+                src,
+                novo_layout::spec::Source::Catalogue | novo_layout::spec::Source::Default
+            ) {
+                m.push(novo_layout::spec::ESTIMATE_NOTICE.to_owned());
+            }
+        }
+        m
     }
 
     pub fn is_complete(&self) -> bool {
@@ -285,7 +315,33 @@ pub fn scenario_from_project(
     if structure.plate.is_none() {
         return Err(BridgeError::NoPlate);
     }
-    let interior = enclosure_of(project, enclosure).ok_or(BridgeError::NoInterior)?;
+    // A chosen enclosure (`encl.` record) gives outside size and wall; a
+    // missing field fails loudly instead of falling back to a default.
+    let spec = novo_layout::spec::EnclosureSpec::read(&structure.properties);
+    let from_spec = !spec.is_empty();
+    let mut interior = enclosure_of(project, enclosure);
+    let mut spec_wall = None;
+    if from_spec {
+        let inner = spec.interior().map_err(BridgeError::SpecIncomplete)?;
+        spec_wall = spec.wall.map(|f| f.value);
+        let mut e = interior.unwrap_or(novo_layout::enclosure::Enclosure {
+            width: 0.0,
+            height: 0.0,
+            depth: 0.0,
+            plate_setback: 0.0,
+            door: None,
+            front_clearance: None,
+            hinge_side_clearance: None,
+        });
+        e.width = inner.width;
+        e.height = inner.height;
+        e.depth = inner.depth;
+        if let Some(s) = spec.plate_setback {
+            e.plate_setback = s.value.max(0.0);
+        }
+        interior = Some(e);
+    }
+    let interior = interior.ok_or(BridgeError::NoInterior)?;
     let layout = load(project, enclosure).ok_or(BridgeError::NoPlate)?;
 
     let plate_x = interior.plate_left(&layout.plate);
@@ -297,7 +353,7 @@ pub fn scenario_from_project(
         h: r.h,
     };
 
-    let wall = options.wall_mm.max(0.0);
+    let wall = spec_wall.unwrap_or(options.wall_mm).max(0.0);
     let enclosure_model = Enclosure {
         width_mm: interior.width + 2.0 * wall,
         height_mm: interior.height + 2.0 * wall,
@@ -314,6 +370,10 @@ pub fn scenario_from_project(
     };
 
     let mut report = BridgeReport::default();
+    if from_spec {
+        report.enclosure_source = spec.weakest();
+        report.enclosure_article = spec.article.clone();
+    }
     let mut devices = Vec::new();
     let mut placements: Vec<&Placement> = layout.placements.iter().collect();
     placements.sort_by_key(|p| p.id);

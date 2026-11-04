@@ -1268,7 +1268,7 @@ pub(super) fn start_run(
                 layout_key: layout_key(input),
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
-                messages: bridge.report.messages(),
+                messages: bridge.report.messages_with_enclosure(),
                 enclosure: Some(bridge.scenario.enclosure.clone()),
                 duct_loss_w: super::heat_cooling::duct_loss_w(&bridge.scenario),
                 wire_notes: wires.notes.clone(),
