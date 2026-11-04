@@ -264,6 +264,7 @@ mod parts_table;
 mod pdf;
 mod pdf_options;
 mod pin_offer;
+mod place_list;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -2217,6 +2218,7 @@ impl NovoApp {
         self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
+        self.place_list_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.restore_ask_dialog(&ctx);
         self.handover_ask_dialog(&ctx);
