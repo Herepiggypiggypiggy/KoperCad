@@ -21,6 +21,16 @@ wait 30
 expect_scene "-K1"
 shot triangles-on-drawing
 check_layout
+# A click on a triangle opens its popover: title, source badge, the numbers, actions.
+click 540 129
+wait 6
+expect "Locate"
+expect "Waive"
+shot triangles-popover
+check_layout
+key Escape
+wait 4
+expect_not "Locate"
 # The pill is the one count; a click opens the list of the same problems.
 click_text "warnings" Button
 wait 10

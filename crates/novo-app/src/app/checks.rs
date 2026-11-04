@@ -346,35 +346,46 @@ impl NovoApp {
             .show(ui, |ui| {
                 for (i, p) in &problems {
                     let pal = crate::theme::ui_palette();
-                    // Errors and warnings are painted triangles (solid red,
-                    // hollow yellow); the room for them is left in the text.
+                    let triangle = p.severity != Severity::Info;
                     let (mark, color) = match p.severity {
-                        Severity::Error | Severity::Warning => ("    ", pal.text_primary),
+                        Severity::Error | Severity::Warning => ("", pal.text_primary),
                         Severity::Info => (novo_theme::icons::status::INFO, pal.info),
                     };
                     let mut text = egui::text::LayoutJob::default();
                     let font = egui::TextStyle::Body.resolve(ui.style());
-                    text.append(
-                        &format!("{mark}  "),
-                        0.0,
-                        egui::TextFormat::simple(font.clone(), color),
-                    );
+                    if !mark.is_empty() {
+                        text.append(
+                            &format!("{mark}  "),
+                            0.0,
+                            egui::TextFormat::simple(font.clone(), color),
+                        );
+                    }
                     text.append(
                         &p.message,
                         0.0,
                         egui::TextFormat::simple(font, ui.visuals().text_color()),
                     );
-                    let row = ui.selectable_label(false, text);
-                    if p.severity != Severity::Info {
-                        novo_theme::widgets::flag_triangle(
-                            ui.painter(),
-                            egui::pos2(row.rect.left() + 12.0, row.rect.center().y),
-                            11.0,
-                            p.severity == Severity::Error,
-                            super::flags::is_unchecked(p.kind),
-                            novo_theme::Palette::of(ui),
-                        );
-                    }
+                    // The triangle has its own column; the text, wrapped or
+                    // not, starts after it.
+                    let row = ui
+                        .horizontal_top(|ui| {
+                            if triangle {
+                                let (slot, _) = ui.allocate_exact_size(
+                                    egui::vec2(20.0, 20.0),
+                                    egui::Sense::hover(),
+                                );
+                                novo_theme::widgets::flag_triangle(
+                                    ui.painter(),
+                                    slot.center(),
+                                    15.0,
+                                    p.severity == Severity::Error,
+                                    super::flags::is_unchecked(p.kind),
+                                    novo_theme::Palette::of(ui),
+                                );
+                            }
+                            ui.selectable_label(false, text)
+                        })
+                        .inner;
                     self.problem_flash(ui, *i, &row);
                     self.learn_row("issues.list", &p.message, row.rect);
                     if row.clicked() {
