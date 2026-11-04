@@ -63,6 +63,9 @@ pub(crate) struct LiveView {
     /// The frame whose Escape was handled, so a repeated pass of one frame
     /// does not step back twice.
     escaped_in: Option<u64>,
+    /// A menu or popup was open when this frame began. Escape that closes one
+    /// during the frame must not also leave Live.
+    pub(super) popup_at_start: bool,
     /// What the explanation is about.
     why: Option<Target>,
     /// The PLC program window and the program running in it.
@@ -836,6 +839,7 @@ impl NovoApp {
             && !self.outline_open
             && !ctx.egui_wants_keyboard_input()
             && !egui::Popup::is_any_open(ctx)
+            && !self.wb.live.popup_at_start
             && !super::panel::dialog_on_top(ctx)
             && self.wb.live.escaped_in != Some(ctx.cumulative_frame_nr())
         {

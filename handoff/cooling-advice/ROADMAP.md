@@ -1,6 +1,6 @@
 # Cooling advice and vent sweep: roadmap
 
-Scope: Tadjiro asked (CV-200 heat findings, `audit/real-machine/heat-layout-findings.md`) for a
+Scope: Tadjiro asked (real machine, heat findings, `audit/real-machine/heat-layout-findings.md`) for a
 cooling advice card and a vent and fan position sweep that ranks tries by predicted device temperatures.
 
 ## Done (PR 1, branch claude/project-thread-phf292)

@@ -7,7 +7,8 @@ import_table qa/fixtures/parts/price-list-nl.csv
 wait 10
 resize 700 420
 wait 10
-expect "Import parts from price-list-nl.csv"
+# The pane title is not readable by the harness since the window docked; its first line is.
+expect "Say what each column is"
 shot tiny
 check_layout
 key Escape

@@ -12,10 +12,10 @@ wait 4
 key Enter
 wait 40
 shot list-open
-click_text "2   462 mm"
+click_text "2   365 mm"
 wait 30
 shot wire-picked
-click_text "Select and hide"
+click_text Hide
 wait 8
 click_text "Select all devices"
 wait 30

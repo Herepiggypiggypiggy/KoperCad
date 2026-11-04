@@ -17,16 +17,17 @@ expect "Projects"
 expect "Choose an item on the left"
 # The greyed tiles say why in their second line (see the picture): this page has no background, the Controllers add-on is off.
 check_layout
-click_text "Import parts table"
+click_text "Import spreadsheet"
 wait 6
 shot centre-picked
-expect "Parts from a CSV or Excel table"
+expect "Changes made in Excel or CSV"
+expect "Any import also runs from Ctrl+K by its name."
 check_layout
 text eplan
 wait 8
 shot centre-search-eplan
 expect "Import EPLAN project"
-expect_not "Import parts table"
+expect_not "Import spreadsheet"
 check_layout
 key Escape
 wait 6

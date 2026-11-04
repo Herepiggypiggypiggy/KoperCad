@@ -2697,6 +2697,43 @@ impl NovoApp {
                     self.cabinet.ghost = None;
                     self.cabinet.keys.clear();
                 }
+                // A safety net for a drag the canvas never saw end: the
+                // button went up where no canvas response saw it (over a
+                // docked window or panel, outside the program, with a
+                // modal open), or Enter/Escape took the frame. Without it
+                // the part stayed on the pointer and could not be put down.
+                // Escape cancels; a released button drops where it last was.
+                // The same for a rail or duct being moved or resized.
+                if (self.cabinet.rails.drag.is_some() || self.cabinet.rails.resize.is_some())
+                    && ui.input(|i| !i.pointer.primary_down() || i.key_pressed(egui::Key::Escape))
+                {
+                    self.cabinet.rails.drag = None;
+                    self.cabinet.rails.resize = None;
+                }
+                if let Some(d) = self.cabinet.drag.clone() {
+                    let (down, escape, focused) = ui.input(|i| {
+                        (
+                            i.pointer.primary_down(),
+                            i.key_pressed(egui::Key::Escape),
+                            i.focused,
+                        )
+                    });
+                    if escape || !focused {
+                        self.cabinet.drag = None;
+                        self.cabinet.ghost = None;
+                    } else if !down {
+                        self.cabinet.drag = None;
+                        self.cabinet.ghost = None;
+                        if ask.is_none() {
+                            ask = Some(match (&layout, d.group.len() > 1) {
+                                (Some(l), true) => Ask::MoveGroup(super::cabinet_group::landings(
+                                    l, &d.group, d.id, d.at,
+                                )),
+                                _ => Ask::Drop(d.id, d.at.0, d.at.1),
+                            });
+                        }
+                    }
+                }
             }
             None => {
                 // A search asked for here (also from the 3D Heat panel) has

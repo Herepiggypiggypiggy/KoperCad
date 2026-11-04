@@ -28,7 +28,7 @@ text emc net classes
 wait 8
 key Enter
 wait 20
-click 513 540
+click 609 500
 wait 12
 expect "Cable =A1+CAB-W2"
 scroll 1180 400 2000

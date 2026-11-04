@@ -1,0 +1,28 @@
+@title Menus stay open while the heat run goes, wide window
+@area Menus
+@sizes 1920x1080
+open_starter_example
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 30
+click_text File #1
+wait 6
+shot file-menu-heat-running
+expect_popups_stable 90
+key Escape
+click_text Simulate #1
+wait 6
+shot simulate-menu-heat-running
+expect_popups_stable 90
+key Escape
+click_text "KoperCAD" #1
+wait 6
+shot app-menu-heat-running
+expect_popups_stable 90
+key Escape

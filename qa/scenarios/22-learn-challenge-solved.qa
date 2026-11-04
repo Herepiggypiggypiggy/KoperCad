@@ -13,11 +13,11 @@ key shift+l
 wait 40
 click_text Connect
 wait 6
-click 451 278
+click 462 306
 wait 4
-move 435 278
+move 445 306
 wait 4
-click 418 278
+click 427 306
 wait 10
 shot repaired
 click_text "Hold to press" #2

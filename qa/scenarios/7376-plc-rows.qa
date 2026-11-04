@@ -24,7 +24,7 @@ expect "Import I/O list"
 check_layout
 key Escape
 wait 4
-click 348 238 right
+click 358 246 right
 wait 10
 shot right-click
 expect "Send to PLC"

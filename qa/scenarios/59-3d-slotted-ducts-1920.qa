@@ -12,6 +12,9 @@ wait 40
 key f
 wait 300
 shot duct-zoomed
+# Layers sits on the 3D rail: open the rail, then its flyout.
+click 23 1034
+wait 8
 click_text Layers
 wait 20
 expect "Slotted ducts"
@@ -19,6 +22,9 @@ shot layers-menu
 click_text "Slotted ducts"
 wait 40
 shot duct-solid
+# The flyout closes after a choice: open it again.
+click_text Layers
+wait 20
 click_text "Slotted ducts"
 wait 40
 shot duct-slotted-again

@@ -41,7 +41,7 @@ text options
 wait 4
 key Enter
 wait 10
-expect "Project options and variants"
+expect "Add an option"
 expect "Tie the selection"
 expect "Heat inside the cabinets"
 shot options-window

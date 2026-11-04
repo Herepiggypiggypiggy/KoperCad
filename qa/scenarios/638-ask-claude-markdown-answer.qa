@@ -12,11 +12,16 @@ text ask claude
 wait 8
 key Enter
 wait 10
-scroll 250 300 -300
+# Ask Claude docks at the right edge (x 1200 at 1366 wide, 1750 at 1920, 880 at 1024); the scroll that misses the dock does nothing.
+try scroll 1200 400 -300
+try scroll 1750 400 -300
+try scroll 880 400 -300
 wait 4
 click_text "Whole project"
 wait 4
-scroll 250 300 -3000
+try scroll 1200 400 -3000
+try scroll 1750 400 -3000
+try scroll 880 400 -3000
 wait 4
 click_text "I have read this and agree"
 wait 4

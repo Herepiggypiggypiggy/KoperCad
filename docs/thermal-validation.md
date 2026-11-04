@@ -125,7 +125,7 @@ A cabinet whose full grid is over 1.5 times the level budget runs as a reduced m
 | Drive 60 W and 3 cold devices side by side, reduced (5.8 k cells) against full (9.4 k cells), `tests/large.rs` | housing rise of the drive / air rise round it | -0.2 % / -1.0 % (test limits 5 % and 15 %) |
 | Same, reduced at 3.7 k cells | air rise round the drive | -30 % (the air next to a hot device depends on the grid; at 10.5 k cells it is +10 %) |
 | Same, cold devices | air round them | 0.7 to 1.8 K above the full run (test limit 3 K) |
-| CV-200 (115 devices, 460 W, planning losses), Coarse / Medium / Fine | cells, time (4 cores), converged | 6.5 k, 36 s / 19.6 k, 44 s / 47.6 k, 6 min; heat imbalance 0.0 / 0.3 / 0.1 % |
+| real machine (115 devices, 460 W, planning losses), Coarse / Medium / Fine | cells, time (4 cores), converged | 6.5 k, 36 s / 19.6 k, 44 s / 47.6 k, 6 min; heat imbalance 0.0 / 0.3 / 0.1 % |
 | Same | drive housing temperature / margin to its limit | 89 / 95 / 86 C and -7.2 / -7.9 / -8.0 K (the 2D model gives about -15 K) |
 | Full scenario of the same cabinet at Coarse | cells, result | 1.48 M, not converged in 180 s |
 | Example cabinet (7 devices) at Coarse | cells | 199 k full, 12.7 k reduced |

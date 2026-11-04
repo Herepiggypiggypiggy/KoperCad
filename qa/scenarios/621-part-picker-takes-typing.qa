@@ -10,12 +10,12 @@ text "Motor starter DOL"
 wait 10
 key Return
 wait 20
-click_text Place #2
+click_text Place #1
 wait 20
 key Escape
 click 700 560
 wait 5
-click 345 232
+click 407 398
 wait 8
 click_text "Choose..."
 wait 12
