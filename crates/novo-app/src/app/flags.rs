@@ -284,10 +284,6 @@ impl NovoApp {
         let project = doc.project();
         let mut marks = Vec::new();
         for flag in self.wb.flags.store.list(false) {
-            let hover = std::iter::once(flag.title.clone())
-                .chain(flag.detail.0.iter().cloned())
-                .collect::<Vec<_>>()
-                .join(": ");
             for anchor in &flag.anchors {
                 let id = match anchor {
                     Anchor::Symbol(raw) => raw
@@ -321,11 +317,7 @@ impl NovoApp {
                     _ => Vec::new(),
                 };
                 for id in id.into_iter().chain(drawn) {
-                    marks.push(
-                        Mark::on(mark_kind(flag), item_id(id))
-                            .with_text(hover.clone())
-                            .with_key(flag.id.0),
-                    );
+                    marks.push(Mark::on(mark_kind(flag), item_id(id)).with_key(flag.id.0));
                 }
             }
         }
