@@ -49,7 +49,7 @@ wait 10
 click_text "=A1+FLD-M1"
 wait 10
 mouse_down 371 359
-wait 400
+wait 800
 expect "pushes with"
 expect "last stop"
 shot status-line-running
