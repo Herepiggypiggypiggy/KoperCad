@@ -423,6 +423,8 @@ mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
+mod census_safety_tests;
+#[cfg(test)]
 mod centre_tests;
 #[cfg(test)]
 mod changes_tests;

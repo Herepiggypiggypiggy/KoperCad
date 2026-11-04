@@ -699,6 +699,43 @@ impl NovoApp {
         self.emc.preview_fresh = true;
     }
 
+    /// The first suggestion of the finding an EMC triangle stands for that
+    /// the program can apply, for the "Preview the fix" button (the preview
+    /// shows in the EMC check window; nothing changes until Apply there).
+    /// `None` when the finding only has advice to follow by hand.
+    pub(super) fn emc_fix_of(
+        &self,
+        flag: &novo_flags::Flag,
+        rule: Option<&'static str>,
+    ) -> Option<Fix> {
+        let project = self.backend.document().map(|d| d.project())?;
+        let netlist = project.netlist();
+        let report = emc::analyse_with(project, &netlist);
+        let wanted: std::collections::BTreeSet<String> =
+            flag.anchors.iter().map(novo_flags::Anchor::key).collect();
+        report
+            .findings
+            .iter()
+            .filter(|f| Some(f.rule) == rule)
+            .filter(|f| {
+                let keys: std::collections::BTreeSet<String> = f
+                    .subjects
+                    .iter()
+                    .map(|s| match s {
+                        Subject::Run(id) => format!("wire:{id}"),
+                        Subject::Device(id) => format!("device:{id}"),
+                        Subject::Cable(id) => format!("cable:{id}"),
+                        Subject::Plate(_) => String::new(),
+                    })
+                    .filter(|k| !k.is_empty())
+                    .collect();
+                keys.is_empty() || keys.is_subset(&wanted)
+            })
+            .flat_map(|f| f.fixes.iter())
+            .find(|x| x.applicable())
+            .cloned()
+    }
+
     /// Opens a view that can draw the previewed fix, EMC layer on.
     fn emc_show_whatif(&mut self, ws: Workspace) {
         // The layer that shows what the fix changes goes on with the view.
