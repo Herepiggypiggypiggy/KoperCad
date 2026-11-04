@@ -41,6 +41,8 @@ scroll 250 420 -420
 scroll 250 800 -420
 wait 10
 shot ranked-scrolled
+scroll 250 300 900
+wait 10
 click_text "Copy the table"
 wait 6
 expect "The table is on the clipboard."

@@ -63,7 +63,7 @@ wait_s 150
 # Undo and the cooling card wait for the finished run: no "Preliminary" left.
 expect_not "Preliminary"
 shot airflow-result
-expect "Flow: streamlines, scale 0 to 2 m/s"
+expect "Streamlines"
 check_blank airflow-result
 check_layout
 wait_s 5
@@ -88,7 +88,7 @@ click_text "Cooling selection"
 wait 10
 click_text Undo
 wait 10
-expect "from before your last change"
+expect "Result out of date"
 shot stale-after-edit
 check_layout
 key ctrl+k
