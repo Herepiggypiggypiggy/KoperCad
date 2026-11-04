@@ -516,6 +516,23 @@ fn shield_end(cable: &Cable, key: &str) -> Termination {
     }
 }
 
+/// The chosen enclosure's shell; `None` when the structure has no record.
+fn shell_of(s: &Structure) -> Option<crate::input::Shell> {
+    let spec = novo_layout::spec::EnclosureSpec::read(&s.properties);
+    if spec.is_empty() {
+        return None;
+    }
+    let inside = spec
+        .interior()
+        .map(|i| ((i.width, i.height, i.depth), i.weakest.words()))
+        .map_err(|m| m.to_string());
+    Some(crate::input::Shell {
+        article: spec.article.clone(),
+        source: inside.as_ref().map_or("", |(_, w)| w),
+        inside: inside.map(|(d, _)| d),
+    })
+}
+
 fn finish_of(s: &Structure) -> Option<Finish> {
     match text(&s.properties, "emc.finish")?
         .to_ascii_lowercase()
@@ -580,6 +597,7 @@ pub fn input_of(project: &Project, netlist: &Netlist) -> Input {
             tag: s.tag.to_string(),
             finish: finish_of(s),
             door_bonded: s.properties.get("emc.door_bonded").and_then(as_bool),
+            shell: shell_of(s),
         });
     }
     if started {

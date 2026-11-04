@@ -741,3 +741,48 @@ fn no_spot_under_the_planning_value_is_refused() {
     let err = preview(&c.project, &fix).unwrap_err().to_string();
     assert!(err.contains("modelled field"), "{err}");
 }
+
+#[test]
+fn the_enclosure_record_on_the_structure_reaches_the_shell_rule() {
+    use novo_layout::spec::{CatalogueRow, Field, Source};
+    let mut c = cabinet();
+    let run = |c: &Cab, w: f64, h: f64| -> Option<String> {
+        let mut spec = CatalogueRow {
+            article: "T-1".into(),
+            series: "T".into(),
+            width: w,
+            height: h,
+            depth: 300.0,
+            wall: 2.0,
+            plate_article: String::new(),
+            source: "test".into(),
+            terms: "test".into(),
+        }
+        .spec();
+        spec.plate_setback = Some(Field::new(20.0, Source::Catalogue));
+        let mut p = c.project.clone();
+        let mut props = p.get::<Structure>(c.cab).unwrap().properties.clone();
+        spec.write(&mut props);
+        p.transact("spec", |tx| {
+            for (k, v) in props {
+                tx.set_property(c.cab, k, Some(v))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        analyse_project(&p)
+            .of_rule("EMC-22")
+            .next()
+            .map(|f| f.message.clone())
+    };
+    assert!(
+        analyse_project(&c.project)
+            .of_rule("EMC-22")
+            .next()
+            .is_none()
+    );
+    let big = run(&c, 1000.0, 800.0).expect("a big box is flagged");
+    assert!(big.contains("MHz"), "{big}");
+    assert!(run(&c, 400.0, 300.0).is_none());
+    let _ = &mut c;
+}

@@ -133,6 +133,21 @@ pub struct Plate {
     /// The door is bonded to the frame with a strap (`emc.door_bonded`), when
     /// stated.
     pub door_bonded: Option<bool>,
+    /// The chosen enclosure's shell, when the plate's enclosure has a
+    /// record (`novo_layout::spec`); `None` for projects without one.
+    pub shell: Option<Shell>,
+}
+
+/// The shell of a chosen enclosure as the shielding estimate reads it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shell {
+    /// Maker article number.
+    pub article: String,
+    /// Inside size (width, height, depth) in mm, or the first missing
+    /// field in words; never a guessed size.
+    pub inside: Result<(f64, f64, f64), String>,
+    /// Where the weakest number came from, in words (`catalogue`, ...).
+    pub source: &'static str,
 }
 
 /// Thresholds and assumptions. Every field is shown next to the results it

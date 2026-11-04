@@ -165,3 +165,72 @@ fn keys_and_labels_are_unique() {
     let keys: std::collections::HashSet<_> = ProblemKind::ALL.iter().map(|k| k.key()).collect();
     assert_eq!(keys.len(), ProblemKind::ALL.len());
 }
+
+fn with_spec(project: &mut Project, depth: f64, setback: Option<f64>) {
+    use novo_layout::spec::{CatalogueRow, Field, Source};
+    let mut spec = CatalogueRow {
+        article: "T-1".into(),
+        series: "T".into(),
+        width: 404.0,
+        height: 404.0,
+        depth,
+        wall: 2.0,
+        plate_article: String::new(),
+        source: "test".into(),
+        terms: "test".into(),
+    }
+    .spec();
+    spec.plate_setback = setback.map(|v| Field::new(v, Source::Catalogue));
+    let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+    let mut props = project.get::<Structure>(cab).unwrap().properties.clone();
+    spec.write(&mut props);
+    project
+        .transact("spec", |tx| {
+            for (k, v) in props {
+                tx.set_property(cab, k, Some(v))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn the_chosen_enclosure_decides_the_depth_check() {
+    // -K2 stands 250 mm deep.
+    let mut shallow = cabinet(None, 300.0);
+    with_spec(&mut shallow, 254.0, Some(0.0));
+    let found = check(&shallow);
+    assert_eq!(of_kind(&found, ProblemKind::DeviceTooDeep).len(), 0);
+    assert_eq!(of_kind(&found, ProblemKind::DoorGapTight).len(), 1);
+    assert!(
+        of_kind(&found, ProblemKind::DoorGapTight)[0]
+            .message
+            .contains("enclosure data: catalogue")
+    );
+
+    let mut small = cabinet(None, 300.0);
+    with_spec(&mut small, 200.0, Some(0.0));
+    let found = check(&small);
+    let deep = of_kind(&found, ProblemKind::DeviceTooDeep);
+    assert_eq!(deep.len(), 1);
+    assert!(deep[0].message.contains("54 mm too deep"));
+}
+
+#[test]
+fn a_chosen_enclosure_without_setback_fails_loudly() {
+    let mut p = cabinet(None, 300.0);
+    with_spec(&mut p, 300.0, None);
+    let found = check(&p);
+    let missing = of_kind(&found, ProblemKind::EnclosureDataMissing);
+    assert_eq!(missing.len(), 1);
+    assert!(missing[0].message.contains("plate setback"));
+}
+
+#[test]
+fn a_typed_size_that_disagrees_is_reported_and_the_record_wins() {
+    let mut p = cabinet(Some(enclosure(300.0)), 300.0);
+    with_spec(&mut p, 204.0, Some(0.0));
+    let found = check(&p);
+    assert_eq!(of_kind(&found, ProblemKind::EnclosureSizeDiffers).len(), 1);
+    assert_eq!(of_kind(&found, ProblemKind::DeviceTooDeep).len(), 1);
+}

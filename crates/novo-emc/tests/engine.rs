@@ -54,6 +54,7 @@ fn input(runs: Vec<Run>, ducts: Vec<Duct>) -> Input {
             tag: "+CAB".into(),
             finish: None,
             door_bonded: None,
+            shell: None,
         }],
         cables: Vec::new(),
         params: Params::default(),
@@ -827,4 +828,45 @@ fn motor_cable_without_a_length_gives_no_number() {
     assert_eq!(r.of_rule("EMC-21").count(), 0);
     let s = r.rules.iter().find(|s| s.rule == "EMC-21").unwrap();
     assert_eq!(s.status, Status::NotEvaluated);
+}
+
+fn with_shell(inside: Result<(f64, f64, f64), String>) -> Input {
+    let mut i = input(vec![], vec![]);
+    i.plates[0].shell = Some(novo_emc::Shell {
+        article: "T-1".into(),
+        inside,
+        source: "catalogue",
+    });
+    i.devices = vec![dev(1, "-T1", Role::Drive, (0.0, 0.0, 100.0, 200.0))];
+    i
+}
+
+#[test]
+fn the_lowest_cavity_resonance_follows_the_inside_size() {
+    // 1.0 x 0.8 m: c/2 * sqrt(1 + 1.5625) = 239.9 MHz (closed form).
+    let f = novo_emc::rules::lowest_cavity_hz((1000.0, 800.0, 300.0));
+    assert!((f / 1.0e6 - 239.9).abs() < 0.1, "{f}");
+    // The depth only matters when it is one of the two longest sides.
+    assert_eq!(f, novo_emc::rules::lowest_cavity_hz((300.0, 1000.0, 800.0)));
+
+    // Changing the enclosure changes the result: a big box is flagged, a
+    // small one resonates above the limit and is quiet.
+    let big = analyse(&with_shell(Ok((1000.0, 800.0, 300.0))));
+    let f21 = big.of_rule("EMC-22").next().unwrap();
+    assert!(f21.message.contains("240 MHz") && f21.message.contains("catalogue"));
+    let small = analyse(&with_shell(Ok((400.0, 300.0, 200.0))));
+    assert_eq!(small.of_rule("EMC-22").count(), 0);
+}
+
+#[test]
+fn a_chosen_enclosure_without_a_size_is_flagged_not_guessed() {
+    let r = analyse(&with_shell(Err(
+        "The enclosure has no wall thickness.".into()
+    )));
+    let f = r.of_rule("EMC-22").next().unwrap();
+    assert_eq!(f.severity, novo_emc::Severity::Warning);
+    assert!(f.message.contains("no wall thickness"));
+    // No enclosure record, no finding, rule not applicable.
+    let none = analyse(&input(vec![], vec![]));
+    assert_eq!(none.of_rule("EMC-22").count(), 0);
 }

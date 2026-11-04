@@ -143,6 +143,15 @@ pub static RULES: &[Rule] = &[
         verify: true,
         inputs: "Motor cables with a shield, cable length (`length_m` on the cable), maker capacitance (`emc.cable_pf_per_m`)",
     },
+    Rule {
+        id: "EMC-22",
+        title: "Enclosure shell: lowest cavity resonance",
+        level: Level::Estimate,
+        requirement: "The empty box of the chosen enclosure resonates first (TM110 of a rectangular cavity, from its inside size) above the resonance limit when a drive or noisy device sits in it; a chosen enclosure with no inside size is flagged instead of being given a default.",
+        source: "Closed form f = c / 2 * sqrt(1/a^2 + 1/b^2) for the two longest inside sides; the limit is a house value, not verified",
+        verify: true,
+        inputs: "The enclosure record (`encl.` properties of the structure: outside size, wall), drives and noisy devices",
+    },
 ];
 
 pub fn rule(id: &str) -> &'static Rule {
@@ -391,6 +400,17 @@ pub fn analyse_with_field(input: &Input, field: Option<&crate::field::FieldSetup
         findings.len() - n,
         input.devices.iter().any(|d| d.role == Role::Sensitive),
         "Sensitive devices against drives",
+        false,
+    );
+
+    let n = findings.len();
+    shell(&cx, &mut findings);
+    note(
+        &mut status,
+        "EMC-22",
+        findings.len() - n,
+        input.plates.iter().any(|p| p.shell.is_some()),
+        "Lowest cavity resonance of the chosen enclosure",
         false,
     );
 
@@ -1203,6 +1223,86 @@ fn bonding(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
                 band_hz: None,
             });
         }
+    }
+}
+
+// ---- EMC-22 ----------------------------------------------------------------
+
+/// The speed of light, m/s.
+const C0: f64 = 299_792_458.0;
+/// A resonance below this is flagged when a drive or noisy device is in the
+/// box (house value: drive edges carry energy up to about this frequency).
+pub const CAVITY_LIMIT_HZ: f64 = 300.0e6;
+
+/// Lowest resonance of an empty rectangular box with inside sides in mm: the
+/// TM110 mode over the two longest sides. Devices and wiring lower it.
+pub fn lowest_cavity_hz(inside: (f64, f64, f64)) -> f64 {
+    let mut s = [inside.0, inside.1, inside.2];
+    s.sort_by(|a, b| b.total_cmp(a));
+    let (a, b) = (s[0] / 1000.0, s[1] / 1000.0);
+    C0 / 2.0 * (1.0 / (a * a) + 1.0 / (b * b)).sqrt()
+}
+
+fn shell(cx: &Ctx<'_>, out: &mut Vec<Finding>) {
+    for plate in cx.input.plates.iter() {
+        let Some(shell) = &plate.shell else { continue };
+        let sources = cx
+            .input
+            .devices
+            .iter()
+            .filter(|d| d.plate == Some(plate.id) && matches!(d.role, Role::Drive | Role::Noisy))
+            .count();
+        if sources == 0 {
+            continue;
+        }
+        let (message, severity, metrics) = match &shell.inside {
+            Err(why) => (
+                format!(
+                    "{} ({}) has no usable inside size, so its shielding was not estimated. {why}",
+                    cx.plate(plate.id),
+                    shell.article
+                ),
+                Severity::Warning,
+                Vec::new(),
+            ),
+            Ok(inside) => {
+                let f = lowest_cavity_hz(*inside);
+                if f >= CAVITY_LIMIT_HZ {
+                    continue;
+                }
+                (
+                    format!(
+                        "The empty box of {} resonates first at about {:.0} MHz ({:.0} x {:.0} x {:.0} mm inside, {}): drive edges carry energy there; devices and wiring lower it further. Keep the door and plate bonded and the seams short, and check by measurement.",
+                        cx.plate(plate.id),
+                        f / 1.0e6,
+                        inside.0,
+                        inside.1,
+                        inside.2,
+                        shell.source
+                    ),
+                    Severity::Info,
+                    vec![Metric {
+                        label: "Lowest cavity resonance",
+                        value: format!("{:.0} MHz", f / 1.0e6),
+                        level: Level::Estimate,
+                    }],
+                )
+            }
+        };
+        out.push(Finding {
+            rule: "EMC-22",
+            level: Level::Estimate,
+            severity,
+            subjects: vec![Subject::Plate(plate.id)],
+            points: vec![(Subject::Plate(plate.id), 10)],
+            message,
+            metrics,
+            fixes: Vec::new(),
+            at: None,
+            ribbons: Vec::new(),
+            loop_polygon: Vec::new(),
+            band_hz: Some((CAVITY_LIMIT_HZ / 10.0, 1.0e9)),
+        });
     }
 }
 

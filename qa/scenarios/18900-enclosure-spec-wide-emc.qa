@@ -1,0 +1,25 @@
+@title Chosen enclosure, big box: EMC-22 flags the low cavity resonance
+@area Check
+@sizes 1366x768 1920x1080
+# The EMC cabinet with a chosen 1200 x 1000 x 400 enclosure (synthetic numbers). Check > EMC check, run with the design checks: EMC-22 names the lowest resonance of the empty box. The doors and depth checks find no problem for this depth.
+open qa/fixtures/enclosure-spec-wide.novo
+wait 20
+key ctrl+k
+text EMC check
+key enter
+wait 10
+click_text "Run the EMC rules with the design checks"
+wait 10
+expect "EMC-22"
+expect "resonates first"
+shot emc-wide-box
+check_layout
+key Escape
+wait 5
+key ctrl+k
+text Problems
+key enter
+wait 10
+expect_not "too deep"
+shot problems-wide-box
+check_layout

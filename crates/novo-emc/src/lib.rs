@@ -27,7 +27,7 @@ pub mod rules;
 pub use class::{EmcClass, Shield, Termination, default_distance_mm};
 pub use field::{Current, FieldMap, FieldParams, FieldSetup, FieldSummary};
 pub use input::{
-    CableData, Device, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run,
+    CableData, Device, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run, Shell,
 };
 pub use picture::{Bond, BondQuality, DESIGN_AID, Picture, picture};
 pub use report::*;
