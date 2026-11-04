@@ -49,6 +49,7 @@ mod macros;
 mod makers;
 mod panel;
 mod pins;
+pub mod place_list;
 mod plain;
 mod quality;
 mod recipes;

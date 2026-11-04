@@ -3466,6 +3466,7 @@ dependencies = [
  "novo-core",
  "novo-layout",
  "novo-parts",
+ "serde",
  "thiserror 2.0.21",
 ]
 

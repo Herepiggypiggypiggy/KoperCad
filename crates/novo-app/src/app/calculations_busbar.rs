@@ -202,6 +202,14 @@ pub(super) fn tab(
     ui.horizontal(|ui| {
         ui.label("Bar");
         badge(ui, Model::Heat);
+        super::dialog_ui::help(ui, HELP);
+        // The button sits in the header so it never scrolls out of a small
+        // window; it copies the report of the numbers last calculated.
+        if let Some((f, r)) = cache.as_ref()
+            && ui.button("Copy busbar result").clicked()
+        {
+            *copy = Some(report_text(f, r));
+        }
     });
     egui::Grid::new("busbar_form")
         .num_columns(4)
@@ -312,13 +320,6 @@ pub(super) fn tab(
     if let Ok(o) = &r.steady {
         profile(ui, o, form.limit_c);
     }
-    ui.horizontal(|ui| {
-        if ui.button("Copy as text").clicked() {
-            *copy = Some(report_text(form, r));
-        }
-        badge(ui, Model::Heat);
-        super::dialog_ui::help(ui, HELP);
-    });
 }
 
 /// The temperature along the bar as a small line graph with the limit.

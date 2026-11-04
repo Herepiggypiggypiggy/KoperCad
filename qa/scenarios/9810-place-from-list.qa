@@ -1,0 +1,25 @@
+@title Place devices from a pasted list (Ctrl+K, place list)
+@area Schematic
+open_starter_example
+wait 20
+key ctrl+k
+wait 6
+text "place list"
+wait 8
+key Enter
+wait 10
+shot window-empty
+text "F1 mcb 3p x3"
+key Enter
+text "K1 contactor"
+key Enter
+text "nonsense words"
+wait 12
+shot preview
+expect "left out"
+expect "Place 4"
+click_text "Place 4"
+wait 12
+shot placed
+expect_scene "-F3"
+check_layout
