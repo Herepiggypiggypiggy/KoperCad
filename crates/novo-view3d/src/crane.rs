@@ -166,6 +166,7 @@ const RAW_TROLLEY_DRIVE: u64 = 80;
 const RAW_PANEL: u64 = 90;
 const RAW_PLATE: u64 = 100;
 const RAW_BUFFER: u64 = 110;
+const RAW_MARK: u64 = 120;
 const RAW_BRIDGE_FLAG: u64 = 1000;
 const RAW_TROLLEY_FLAG: u64 = 2000;
 const RAW_COLUMN: u64 = 3000;
@@ -248,6 +249,7 @@ const WHEEL: [u8; 3] = [104, 110, 120];
 const ROPE_STEEL: [u8; 3] = [78, 80, 86];
 const MOTOR: [u8; 3] = [48, 62, 92];
 const GEARBOX: [u8; 3] = [92, 98, 108];
+const MARKING: [u8; 3] = [226, 190, 40];
 const CONCRETE: [u8; 3] = [150, 150, 146];
 const PANEL: [u8; 3] = [196, 200, 204];
 
@@ -280,6 +282,28 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         Vec3::new(runway + 6000.0, 60.0, span + 6000.0),
         FLOOR,
     ));
+    // Safety markings on the floor: a yellow line along the outside of each runway and across both
+    // ends, 4 mm proud of the floor so they never z-fight with it.
+    {
+        let (w, t) = (150.0, 4.0);
+        let (x_lo, x_hi) = (-2000.0, runway + 2000.0);
+        let (z_lo, z_hi) = (-1500.0, span + 1500.0);
+        let bars = [
+            (Vec3::new(x_lo, 0.0, z_lo), Vec3::new(x_hi - x_lo, t, w)),
+            (Vec3::new(x_lo, 0.0, z_hi - w), Vec3::new(x_hi - x_lo, t, w)),
+            (Vec3::new(x_lo, 0.0, z_lo), Vec3::new(w, t, z_hi - z_lo)),
+            (Vec3::new(x_hi - w, 0.0, z_lo), Vec3::new(w, t, z_hi - z_lo)),
+        ];
+        for (k, (min, ext)) in bars.into_iter().enumerate() {
+            push(boxed(
+                RAW_MARK + k as u64,
+                ItemKind::Plate,
+                min,
+                ext,
+                MARKING,
+            ));
+        }
+    }
     // Runway beams along x at both ends of the span, with a crane rail on top and columns under
     // them. They run past the bridge's travel so an end truck at the end still has beam under it.
     let beam_len = runway + 2.0 * size::RUNWAY_OVERHANG;
