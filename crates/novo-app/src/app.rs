@@ -1205,6 +1205,7 @@ impl NovoApp {
             dismissed: true,
             count: 1,
             file: None,
+            action: None,
         });
         if self.messages.len() > MESSAGE_HISTORY {
             let excess = self.messages.len() - MESSAGE_HISTORY;
