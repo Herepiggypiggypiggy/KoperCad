@@ -15,6 +15,8 @@ pub enum Source {
     Safety,
     Calc,
     Parts,
+    /// Commissioning: punch items, failed checks, open redlines.
+    Commissioning,
     Job,
     Shell,
 }
@@ -32,6 +34,7 @@ impl Source {
             Source::Safety => "safety".into(),
             Source::Calc => "calc".into(),
             Source::Parts => "parts".into(),
+            Source::Commissioning => "commissioning".into(),
             Source::Job => "job".into(),
             Source::Shell => "shell".into(),
         }
@@ -49,6 +52,7 @@ impl Source {
             Source::Safety => "Safety",
             Source::Calc => "Calc",
             Source::Parts => "Parts",
+            Source::Commissioning => "Commissioning",
             Source::Job => "Job",
             Source::Shell => "App",
         }

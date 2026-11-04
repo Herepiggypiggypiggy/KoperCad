@@ -64,6 +64,9 @@ mod commissioning;
 mod commissioning_cabinet;
 #[cfg(test)]
 mod commissioning_cabinet_tests;
+mod commissioning_flags;
+#[cfg(test)]
+mod commissioning_flags_tests;
 mod commissioning_photos;
 mod commissioning_redlines;
 mod commissioning_signature;
@@ -131,6 +134,7 @@ mod example_mcc;
 mod example_plc;
 mod example_pump;
 mod faults;
+mod flag_rows;
 mod flags;
 mod handover;
 mod heat;

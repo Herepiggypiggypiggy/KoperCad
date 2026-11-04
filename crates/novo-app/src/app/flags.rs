@@ -270,6 +270,8 @@ impl NovoApp {
                                 Action::Fix(c) if c == FIX_ASSIGN_PARTS => "Assign parts",
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
                                 Action::Fix(_) => "Fix",
+                                Action::Open(_) => "Open",
+                                Action::Retry => "Retry",
                                 Action::Waive => "Waive…",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
@@ -312,6 +314,18 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        if flag.source == Source::Commissioning || flag.source == Source::Job {
+            match action {
+                Action::Locate => self.locate_commissioning_flag(flag),
+                Action::Open(panel) => self.open_commissioning_panel(&panel),
+                Action::Retry => self.retry_commissioning_job(flag),
+                Action::Copy => {
+                    ctx.copy_text(format!("{}\n{}", flag.title, flag.detail.0.join("\n")))
+                }
+                _ => {}
+            }
+            return;
+        }
         match action {
             Action::Locate => {
                 if let Some(i) = index {
