@@ -121,7 +121,12 @@ impl NovoApp {
         let set = match page_set(choice, &pages, current) {
             Ok(set) => set,
             Err(e) => {
-                self.message(Level::Warning, format!("Export PDF: {e}"));
+                self.job_fail(
+                    "export.pdf",
+                    "PDF export failed",
+                    Level::Warning,
+                    format!("Export PDF: {e}"),
+                );
                 return None;
             }
         };

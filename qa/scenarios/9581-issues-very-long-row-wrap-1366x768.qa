@@ -1,0 +1,10 @@
+@title A 220 character tag wraps over several lines beside its triangle in the Issues list (1366x768)
+@area Schematic
+@sizes 1366x768
+# Regression from T0b: Issues rows ran off the edge. Fixture qa/fixtures/cabinet-long-tag.novo has a 220 character device tag, so its rows wrap to three or more lines.
+open qa/fixtures/cabinet-long-tag.novo
+wait 20
+click_text "warnings" Button
+wait 10
+shot issues-very-long-row
+check_layout

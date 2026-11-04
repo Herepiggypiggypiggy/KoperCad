@@ -24,19 +24,20 @@ fn a_failed_job_is_a_flag_on_the_job_and_the_next_success_clears_it() {
         "Could not write x: disk full",
         Some("help.open_log_folder"),
     );
-    let (severity, count, id) = d.app.shell_chip().expect("the chip has something to say");
-    assert_eq!((severity, count), (Severity::Red, 1));
-    let flag = d.app.wb.flags.store.get(id).unwrap();
-    assert_eq!(flag.source, Source::Shell);
+    let jobs = d.app.job_flags();
+    assert_eq!(jobs.len(), 1);
+    let flag = &jobs[0];
+    assert_eq!(flag.severity, Severity::Red);
+    assert_eq!(flag.source, Source::Job);
     assert_eq!(flag.anchors, vec![Anchor::Job("test.job".into())]);
     assert!(flag.accessible_name().starts_with("Error: "));
     // Raising it again with new words replaces it: one flag, one count.
     d.app
         .job_flag("test.job", false, "Thing not written", "Again", None);
-    assert_eq!(d.app.shell_chip().unwrap().1, 1);
-    assert_eq!(d.app.shell_chip().unwrap().0, Severity::Yellow);
+    assert_eq!(d.app.job_flags().len(), 1);
+    assert_eq!(d.app.job_flags()[0].severity, Severity::Yellow);
     d.app.job_ok("test.job");
-    assert!(d.app.shell_chip().is_none());
+    assert!(d.app.job_flags().is_empty());
 }
 
 #[test]
@@ -49,7 +50,7 @@ fn the_popover_offers_the_fix_and_dismiss_clears_the_flag() {
         "Could not open it",
         Some("help.open_log_folder"),
     );
-    let (_, _, id) = d.app.shell_chip().unwrap();
+    let id = d.app.job_flags()[0].id;
     d.app.wb.flags.open = Some((id, eframe::egui::pos2(300.0, 300.0)));
     d.frame();
     d.frame();
@@ -58,7 +59,7 @@ fn the_popover_offers_the_fix_and_dismiss_clears_the_flag() {
     d.frame();
     assert!(d.app.wb.flags.open.is_none());
     assert!(
-        d.app.shell_chip().is_some(),
+        !d.app.job_flags().is_empty(),
         "Esc closes, it does not clear"
     );
 }
@@ -85,8 +86,9 @@ fn two_jobs_are_two_flags_with_the_worst_first() {
     let (_dir, mut d) = drive();
     d.app.job_flag("a", false, "A", "a", None);
     d.app.job_flag("b", true, "B", "b", None);
-    let (severity, count, _) = d.app.shell_chip().unwrap();
-    assert_eq!((severity, count), (Severity::Red, 2));
+    let jobs = d.app.job_flags();
+    assert_eq!(jobs.len(), 2);
+    assert!(jobs.iter().any(|f| f.severity == Severity::Red));
 }
 
 #[test]

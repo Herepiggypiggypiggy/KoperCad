@@ -17,7 +17,7 @@
 use eframe::egui;
 use novo_flags::{Action, Anchor, Detail, Flag, FlagDraft, FlagId, Life, Severity, Source};
 
-use super::NovoApp;
+use super::{Level, NovoApp};
 
 /// Commands a shell flag may offer as its Fix or Open button, with the label.
 pub(super) const COMMANDS: &[(&str, &str)] = &[
@@ -72,9 +72,9 @@ fn id_of(anchor: &Anchor, rule: &str) -> FlagId {
 }
 
 impl NovoApp {
-    /// A job failed or was doubtful: a triangle on the job chip instead of a
-    /// toast. `rule` names the job (`diag.log_folder`); raising it again with
-    /// new words replaces the old one.
+    /// A job failed or was doubtful: a triangle on the failed-jobs pill in the
+    /// top bar (see `flags_jobs`) instead of a toast. `rule` names the job
+    /// (`diag.log_folder`); raising it again with new words replaces the old one.
     pub(super) fn job_flag(
         &mut self,
         rule: &str,
@@ -83,12 +83,8 @@ impl NovoApp {
         detail: impl AsRef<str>,
         fix: Option<&str>,
     ) {
-        self.shell_flag(Anchor::Job(rule.to_owned()), rule, red, title, detail, fix);
-    }
-
-    /// The same job worked this time: its flag goes.
-    pub(super) fn job_ok(&mut self, rule: &str) {
-        self.shell_clear(&Anchor::Job(rule.to_owned()), rule);
+        let level = if red { Level::Error } else { Level::Warning };
+        self.job_fail_in(rule, title, level, detail.as_ref(), None, fix);
     }
 
     /// A triangle on the control or window `key` (see [`NovoApp::flag_on`]).
@@ -130,25 +126,6 @@ impl NovoApp {
 
     fn shell_clear(&mut self, anchor: &Anchor, rule: &str) {
         self.wb.flags.store.clear(id_of(anchor, rule));
-    }
-
-    /// The shell flags that are not on the drawing: worst severity, count and
-    /// the newest one (for the status bar chip).
-    pub(super) fn shell_chip(&self) -> Option<(Severity, usize, FlagId)> {
-        let mut found: Vec<&Flag> = self
-            .wb
-            .flags
-            .store
-            .list(false)
-            .into_iter()
-            .filter(|f| f.source == Source::Shell)
-            .collect();
-        if found.is_empty() {
-            return None;
-        }
-        found.sort_by_key(|f| (f.severity == Severity::Yellow, f.id.0));
-        let worst = found[0].severity;
-        Some((worst, found.len(), found[0].id))
     }
 
     /// The flags on control `key`, ready to draw with [`flag_row`].
@@ -285,29 +262,4 @@ pub(super) fn inline_flag(
         }
     });
     response
-}
-
-/// The status bar chip for the shell flags: a triangle, the count when there
-/// are several. Returns the flag to open when it was clicked.
-pub(super) fn chip(
-    ui: &mut egui::Ui,
-    chip: (Severity, usize, FlagId),
-) -> Option<(FlagId, egui::Pos2)> {
-    let (severity, count, id) = chip;
-    let name = if count == 1 {
-        "A job did not work: click for details".to_owned()
-    } else {
-        format!("{count} things did not work: click for details")
-    };
-    let mut asked = None;
-    ui.horizontal(|ui| {
-        let r = triangle_button_sized(ui, severity == Severity::Red, false, &name, 18.0);
-        if count > 1 {
-            ui.weak(count.to_string());
-        }
-        if r.clicked() {
-            asked = Some((id, r.rect.left_top() - egui::vec2(0.0, 120.0)));
-        }
-    });
-    asked
 }

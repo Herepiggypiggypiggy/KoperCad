@@ -36,6 +36,7 @@ pub(super) enum DrawerAction {
     DeclineOne(u64),
     RestoreDeclined,
     Tab(Drawer),
+    Pass(super::parts_pass::PassAction),
     Lesson(String),
     Close,
 }
@@ -88,6 +89,11 @@ impl NovoApp {
             Drawer::Terminals => super::terminals::all_proposals(project).0.len(),
             Drawer::Cables => cable_proposals.len(),
             Drawer::Devices => 0,
+        };
+        let pass = if tab == Drawer::Devices {
+            self.parts_pass_rows()
+        } else {
+            None
         };
         let grouping = novo_terminals::grouping(project);
         let chip = match tab {
@@ -238,6 +244,11 @@ impl NovoApp {
                             &mut actions,
                         );
                     }
+                    Drawer::Devices if pass.is_some() => {
+                        if let Some((rows, cursor)) = &pass {
+                            super::parts_pass::pass_tab(ui, rows, *cursor, &mut actions);
+                        }
+                    }
                     Drawer::Devices => {
                         let rows = device_rows(project, &selected);
                         devices_tab(ui, &rows, &mut self.wb.location_edit, &mut actions);
@@ -277,6 +288,7 @@ impl NovoApp {
                 DrawerAction::DeclineOne(key) => self.decline_one_cable(key),
                 DrawerAction::RestoreDeclined => self.restore_declined_cables(),
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
+                DrawerAction::Pass(a) => self.pass_action(a),
                 DrawerAction::Lesson(id) => self.learn_run_command_lesson(&id),
                 DrawerAction::Close => self.wb.drawer = None,
             }

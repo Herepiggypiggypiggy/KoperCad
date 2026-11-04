@@ -121,9 +121,12 @@ impl NovoApp {
             match write_replacing(&path, f.export.text.as_bytes()) {
                 Ok(()) => written.push(path),
                 Err(e) => {
-                    self.message(
+                    self.job_fail_at(
+                        "export.step",
+                        "STEP export failed",
                         Level::Error,
                         format!("Could not write {}: {e}", path.display()),
+                        &path,
                     );
                     return written;
                 }
@@ -157,9 +160,12 @@ impl NovoApp {
         );
         let path = replaceable(&dir, &stem, "aml", aml_is_ours);
         if let Err(e) = write_replacing(&path, export.text.as_bytes()) {
-            self.message(
+            self.job_fail_at(
+                "export.aml",
+                "AML export failed",
                 Level::Error,
                 format!("Could not write {}: {e}", path.display()),
+                &path,
             );
             return None;
         }
@@ -184,9 +190,12 @@ impl NovoApp {
             novo_interop::eplan::pxf::is_kopercad_pxf,
         );
         if let Err(e) = write_replacing(&path, export.text.as_bytes()) {
-            self.message(
+            self.job_fail_at(
+                "export.eplan",
+                "EPLAN export failed",
                 Level::Error,
                 format!("Could not write {}: {e}", path.display()),
+                &path,
             );
             return None;
         }
@@ -266,7 +275,12 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not import {name}: {e}"));
+                self.job_fail(
+                    "import.aml",
+                    "AML import failed",
+                    Level::Error,
+                    format!("Could not import {name}: {e}"),
+                );
                 false
             }
         }
@@ -300,7 +314,9 @@ impl NovoApp {
                 false
             }
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "import.aml",
+                    "AML import failed",
                     Level::Error,
                     format!("Could not import {}: {e}", import.file),
                 );
@@ -394,12 +410,15 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.eplan_script",
+                    "EPLAN script failed",
                     Level::Error,
                     format!(
                         "Could not write the EPLAN script to {}: {e}",
                         folder.display()
                     ),
+                    folder,
                 );
                 false
             }
@@ -470,9 +489,11 @@ impl NovoApp {
             return false;
         }
         let Some(converter) = dwg::find_installed(self.settings.dwg_converter.as_deref()) else {
-            self.message(
+            self.job_fail(
+                "import.dwg",
+                "No DWG converter",
                 Level::Warning,
-                format!("No DWG converter found. {}", dwg::guidance()),
+                format!("No DWG converter found. {}.", dwg::guidance()),
             );
             return false;
         };
@@ -510,7 +531,12 @@ impl NovoApp {
             Ok(Err(e)) => {
                 let name = job.name.clone();
                 self.wb.dwg_job = None;
-                self.message(Level::Error, format!("Could not import {name}: {e}"));
+                self.job_fail(
+                    "import.dwg",
+                    "DWG import failed",
+                    Level::Error,
+                    format!("Could not import {name}: {e}"),
+                );
             }
             Err(TryRecvError::Empty) => {
                 ctx.request_repaint_after(Duration::from_millis(250));
@@ -537,6 +563,7 @@ impl NovoApp {
         match dwg::ConverterKind::of_program(program) {
             Some(kind) => {
                 self.settings.dwg_converter = Some(program.to_path_buf());
+                self.job_ok("import.dwg");
                 self.message(
                     Level::Info,
                     format!("DWG files will be converted with {}", kind.label()),
@@ -544,9 +571,11 @@ impl NovoApp {
                 true
             }
             None => {
-                self.message(
+                self.job_fail(
+                    "import.dwg",
+                    "Not a DWG converter",
                     Level::Warning,
-                    "That is not dwg2dxf or the ODA File Converter. Choose one of those programs",
+                    "That is not dwg2dxf or the ODA File Converter. Choose one of those programs.",
                 );
                 false
             }
