@@ -29,6 +29,8 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// The drafts each simulation window raised (lane T10), by window.
+    pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
     /// The project revision and Place rules the Cabinet's own flags were built from.
     layout_synced: Option<(u64, novo_layout::rules::RuleSet)>,
 }
@@ -40,6 +42,7 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            sim: std::collections::BTreeMap::new(),
             layout_synced: None,
         }
     }
@@ -360,11 +363,10 @@ impl NovoApp {
             Action::Locate if super::cabinet_flags::is_plate_flag(flag) => {
                 self.locate_on_plate(flag);
             }
-            Action::Locate => {
-                if let Some(i) = index {
-                    self.go_problem(i);
-                }
-            }
+            Action::Locate => match index {
+                Some(i) => self.go_problem(i),
+                None => self.locate_flag(flag),
+            },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
             Action::Fix(cmd) if cmd == FIX_PIN_NAMES => {
                 if let Some(i) = index {
