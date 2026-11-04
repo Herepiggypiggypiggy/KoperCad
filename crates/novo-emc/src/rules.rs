@@ -911,8 +911,9 @@ fn motor_cable_leakage(cx: &Ctx<'_>, out: &mut Vec<Finding>) -> bool {
             subjects: vec![Subject::Cable(c), Subject::Run(r.id)],
             points: vec![(Subject::Run(r.id), if warn { 20 } else { 5 })],
             message: format!(
-                "The shielded motor cable of {} ({len_m:.0} m, {cores:.0} cores) has about {:.1} nF to earth ({source}): {ma:.1} mA leakage at {LEAK_HZ:.0} Hz and {LEAK_PHASE_V:.0} V{}.",
+                "The shielded motor cable of {} ({len_m:.0} m, {cores:.0} {}) has about {:.1} nF to earth ({source}): {ma:.1} mA leakage at {LEAK_HZ:.0} Hz and {LEAK_PHASE_V:.0} V{}.",
                 cx.run(r.id),
+                if cores > 1.5 { "cores" } else { "core" },
                 total_pf / 1000.0,
                 if warn {
                     ", over half of what a 30 mA RCD tolerates: use a drive-rated RCD (type B) or a shorter cable"
