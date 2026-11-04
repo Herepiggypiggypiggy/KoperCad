@@ -42,7 +42,7 @@ impl Default for BusbarState {
             bars: 1,
             stacked: true,
             gap_mm: 10.0,
-            pitch_mm: 120.0,
+            pitch_mm: 200.0,
             length_m: 1.0,
             hz: 50.0,
             amps: 800.0,
@@ -79,16 +79,31 @@ impl BusbarState {
     /// The solution for the current inputs (solved again only when they change).
     #[cfg(test)]
     pub(super) fn solution(&mut self) -> Option<&Solution> {
-        self.refresh();
+        self.refresh(false);
         self.cache.as_ref().and_then(|(_, s)| s.as_ref())
     }
 
-    fn refresh(&mut self) {
+    /// Solve again when an input changed. While a field is being dragged
+    /// (`busy`) the last result stays, so dragging does not stutter.
+    fn refresh(&mut self, busy: bool) {
         let setup = self.setup();
+        if busy && self.cache.is_some() {
+            return;
+        }
         if self.cache.as_ref().is_none_or(|(s, _)| *s != setup) {
             let solved = busbar::solve(&setup);
             self.cache = Some((setup, solved));
         }
+    }
+}
+
+/// One choice of a group: a button that shows it is the chosen one.
+fn pick<T: PartialEq + Copy>(ui: &mut egui::Ui, value: &mut T, this: T, label: &str) {
+    if ui
+        .add(egui::Button::new(label).selected(*value == this))
+        .clicked()
+    {
+        *value = this;
     }
 }
 
@@ -111,9 +126,9 @@ pub(super) fn text_of(setup: &Setup, sol: &Solution) -> String {
     for (g, z) in sol.group_zeff.iter().enumerate() {
         let _ = writeln!(
             out,
-            "{}: R {} mohm, X {} mohm, drop {:.3} V",
+            "{}: R {} mohm, X {} mohm (with coupling), drop {:.3} V",
             setup.group_name[g],
-            milli(z.re),
+            milli(sol.group_r_ac[g]),
             milli(z.im),
             sol.group_v[g].abs()
         );
@@ -145,14 +160,15 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         ui.label("?")
             .on_hover_text(format!("{}\n\nNot modelled:\n{hover}", busbar::MODEL_LABEL));
     });
+    ui.weak("Straight parallel bars, no steel nearby, no joints or bends. Planning numbers.");
     egui::Grid::new("busbar_inputs")
         .num_columns(4)
         .spacing([12.0, 4.0])
         .show(ui, |ui| {
             ui.label("Material");
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut st.aluminium, false, "Copper");
-                ui.selectable_value(&mut st.aluminium, true, "Aluminium");
+                pick(ui, &mut st.aluminium, false, "Copper");
+                pick(ui, &mut st.aluminium, true, "Aluminium");
             });
             ui.label("Temperature");
             ui.add(
@@ -175,11 +191,15 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
             );
             ui.end_row();
             ui.label("Bars per phase");
-            ui.add(egui::DragValue::new(&mut st.bars).range(1..=4));
+            ui.horizontal(|ui| {
+                for (n, label) in [(1, "1 bar"), (2, "2 bars"), (3, "3 bars"), (4, "4 bars")] {
+                    pick(ui, &mut st.bars, n, label);
+                }
+            });
             ui.label("Bars of a phase");
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut st.stacked, true, "stacked");
-                ui.selectable_value(&mut st.stacked, false, "side by side");
+                pick(ui, &mut st.stacked, true, "stacked");
+                pick(ui, &mut st.stacked, false, "side by side");
             });
             ui.end_row();
             ui.label("Gap between bars");
@@ -223,13 +243,18 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
             );
             ui.end_row();
         });
-    st.refresh();
+    let busy = ui.input(|i| i.pointer.any_down());
+    st.refresh(busy);
     ui.separator();
     let Some((setup, sol)) = st.cache.clone() else {
         return;
     };
     let Some(sol) = sol else {
-        ui.colored_label(p.warning, "These inputs cannot be solved.");
+        let why = match busbar::overlap(&setup) {
+            Some((a, b)) => format!("Bars {a} and {b} overlap: raise the phase pitch or the gap."),
+            None => "These inputs cannot be solved.".to_owned(),
+        };
+        ui.colored_label(p.warning, why);
         return;
     };
     for w in &sol.warnings {
@@ -240,14 +265,20 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         .striped(true)
         .spacing([14.0, 3.0])
         .show(ui, |ui| {
-            for h in ["Phase", "R (mΩ)", "X (mΩ)", "Drop (V)", "Drop (%)"] {
+            for h in [
+                "Phase",
+                "R AC (mΩ)",
+                "X with coupling (mΩ)",
+                "Drop (V)",
+                "Drop (%)",
+            ] {
                 ui.strong(h);
             }
             ui.end_row();
             let phase_v = st.line_volts / 3f64.sqrt();
             for (g, z) in sol.group_zeff.iter().enumerate() {
                 ui.label(&setup.group_name[g]);
-                ui.label(milli(z.re));
+                ui.label(milli(sol.group_r_ac[g]));
                 ui.label(milli(z.im));
                 let v = sol.group_v[g].abs();
                 ui.label(format!("{v:.3}"));
@@ -330,13 +361,13 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
                 .striped(true)
                 .spacing([14.0, 3.0])
                 .show(ui, |ui| {
-                    for h in ["Hz", "R of L1 (mΩ)", "X of L1 (mΩ)", "Total loss (W)"] {
+                    for h in ["Hz", "R AC of L1 (mΩ)", "X of L1 (mΩ)", "Total loss (W)"] {
                         ui.strong(h);
                     }
                     ui.end_row();
                     for r in sols {
                         ui.label(format!("{:.0}", r.hz));
-                        ui.label(milli(r.group_zeff[0].re));
+                        ui.label(milli(r.group_r_ac[0]));
                         ui.label(milli(r.group_zeff[0].im));
                         ui.label(format!("{:.1}", r.total_loss_w));
                         ui.end_row();

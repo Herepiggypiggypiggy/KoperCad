@@ -483,6 +483,10 @@ pub struct Solution {
     /// that phase *in this arrangement* (includes the others' mutual
     /// coupling). Resistance is the real part, reactance the imaginary part.
     pub group_zeff: Vec<C>,
+    /// AC resistance of each group from its own loss, `P_g / |I_g|^2`, ohm.
+    /// Unlike the real part of `group_zeff` this is not changed by the
+    /// mutual coupling of the other phases.
+    pub group_r_ac: Vec<f64>,
     pub conductors: Vec<ConductorResult>,
     pub filaments: Vec<FilamentResult>,
     pub total_loss_w: f64,
@@ -690,9 +694,34 @@ fn gmd(a: &Fil, b: &Fil, same: bool) -> f64 {
     (s / (m * m * m * m) as f64).exp()
 }
 
+/// The first pair of conductors whose cross-sections overlap (bounding
+/// boxes; a round conductor by its square), if any. Such a run is not
+/// physical and [`solve`] refuses it.
+pub fn overlap(setup: &Setup) -> Option<(String, String)> {
+    let half = |c: &Conductor| match c.section {
+        Section::Rect { w_mm, t_mm } => (w_mm / 2.0, t_mm / 2.0),
+        Section::Round { d_mm } => (d_mm / 2.0, d_mm / 2.0),
+    };
+    for (i, a) in setup.conductors.iter().enumerate() {
+        for b in &setup.conductors[i + 1..] {
+            let (ha, hb) = (half(a), half(b));
+            if (a.x_mm - b.x_mm).abs() < ha.0 + hb.0 - 1e-9
+                && (a.y_mm - b.y_mm).abs() < ha.1 + hb.1 - 1e-9
+            {
+                return Some((a.name.clone(), b.name.clone()));
+            }
+        }
+    }
+    None
+}
+
 /// Solve a run. `None` when the setup is empty or the matrix is singular.
 pub fn solve(setup: &Setup) -> Option<Solution> {
-    if setup.conductors.is_empty() || setup.group_current.is_empty() || setup.length_mm <= 0.0 {
+    if setup.conductors.is_empty()
+        || setup.group_current.is_empty()
+        || setup.length_mm <= 0.0
+        || overlap(setup).is_some()
+    {
         return None;
     }
     let len = setup.length_mm * 1e-3;
@@ -828,6 +857,17 @@ pub fn solve(setup: &Setup) -> Option<Solution> {
             }
         })
         .collect();
+    let group_r_ac: Vec<f64> = (0..ng)
+        .map(|g| {
+            let p: f64 = conductors
+                .iter()
+                .filter(|c| c.group == g)
+                .map(|c| c.loss_w)
+                .sum();
+            let i2 = setup.group_current[g].norm_sq();
+            if i2 > 0.0 { p / i2 } else { 0.0 }
+        })
+        .collect();
     let net = setup.group_current.iter().fold(C::ZERO, |a, &b| a + b);
     if net.abs()
         > 1e-6
@@ -845,6 +885,7 @@ pub fn solve(setup: &Setup) -> Option<Solution> {
         hz: setup.hz,
         group_z: zg,
         group_v: v,
+        group_r_ac,
         group_zeff,
         total_loss_w: closs.iter().sum(),
         conductors,
@@ -1065,6 +1106,63 @@ mod tests {
             sol.conductors[2].loss_w,
             1e-6
         ));
+    }
+
+    #[test]
+    fn phase_ac_resistance_is_its_loss_over_current_squared() {
+        let s = Setup::three_phase(
+            Material::Copper,
+            80.0,
+            10.0,
+            1,
+            0.0,
+            false,
+            120.0,
+            1000.0,
+            50.0,
+            800.0,
+            70.0,
+        );
+        let sol = solve(&s).unwrap();
+        for g in 0..3 {
+            let want = sol.conductors[g].loss_w / 800.0_f64.powi(2);
+            assert!(close(sol.group_r_ac[g], want, 1e-12));
+            assert!(sol.group_r_ac[g] >= sol.conductors[g].r_dc_ohm * 0.999);
+        }
+    }
+
+    #[test]
+    fn overlapping_bars_are_refused() {
+        let s = Setup::three_phase(
+            Material::Copper,
+            80.0,
+            10.0,
+            2,
+            10.0,
+            false,
+            120.0,
+            1000.0,
+            50.0,
+            800.0,
+            70.0,
+        );
+        assert!(overlap(&s).is_some());
+        assert!(solve(&s).is_none());
+        let ok = Setup::three_phase(
+            Material::Copper,
+            80.0,
+            10.0,
+            2,
+            10.0,
+            false,
+            200.0,
+            1000.0,
+            50.0,
+            800.0,
+            70.0,
+        );
+        assert!(overlap(&ok).is_none());
+        assert!(solve(&ok).is_some());
     }
 
     #[test]
