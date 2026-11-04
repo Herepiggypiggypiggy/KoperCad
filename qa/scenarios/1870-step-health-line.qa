@@ -1,0 +1,40 @@
+@title Parts: Add CAD files shows the STEP model health line
+@area Parts
+# Each STEP file gets a swatch (its colour), a verdict and its name; the details are behind the "?".
+# Hand-made fixtures: a coloured plate that reads cleanly, one with a geometry kind KoperCAD cannot read exactly, and a broken file.
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+answer_dialog qa/fixtures/parts/cad/HEALTH1870_clean_plate.stp
+click_text "Add CAD files"
+wait 40
+expect "Add CAD files"
+expect "Reads cleanly"
+expect "Mounting plate"
+shot clean-plate
+check_layout
+click 276 229
+wait 15
+expect "kopercad-cli parts step-health"
+shot details
+click 276 229
+wait 10
+click_text "Close"
+wait 10
+answer_dialog qa/fixtures/parts/cad/HEALTH1870_gaps.stp
+click_text "Add CAD files"
+wait 40
+expect "Reads with gaps"
+shot gaps
+check_layout
+click_text "Close"
+wait 10
+answer_dialog qa/fixtures/parts/cad/HEALTH1870_broken.stp
+click_text "Add CAD files"
+wait 40
+expect "Cannot be read"
+shot broken
+check_layout

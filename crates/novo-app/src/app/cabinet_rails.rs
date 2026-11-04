@@ -636,6 +636,7 @@ impl super::NovoApp {
         }
         self.cabinet.table = false;
         self.cabinet.plate_card = true;
+        self.cabinet.maker_plates.reset();
         self.cabinet.view.selection.clear();
         self.cabinet.door.reveal = Some("cabinet.door");
     }

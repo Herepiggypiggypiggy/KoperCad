@@ -32,6 +32,7 @@
 
 mod assign;
 mod bmecat;
+pub mod body;
 mod browser;
 mod bulk;
 mod bundle;

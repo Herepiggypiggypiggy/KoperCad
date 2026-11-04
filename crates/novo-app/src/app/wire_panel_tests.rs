@@ -58,3 +58,33 @@ fn leaving_a_field_without_an_edit_commits_nothing() {
     assert!(should_commit(true, "RD", "BK"));
     assert!(should_commit(true, "", "BK"));
 }
+
+#[test]
+fn termination_and_sleeve_edits_reach_the_wire_and_clear_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenStarterExample);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let wires: Vec<_> = doc.project().wires().map(|w| w.id).take(2).collect();
+    doc.transact("ends", |tx| {
+        apply(tx, &wires, &WireEdit::TerminationA("ring M5".into()))
+            .map_err(novo_core::ModelError::Format)?;
+        apply(tx, &wires, &WireEdit::TerminationB("bare".into()))
+            .map_err(novo_core::ModelError::Format)?;
+        apply(tx, &wires, &WireEdit::Sleeve("L1.1".into())).map_err(novo_core::ModelError::Format)
+    })
+    .unwrap();
+    for w in &wires {
+        let f = facts(doc.project(), *w).unwrap();
+        assert_eq!((f.term_a.as_str(), f.term_b.as_str()), ("ring M5", "bare"));
+        assert_eq!(f.sleeve, "L1.1");
+    }
+    doc.transact("clear", |tx| {
+        apply(tx, &wires, &WireEdit::TerminationA(String::new()))
+            .map_err(novo_core::ModelError::Format)
+    })
+    .unwrap();
+    assert_eq!(facts(doc.project(), wires[0]).unwrap().term_a, "");
+}

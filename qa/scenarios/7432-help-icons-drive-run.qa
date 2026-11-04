@@ -1,0 +1,19 @@
+@title Help icons: Drive run carries no explanation text, the ? popup says it
+@area Simulate
+@sizes 1366x768 1920x1080
+# Drive run keeps one short qualifier line, its notes are behind the ? of its header (popup open in the second picture).
+open qa/fixtures/hoist-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 30
+shot drive-run
+expect "Model, not measurement. Not a safety function."
+check_text 40
+check_layout
+click_text Help
+wait 8
+shot drive-run-help-open
