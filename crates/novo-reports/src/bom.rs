@@ -269,7 +269,11 @@ fn enclosure_sections(project: &Project) -> Vec<Section> {
             lines.push(
                 vec![
                     Cell::text(st.tag.to_string()),
-                    Cell::Int(i64::from(l.quantity)),
+                    if l.quantity == 0 {
+                        Cell::Empty
+                    } else {
+                        Cell::Int(i64::from(l.quantity))
+                    },
                     Cell::text(l.article),
                     Cell::text(l.description),
                     Cell::text(words(l.source)),

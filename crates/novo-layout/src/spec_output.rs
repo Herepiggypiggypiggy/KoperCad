@@ -76,13 +76,16 @@ pub fn cabinet_sheet(spec: &EnclosureSpec, plate: Option<PlateSize>) -> Vec<Shee
     if !spec.step_name.is_empty() {
         rows.push(text("STEP file", &spec.step_name));
     }
+    if let Some(n) = spec.notice() {
+        rows.push(text("Note", n));
+    }
     rows
 }
 
 /// Bill of materials line for the enclosure and its plate.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BomLine {
-    /// `enclosure` or `plate`.
+    /// `enclosure`, `plate` or `note` (the estimate notice; quantity 0).
     pub role: &'static str,
     /// Maker article; empty when the record has none (never invented).
     pub article: String,
@@ -108,10 +111,9 @@ pub fn bom_lines(spec: &EnclosureSpec, plate: Option<PlateSize>) -> Vec<BomLine>
     } else {
         format!("Enclosure {}", spec.series)
     };
-    let sources = [spec.width, spec.height, spec.depth]
-        .iter()
-        .filter_map(|f| f.map(|f| f.source))
-        .max();
+    // Weakest source of every number the record holds, wall and setback
+    // included.
+    let sources = spec.weakest();
     let mut lines = vec![BomLine {
         role: "enclosure",
         article: spec.article.clone(),
@@ -125,6 +127,15 @@ pub fn bom_lines(spec: &EnclosureSpec, plate: Option<PlateSize>) -> Vec<BomLine>
             article: String::new(),
             description: format!("Mounting plate {} x {} mm", mm(p.width), mm(p.height)),
             quantity: 1,
+            source: None,
+        });
+    }
+    if let Some(n) = spec.notice() {
+        lines.push(BomLine {
+            role: "note",
+            article: String::new(),
+            description: n.to_owned(),
+            quantity: 0,
             source: None,
         });
     }
@@ -262,6 +273,22 @@ mod tests {
                 .iter()
                 .any(|l| l.contains("plate setback"))
         );
+    }
+
+    #[test]
+    fn bom_source_is_the_weakest_of_all_numbers_and_notice_follows() {
+        let mut s = spec(600.0, Source::Step);
+        s.wall = Some(Field::new(2.0, Source::Typed));
+        s.plate_setback = Some(Field::new(30.0, Source::Catalogue));
+        let lines = bom_lines(&s, None);
+        assert_eq!(lines[0].source, Some(Source::Typed));
+        // A catalogue+typed mix still carries the notice, in BOM and sheet.
+        assert_eq!(lines.last().unwrap().role, "note");
+        assert!(cabinet_sheet(&s, None).iter().any(|r| r.label == "Note"));
+        s.plate_setback = Some(Field::new(30.0, Source::Typed));
+        s.width = Some(Field::new(600.0, Source::Step));
+        assert_eq!(bom_lines(&s, None).last().unwrap().role, "enclosure");
+        assert!(!cabinet_sheet(&s, None).iter().any(|r| r.label == "Note"));
     }
 
     #[test]
