@@ -210,11 +210,15 @@ impl Panel {
 
     /// The corner the panel hangs from and where that corner starts: against
     /// its side of the canvas, so the panel's own size never matters.
-    fn start(&self, flyout: f32) -> (egui::Align2, egui::Pos2) {
+    fn start(&self, ctx: &egui::Context, flyout: f32) -> (egui::Align2, egui::Pos2) {
         let top = self.canvas.top() + self.top;
         let bottom = self.canvas.bottom() - BOTTOM - MARGIN;
         let left = self.canvas.left() + MARGIN + flyout;
-        let right = self.canvas.right() - MARGIN;
+        let right = self
+            .canvas
+            .right()
+            .min(super::panel_dock::right_strip_left(ctx).unwrap_or(f32::MAX))
+            - MARGIN;
         match self.side {
             Side::Left => (egui::Align2::LEFT_TOP, egui::pos2(left, top)),
             Side::Right => (egui::Align2::RIGHT_TOP, egui::pos2(right, top)),
@@ -286,7 +290,7 @@ impl Panel {
         } else {
             reserved_left(ctx)
         };
-        let (pivot, start) = self.start(flyout);
+        let (pivot, start) = self.start(ctx, flyout);
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
         let corner = if self.above_card && self.side == Side::Right && !moved {

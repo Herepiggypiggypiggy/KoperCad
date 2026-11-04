@@ -310,6 +310,16 @@ fn slot_rect(ctx: &egui::Context, slot: Slot) -> Option<egui::Rect> {
     ctx.data(|d| d.get_temp(rect_id(slot)))
 }
 
+/// The left edge of the right strip while a pane is docked there: a card
+/// hanging from the right edge of the canvas stays left of it, even when the
+/// canvas has not yet been made smaller.
+pub(super) fn right_strip_left(ctx: &egui::Context) -> Option<f32> {
+    if shown_before(ctx, Slot::Right).is_empty() {
+        return None;
+    }
+    slot_rect(ctx, Slot::Right).map(|r| r.left())
+}
+
 /// The panels that drew a pane in a slot, this pass and the one before: the
 /// slot is only there (and the canvas only made smaller) while one did.
 fn shown_id(slot: Slot, previous: bool) -> egui::Id {

@@ -1256,7 +1256,7 @@ pub(super) fn start_run(
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
         Ok(bridge) if too_big(&bridge.scenario.enclosure) => {
             state.fail(format!(
-                "Cannot simulate: the enclosure is over {} m on one side; check its size in Cabinet > Size enclosure",
+                "Cannot simulate: a side is over {} m",
                 MAX_SIDE_MM / 1000.0
             ));
         }

@@ -32,7 +32,7 @@ wait_s 90
 expect "Cooling advice"
 expect "Model estimate"
 expect "Tightest margin"
-expect "A try is one run"
+expect "Best of"
 shot advice
 check_layout
 click_text "Add these two to Vents and fans"
