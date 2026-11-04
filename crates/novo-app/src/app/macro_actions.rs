@@ -810,6 +810,15 @@ impl NovoApp {
                         }
                     };
                     let at = novo_core::Point::new(snap(at.x), snap(at.y));
+                    // A click outside the sheet drops the ghost and changes
+                    // nothing.
+                    let size = self
+                        .macro_target_page()
+                        .and_then(|p| self.backend.document()?.project().page(p))
+                        .map(|p| p.format.size_mm());
+                    if size.is_some_and(|(w, h)| at.x < 0.0 || at.y < 0.0 || at.x > w || at.y > h) {
+                        return true;
+                    }
                     self.place_definition(ghost.definition, ghost.options, Some(at));
                 }
             }

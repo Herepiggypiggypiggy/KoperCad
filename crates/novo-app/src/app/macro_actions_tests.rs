@@ -227,6 +227,13 @@ fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
     d.app.undo_redo(false);
     d.frame();
     assert_eq!(d.doc().project().symbols().count(), 0, "one undo step");
+    // A click outside the sheet changes nothing and drops the ghost.
+    d.app.run_target(&ctx, target.clone());
+    d.frame();
+    d.click(novo_core::Point::new(-500.0, -500.0));
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    assert_eq!(d.doc().project().symbols().count(), 0, "nothing placed");
     // Options hands the circuit to the form.
     d.app.run_target(&ctx, target);
     d.frame();

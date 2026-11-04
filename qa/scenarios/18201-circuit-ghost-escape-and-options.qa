@@ -1,6 +1,6 @@
 @title Esc drops the circuit ghost; Options opens the form
 @area Schematic
-@sizes 1366x768
+@sizes 1366x768 1920x1080
 click_text "New project"
 wait 20
 key ctrl+k
