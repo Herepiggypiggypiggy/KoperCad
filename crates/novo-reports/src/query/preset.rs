@@ -185,6 +185,7 @@ pub fn to_section(key: &str, title: &str, result: &QueryResult) -> Section {
         })
         .collect();
     let mut section = Section::new(key, title, columns);
+    section.fit_content = true;
     for (row, sources) in result.rows.iter().zip(&result.sources) {
         section.rows.push(Row::new(
             row.iter().map(super::QValue::to_cell).collect(),

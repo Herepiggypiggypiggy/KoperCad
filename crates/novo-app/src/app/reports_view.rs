@@ -635,22 +635,9 @@ impl NovoApp {
         let bar = ui.spacing().scroll.allocated_width() + 4.0;
         let weights: Vec<f64> = section.columns.iter().map(|c| c.width).collect();
         let mut mins = header_min_widths(ui, &columns);
-        // A saved report ("My reports") has whatever columns the person asked
-        // for, with widths worked out from its longest text: those get a
-        // readable width at any column count (tags and part numbers in full).
-        let saved = section.key.starts_with("preset-");
-        let wide = saved || columns.len() > WIDE_TABLE_COLUMNS;
+        let wide = columns.len() > WIDE_TABLE_COLUMNS || section.fit_content;
         if wide {
-            // Many columns would be squeezed until the cells are cut: give
-            // each a readable width and scroll sideways when they do not fit.
-            let (per_weight, widest) = if saved {
-                (SAVED_PX_PER_CHAR, SAVED_MAX_COLUMN)
-            } else {
-                (WIDE_PX_PER_WEIGHT, WIDE_MAX_COLUMN)
-            };
-            for (min, weight) in mins.iter_mut().zip(&weights) {
-                *min = min.max((*weight as f32 * per_weight + 12.0).min(widest));
-            }
+            wide_minimums(&mut mins, &weights, section.fit_content);
         }
         let available = ui.available_width() - bar;
         let widths = column_widths_min(available, &weights, &mins);
@@ -1487,6 +1474,21 @@ mod tests {
 }
 
 /// What an empty report says, with how to get rows into it.
+/// Gives each column of a wide table a readable minimum width, so the table
+/// scrolls sideways instead of cutting cells. A saved report's weights are
+/// character counts of its longest text (`fit_content`): those get room for
+/// the text plus padding; other wide reports keep their own, tighter, scale.
+fn wide_minimums(mins: &mut [f32], weights: &[f64], fit_content: bool) {
+    let (per_weight, padding, widest) = if fit_content {
+        (SAVED_PX_PER_CHAR, 12.0, SAVED_MAX_COLUMN)
+    } else {
+        (WIDE_PX_PER_WEIGHT, 0.0, WIDE_MAX_COLUMN)
+    };
+    for (min, weight) in mins.iter_mut().zip(weights) {
+        *min = min.max((*weight as f32 * per_weight + padding).min(widest));
+    }
+}
+
 fn empty_report_hint(id: &str) -> &'static str {
     match id {
         "io" => {
@@ -1503,6 +1505,37 @@ fn empty_report_hint(id: &str) -> &'static str {
         }
         "queries" => "No saved reports yet. Open Edit my reports above to write one.",
         _ => "Nothing to list yet",
+    }
+}
+
+#[cfg(test)]
+mod wide_minimum_tests {
+    use super::wide_minimums;
+
+    /// An 11-column report (the wire list) keeps the minimum widths it had
+    /// before saved reports existed.
+    #[test]
+    fn a_wide_report_keeps_its_old_minimums() {
+        let weights = [
+            15.0, 35.0, 35.0, 15.0, 12.0, 10.0, 25.0, 15.0, 14.0, 12.0, 20.0,
+        ];
+        let mut mins = vec![40.0_f32; weights.len()];
+        wide_minimums(&mut mins, &weights, false);
+        let old: Vec<f32> = weights
+            .iter()
+            .map(|w| 40.0_f32.max((*w as f32 * 5.5).min(230.0)))
+            .collect();
+        assert_eq!(mins, old);
+    }
+
+    #[test]
+    fn a_saved_report_gets_room_for_its_longest_text() {
+        let mut mins = vec![40.0_f32];
+        wide_minimums(&mut mins, &[18.0], true);
+        assert_eq!(mins[0], 18.0 * 7.5 + 12.0);
+        let mut mins = vec![40.0_f32];
+        wide_minimums(&mut mins, &[400.0], true);
+        assert_eq!(mins[0], 340.0);
     }
 }
 

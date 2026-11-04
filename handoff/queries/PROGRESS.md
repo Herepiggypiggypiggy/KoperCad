@@ -6,3 +6,4 @@
 2026-11-04 11:15 UTC follow-up PR: empty state behind ?, Write query clears name, content widths, entity-coverage test, CLI export queries + test, Ctrl+K and menu report.queries
 2026-11-04 11:20 UTC empty state keeps a visible short title beside ?
 2026-11-04 14:26 UTC saved report columns use content widths at any column count; QA scenarios 19030-19032 added (unrun here)
+2026-11-04 14:32 UTC review: +12 padding only for fit_content sections (typed Section flag), wide-minimum unit tests
