@@ -15,6 +15,7 @@ mod advice;
 pub mod bridge;
 pub mod cooling;
 mod flow;
+pub mod gaps;
 mod linalg;
 pub mod lump;
 pub mod model;
