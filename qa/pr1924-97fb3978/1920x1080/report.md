@@ -2,7 +2,7 @@
 
 Platform linux, window sizes 1920x1080. 1 run(s): 1 passed, 0 failed; 1 finding(s) (0 blocking, S1 to S3).
 
-Program: `/home/claude/target/debug/kopercad`, built 1793798230 (unix time), source at git 2fa443d859.
+Program: `/home/claude/target/debug/kopercad`, built 1793798593 (unix time), source at git 97fb397884.
 
 App: 1920.0x1080.0 points at scale 1.0.
 
@@ -16,9 +16,9 @@ App: 1920.0x1080.0 points at scale 1.0.
 
 | # | Sev | Area | Size | Title | Evidence |
 |---|---|---|---|---|---|
-| F-001 | S4 | Check | 1920x1080 | 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture) | shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png |
+| F-001 | S4 | Check | 1920x1080 | 4 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture) | shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png |
 
-### F-001 S4 1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)
+### F-001 S4 4 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)
 
 Scenario `9512-emc-triangles-popover-1920x1080` at 1920x1080. Kind: layout-maybe.
 
@@ -51,7 +51,7 @@ Steps:
 25. `check_layout`
 
 - Expected: every control fully visible and not overlapped
-- Saw: ' New' over 'Run the EMC rules with the design checks'
+- Saw: ' New' over 'Run the EMC rules with the design checks'; '' over 'Save EMC record (Excel)'; 'Drawn wires (2)' over '-T1:U to -M1:U1: 84 of 100, high'; 'Cables (0)' over '-A1:AI1 to -B1:1: 68 of 100, high'
 
 ![F-001](shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png)
 

@@ -10,8 +10,8 @@
     ]
   },
   "binary": {
-    "built": "1793798230 (unix time)",
-    "git_head": "2fa443d859",
+    "built": "1793798593 (unix time)",
+    "git_head": "97fb397884",
     "path": "/home/claude/target/debug/kopercad",
     "warning": null
   },
@@ -21,7 +21,7 @@
       "expected": "every control fully visible and not overlapped",
       "id": "F-001",
       "kind": "layout-maybe",
-      "saw": "' New' over 'Run the EMC rules with the design checks'",
+      "saw": "' New' over 'Run the EMC rules with the design checks'; '' over 'Save EMC record (Excel)'; 'Drawn wires (2)' over '-T1:U to -M1:U1: 84 of 100, high'; 'Cables (0)' over '-A1:AI1 to -B1:1: 68 of 100, high'",
       "scenario": "9512-emc-triangles-popover-1920x1080",
       "screenshot": "shots/9512-emc-triangles-popover-1920x1080-1920x1080-04-finding-1.png",
       "severity": "S4",
@@ -53,10 +53,10 @@
         "shot emc-fix-preview",
         "check_layout"
       ],
-      "title": "1 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)"
+      "title": "4 pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)"
     }
   ],
-  "generated": 1793798264,
+  "generated": 1793798625,
   "platform": "linux",
   "scenarios": [
     {
@@ -66,7 +66,7 @@
         "F-001"
       ],
       "name": "9512-emc-triangles-popover-1920x1080",
-      "seconds": 36.9,
+      "seconds": 34.7,
       "shots": [
         "shots/9512-emc-triangles-popover-1920x1080-1920x1080-01-emc-triangles.png",
         "shots/9512-emc-triangles-popover-1920x1080-1920x1080-02-emc-popover.png",
@@ -78,7 +78,7 @@
       "steps": [
         {
           "error": null,
-          "ms": 5763,
+          "ms": 5404,
           "n": 1,
           "note": null,
           "status": "ok",
@@ -86,7 +86,7 @@
         },
         {
           "error": null,
-          "ms": 1316,
+          "ms": 1204,
           "n": 2,
           "note": null,
           "status": "ok",
@@ -94,7 +94,7 @@
         },
         {
           "error": null,
-          "ms": 2132,
+          "ms": 1895,
           "n": 3,
           "note": null,
           "status": "ok",
@@ -102,7 +102,7 @@
         },
         {
           "error": null,
-          "ms": 1211,
+          "ms": 983,
           "n": 4,
           "note": null,
           "status": "ok",
@@ -110,7 +110,7 @@
         },
         {
           "error": null,
-          "ms": 1015,
+          "ms": 1035,
           "n": 5,
           "note": null,
           "status": "ok",
@@ -118,7 +118,7 @@
         },
         {
           "error": null,
-          "ms": 928,
+          "ms": 872,
           "n": 6,
           "note": null,
           "status": "ok",
@@ -126,7 +126,7 @@
         },
         {
           "error": null,
-          "ms": 1063,
+          "ms": 852,
           "n": 7,
           "note": null,
           "status": "ok",
@@ -134,7 +134,7 @@
         },
         {
           "error": null,
-          "ms": 951,
+          "ms": 889,
           "n": 8,
           "note": null,
           "status": "ok",
@@ -142,7 +142,7 @@
         },
         {
           "error": null,
-          "ms": 473,
+          "ms": 514,
           "n": 9,
           "note": null,
           "status": "ok",
@@ -150,7 +150,7 @@
         },
         {
           "error": null,
-          "ms": 733,
+          "ms": 704,
           "n": 10,
           "note": null,
           "status": "ok",
@@ -158,7 +158,7 @@
         },
         {
           "error": null,
-          "ms": 2019,
+          "ms": 1939,
           "n": 11,
           "note": null,
           "status": "ok",
@@ -166,7 +166,7 @@
         },
         {
           "error": null,
-          "ms": 405,
+          "ms": 400,
           "n": 12,
           "note": null,
           "status": "ok",
@@ -174,7 +174,7 @@
         },
         {
           "error": null,
-          "ms": 695,
+          "ms": 611,
           "n": 13,
           "note": null,
           "status": "ok",
@@ -182,7 +182,7 @@
         },
         {
           "error": null,
-          "ms": 506,
+          "ms": 451,
           "n": 14,
           "note": null,
           "status": "ok",
@@ -190,7 +190,7 @@
         },
         {
           "error": null,
-          "ms": 137,
+          "ms": 124,
           "n": 15,
           "note": null,
           "status": "ok",
@@ -198,7 +198,7 @@
         },
         {
           "error": null,
-          "ms": 152,
+          "ms": 122,
           "n": 16,
           "note": null,
           "status": "ok",
@@ -206,7 +206,7 @@
         },
         {
           "error": null,
-          "ms": 130,
+          "ms": 121,
           "n": 17,
           "note": null,
           "status": "ok",
@@ -214,7 +214,7 @@
         },
         {
           "error": null,
-          "ms": 2192,
+          "ms": 1767,
           "n": 18,
           "note": null,
           "status": "ok",
@@ -222,7 +222,7 @@
         },
         {
           "error": null,
-          "ms": 476,
+          "ms": 454,
           "n": 19,
           "note": null,
           "status": "ok",
@@ -230,7 +230,7 @@
         },
         {
           "error": null,
-          "ms": 1075,
+          "ms": 929,
           "n": 20,
           "note": null,
           "status": "ok",
@@ -238,7 +238,7 @@
         },
         {
           "error": null,
-          "ms": 1104,
+          "ms": 1043,
           "n": 21,
           "note": null,
           "status": "ok",
@@ -246,7 +246,7 @@
         },
         {
           "error": null,
-          "ms": 170,
+          "ms": 181,
           "n": 22,
           "note": null,
           "status": "ok",
@@ -254,7 +254,7 @@
         },
         {
           "error": null,
-          "ms": 187,
+          "ms": 152,
           "n": 23,
           "note": null,
           "status": "ok",
@@ -262,7 +262,7 @@
         },
         {
           "error": null,
-          "ms": 2294,
+          "ms": 2474,
           "n": 24,
           "note": null,
           "status": "ok",
@@ -270,7 +270,7 @@
         },
         {
           "error": null,
-          "ms": 2768,
+          "ms": 2848,
           "n": 25,
           "note": null,
           "status": "ok",
@@ -278,7 +278,7 @@
         },
         {
           "error": null,
-          "ms": 547,
+          "ms": 495,
           "n": 26,
           "note": null,
           "status": "ok",
@@ -286,7 +286,7 @@
         },
         {
           "error": null,
-          "ms": 532,
+          "ms": 452,
           "n": 27,
           "note": null,
           "status": "ok",
@@ -294,7 +294,7 @@
         },
         {
           "error": null,
-          "ms": 121,
+          "ms": 116,
           "n": 28,
           "note": null,
           "status": "ok",
