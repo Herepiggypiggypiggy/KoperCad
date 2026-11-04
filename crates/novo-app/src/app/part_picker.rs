@@ -47,6 +47,11 @@ impl PickerCatalog {
     pub(super) fn get(&self) -> Option<&Catalog> {
         self.0.as_ref()
     }
+
+    #[cfg(test)]
+    pub(super) fn set_for_test(&mut self, catalog: Catalog) {
+        self.0 = Some(catalog);
+    }
 }
 
 /// Whether a picker is showing, and what is typed in its search.
@@ -371,10 +376,13 @@ impl NovoApp {
             return;
         };
         match self.execute(command) {
-            Some(Ok(_)) => self.message(
-                Level::Info,
-                format!("{title} set for {} selected", devices.len()),
-            ),
+            Some(Ok(_)) => {
+                self.remember_part(&devices, &part.key());
+                self.message(
+                    Level::Info,
+                    format!("{title} set for {} selected", devices.len()),
+                );
+            }
             Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),
             None => {}
         }

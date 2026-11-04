@@ -26,6 +26,7 @@ pub mod sizing;
 pub mod sizing_model;
 pub mod spec;
 pub mod spec_output;
+pub mod spec_cooling;
 pub mod state;
 pub mod stock;
 pub mod surface_rules;

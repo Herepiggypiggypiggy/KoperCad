@@ -39,7 +39,12 @@ impl NovoApp {
             None => match projects_dir() {
                 Some(dir) => (dir, name.clone()),
                 None => {
-                    self.message(Level::Error, "Could not find the Documents folder");
+                    self.job_fail(
+                        "export.dxf",
+                        "DXF export failed",
+                        Level::Error,
+                        "Could not find the Documents folder",
+                    );
                     return Vec::new();
                 }
             },
@@ -104,9 +109,12 @@ impl NovoApp {
             let path = replaceable_path(&target.join(file));
             replaced |= path.exists();
             if let Err(e) = write_replacing(&path, text.as_bytes()) {
-                self.message(
+                self.job_fail_at(
+                    "export.dxf",
+                    "DXF export failed",
                     Level::Error,
                     format!("Could not export {}: {e}", path.display()),
+                    &path,
                 );
                 return written;
             }
@@ -118,7 +126,10 @@ impl NovoApp {
             _ => format!("{} pages to {}", written.len(), target.display()),
         };
         match written.last() {
-            Some(last) => self.message_file(format!("{verb} {shown}"), last),
+            Some(last) => {
+                self.job_ok("export.dxf");
+                self.message_file(format!("{verb} {shown}"), last)
+            }
             None => self.message(Level::Info, format!("{verb} {shown}")),
         }
         if let Some(last) = written.last() {
@@ -159,7 +170,13 @@ impl NovoApp {
         let import = match import {
             Ok(import) => import,
             Err(e) => {
-                self.message(Level::Error, format!("Could not import {name}: {e}"));
+                self.job_fail_at(
+                    "import.dxf",
+                    "DXF import failed",
+                    Level::Error,
+                    format!("Could not import {name}: {e}"),
+                    path,
+                );
                 return false;
             }
         };
@@ -180,6 +197,7 @@ impl NovoApp {
             label: "Import DXF background".into(),
             commands,
         });
+        self.job_ok("import.dxf");
         self.message(Level::Info, summary);
         true
     }
@@ -238,7 +256,9 @@ impl NovoApp {
 
     pub(super) fn run_background(&mut self, command: Command) {
         if let Some(Err(e)) = self.execute(command) {
-            self.message(
+            self.job_fail(
+                "import.dxf_background",
+                "Background change failed",
                 Level::Error,
                 format!("Could not change the background: {e}"),
             );

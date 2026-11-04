@@ -405,7 +405,10 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
             "window_help_popup",
             "the ? popup of a floating window, closes on a click elsewhere",
         ),
-        ("refusal_card_id()", "a refusal that fades away"),
+        (
+            "flag_corner",
+            "a refusal triangle that goes with the next input",
+        ),
         ("empty_sheet_ghost", "a hint drawn on the empty sheet"),
         ("lesson_note", "lesson note beside a highlighted control"),
         ("lesson_demo_keys", "lesson demo key caps"),
@@ -427,6 +430,10 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
         ("live_load", "badge drawn on a symbol"),
         ("live_pole", "badge drawn on a symbol"),
         ("live_coil", "badge drawn on a symbol"),
+        (
+            "flag_popover",
+            "popover of a problem triangle, closes on Esc or a click elsewhere",
+        ),
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();

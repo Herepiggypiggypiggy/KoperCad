@@ -159,6 +159,8 @@ pub(super) struct HeatState {
     pub(super) layout: super::heat_layout::LayoutSearch,
     /// The cooling what-if wizard (`heat.cooling_whatif`).
     pub(super) whatif: super::heat_whatif::Wizard,
+    /// Commands the panel asks the app to run (the panel has no file access).
+    pub(super) app_commands: Vec<&'static str>,
 }
 
 /// See [`HeatState::no_data`].
@@ -210,6 +212,11 @@ impl HeatState {
         self.layout.left_out = on;
     }
 
+    /// Tells the cooling selection which enclosure the cabinet has chosen.
+    pub(super) fn set_spec(&mut self, spec: Option<novo_layout::spec::EnclosureSpec>) {
+        self.cooling.set_spec(spec);
+    }
+
     pub(super) fn new() -> HeatState {
         HeatState {
             on: false,
@@ -247,6 +254,7 @@ impl HeatState {
             advice: Default::default(),
             layout: Default::default(),
             whatif: Default::default(),
+            app_commands: Vec::new(),
         }
     }
 
@@ -1150,6 +1158,14 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         }
         heat_up_controls(ui, state);
         compare_controls(ui, state);
+        if state.solution.is_some() {
+            let export = ui.button("ParaView").on_hover_text(
+                "Save this result as a ParaView file (.vtr, or .pvd for a heat-up) and open it in ParaView if it is installed. A model result: the file says so",
+            );
+            if export.clicked() {
+                state.app_commands.push("heat.open_paraview");
+            }
+        }
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
             let validated = sol.snapshot.accuracy.validated;
@@ -1268,7 +1284,7 @@ pub(super) fn start_run(
                 layout_key: layout_key(input),
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
-                messages: bridge.report.messages(),
+                messages: bridge.report.messages_with_enclosure(),
                 enclosure: Some(bridge.scenario.enclosure.clone()),
                 duct_loss_w: super::heat_cooling::duct_loss_w(&bridge.scenario),
                 wire_notes: wires.notes.clone(),

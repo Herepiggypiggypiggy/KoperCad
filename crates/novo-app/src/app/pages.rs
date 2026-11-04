@@ -424,9 +424,9 @@ impl NovoApp {
             match command {
                 Some(Ok(command)) => match self.execute(command) {
                     Some(Ok(_)) | None => return,
-                    Some(Err(e)) => self.message(Level::Error, format!("Could not add: {e}")),
+                    Some(Err(e)) => self.refuse_tool(Level::Error, format!("Could not add: {e}")),
                 },
-                Some(Err(e)) => self.message(Level::Warning, e),
+                Some(Err(e)) => self.refuse_tool(Level::Warning, e),
                 None => return,
             }
         }

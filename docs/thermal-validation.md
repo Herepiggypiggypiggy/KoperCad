@@ -48,7 +48,7 @@ Errors are signed, relative to the reference unless marked abs.
 | Full cabinet 50 W, 1500 / 6000 / 20000 cells, with the film reference (lane H6) | 2D engine | housing rise | +3.7% / +4.7% / +4.7%: flat with the mesh; was +5.1% / +10.7% / +14.3% before the fix (see "Mesh creep: closed by the film reference") |
 | Sealed cabinet 50 W, mesh study (`examples/mesh_study`, lane H6) | 2D engine reads 82.3 C | housing temperature at 1000 / 6000 / 20000 / 60000 cells | 84.5 / 85.0 / 85.0 / 87.6 C; before: 85.2 / 88.4 / 90.4 / 99.1 C; plate share 0.26 to 0.27 throughout |
 | Sealed enclosures at real sizes, six cases (`novo-thermal/tests/validation_iec.rs`, lane H6) | IEC 60890 hand calculation (b factors, k) written out in the test | k Ae and rise P / (k Ae); 2D mean air rise | rise equals the hand value to 1e-6; 2D mean air rise -9% to -22% (never above) |
-| Cabinet solver as the app runs it (`tests/validation_cabinet.rs`, CFD-INT), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement, so `ENCLOSURE_VALIDATED` stays false. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
+| Cabinet solver as the app runs it, BEFORE the film reference (`tests/validation_cabinet.rs`, CFD-INT; historical, superseded by the next rows), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement then; with the film reference the housing is +3.7 to +4.7% and flat (sealed 1500 to 20000 cells, vented +4.0 to +4.1% at 1500 to 6000), air -10 to -18% at 1500 to 6000 cells. `ENCLOSURE_VALIDATED` stays false because nothing is measured. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
 | Cooling what-if fixes, 3D against 2D (`validation_whatif.rs`, 3000 cells): sealed 600 x 800 x 300 mm box, one 120 W device at 35 C outside, the what-if's vent and fan fixes | 2D engine | housing temperature; housing K gained; order of the fixes | housing +4.9% as it is, -1.0% with filter fan in and vent out, +4.9% with two vents; K gained: vents +5.3% (6.5 K vs 6.2 K), fan pair +59% (24.2 K vs 15.2 K: the 2D model read the fan benefit low, before the jet speed term; see "Fan gain: the jet speed term"); 3 of 3 pairs more than 3 K apart in 2D are ordered the same in 3D (model vs model, not a measurement) |
 | Fan gain sweep, 3D against 2D, BEFORE the jet speed term, historical (`validation_fan_gain.rs`, ignored test, 3000 cells, 36 cases, about 18 minutes in debug): fan 60 / 120 / 250 m3/h, 60 / 120 W, boxes 600x800x300, 800x1200x300 and 600x600x400 mm, fan low in with vent on top or fan on top with vent low | 2D engine | housing K gained by the fan fix, 3D / 2D (3D at 3000 cells; its gain rises 9 to 11% from 3000 to 12000 cells, see below) | mean 1.90, median 1.89, range 0.94 to 3.09; the 2D model reads the gain low against the 3D solver in 33 to 34 of 36 cases (the three 600x600x400 cases at 60 m3/h are within about 0.1 of 1). By flow: 60 m3/h 0.94 to 2.07 (mean 1.46), 120: 1.36 to 2.56 (1.90), 250: 1.68 to 3.09 (2.35). By box: 600x800x300 mean 1.94, 800x1200x300 mean 2.34, 600x600x400 mean 1.42. The two fan positions agree within 0.25. No single factor fits (model vs model, not a measurement) |
 | Fan gain sweep, 3D against 2D, current main (`validation_fan_gain.rs`, same 36 cases, rerun 2026-10-26 in release, about 15 minutes; frozen in `tests/fan_gain.rs`) | 2D engine with the jet speed term | housing K gained by the fan fix, 3D / 2D | mean 0.97, median 1.01, range 0.69 to 1.28; the 2D model reads the gain low in 19 of 36 cases and high in 17, so it is not biased either way. By flow: 60 m3/h 0.69 to 1.28 (mean 1.00), 120: 0.78 to 1.15 (1.00), 250: 0.77 to 1.01 (0.90). By box: 600x800x300 mean 0.99, 800x1200x300 mean 1.12 (2D low by up to 22%), 600x600x400 mean 0.79 (2D high by up to 45%, always on the optimistic side). Two fan positions differ by at most 0.15. The device sits near the fan-to-vent line here; away from it see "Fan gain: where the device sits". Model vs model, not a measurement |
@@ -252,3 +252,29 @@ stated tolerance; "model" means a planning value with no measured case behind it
 | Fan effect on a device film | a device in the stream gets a higher film and a lower surface temperature; further away, less | model (2D flow has no momentum, the jet is added analytically) |
 
 Not yet checked against a measured fan case. ENCLOSURE_VALIDATED is unchanged.
+
+## H8 in the 3D solver: a fan inside the domain (`novo-cfd`, `flow::InteriorFan`)
+
+A circulation fan is a disk of faces on the grid plane nearest its centre. The
+maker's straight-line curve acts as a momentum source (the pressure jump,
+spread over the width of the face control volume) and an implicit linear drag
+(the slope of the curve), so the steady state meets the curve at any step size.
+`interior_fans_from_scenario` maps `Params::circulation_fans` (installed factor
+applied) into the grid; the 3D scenario setup does it with the openings.
+
+Exact (reproduced by hand in `crates/novo-cfd/tests/interior_fan.rs`):
+- Fan across a channel with a free inlet and a louvre outlet: the operating
+  point `p_max (1 - Q/Q_free) = rho/2 (1 + K) (Q/A)^2` is met to 0.01 %
+  (0.11373 against 0.11374 m3/s at K = 6; also 0.09088 at K = 50 with slip walls).
+- A fan the other way moves the same flow the other way; the outlet carries what
+  the fan moves; a closed box has zero net flow across a plane.
+
+Model, not measurement:
+- A disk of faces is a momentum patch, not a rotor: no swirl, no hub, no stall
+  region (the curve is a straight line), a block-shaped exit.
+- With the laminar solver the jet barely spreads: on a 25 mm grid the axis
+  speed 0.1 to 0.4 m behind a 150 mm fan stays about 1.4 times the exit speed,
+  where the turbulent free jet of the 2D model falls. So the 3D jet is at least as
+  long as the 2D one. With the turbulence model the jet will spread; that case
+  is not tested yet.
+- The device films do not read the resolved jet yet (next step).

@@ -7,6 +7,7 @@
 //! [`FlowConfig::openings`] opens patches of the walls to the outside air
 //! (see [`crate::openings`]).
 
+mod fan;
 mod mesh;
 mod par;
 mod pressure;
@@ -14,6 +15,7 @@ mod scheme;
 mod sheet;
 mod solver;
 
+pub use fan::{InteriorFan, interior_fans_from_scenario};
 pub use mesh::{Mesh, other_axes};
 pub use pressure::{PressureSolver, Smoother};
 pub use scheme::Scheme;

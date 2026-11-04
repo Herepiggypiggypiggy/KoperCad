@@ -1,0 +1,12 @@
+@title Errors: red triangle in the pill and the list, both sizes
+@area Schematic
+# T0b: red is solid, yellow is hollow. This project has errors (not drawn on this page), so the pill and the list show the red triangle. Triangles on the drawing itself are 9401 and 9402 (the macro window's search field needs a click at a size-specific place).
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+shot red-pill
+check_layout
+click_text "errors" Button
+wait 10
+expect "F8 next"
+shot red-list
+check_layout

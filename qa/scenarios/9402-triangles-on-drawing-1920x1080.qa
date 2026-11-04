@@ -1,0 +1,41 @@
+@title Schematic warnings are hollow triangles on the symbol (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# T0b: a problem is a red solid or yellow hollow triangle on its symbol or wire; the pill counts them; the list leads with the same triangle.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+# The macro window docks at the right edge; its search field is at x 1759 at this size.
+click 1759 103
+wait 4
+text motor starter dol
+wait 5
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button
+wait 30
+expect_scene "-K1"
+shot triangles-on-drawing
+check_layout
+# A click on a triangle opens its popover: title, source badge, the numbers, actions.
+click 540 129
+wait 6
+expect "Locate"
+expect "Waive"
+shot triangles-popover
+check_layout
+key Escape
+wait 4
+expect_not "Locate"
+# The pill is the one count; a click opens the list of the same problems.
+click_text "warnings" Button
+wait 10
+shot triangles-list
+check_layout
+key F8
+wait 10
+shot triangles-f8
