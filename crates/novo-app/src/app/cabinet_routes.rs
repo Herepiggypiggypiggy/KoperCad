@@ -346,7 +346,7 @@ fn chips(
     let guessed = count(&|p| matches!(p, Problem::GuessedWire { .. }));
     add(
         guessed,
-        "no size",
+        "wires no size",
         format!(
             "{} no size: duct fill assumes 3 mm",
             plural(guessed, "wire has", "wires have")

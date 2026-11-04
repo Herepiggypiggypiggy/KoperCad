@@ -151,6 +151,38 @@ fn the_routes_chips_are_counts_with_a_fix_where_there_is_one() {
     );
 }
 
+#[test]
+fn set_entry_from_the_chip_is_the_bottom_middle_and_one_undo_step() {
+    use super::cabinet::Ask;
+    let (_dir, mut d) = placed_example();
+    let cab = d
+        .doc()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .unwrap()
+        .id;
+    let before = super::cabinet_routes::overlay(d.doc().project(), cab);
+    let (w, h) = before.plate.unwrap();
+    assert!(before.entry.is_none());
+    d.app.cabinet_ask(
+        Ask::SetEntryPoint(cab, Some((w / 2.0, h))),
+        Some(cab),
+        None,
+        &[],
+    );
+    let after = super::cabinet_routes::overlay(d.doc().project(), cab);
+    assert_eq!(
+        after.entry,
+        Some((w / 2.0, h)),
+        "bottom middle, y grows down"
+    );
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    let undone = super::cabinet_routes::overlay(d.doc().project(), cab);
+    assert!(undone.entry.is_none(), "one undo step");
+}
+
 /// Rewrites the QA fixture: the example cabinet after Place all with the
 /// vertical trunk duct cut short, so it joins only the first two row ducts and
 /// the wires below them have no duct path:
