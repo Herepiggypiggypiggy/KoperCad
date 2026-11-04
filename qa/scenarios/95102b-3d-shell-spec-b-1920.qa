@@ -1,0 +1,15 @@
+@title 3D shell and door follow the chosen enclosure (spec b, synthetic)
+@area Cabinet
+@sizes 1920x1080
+# Synthetic enclosure record, catalogue numbers: the body, its depth and the door size come from it. The door covers the front of the box, flush with its outside, and stands 0.5 mm in front of it.
+open qa/fixtures/cabinet-spec-b.novo
+wait 30
+click_text 3D #1
+wait 40
+shot shell-b
+click 1848 123
+wait 20
+shot front-b
+click_text "Open door"
+wait 40
+shot door-open-b
