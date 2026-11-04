@@ -286,7 +286,7 @@ impl NovoApp {
         let project = self.machine()?;
         let jobs = wire_cut_jobs_with(&project, &inputs.standard);
         let report = FerruleTable::build(&project, &jobs, &inputs.standard);
-        if report.section("ferrules").is_none() {
+        if report.section("ferrules").is_none() && report.section("lugs").is_none() {
             let (unknown, off) = novo_reports::ends_without_ferrule(&jobs);
             let why = if jobs.is_empty() {
                 "No ferrules to crimp yet: connect two device pins".to_owned()
@@ -1164,6 +1164,24 @@ fn ferrule_tab(
             }
         }
         _ => {}
+    }
+    if let Some(cache) = state.cache.as_ref().filter(|_| valid) {
+        let lugs: Vec<_> = novo_reports::crimp_list(&cache.jobs, &state.standard)
+            .into_iter()
+            .filter(|c| c.kind != novo_reports::TerminationKind::Ferrule)
+            .collect();
+        if !lugs.is_empty() {
+            novo_theme::widgets::section_label(ui, "Lugs to crimp");
+            for c in &lugs {
+                ui.label(format!(
+                    "{} {}  x {} (prepare {})",
+                    c.kind.label(),
+                    c.size,
+                    c.pieces,
+                    c.to_prepare
+                ));
+            }
+        }
     }
     ui.add_space(6.0);
     ui.horizontal_wrapped(|ui| {
