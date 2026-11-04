@@ -1,0 +1,35 @@
+@title Help icons: a long "?" popup scrolls inside the window at 1920x1080
+@area 3D
+@sizes 1920x1080
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+try click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+try click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+click 1849 311
+wait 10
+shot popup-top
+scroll 1750 520 -300
+wait 6
+shot popup-scrolled
+scroll 1750 520 -3000
+wait 6
+shot popup-end
+click 700 690
+wait 6

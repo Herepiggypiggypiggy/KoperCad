@@ -288,6 +288,7 @@ pub fn help_text(ui: &mut Ui, text: &str) {
     egui::ScrollArea::vertical()
         .max_height(max)
         .auto_shrink([true, true])
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
             ui.add(Label::new(text).wrap());
         });

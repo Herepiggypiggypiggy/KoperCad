@@ -40,10 +40,3 @@ wait 8
 shot help-b
 click 700 690
 wait 6
-# The Heat window "?" sits at the right edge: x differs by size, a click at the other size lands on the canvas.
-try click 1294 311
-try click 1849 311
-wait 8
-try shot help-c
-click 700 690
-wait 6
