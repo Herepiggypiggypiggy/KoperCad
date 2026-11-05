@@ -1,3 +1,0 @@
-# PR 1962 QA, source at git 00fc3120f88ec0f974f06a3e3ec51a3db793d912
-
-9600 at 1366x768 (1366/) and 1920x1080 (1920/); slack heap 9607 at 1366x768 (1366-slack/) and 9608 at 1920x1080 (1920-slack/). All 0 failed, 0 findings, check_layout ok. 9607/9608 land the hook of the closed-loop winch, drag the Drive run window off the picture, expect the line 'slack rope' under the controls and show the crane with the loose rope beside the block (small in the whole-crane view; close-up in /mnt/project-files/qa/crane-slack/slack-floor.png). Pictures: /mnt/project-files/qa/pr1962-00fc3120. This commit adds only these evidence files.
