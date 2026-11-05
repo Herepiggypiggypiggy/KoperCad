@@ -112,7 +112,10 @@ impl NovoApp {
                 .map_err(|e| e.to_string())
                 .and_then(|t| Study::from_json(&t))
             {
-                Ok(s) => s,
+                Ok(s) => {
+                    self.job_ok("faults.read");
+                    s
+                }
                 Err(why) => {
                     self.job_fail(
                         "faults.read",
@@ -969,6 +972,7 @@ impl NovoApp {
             .to_owned();
         match store_fault(&path, &name, target, what, fault_ohm, at_s) {
             Ok(id) => {
+                self.job_ok("faults.store");
                 self.message(
                     Level::Info,
                     format!("Added fault {id} at {target} (Simulate > Fault scenarios)"),

@@ -504,6 +504,12 @@ impl NovoApp {
         let Some(path) = dialog.pick_file() else {
             return;
         };
+        self.controller_read_file(path);
+    }
+
+    /// Reads a picked table or EPLAN export into the wizard; a failure is a
+    /// `controller.table_read` flag, the next success clears it.
+    pub(super) fn controller_read_file(&mut self, path: PathBuf) {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -521,9 +527,11 @@ impl NovoApp {
                 });
             match read {
                 Ok(file) if file.pages.is_empty() => {
+                    self.job_ok("controller.table_read");
                     self.message(Level::Info, format!("{name} has no pages"));
                 }
                 Ok(file) => {
+                    self.job_ok("controller.table_read");
                     if let Some(w) = &mut self.wb.controller_wizard {
                         w.pxf = Some((name, file, 0));
                     }
@@ -538,6 +546,7 @@ impl NovoApp {
         } else {
             match read_table_file(&path) {
                 Ok(text) => {
+                    self.job_ok("controller.table_read");
                     if let Some(w) = &mut self.wb.controller_wizard {
                         w.pxf = None;
                         w.set_text(text, name);
