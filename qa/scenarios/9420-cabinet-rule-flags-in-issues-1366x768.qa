@@ -1,0 +1,17 @@
+@title Cabinet: rule and opening flags are in the top-bar count and the Issues rows (1366x768)
+@area Cabinet
+@sizes 1366x768
+# T1 follow-up: the Place-rule and wiring-opening triangles on the plate are counted in the top bar and listed in Issues. Small devices keep their badges apart.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot plate-badges
+check_layout
+expect_not "Second use of widget ID"
+click_text "error" Button
+wait 10
+expect "F8 next"
+shot issues-rows
+check_layout
+expect_not "Second use of widget ID"

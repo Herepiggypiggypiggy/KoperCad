@@ -206,16 +206,16 @@ impl NovoApp {
             return;
         };
         self.cabinet.rules.ensure_loaded();
-        let rules = self.cabinet.rules.rules.clone();
         if self
             .wb
             .flags
             .layout_synced
             .as_ref()
-            .is_some_and(|(r, set)| *r == revision && *set == rules)
+            .is_some_and(|(r, set)| *r == revision && *set == self.cabinet.rules.rules)
         {
             return;
         }
+        let rules = self.cabinet.rules.rules.clone();
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -459,5 +459,22 @@ impl NovoApp {
         if !items.is_empty() {
             self.cabinet.view.reveal(items);
         }
+    }
+
+    /// Red and yellow counts of the Cabinet's own flags (broken Place rules,
+    /// covered wiring openings): the part of the one count the design checks
+    /// do not hold.
+    pub(super) fn layout_counts(&self) -> (usize, usize) {
+        let mut red = 0;
+        let mut yellow = 0;
+        for f in self.wb.flags.store.list(false) {
+            if f.source == Source::Layout {
+                match f.severity {
+                    novo_flags::Severity::Red => red += 1,
+                    novo_flags::Severity::Yellow => yellow += 1,
+                }
+            }
+        }
+        (red, yellow)
     }
 }
