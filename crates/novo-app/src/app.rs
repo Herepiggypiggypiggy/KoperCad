@@ -1071,6 +1071,9 @@ impl NovoApp {
                 self.backend.record(&changes);
                 self.reports_heard(&changes);
                 self.message(Level::Info, if redo { "Redone" } else { "Undone" });
+                // The undo has said what happened: the "No errors or warnings
+                // left" line of the check that follows must not replace it.
+                self.wb.last_issue_total = None;
             }
             Ok(None) => {}
             Err(e) => {
