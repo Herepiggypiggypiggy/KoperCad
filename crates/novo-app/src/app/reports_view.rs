@@ -449,9 +449,10 @@ impl NovoApp {
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
                         if id == novo_reports::query::SavedQueries::ID {
+                            let (text, hint) = saved_empty_state(output.sections.is_empty());
                             ui.horizontal(|ui| {
-                                ui.weak("No saved reports");
-                                novo_theme::widgets::help_mark(ui, empty_report_hint(&id));
+                                ui.weak(text);
+                                novo_theme::widgets::help_mark(ui, hint);
                             });
                         } else {
                             ui.weak(empty_report_hint(&id));
@@ -1524,6 +1525,32 @@ fn empty_report_hint(id: &str) -> &'static str {
         }
         "queries" => "No saved reports yet. Open Edit my reports above to write one.",
         _ => "Nothing to list yet",
+    }
+}
+
+/// Empty-state line and its "?" text for the My reports page. No sections
+/// means nothing is saved; sections without rows means a report that simply
+/// matches nothing right now.
+fn saved_empty_state(nothing_saved: bool) -> (&'static str, &'static str) {
+    if nothing_saved {
+        ("No saved reports", empty_report_hint("queries"))
+    } else {
+        (
+            "No rows",
+            "Nothing matches this report right now. It fills in when matching items exist.",
+        )
+    }
+}
+
+#[cfg(test)]
+mod saved_empty_tests {
+    use super::saved_empty_state;
+
+    #[test]
+    fn no_rows_is_not_no_saved_reports() {
+        assert_eq!(saved_empty_state(true).0, "No saved reports");
+        assert_eq!(saved_empty_state(false).0, "No rows");
+        assert_ne!(saved_empty_state(true).1, saved_empty_state(false).1);
     }
 }
 
