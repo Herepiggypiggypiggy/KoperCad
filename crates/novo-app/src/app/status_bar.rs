@@ -295,6 +295,20 @@ impl NovoApp {
     /// The modes that are on, each with the command that switches it off.
     pub(super) fn mode_chips(&self) -> Vec<ModeChip> {
         let mut chips = Vec::new();
+        // A circuit on the pointer: the chip opens the form for it.
+        if let Some((name, moved)) = self.macro_ghost_name() {
+            chips.push(ModeChip {
+                alert: false,
+                label: if moved {
+                    format!("{name} \u{b7} moved to fit \u{b7} Options")
+                } else {
+                    format!("{name} \u{b7} Options")
+                },
+                command: "macro.place",
+                hover: "Click places it, Esc cancels. Click here or press O for the form: parameters, parts, wire numbers"
+                    .into(),
+            });
+        }
         // The machine's choice is shown wherever the documents come from.
         if let Some(info) = self.machine_info() {
             chips.push(ModeChip {

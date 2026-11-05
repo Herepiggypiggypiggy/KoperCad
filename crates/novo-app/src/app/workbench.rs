@@ -1001,6 +1001,22 @@ impl NovoApp {
         if let (Some(at), Some(page)) = (self.wb.pointer_world, self.current_page) {
             self.wb.last_pointer = Some((page, at));
         }
+        self.keep_macro_ghost_on_sheet();
+        // O on a circuit ghost: the form, from the keyboard.
+        if self.wb.macro_place.ghost.is_some()
+            && self.key_focus(ctx) == Focus::Canvas
+            && ctx.input(|i| i.key_pressed(egui::Key::O) && !i.modifiers.any())
+        {
+            self.macro_place_command(None);
+        }
+        // A circuit ghost remembers where it was on screen.
+        if let (Some(ghost), Some(at), Some((_, rect))) =
+            (self.wb.macro_place.ghost.as_mut(), at, self.wb.canvas_area)
+            && self.wb.pointer_world.is_some()
+            && rect.contains(at)
+        {
+            ghost.screen = Some(at);
+        }
     }
 
     /// Whether the shell runs `command` from a key press itself.
@@ -1286,7 +1302,7 @@ impl NovoApp {
             "view.override_marks" => self.wb.override_marks ^= true,
             "view.left_out" => self.wb.ghost_left_out ^= true,
             "macro.save" => self.open_macro_save(argument),
-            "macro.place" => self.open_macro_place(argument),
+            "macro.place" => self.macro_place_command(argument),
             "macro.edit" => self.open_macro_editor(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
@@ -1875,8 +1891,8 @@ impl NovoApp {
                 }
             }
             Target::Lesson(id) => self.learn_run_command_lesson(&id),
-            // The place window opens on the macro, to be confirmed there.
-            Target::Macro(name) => self.open_macro_place(Some(&name)),
+            // The circuit follows the pointer; a click places it.
+            Target::Macro(name) => self.begin_macro_ghost(&name),
             Target::Addon(id) => self.run_addon_command(&id),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),

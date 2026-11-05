@@ -12,6 +12,7 @@ pub mod assembly;
 pub mod build;
 pub mod camera;
 pub mod crane;
+pub mod crane_model;
 pub mod crane_parts;
 pub mod cube;
 pub mod cull;

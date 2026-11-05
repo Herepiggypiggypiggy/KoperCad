@@ -12,6 +12,7 @@ pub mod contour;
 pub mod field;
 pub mod flux;
 pub mod hotspot;
+pub mod probes;
 pub mod range;
 pub mod streamline;
 pub mod synthetic;

@@ -517,11 +517,7 @@ impl NovoApp {
                 ui.close();
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new("Arrow keys and Enter; Alt+letter picks an area")
-                        .small()
-                        .color(pal.text_tertiary),
-                );
+                super::window_help::mark(ui, "Arrow keys and Enter; Alt+letter picks an area");
             });
         });
     }

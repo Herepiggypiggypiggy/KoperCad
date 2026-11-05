@@ -1,0 +1,15 @@
+# file (under src/app) and the most problem sentences it may hold (lane T9).
+# Before the lane: eplan_parts 10, part_picker 4, parts 16, parts_bulk 18,
+# parts_bundle 4, parts_pins 1, parts_quality 16, parts_table 23 (92 in all).
+# What is left: the quality grade/fill colours (a scale, not a sentence),
+# the match/fit colour test helper, field `.error` reads, and the one
+# toast bridge in parts_flags used while the Parts window is closed.
+eplan_parts.rs 0
+part_picker.rs 2
+parts.rs 4
+parts_bulk.rs 1
+parts_bundle.rs 0
+parts_pins.rs 0
+parts_quality.rs 11
+parts_table.rs 2
+parts_flags.rs 2

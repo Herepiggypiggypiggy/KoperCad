@@ -1,0 +1,5 @@
+code sha (built and run): 7118dce2ad99abea82087321b80708dc729d4e81
+PR head: the commit that adds this file (evidence files only; its parent is the code sha).
+Code is identical to the earlier run for scenarios 21, 61, 706 and 9490-9492 (sources at git 2f3a1113: only scenario files changed since); scenario 60 ran at 7118dce2.
+Each report-*.md says "source at git <sha>".
+Scenarios: 21, 60, 61, 706 (the four QA2 reported red) and 9490-9492, at 1366x768 and 1920x1080.

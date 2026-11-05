@@ -477,7 +477,8 @@ impl NovoApp {
                     turn = Some(on);
                 }
                 if !enabled {
-                    ui.weak("Off: the findings below are a preview and do not appear in the Issues list.");
+                    ui.weak("Off: findings are a preview");
+                    super::window_help::add(ui.ctx(), "Off: the findings below are a preview and do not appear in the Issues list.");
                 }
                 super::dialog_ui::explained(
                     ui,

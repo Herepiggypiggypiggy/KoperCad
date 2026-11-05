@@ -24,7 +24,13 @@ wait 10
 shot rows
 check_layout
 expect "Not imported"
+# The sentence is the popover of the row triangle.
+click_text "Warning: Check this row" Button #2
+wait 6
 expect "not a possible size"
+shot row-popover
+click_text "Warning: Check this row" Button #2
+wait 6
 click_text "Add 4 parts to the catalog"
 wait 20
 shot added

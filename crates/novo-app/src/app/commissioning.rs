@@ -1875,7 +1875,7 @@ fn walk_card(
         }
         let hint = step.same_number_hint();
         if !hint.is_empty() {
-            ui.label(egui::RichText::new(hint).small().color(p.text_tertiary));
+            super::window_help::mark(ui, &hint);
         }
     } else {
         let pages = info

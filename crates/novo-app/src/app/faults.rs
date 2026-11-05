@@ -112,9 +112,17 @@ impl NovoApp {
                 .map_err(|e| e.to_string())
                 .and_then(|t| Study::from_json(&t))
             {
-                Ok(s) => s,
+                Ok(s) => {
+                    self.job_ok("faults.read");
+                    s
+                }
                 Err(why) => {
-                    self.message(Level::Error, format!("Could not read the study: {why}"));
+                    self.job_fail(
+                        "faults.read",
+                        "Study not read",
+                        Level::Error,
+                        format!("Could not read the study: {why}"),
+                    );
                     return;
                 }
             },
@@ -153,7 +161,7 @@ impl NovoApp {
             win.stale = false;
         }
         let mut open = true;
-        let mut note: Option<(Level, String)> = None;
+        let mut note: Option<Note> = None;
         super::panel::dialog(ctx, "Fault scenarios", [760.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
@@ -175,13 +183,26 @@ impl NovoApp {
                     None => {}
                 });
             });
-        if let Some((level, text)) = note {
-            self.message(level, text);
+        match note {
+            Some(Note::Done(job, text)) => {
+                self.job_ok(job);
+                self.message(Level::Info, text);
+            }
+            Some(Note::Failed(job, title, text)) => {
+                self.job_fail(job, title, Level::Error, text);
+            }
+            None => {}
         }
         if open {
             self.wb.faults = Some(win);
         }
     }
+}
+
+/// What a button in the window did: the job, and its words.
+enum Note {
+    Done(&'static str, String),
+    Failed(&'static str, &'static str, String),
 }
 
 fn run_selected(win: &FaultsWindow) -> Result<ScenarioResult, String> {
@@ -200,7 +221,7 @@ fn run_selected(win: &FaultsWindow) -> Result<ScenarioResult, String> {
     study.run(win.selected)
 }
 
-fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, String)>) {
+fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<Note>) {
     ui.horizontal(|ui| {
         ui.label("Scenario");
         let name = win
@@ -288,9 +309,13 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
                 match super::pdf::write_replacing(path, win.study.to_json().as_bytes()) {
                     Ok(()) => {
                         win.example = false;
-                        (Level::Info, format!("Saved {}", path.display()))
+                        Note::Done("faults.save", format!("Saved {}", path.display()))
                     }
-                    Err(e) => (Level::Error, format!("Could not save the study: {e}")),
+                    Err(e) => Note::Failed(
+                        "faults.save",
+                        "Study not saved",
+                        format!("Could not save the study: {e}"),
+                    ),
                 },
             );
         }
@@ -313,7 +338,7 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
 }
 
 /// The faults added from the drawing, each with Run and Remove.
-fn project_faults(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, String)>) {
+fn project_faults(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<Note>) {
     if win.study.faults.is_empty() {
         return;
     }
@@ -359,8 +384,12 @@ fn project_faults(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(
         if let Some(path) = &win.path {
             *note = Some(
                 match super::pdf::write_replacing(path, win.study.to_json().as_bytes()) {
-                    Ok(()) => (Level::Info, format!("Removed fault {id}")),
-                    Err(e) => (Level::Error, format!("Could not save the study: {e}")),
+                    Ok(()) => Note::Done("faults.save", format!("Removed fault {id}")),
+                    Err(e) => Note::Failed(
+                        "faults.save",
+                        "Study not saved",
+                        format!("Could not save the study: {e}"),
+                    ),
                 },
             );
         }
@@ -372,7 +401,7 @@ fn export(
     result: &ScenarioResult,
     study_path: &std::path::Path,
     ext: &str,
-) -> (Level, String) {
+) -> Note {
     let stem = study_path
         .file_name()
         .and_then(|n| n.to_str())
@@ -392,8 +421,12 @@ fn export(
         _ => result.timing.to_vcd(),
     };
     match super::pdf::write_replacing(&path, text.as_bytes()) {
-        Ok(()) => (Level::Info, format!("Exported {}", path.display())),
-        Err(e) => (Level::Error, format!("Could not export: {e}")),
+        Ok(()) => Note::Done("faults.export", format!("Exported {}", path.display())),
+        Err(e) => Note::Failed(
+            "faults.export",
+            "Not exported",
+            format!("Could not export: {e}"),
+        ),
     }
 }
 
@@ -939,6 +972,7 @@ impl NovoApp {
             .to_owned();
         match store_fault(&path, &name, target, what, fault_ohm, at_s) {
             Ok(id) => {
+                self.job_ok("faults.store");
                 self.message(
                     Level::Info,
                     format!("Added fault {id} at {target} (Simulate > Fault scenarios)"),
@@ -946,7 +980,12 @@ impl NovoApp {
                 self.wb.faults = None;
                 self.open_faults(Some(&id));
             }
-            Err(e) => self.message(Level::Error, format!("Could not store the fault: {e}")),
+            Err(e) => self.job_fail(
+                "faults.store",
+                "Fault not stored",
+                Level::Error,
+                format!("Could not store the fault: {e}"),
+            ),
         }
     }
 }

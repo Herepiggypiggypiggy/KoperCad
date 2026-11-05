@@ -63,12 +63,12 @@ id = "sheet"
 title = "Read the count and the settings"
 title_nl = "Lees de telling en de instellingen"
 text = """
-The top lines count the drawn wires: tested, missed, and "not tested yet (dead wire check)" in red. The grey note says the bench cut list and Wire-it count connections, so their numbers can differ.
-**Expected values** holds the test voltage, the least insulation and the contact allowance. Wire resistance is copper at 20 °C from the drawn length, times 1.25.
+The top lines count the drawn wires: tested, missed, and "not tested yet (dead wire check)" in red. The ? beside the count says, among other things, that the bench cut list and Wire-it count connections, so their numbers can differ.
+**Expected values** holds the test voltage, the least insulation and the contact allowance. The ? beside it says wire resistance is copper at 20 °C from the drawn length, times 1.25.
 """
 text_nl = """
-De bovenste regels tellen de getekende draden: getest, afwijkend, en in het rood "not tested yet (dead wire check)". De grijze noot zegt dat de werkbank-zaaglijst en Wire-it verbindingen tellen, dus hun aantallen kunnen verschillen.
-**Expected values** bevat de testspanning, de laagste isolatie en de contacttoeslag. De draadweerstand is koper bij 20 °C uit de getekende lengte, maal 1,25.
+De bovenste regels tellen de getekende draden: getest, afwijkend, en in het rood "not tested yet (dead wire check)". Het ?-teken ernaast zegt onder meer dat de werkbank-zaaglijst en Wire-it verbindingen tellen, dus hun aantallen kunnen verschillen.
+**Expected values** bevat de testspanning, de laagste isolatie en de contacttoeslag. Het ?-teken ernaast zegt dat de draadweerstand koper is bij 20 °C uit de getekende lengte, maal 1,25.
 """
 point = { ui = "commissioning.test" }
 manual = "reading step: the count lines and the Expected values fold are not anchored; QA 210 shows them"
@@ -78,11 +78,11 @@ id = "reading"
 title = "Type the reading"
 title_nl = "Typ de meting"
 text = """
-One wire is selected, with its two ends and the continuity to expect. Zero the test leads, measure and type the ohms in the first box. If the meter shows OL, press {ui:commissioning.test_open}. "(assumed)" means no length is drawn, so a fallback value stands in.
+One wire is selected, with its two ends and the continuity to expect. Zero the test leads (the ? at the top says how), measure and type the ohms in the first box. If the meter shows OL, press {ui:commissioning.test_open}. "(assumed)" means no length is drawn, so a fallback value stands in.
 Insulation goes in the Mohm box. Before an insulation test, disconnect electronics and surge arresters: the tab says so under the box.
 """
 text_nl = """
-Eén draad is geselecteerd, met zijn twee uiteinden en de verwachte doorgang. Nul de meetsnoeren, meet en typ de ohm in het eerste vak. Toont de meter OL, druk dan op {ui:commissioning.test_open}. "(assumed)" betekent dat er geen lengte getekend is, dus een vervangwaarde geldt.
+Eén draad is geselecteerd, met zijn twee uiteinden en de verwachte doorgang. Nul de meetsnoeren (het ?-teken bovenaan zegt hoe), meet en typ de ohm in het eerste vak. Toont de meter OL, druk dan op {ui:commissioning.test_open}. "(assumed)" betekent dat er geen lengte getekend is, dus een vervangwaarde geldt.
 Isolatie gaat in het vak Mohm. Ontkoppel vóór een isolatietest elektronica en overspanningsafleiders: het tabblad zegt dat onder het vak.
 """
 point = { ui = "commissioning.test_ohm" }

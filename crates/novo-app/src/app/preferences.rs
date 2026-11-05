@@ -234,7 +234,7 @@ impl NovoApp {
                         );
                     });
                     if let Some(line) = self.wb.custom_symbols.summary() {
-                        hint(ui, &line);
+                        ui.weak(line);
                     }
                     for problem in self.wb.custom_symbols.problems.iter().take(5) {
                         super::flags_shell::inline_flag(ui, false, false, "Symbol file", problem);
@@ -298,14 +298,7 @@ fn section(ui: &mut egui::Ui, title: &str, first: bool) {
 }
 
 fn hint(ui: &mut egui::Ui, text: &str) {
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(text)
-                .size(egui::TextStyle::Small.resolve(ui.style()).size.max(12.0))
-                .weak(),
-        )
-        .wrap(),
-    );
+    super::window_help::mark(ui, text);
 }
 
 fn row_title(ui: &mut egui::Ui, label: &str, text: &str) {

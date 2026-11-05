@@ -469,20 +469,12 @@ impl NovoApp {
             // The panel stays this wide when a fix preview opens (its long
             // lines wrap) instead of growing over the drawing.
             ui.set_max_width(WIDTH - 24.0);
-            ui.label(
-                egui::RichText::new(
-                    "Indicative: classes are read from the drawing. A design aid, not a test result.",
-                )
-                .small()
-                .color(pal.text_secondary),
-            );
+            super::window_help::add(ui.ctx(), "Classes are read from the drawing.");
             if live {
-                ui.label(
-                    egui::RichText::new(
-                        "The live view is on and colours the wires by potential. Switch it off (Shift+L) to see the classes.",
-                    )
-                    .small()
-                    .color(pal.warning),
+                ui.label(egui::RichText::new("Live view is on").small().color(pal.warning));
+                super::window_help::add(
+                    ui.ctx(),
+                    "The live view is on and colours the wires by potential. Switch it off (Shift+L) to see the classes.",
                 );
             }
             if total == 0 {
@@ -514,13 +506,12 @@ impl NovoApp {
                 }
             }
             if guessed > 0 {
+                super::window_help::add(
+                    ui.ctx(),
+                    "Wires marked ? are guessed: nothing in the drawing says what they carry. Pick one and set its class.",
+                );
                 ui.label(
-                    egui::RichText::new(format!(
-                        "{guessed} wire{} marked ? {} guessed: nothing in the drawing says what {} carry. Pick one and set its class.",
-                        if guessed == 1 { "" } else { "s" },
-                        if guessed == 1 { "is" } else { "are" },
-                        if guessed == 1 { "it" } else { "they" },
-                    ))
+                    egui::RichText::new(format!("{guessed} guessed (?)"))
                     .small()
                     .color(pal.warning),
                 );
@@ -635,17 +626,9 @@ impl NovoApp {
                         }
                     }
                     if cable.findings.is_empty() {
-                        ui.label(
-                            egui::RichText::new("No finding about this cable. That is not a statement that it is fine.")
-                                .small()
-                                .color(pal.text_secondary),
-                        );
+                        super::window_help::add(ui.ctx(), "No finding about this cable. That is not a statement that it is fine.");
                     }
-                    ui.label(
-                        egui::RichText::new("Indicative: a design aid, not a test result.")
-                            .small()
-                            .color(pal.text_secondary),
-                    );
+                    super::window_help::add(ui.ctx(), "Indicative: a design aid, not a test result.");
                 }
                 ui.separator();
                 ui.label(egui::RichText::new("Set the class").small().strong());
@@ -672,17 +655,9 @@ impl NovoApp {
                 {
                     set = Some((*wire, None));
                 }
-                ui.label(
-                    egui::RichText::new("One undo step. Check > EMC check uses this class.")
-                        .small()
-                        .color(pal.text_secondary),
-                );
+                super::window_help::add(ui.ctx(), "One undo step. Check > EMC check uses this class.");
             } else if total > 0 {
-                ui.label(
-                    egui::RichText::new("Pick a wire to see why it has its class. Check > EMC check uses these classes.")
-                        .small()
-                        .color(pal.text_secondary),
-                );
+                super::window_help::add(ui.ctx(), "Pick a wire to see why it has its class. Check > EMC check uses these classes.");
             }
             ui.add_space(2.0);
             let close = ui.small_button("Close");

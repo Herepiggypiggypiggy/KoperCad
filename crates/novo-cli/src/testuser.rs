@@ -56,6 +56,10 @@ pub(crate) struct TestUser {
     /// scenario's `user_catalog` step).
     #[arg(skip)]
     catalog_seed: Option<PathBuf>,
+    /// A supplier list file (`suppliers.json`) every launch starts with (a QA
+    /// scenario's `supplier_list` step).
+    #[arg(skip)]
+    supplier_seed: Option<PathBuf>,
 }
 
 impl TestUser {
@@ -77,6 +81,7 @@ impl TestUser {
             env,
             library_seed: None,
             catalog_seed: None,
+            supplier_seed: None,
         }
     }
 }
@@ -499,6 +504,11 @@ impl Server {
         self.opts.catalog_seed = file;
     }
 
+    /// Start every launch from here with this `suppliers.json` in the profile.
+    pub(crate) fn set_supplier_seed(&mut self, file: Option<PathBuf>) {
+        self.opts.supplier_seed = file;
+    }
+
     /// Whether the next launch keeps the profile of the last one.
     pub(crate) fn keep_profile(&mut self, keep: bool) {
         self.keep_profile = keep;
@@ -706,6 +716,24 @@ impl Server {
             std::fs::copy(seed, &to).map_err(|e| {
                 format!(
                     "cannot copy the catalog {} to the profile: {e}",
+                    seed.display()
+                )
+            })?;
+        }
+        if let (Some(seed), false) = (&self.opts.supplier_seed, self.opts.real_profile) {
+            // Where the app looks (`novo_parts::supplier_site::browser_root`).
+            let home = work.join("home");
+            let to = if cfg!(windows) {
+                home.join("Local/KoperCAD/browser/suppliers.json")
+            } else {
+                home.join("data/KoperCAD/browser/suppliers.json")
+            };
+            if let Some(dir) = to.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            std::fs::copy(seed, &to).map_err(|e| {
+                format!(
+                    "cannot copy the supplier list {} to the profile: {e}",
                     seed.display()
                 )
             })?;

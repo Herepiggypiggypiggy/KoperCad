@@ -1,0 +1,20 @@
+@title Problem triangles T9: a failed EPLAN parts import leaves a job flag, not a toast
+@sizes 1366x768 1920x1080
+@area Parts
+# A file that is not a parts export: the failure stays as a triangle in the Parts window until dismissed or the import works.
+open_starter_example
+wait 20
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+key ctrl+k
+text Import parts from a CAD parts export
+wait 10
+answer_dialog qa/fixtures/parts/not-text.csv
+key Return
+wait 40
+shot failed-eplan-import
+expect "EPLAN parts not read"
+check_layout

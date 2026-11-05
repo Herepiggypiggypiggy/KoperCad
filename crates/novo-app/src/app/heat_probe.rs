@@ -74,15 +74,72 @@ pub(crate) struct ProbeState {
     pub result: Option<u64>,
     /// The line the Heat strip shows for the probe.
     pub text: String,
+    /// Points kept in the air, numbered in the order they were pinned.
+    pub pins: Vec<[f64; 3]>,
+    /// The plot-over-line tool: the next clicks set the two ends.
+    pub line_on: bool,
+    pub line: (Option<[f64; 3]>, Option<[f64; 3]>),
+    /// The air volume figures count air hotter than this, degrees C. `None`
+    /// until the user picks one: ambient plus 10 K.
+    pub level_c: Option<f64>,
+    /// Bumped on every change to pins or line, so the overlays are rebuilt.
+    pub rev: u32,
+    pub shown_rev: u32,
 }
+
+/// Most points that can be pinned at once.
+pub(crate) const MAX_PINS: usize = 8;
 
 impl ProbeState {
     /// A point belongs to the result it was read from: a new result drops it.
     pub(crate) fn bind(&mut self, result: u64) {
         if self.result != Some(result) {
             self.at = None;
+            self.pins.clear();
+            self.line = (None, None);
+            self.rev = self.rev.wrapping_add(1);
             self.result = Some(result);
         }
+    }
+
+    /// Keep the probed point. False when there is none, it is pinned already
+    /// or the list is full.
+    pub(crate) fn pin(&mut self) -> bool {
+        match self.at {
+            Some(p) if self.pins.len() < MAX_PINS && !self.pins.contains(&p) => {
+                self.pins.push(p);
+                self.rev = self.rev.wrapping_add(1);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn unpin(&mut self, n: usize) {
+        if n < self.pins.len() {
+            self.pins.remove(n);
+            self.rev = self.rev.wrapping_add(1);
+        }
+    }
+
+    /// A click while the line tool is on: first the start, then the end; a
+    /// third click starts a new line.
+    pub(crate) fn line_click(&mut self, p: [f64; 3]) {
+        self.line = match self.line {
+            (Some(a), None) => (Some(a), Some(p)),
+            _ => (Some(p), None),
+        };
+        self.rev = self.rev.wrapping_add(1);
+    }
+
+    pub(crate) fn clear_line(&mut self) {
+        self.line = (None, None);
+        self.rev = self.rev.wrapping_add(1);
+    }
+
+    /// Both ends of the line, when set.
+    pub(crate) fn line_ends(&self) -> Option<([f64; 3], [f64; 3])> {
+        self.line.0.zip(self.line.1)
     }
 
     /// Store the strip line; true only when it changed (so only then repaint).
@@ -207,8 +264,45 @@ pub(crate) fn read(snap: &CfdSnapshot, ambient: f64, at: [f64; 3]) -> Reading {
     }
 }
 
+/// The crosses of the pinned points and the plotted line, drawn with the
+/// probe cross.
+pub(crate) fn pin_overlays(place: Place, probe: &ProbeState) -> Vec<Overlay> {
+    let mut out: Vec<Overlay> = probe
+        .pins
+        .iter()
+        .map(|p| marker_in(place, *p, [255, 200, 60, 255]))
+        .collect();
+    let world = |p: [f64; 3]| -> Vec3 {
+        place
+            .frame
+            .world(p[0] - place.plate_x, p[1] - place.plate_y, p[2])
+    };
+    let cyan = [80, 220, 255, 255];
+    for end in [probe.line.0, probe.line.1].into_iter().flatten() {
+        out.push(marker_in(place, end, cyan));
+    }
+    if let Some((a, b)) = probe.line_ends() {
+        let mut l = OverlayLines {
+            width_px: 2.0,
+            order: 5,
+            ..Default::default()
+        };
+        l.starts.push(0);
+        for p in [a, b] {
+            l.positions.push(world(p));
+            l.colors.push(cyan);
+        }
+        out.push(Overlay::Lines(l));
+    }
+    out
+}
+
 /// A small white cross at the probed point.
 pub(crate) fn marker(place: Place, at: [f64; 3]) -> Overlay {
+    marker_in(place, at, [255, 255, 255, 255])
+}
+
+fn marker_in(place: Place, at: [f64; 3], color: [u8; 4]) -> Overlay {
     const ARM: f64 = 12.0;
     let mut l = OverlayLines {
         width_px: 2.0,
@@ -224,7 +318,7 @@ pub(crate) fn marker(place: Place, at: [f64; 3]) -> Overlay {
                 .frame
                 .world(p[0] - place.plate_x, p[1] - place.plate_y, p[2]);
             l.positions.push(w);
-            l.colors.push([255, 255, 255, 255]);
+            l.colors.push(color);
         }
     }
     Overlay::Lines(l)
@@ -325,6 +419,48 @@ mod tests {
         assert!(p.set_text("Probe: 26.0 °C".into()));
         assert!(!p.set_text("Probe: 26.0 °C".into()));
         assert!(p.set_text("Probe: 27.0 °C".into()));
+    }
+
+    #[test]
+    fn pins_keep_points_until_the_result_changes() {
+        let mut p = ProbeState::default();
+        p.bind(1);
+        assert!(!p.pin(), "nothing probed yet");
+        p.at = Some([1.0, 2.0, 3.0]);
+        assert!(p.pin() && !p.pin(), "the same point is pinned once");
+        for n in 0..MAX_PINS + 2 {
+            p.at = Some([n as f64 + 10.0, 0.0, 0.0]);
+            p.pin();
+        }
+        assert_eq!(p.pins.len(), MAX_PINS);
+        p.unpin(0);
+        assert_eq!(p.pins.len(), MAX_PINS - 1);
+        p.unpin(99);
+        p.bind(2);
+        assert!(p.pins.is_empty());
+    }
+
+    #[test]
+    fn line_clicks_set_start_then_end_then_start_again() {
+        let mut p = ProbeState::default();
+        p.line_click([1.0, 0.0, 0.0]);
+        assert!(p.line_ends().is_none());
+        p.line_click([2.0, 0.0, 0.0]);
+        assert_eq!(p.line_ends(), Some(([1.0, 0.0, 0.0], [2.0, 0.0, 0.0])));
+        p.line_click([3.0, 0.0, 0.0]);
+        assert_eq!(p.line, (Some([3.0, 0.0, 0.0]), None));
+        p.clear_line();
+        assert_eq!(p.line, (None, None));
+    }
+
+    #[test]
+    fn pins_and_the_line_are_drawn() {
+        let mut p = ProbeState::default();
+        assert!(pin_overlays(place(), &p).is_empty());
+        p.pins.push([60.0, 30.0, 40.0]);
+        p.line = (Some([10.0, 30.0, 40.0]), Some([90.0, 30.0, 40.0]));
+        // One cross per pin, one per end, and the segment.
+        assert_eq!(pin_overlays(place(), &p).len(), 4);
     }
 
     #[test]
