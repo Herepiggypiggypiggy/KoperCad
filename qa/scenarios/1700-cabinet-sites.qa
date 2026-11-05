@@ -7,8 +7,8 @@ click_text Cabinet #1
 wait 20
 shot cabinet-before
 # The Mounted row of the Inspector, with the choice open.
-# The motor sits at a different spot at each window size; the click that misses lands on bare plate.
-click 969 192
+# The motor sits at a different spot at each window size; the click that misses lands on bare plate. (The Unplaced pane is narrower since its text moved behind the ?, so at 1366 the motor is about x 949-976, y 181-236.)
+click 962 222
 try click 1470 218
 wait 10
 shot inspector-mounted

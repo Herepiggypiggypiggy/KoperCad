@@ -19,3 +19,6 @@ Traps: a lesson or scenario that quotes removed text (grep `assets/lessons` and 
 
 Second PR (Learn, Assistant, Start, Help, App menu, Preferences): see PROGRESS.md 18:10 entry. Still open: Parts, Macros, Cabinet, Reports, Schematic, 3D, Check, Add-ons (see INVENTORY.md). Learn lesson-step text and the Ask Claude consent notice stay visible by design.
 Slice 2 (this PR): `window_help::add` where the surface is a panel or dialog, `window_help::mark` for headerless rows. Still long: report documents themselves (EMC record, Contents.pdf are files, not screens), Commissioning hint sentences from `step.same_number_hint()` (now behind "?"), hover tooltips, `emc_stub.rs` finding details (result text), Reports preview pages, Bench "Not set:" banner (result sentence, 29 words).
+
+## Cabinet area (done 2026-11-03)
+Files: cabinet.rs, cabinet_routes.rs, cabinet_door.rs, cabinet_panel.rs, cabinet_rails.rs, cabinet_rules.rs, cabinet_rules_panel.rs, cabinet_surface_size.rs. Inside a Panel or dialog the text goes through `window_help::add`; in raw egui side panels (Routes, Unplaced) and banners it is `window_help::mark`. Left: EMC check window texts in emc_view.rs, per-surface Info notes (`surface_notes` in cabinet.rs).

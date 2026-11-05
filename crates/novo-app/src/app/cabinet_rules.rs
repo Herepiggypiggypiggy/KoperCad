@@ -399,11 +399,11 @@ pub(super) fn show_rules_window(
                 state.notice = None;
             }
         });
-        ui.weak(if dirty {
-            "Applies now. Not saved as your default yet."
-        } else {
-            "Saved as your default."
-        });
+        ui.weak(if dirty { "Not saved" } else { "Saved" });
+        super::window_help::add(
+            ui.ctx(),
+            "Changes apply now. Save keeps the rules as your default.",
+        );
         ui.separator();
         let (changed, surface_edit) =
             super::cabinet_rules_panel::show(ui, &mut state.rules, surface.map(|(_, r)| r));
@@ -456,8 +456,8 @@ pub(super) fn show_rules_window(
 }
 
 fn dialog_ui_hint(ui: &mut egui::Ui) {
-    super::dialog_ui::hint(
-        ui,
+    super::window_help::add(
+        ui.ctx(),
         "The same rules as a file: one per line. Letter codes, then zone=, rail=, class=, \
          gap=, above=, below= in mm. `heat on` / `heat off`. Edits here apply once the text reads.",
     );
@@ -522,7 +522,10 @@ fn summary(ui: &mut egui::Ui, plan: &CutPlan) {
         plan.scrap()
     ));
     if plan.budget_hit {
-        ui.weak("The search stopped early; fewer bars may be possible.");
+        super::window_help::add(
+            ui.ctx(),
+            "The search stopped early; fewer bars may be possible.",
+        );
     }
 }
 
@@ -542,7 +545,7 @@ pub(super) fn show_cut_window(
         .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             let Some(lists) = lists else {
-                ui.weak("This panel has no mounting plate yet.");
+                super::window_help::add(ui.ctx(), "This panel has no mounting plate yet.");
                 return;
             };
             super::dialog_ui::explained(ui, "Stock bars", "Stock bars of 2000 mm, 2 mm saw cut. Rails are cut shorter than the plate only when that saves a bar.");
@@ -591,7 +594,7 @@ pub(super) fn show_cut_window(
                 ui.add_space(6.0);
             }
             if lists.rails.is_none() && lists.ducts.is_empty() {
-                ui.weak("No rails or ducts on the plate yet. Place all adds them.");
+                super::window_help::add(ui.ctx(), "No rails or ducts on the plate yet. Place all adds them.");
             }
         });
     state.cut_open = open;

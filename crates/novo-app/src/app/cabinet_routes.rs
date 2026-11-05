@@ -103,6 +103,23 @@ pub(super) struct Overlay {
 }
 
 impl Overlay {
+    /// Everything the Routes panel explains, for its "?": what the card
+    /// is, the wire rules and the entry, and how to fix an unusable entry
+    /// point. The problems on the plan are the chips below it.
+    pub(super) fn help_text(&self) -> String {
+        let mut parts = vec![
+            "Routes: every wire with both ends on this plate, through the ducts. Lengths are measured along the ducts, loops included.",
+            "Wire rules are kept in the project. They set cut lengths, the wire list and the wire cut file.",
+            "Entry point: where wires from outside come in (origin top left). Wires to the outside are routed to it.",
+        ];
+        if self.entry_hidden {
+            parts.push(
+                "A stored entry point is incomplete or outside the plate and cannot be used. Set a new one.",
+            );
+        }
+        parts.join("\n\n")
+    }
+
     /// One line for the header strip: routed wires, those no duct path
     /// reaches, the fullest duct.
     pub(super) fn summary(&self) -> String {
@@ -559,7 +576,11 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
         .resizable(true)
         .show(ui, |ui| {
             ui.add_space(6.0);
-            ui.strong("Routes");
+            let help = overlay.help_text();
+            ui.horizontal(|ui| {
+                ui.strong("Routes");
+                super::window_help::mark(ui, &help);
+            });
             if let Some(a) = rules_section(ui, &overlay.rules) {
                 ask = Some(a);
             }
@@ -805,12 +826,9 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
     if overlay.entry_hidden {
         ui.colored_label(
             crate::theme::ui_palette().warning,
-            "A stored entry point is incomplete or outside the plate and cannot be used. Set a new one.",
+            "Entry point unusable (see the ? beside Routes)",
         );
     }
-    ui.weak(
-        "Where wires from outside come in (origin top left). Wires to the outside are routed to it.",
-    );
     ask
 }
 
@@ -834,9 +852,6 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules) -> Option<Ask> {
         .id_salt("cabinet_wire_rules")
         .default_open(false)
         .show(ui, |ui| {
-            ui.weak(
-                "Kept in the project. They set cut lengths, the wire list and the wire cut file.",
-            );
             for r in &project_rules::RULES {
                 let Some(current) = rules.value(r.key) else {
                     continue;
