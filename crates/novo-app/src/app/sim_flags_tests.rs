@@ -207,7 +207,7 @@ fn starting_a_run_with_nothing_to_run_raises_a_flag_the_window_lists() {
 /// banner, error or warning colour). The number only goes down; a lane that
 /// migrates a site lowers it here, in this area's own file
 /// (docs/design/problem-triangles.md, section 12). Lane T10 took it from 98
-/// to 82 in these files.
+/// to 82 (first PR) and 70 (second) in these files.
 fn census(source: &str) -> usize {
     source
         .lines()
@@ -241,12 +241,12 @@ fn problem_census_sim() {
         ("drive_run", include_str!("drive_run.rs"), 11),
         ("hoist_run", include_str!("hoist_run.rs"), 6),
         ("machine", include_str!("machine.rs"), 4),
-        ("live", include_str!("live.rs"), 8),
+        ("live", include_str!("live.rs"), 6),
         ("live_anim", include_str!("live_anim.rs"), 4),
-        ("motor_freq", include_str!("motor_freq.rs"), 3),
+        ("motor_freq", include_str!("motor_freq.rs"), 1),
         ("winch_scenarios", include_str!("winch_scenarios.rs"), 2),
         ("sim_chip", include_str!("sim_chip.rs"), 2),
-        ("controller_card", include_str!("controller_card.rs"), 12),
+        ("controller_card", include_str!("controller_card.rs"), 4),
         (
             "controller_import",
             include_str!("controller_import.rs"),
@@ -328,4 +328,71 @@ fn the_strings_the_runs_really_produce_land_on_the_right_device_and_title() {
     assert_eq!(d2[1].title, "Nothing can run");
     assert_eq!(d2[2].title, "Binding problem");
     assert!(matches!(d2[2].anchors[0], Anchor::Device(_)));
+}
+
+#[test]
+fn controller_card_flags_split_between_the_card_and_the_instance_panel() {
+    use super::sim_flags::{card_draft, card_level, instance_level, signal_key};
+    let make = |d| Flag::from_draft(d);
+    let card = make(card_draft(
+        "damaged",
+        true,
+        "Stored controllers damaged",
+        vec!["x".into()],
+        None,
+    ));
+    let own = make(card_draft(
+        "check",
+        false,
+        "Controller check",
+        vec!["y".into()],
+        Some("c1"),
+    ));
+    let other = make(card_draft(
+        "check",
+        false,
+        "Controller check",
+        vec!["y".into()],
+        Some("c2"),
+    ));
+    let row = make(pin_problem_draft(
+        "c1",
+        "up",
+        &PinProblem::NoDevice("-K9".into()),
+        &device_of,
+    ));
+    assert_eq!(row.anchors[0], Anchor::Control(signal_key("c1", "up")));
+    let all = vec![card.clone(), own.clone(), other.clone(), row.clone()];
+    let on_card = card_level(&all);
+    assert_eq!(on_card.len(), 3, "the signal row keeps its own triangle");
+    assert!(!on_card.iter().any(|f| f.id == row.id));
+    let panel = instance_level(&all, "c1");
+    assert_eq!(panel.len(), 1);
+    assert_eq!(panel[0].id, own.id);
+    assert_eq!(card.severity, Severity::Red);
+    assert_eq!(own.severity, Severity::Yellow);
+}
+
+#[test]
+fn live_and_motor_frequency_flags_have_short_titles_and_the_right_colours() {
+    use super::sim_flags::{live_draft, motor_freq_draft};
+    let none = live_draft(
+        "no_supply",
+        false,
+        "No supply in the drawing",
+        vec!["a".into()],
+    );
+    let short = live_draft("short", true, "Short circuit", vec!["1 short".into()]);
+    assert_eq!(none.severity, Severity::Yellow);
+    assert_eq!(short.severity, Severity::Red);
+    for d in [&none, &short] {
+        assert!(d.title.chars().count() <= 28, "{}", d.title);
+        assert_eq!(d.anchors, vec![Anchor::Job("live".into())]);
+    }
+    let f = motor_freq_draft("-M1", Some("7".into()), "no power");
+    assert!(f.unchecked && f.severity == Severity::Yellow);
+    assert_eq!(f.anchors, vec![Anchor::Device("7".into())]);
+    assert!(f.title.chars().count() <= 28);
+    let g = motor_freq_draft("-M1", None, "no power");
+    assert_eq!(g.anchors, vec![Anchor::Job("motor_freq".into())]);
 }
