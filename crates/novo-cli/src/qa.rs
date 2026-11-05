@@ -368,17 +368,36 @@ pub(crate) const TEXT_WORDS: usize = 8;
 
 /// Explanation text on screen: labels (not buttons, fields or menus) of more
 /// than `max_words` words, from the widget tree. One finding lists them all.
+///
+/// A label that shares its line with two or more other labels is a cell of a
+/// table row (a catalog description between maker, order number and library):
+/// data, not explanation text, so it is not counted.
 pub(crate) fn text_hits(nodes: &[Value], max_words: usize) -> Vec<Hit> {
-    let mut long: Vec<(usize, String)> = Vec::new();
-    for n in nodes {
-        if !n["role"]
+    let is_label = |n: &Value| {
+        n["role"]
             .as_str()
             .is_some_and(|r| r.eq_ignore_ascii_case("label"))
-        {
+    };
+    let label_rects: Vec<[f64; 4]> = nodes
+        .iter()
+        .filter(|n| is_label(n))
+        .filter_map(rect)
+        .collect();
+    let table_cell = |r: &[f64; 4]| {
+        let mid = (r[1] + r[3]) / 2.0;
+        label_rects
+            .iter()
+            .filter(|o| o[1] <= mid && mid <= o[3] && (o[2] <= r[0] || o[0] >= r[2]))
+            .count()
+            >= 2
+    };
+    let mut long: Vec<(usize, String)> = Vec::new();
+    for n in nodes {
+        if !is_label(n) {
             continue;
         }
         let Some(r) = rect(n) else { continue };
-        if r[2] <= r[0] || r[3] <= r[1] {
+        if r[2] <= r[0] || r[3] <= r[1] || table_cell(&r) {
             continue;
         }
         let label = n["label"].as_str().unwrap_or("");
@@ -2279,6 +2298,21 @@ pub(crate) fn render_report(v: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn text_check_skips_table_cells_but_not_sentences() {
+        let long = "TeSys D contactor, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 24 V DC, 1 NO";
+        let node = |label: &str, x0: f64, x1: f64, y: f64| serde_json::json!({"role": "Label", "label": label, "rect": [x0, y, x1, y + 16.0]});
+        let row = vec![
+            node("Schneider Electric", 49.0, 200.0, 100.0),
+            node("LC1D09BD", 269.0, 400.0, 100.0),
+            node(long, 566.0, 1050.0, 100.0),
+            node("Not imported", 1360.0, 1440.0, 100.0),
+        ];
+        assert!(super::text_hits(&row, 20).is_empty());
+        let alone = vec![node(long, 566.0, 1050.0, 100.0)];
+        assert_eq!(super::text_hits(&alone, 8).len(), 1);
+    }
+
     #[test]
     fn match_paths_expands_a_star_in_any_folder_or_file_name() {
         let dir = std::env::temp_dir().join(format!("qa-match-{}", std::process::id()));

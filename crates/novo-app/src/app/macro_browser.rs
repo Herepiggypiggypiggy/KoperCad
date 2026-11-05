@@ -458,7 +458,7 @@ impl NovoApp {
                         super::macro_thumb::paint(ui, rect, thumb);
                     }
                     if let Some(view) = b.mounting() {
-                        egui::CollapsingHeader::new("Mounting view")
+                        egui::CollapsingHeader::new(super::macro_mounting::HEADER)
                             .id_salt("macro_mounting")
                             .show(ui, |ui| super::macro_mounting::show(ui, view, &[]));
                     }

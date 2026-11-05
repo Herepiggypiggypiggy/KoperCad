@@ -1,0 +1,22 @@
+@title Place macro: the (suggestion) tag of the mounting view is on screen, folded and open
+@area Parts
+@sizes 1366x768 1920x1080
+# The header of the mounting view carries the tag, so it is visible without opening it and never scrolls under the Place button.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+click_text "Crane supply with isolator and fuses" Label
+wait 10
+expect "Mounting view (suggestion)"
+shot folded
+check_text 20
+check_layout
+click_text "Mounting view (suggestion)"
+wait 10
+shot open
+expect_enabled "Place"
+check_layout

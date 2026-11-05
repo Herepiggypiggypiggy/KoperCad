@@ -12,6 +12,10 @@ use novo_parts::{MountItem, MountingView};
 const SIZES_NOTE: &str =
     "Typical sizes of generic devices; the real size comes from the part you assign.";
 
+/// The header of the collapsible mounting view: the tag stays visible when it
+/// is folded.
+pub(super) const HEADER: &str = "Mounting view (suggestion)";
+
 /// Paints `view` at most `max_width` wide, with its lists below.
 pub(super) fn show(ui: &mut egui::Ui, view: &MountingView, values: &[(String, String)]) {
     let pal = crate::theme::ui_palette();
@@ -19,7 +23,7 @@ pub(super) fn show(ui: &mut egui::Ui, view: &MountingView, values: &[(String, St
     let width = ui.available_width().min(380.0);
     let height = (width as f64 * ph / pw.max(1.0)).clamp(90.0, 240.0) as f32;
     ui.weak(format!(
-        "Plate {pw:.0} x {ph:.0} mm, rails {} (suggestion)",
+        "Plate {pw:.0} x {ph:.0} mm, rails {}",
         view.rails.len()
     ));
     super::window_help::add(ui.ctx(), "Layout suggestion, not a measured cabinet.");
@@ -74,10 +78,6 @@ pub(super) fn show(ui: &mut egui::Ui, view: &MountingView, values: &[(String, St
             }
         }
     }
-    ui.weak(format!(
-        "Plate {pw:.0} x {ph:.0} mm, rails {}",
-        view.rails.len()
-    ));
     let list = |ui: &mut egui::Ui, title: &str, items: Vec<&MountItem>, place: bool| {
         if items.is_empty() {
             return;
