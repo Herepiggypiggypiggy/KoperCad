@@ -215,6 +215,7 @@ const KNOWN_VERBS: &[&str] = &[
     "fresh",
     "library",
     "user_catalog",
+    "supplier_list",
     "shot",
     "wait",
     "wait_s",
@@ -990,6 +991,18 @@ impl Ctx<'_> {
                 self.srv.stop();
                 self.srv.keep_profile(false);
                 self.srv.set_catalog_seed(Some(file));
+                self.srv.ensure()
+            }
+            "supplier_list" => {
+                let file = self.resolve(need(1, "a suppliers.json file")?)?;
+                if !file.exists() {
+                    return Err(format!("supplier list {} not found", file.display()));
+                }
+                // Restart with the list in the profile; every later launch of
+                // the scenario has it too.
+                self.srv.stop();
+                self.srv.keep_profile(false);
+                self.srv.set_supplier_seed(Some(file));
                 self.srv.ensure()
             }
             "fresh" => {
