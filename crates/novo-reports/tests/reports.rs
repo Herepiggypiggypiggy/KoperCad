@@ -1109,11 +1109,33 @@ fn write_door_wire_spec_fixtures() {
             Some((500.0, Some(20.0), Source::Step)),
         ),
         ("door-wire-spec-gap", Some((500.0, None, Source::Catalogue))),
+        (
+            "door-wire-long-names",
+            Some((300.0, Some(20.0), Source::Catalogue)),
+        ),
     ];
     for (name, spec) in cases {
         let mut doc = door_doc();
         if let Some((depth, setback, source)) = spec {
             set_spec(&mut doc, depth, setback, source);
+        }
+        if name.ends_with("long-names") {
+            // Long tags and potential names: the wire list must keep Length basis on screen.
+            doc.transact("Long names", |tx| {
+                let devices: Vec<_> = tx.project().devices().map(|d| d.id).collect();
+                for (i, id) in devices.into_iter().enumerate() {
+                    let tag = DeviceTag::parse(&format!("=A1+CAB-KLONGCONTACTOR{i}"))?;
+                    tx.update::<novo_core::Device>(id, |d| d.tag = tag)?;
+                }
+                let potentials: Vec<_> = tx.project().potentials().map(|p| p.id).collect();
+                for id in potentials {
+                    tx.update::<novo_core::Potential>(id, |p| {
+                        p.name = format!("{}-CONTROL-SUPPLY-LONG-NAME", p.name);
+                    })?;
+                }
+                Ok(())
+            })
+            .expect("names");
         }
         let path = dir.join(format!("{name}.novo"));
         let _ = std::fs::remove_file(&path);
@@ -1483,6 +1505,30 @@ fn a_column_wider_than_its_share_borrows_from_columns_that_do_not_need_theirs() 
             need(text)
         );
     }
+}
+
+/// The wire list's screen split is separate from its print split: pages and
+/// exports keep the wide From/To columns for long tags, the screen narrows
+/// them so Length basis is in view at 1366 px.
+#[test]
+fn wire_list_print_widths_are_not_the_screen_widths() {
+    let (doc, _) = starter();
+    let wires = report(&doc, "wires");
+    let cols = &wires.sections[0].columns;
+    let col = |key: &str| cols.iter().find(|c| c.key == key).unwrap();
+    for key in ["from", "to"] {
+        assert!(
+            col(key).width >= 28.0,
+            "{key} keeps room to print =A1+CAB-KM1:A1"
+        );
+        assert!(col(key).screen_width.unwrap() < col(key).width);
+        // About 110 px at 5.5 px per unit: the whole `=A1+CAB-F1:2` shows at 1366.
+        assert!(
+            col(key).screen_width.unwrap() >= 20.0,
+            "{key} readable on screen"
+        );
+    }
+    assert!(col("length_basis").width >= 22.0, "basis prints whole");
 }
 
 /// Writes the QA fixtures for scenario 2451 (wires through the factory duct
