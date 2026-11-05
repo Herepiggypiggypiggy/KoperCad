@@ -10,6 +10,6 @@ key enter
 wait 10
 expect "too deep"
 expect "enclosure data: default"
-expect "Estimate from catalogue data"
+expect "Estimate from program defaults"
 shot too-deep-warning-default-numbers
 check_layout

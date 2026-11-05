@@ -10,6 +10,9 @@ use novo_layout::swing::Obstacle;
 
 use crate::{Context, Problem, ProblemKind, Severity};
 
+/// Ends a door or depth message whose weakest number is a program default.
+const DEFAULTS_NOTICE: &str = "Estimate from program defaults, not a measurement of your cabinet.";
+
 pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
     let tag = |id: u64| {
@@ -35,8 +38,13 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
             let at = vec![AnyId::Structure(structure.id)];
             match spec_fit::fit(&spec, layout.enclosure.as_ref()) {
                 Ok(fit) => {
-                    origin = format!(" (enclosure data: {}){notice}", fit.weakest.words());
                     guessed = fit.weakest == Source::Default;
+                    // The shared notice names the catalogue; a guessed number is a program default.
+                    let notice = match (guessed, notice.is_empty()) {
+                        (true, false) => format!(" {DEFAULTS_NOTICE}"),
+                        _ => notice,
+                    };
+                    origin = format!(" (enclosure data: {}){notice}", fit.weakest.words());
                     layout.enclosure = Some(fit.enclosure);
                 }
                 Err(missing) => out.push(Problem::new(
