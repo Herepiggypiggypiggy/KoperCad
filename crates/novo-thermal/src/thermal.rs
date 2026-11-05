@@ -115,21 +115,18 @@ pub fn update_device_h(s: &Setup, st: &mut State) {
         } else {
             0.0
         };
-        let mut h = device_h_turbulent(
-            d.length_m,
-            st.t_dev[k],
-            t_air,
-            speed,
-            tu,
-            s.params.emissivity,
-            s.params.radiation_view_factor,
-        );
+        // Emissivity x view: computed per device when available (the bands
+        // then scale it), else the plain parameters.
+        let (rad_e, rad_view) = match d.rad_exchange {
+            Some(x) => (x, s.params.radiation_view_factor / 0.5),
+            None => (s.params.emissivity, s.params.radiation_view_factor),
+        };
+        let mut h = device_h_turbulent(d.length_m, st.t_dev[k], t_air, speed, tu, rad_e, rad_view);
         if let Some(hj) = jet_h {
             // A jet straight at the device: its stagnation film replaces the
             // plate forced part where it is higher.
             let tf = 0.5 * (st.t_dev[k] + t_air) + 273.15;
-            let h_r =
-                4.0 * s.params.emissivity * SIGMA * tf.powi(3) * s.params.radiation_view_factor;
+            let h_r = 4.0 * rad_e * SIGMA * tf.powi(3) * rad_view;
             h = h.max(forced::Mixed::default().combine(h - h_r, hj) + h_r);
         }
         if let Some(sink) = &s.sinks[k] {

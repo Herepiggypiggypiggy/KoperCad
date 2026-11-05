@@ -238,8 +238,9 @@ fn body(
             |_| {},
         );
     } else {
+        ui.horizontal_wrapped(|ui| {
         ui.label(format!(
-            "{} sizes, {} colours, {} wire numbers, {} cables and {} can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
+            "{} sizes, {} colours, {} wire numbers, {} cables and {} can be filled in",
             state.plan.count("Size"),
             state.plan.count("Colour"),
             state.plan.count("Number"),
@@ -249,33 +250,40 @@ fn body(
                 n => format!("{n} cabinet entry points"),
             },
         ));
-    }
-    if state.plan.planning_values && state.plan.count("Size") > 0 {
-        ui.add_space(4.0);
-        novo_theme::widgets::banner(
+        super::window_help::mark(
             ui,
-            novo_theme::widgets::Level::Warning,
-            "Sizes use planning values: the built-in ampacity tables are not checked against the standard. Read the clauses in your licensed copy before relying on a number.",
-            |_| {},
+            "Filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
         );
+        });
     }
-    if state
-        .plan
-        .proposals
-        .iter()
-        .any(|p| p.reason.contains("IEC "))
     {
+        let mut caveats = Vec::new();
+        if state.plan.planning_values && state.plan.count("Size") > 0 {
+            caveats.push("Sizes use planning values: the built-in ampacity tables are not checked against the standard. Read the clauses in your licensed copy before relying on a number.");
+        }
+        if state
+            .plan
+            .proposals
+            .iter()
+            .any(|p| p.reason.contains("IEC "))
+        {
+            caveats.push("Unverified: the IEC clause numbers in the reasons are not checked against a licensed copy. Check them in your copy of the standard.");
+        }
+        if !caveats.is_empty() {
+            ui.horizontal(|ui| {
+                ui.weak("Planning values, not verified");
+                super::window_help::mark(ui, &caveats.join("\n\n"));
+            });
+        }
+    }
+    if !state.plan.left_to_you.is_empty() {
         ui.add_space(4.0);
         novo_theme::widgets::banner(
             ui,
             novo_theme::widgets::Level::Info,
-            "Unverified: the IEC clause numbers in the reasons are not checked against a licensed copy. Check them in your copy of the standard.",
-            |_| {},
+            &format!("{} left to you", state.plan.left_to_you.len()),
+            |ui| super::window_help::mark(ui, &state.plan.left_to_you.join("\n\n")),
         );
-    }
-    for line in &state.plan.left_to_you {
-        ui.add_space(4.0);
-        novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, line, |_| {});
     }
     if !state.plan.unresolved.is_empty() {
         ui.add_space(4.0);

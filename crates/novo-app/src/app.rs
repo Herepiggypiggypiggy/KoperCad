@@ -93,6 +93,9 @@ mod controller_pad;
 mod controller_pad_tests;
 mod controller_widgets;
 mod count_words;
+mod crane_model_load;
+mod crane_model_state;
+mod crane_model_ui;
 mod crane_setup;
 mod defects_card;
 #[cfg(test)]
@@ -266,6 +269,9 @@ mod parts;
 mod parts_bulk;
 mod parts_bundle;
 mod parts_cad;
+mod parts_flags;
+#[cfg(test)]
+mod parts_flags_tests;
 mod parts_health;
 mod parts_identity;
 mod parts_import;
@@ -2276,6 +2282,7 @@ impl NovoApp {
         self.faults_window(&ctx);
         self.hoist_window(&ctx);
         self.hoist_3d_window(&ctx);
+        self.crane_model_parts_window(&ctx);
         self.drive_run_window(&ctx);
         self.winch_scenarios_window(&ctx);
         self.motor_freq_window(&ctx);

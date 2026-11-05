@@ -1,0 +1,25 @@
+@title Problem triangles T9: a table that cannot be read leaves a triangle in the Parts window, Dismiss clears it
+@sizes 1366x768 1920x1080
+@area Parts
+# Used to be a red toast that vanished; now the failure stays as a triangle beside More until it is dismissed or the import works.
+open_starter_example
+wait 20
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+answer_dialog qa/fixtures/parts/not-text.csv
+click_text "Import table…"
+wait 20
+shot triangle-in-window
+check_layout
+expect "Error: Parts table not read"
+click_text "Error: Parts table not read" Button #1
+wait 6
+shot popover
+expect "does not look like a text file"
+click_text Dismiss
+wait 6
+expect_not "Error: Parts table not read"
+shot dismissed

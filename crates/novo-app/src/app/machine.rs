@@ -354,7 +354,7 @@ impl NovoApp {
         let before = options::current(project);
         let Some((def, rest)) = find_option(&defs, argument) else {
             let names: Vec<_> = defs.iter().map(|d| d.id.as_str()).collect();
-            self.message(
+            self.refuse_tool(
                 Level::Warning,
                 format!(
                     "No option '{argument}'. This project has: {}",
@@ -365,7 +365,7 @@ impl NovoApp {
         };
         let current = before.get(&def.id).cloned().unwrap_or(def.default.clone());
         let Some(value) = parse_value(def, rest, &current) else {
-            self.message(
+            self.refuse_tool(
                 Level::Warning,
                 format!("{}: {}", def.label(), value_help(def)),
             );
@@ -435,7 +435,7 @@ impl NovoApp {
         let defs = options::options(project);
         let Some((def, rest)) = find_option(&defs, argument) else {
             let names: Vec<_> = defs.iter().map(|d| d.id.as_str()).collect();
-            self.message(
+            self.refuse_tool(
                 Level::Warning,
                 format!(
                     "No option '{argument}'. Add it in Project options first. This project has: {}",
@@ -454,7 +454,7 @@ impl NovoApp {
             parse_value(def, rest, &Value::Bool(true))
         };
         let Some(wanted) = wanted else {
-            self.message(
+            self.refuse_tool(
                 Level::Warning,
                 format!("{}: {}", def.label(), value_help(def)),
             );

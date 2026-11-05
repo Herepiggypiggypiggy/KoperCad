@@ -370,10 +370,10 @@ impl NovoApp {
             });
         match spawned {
             Ok(_) => self.wb.eplan_parts_job = Some(EplanPartsJob { rx, file }),
-            Err(e) => self.job_fail(
-                "import.eplan_parts",
-                "Parts import failed",
-                Level::Error,
+            Err(e) => self.parts_job_failed(
+                "eplan",
+                novo_flags::Severity::Red,
+                "EPLAN parts not read",
                 format!("Could not start reading {file}: {e}. Close other programs and try again."),
             ),
         }
@@ -391,8 +391,16 @@ impl NovoApp {
         };
         self.wb.eplan_parts_job = None;
         match answer {
-            Ok(import) => self.wb.eplan_parts = Some(import),
-            Err(e) => self.job_fail("import.eplan_parts", "Parts import failed", Level::Error, e),
+            Ok(import) => {
+                self.parts_job_ok("eplan");
+                self.wb.eplan_parts = Some(import);
+            }
+            Err(e) => self.parts_job_failed(
+                "eplan",
+                novo_flags::Severity::Red,
+                "EPLAN parts not read",
+                e,
+            ),
         }
     }
 
@@ -417,11 +425,17 @@ impl NovoApp {
     ) -> bool {
         match read_job(paths, catalog_path) {
             Ok(import) => {
+                self.parts_job_ok("eplan");
                 self.wb.eplan_parts = Some(import);
                 true
             }
             Err(e) => {
-                self.job_fail("import.eplan_parts", "Parts import failed", Level::Error, e);
+                self.parts_job_failed(
+                    "eplan",
+                    novo_flags::Severity::Red,
+                    "EPLAN parts not read",
+                    e,
+                );
                 false
             }
         }
@@ -433,10 +447,10 @@ impl NovoApp {
             return false;
         };
         let Some(path) = import.catalog_path.clone().or_else(user_catalog_path) else {
-            self.job_fail(
-                "import.eplan_parts",
-                "Parts import failed",
-                Level::Error,
+            self.parts_job_failed(
+                "eplan",
+                novo_flags::Severity::Red,
+                "Catalog not saved",
                 "No profile folder to save the catalog in",
             );
             return false;
@@ -453,24 +467,27 @@ impl NovoApp {
             catalog.upsert(merged.unwrap_or_else(|| part.clone()));
         }
         if let Err(e) = catalog.save(&path) {
-            self.job_fail(
-                "import.eplan_parts",
-                "Parts import failed",
-                Level::Error,
+            self.parts_job_failed(
+                "eplan",
+                novo_flags::Severity::Red,
+                "Catalog not saved",
                 format!("Could not save the catalog: {e}"),
             );
             return false;
         }
+        self.parts_job_ok("eplan");
         if import.aliases != MakerAliases::default()
             && let Some(p) = &import.alias_path
-            && let Err(e) = import.aliases.save(p)
         {
-            self.job_fail(
-                "import.eplan_parts",
-                "Parts import failed",
-                Level::Warning,
-                format!("Could not save the maker names: {e}"),
-            );
+            match import.aliases.save(p) {
+                Ok(_) => self.parts_job_ok("eplan.makers"),
+                Err(e) => self.parts_job_failed(
+                    "eplan.makers",
+                    novo_flags::Severity::Yellow,
+                    "Maker names not saved",
+                    format!("Could not save the maker names: {e}"),
+                ),
+            }
         }
         let (added, changed, _) = import.counts();
         self.message(
@@ -570,9 +587,11 @@ impl NovoApp {
                         });
                     if !report.skipped.is_empty() {
                         ui.add_space(6.0);
-                        ui.colored_label(
-                            crate::theme::ui_palette().warning,
-                            format!("{} row(s) left out or not joined", report.skipped.len()),
+                        super::parts_flags::labelled(
+                            ui,
+                            novo_flags::Severity::Yellow,
+                            &format!("{} row(s) left out or not joined", report.skipped.len()),
+                            ["Each row and the reason is in the list below.".to_owned()],
                         );
                         egui::ScrollArea::vertical()
                             .id_salt("eplan_parts_rejects")
@@ -628,13 +647,17 @@ fn portal_summary(ui: &mut egui::Ui, portal: &PortalRead) {
         c.accessories,
         c.parts_with_accessories,
     ));
-    let palette = crate::theme::ui_palette();
     egui::CollapsingHeader::new("What was assumed, and what was not understood")
         .id_salt("portal_assumed")
         .default_open(true)
         .show(ui, |ui| {
             for a in &portal.assumed {
-                ui.colored_label(palette.warning, format!("Assumed: {a}"));
+                super::parts_flags::labelled(
+                    ui,
+                    novo_flags::Severity::Yellow,
+                    "Assumed",
+                    [a.to_string()],
+                );
             }
             if portal.unrecognised.is_empty() {
                 ui.weak("Every attribute was placed.");
@@ -660,7 +683,6 @@ fn portal_summary(ui: &mut egui::Ui, portal: &PortalRead) {
 /// The maker codes of a database file and the name each one gets. A name
 /// can be typed over; it is kept for the next import.
 fn makers_ui(ui: &mut egui::Ui, import: &mut EplanPartsImport, changed: &mut bool) {
-    let palette = crate::theme::ui_palette();
     let unknown = import.makers.iter().filter(|m| !m.known).count();
     ui.add_space(4.0);
     ui.strong("Makers in this file");
@@ -688,7 +710,17 @@ fn makers_ui(ui: &mut egui::Ui, import: &mut EplanPartsImport, changed: &mut boo
                         if m.known {
                             ui.weak("known");
                         } else {
-                            ui.colored_label(palette.warning, "not known");
+                            let flag = super::parts_flags::RowFlag::new(
+                                novo_flags::Severity::Yellow,
+                                "Code not known",
+                                [
+                                    "The program does not know this code; it is kept as written."
+                                        .to_owned(),
+                                ],
+                            )
+                            .unchecked();
+                            super::parts_flags::inline(ui, &flag);
+                            ui.weak("not known");
                         }
                         ui.end_row();
                     }

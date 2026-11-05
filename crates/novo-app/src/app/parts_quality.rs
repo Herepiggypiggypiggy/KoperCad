@@ -282,10 +282,17 @@ fn review_ui(
         });
     });
     if let Some(e) = &blocked {
-        ui.colored_label(
-            crate::theme::ui_palette().error,
-            format!("{e}. Decisions are switched off so the file is not overwritten."),
+        let flag = super::parts_flags::RowFlag::new(
+            novo_flags::Severity::Red,
+            "Decisions switched off",
+            [format!(
+                "{e}. Decisions are switched off so the file is not overwritten."
+            )],
         );
+        ui.horizontal(|ui| {
+            super::parts_flags::inline(ui, &flag);
+            ui.label("Decisions switched off");
+        });
     }
     // One button per source file, for approving a whole import after a spot check.
     let mut files: Vec<(String, Vec<PartKey>)> = Vec::new();
@@ -342,7 +349,15 @@ fn review_ui(
                 ui.weak(&item.description);
             }
             ui.add_space(4.0);
-            ui.colored_label(crate::theme::ui_palette().warning, item.trust.label());
+            let flag = super::parts_flags::RowFlag::new(
+                novo_flags::Severity::Yellow,
+                item.trust.label(),
+                [trust_tooltip(&item.trust)],
+            );
+            ui.horizontal(|ui| {
+                super::parts_flags::inline(ui, &flag);
+                ui.label(item.trust.label());
+            });
             if let Some(part) = catalog.get(&item.key) {
                 if let Some(p) = &part.provenance {
                     ui.weak(format!("From {} {}", p.source, p.file));
@@ -552,12 +567,13 @@ pub(crate) fn trust_badge(ui: &mut egui::Ui, trust: &Trust) {
     let Some(tag) = trust_tag(trust) else {
         return;
     };
-    let color = match trust {
-        Trust::Rejected { .. } => crate::theme::ui_palette().error,
-        _ => crate::theme::ui_palette().warning,
+    let severity = match trust {
+        Trust::Rejected { .. } => novo_flags::Severity::Red,
+        _ => novo_flags::Severity::Yellow,
     };
-    ui.small(egui::RichText::new(tag).color(color))
-        .on_hover_text(trust_tooltip(trust));
+    let flag = super::parts_flags::RowFlag::new(severity, tag, [trust_tooltip(trust)]);
+    super::parts_flags::inline(ui, &flag);
+    ui.small(tag);
 }
 
 fn grade_color(grade: Grade) -> egui::Color32 {

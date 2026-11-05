@@ -7,7 +7,13 @@ click_text Commissioning
 wait 20
 click_text Test
 wait 10
+click_text Help #2
+wait 8
 expect "not a compliance test record"
+shot help-open
+check_layout
+click 700 690
+wait 6
 expect "not tested yet"
 shot wire-test-start
 check_layout

@@ -10,6 +10,8 @@ text "motor starter dol"
 wait 5
 key Enter
 wait 10
+click_text Options
+wait 10
 click_text "Motor starter DOL" Label
 wait 10
 click_text Place Button

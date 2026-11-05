@@ -146,6 +146,9 @@ pub struct PasteTool {
     pub paths: Vec<Vec<Point>>,
     /// The source point the pointer holds (the top-left corner).
     pub origin: Point,
+    /// Where to draw the paste instead of at the pointer (the app keeps a
+    /// circuit on the sheet); a click is still reported at the pointer.
+    pub hold: Option<Point>,
 }
 
 /// Drawing a cable: a line over wires (DESIGN.md, C in the keys table and
@@ -849,7 +852,16 @@ impl Editor {
             symbols,
             paths,
             origin,
+            hold: None,
         }));
+    }
+
+    /// Draws the paste in hand at `at` instead of at the pointer (`None`:
+    /// at the pointer). Nothing happens when no paste is in hand.
+    pub fn hold_paste_at(&mut self, at: Option<Point>) {
+        if let Tool::Paste(p) = &mut self.tool {
+            p.hold = at;
+        }
     }
 
     /// Arms the text tool (`draw.text`): the next click on the page says
@@ -2938,12 +2950,12 @@ impl Editor {
                 if blocked {
                     "Overlaps another wire · Backspace takes back the last line".into()
                 } else {
-                    "Lines: click a pin to finish, empty space to draw a line · Backspace undo · Esc or right-click cancels · Shift+W corners"
+                    "Lines: click a pin to finish, empty space for a line · Backspace undo · Esc or right-click cancels"
                         .into()
                 }
             }
             Tool::Wire(_) => {
-                "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc or right-click cancels · Shift+W lines"
+                "Corners: click a pin to finish, empty space to bend · R flips · Backspace undo · Esc or right-click cancels"
                     .into()
             }
             Tool::Cable(c) if c.points.is_empty() => {
@@ -2955,7 +2967,7 @@ impl Editor {
             }
             Tool::Text => "Text: click where it goes, then type · Esc cancels".into(),
             Tool::Paste(_) => {
-                "Paste: click to drop it · Esc cancels · Ctrl+Shift+I pastes in place".into()
+                "Click to drop it · Esc cancels".into()
             }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
                 let wires = if m.carry {
@@ -3143,7 +3155,7 @@ impl Editor {
                 }
             }
             Tool::Paste(p) => {
-                let by = cursor - p.origin;
+                let by = p.hold.unwrap_or(cursor) - p.origin;
                 preview.symbols = p
                     .symbols
                     .iter()

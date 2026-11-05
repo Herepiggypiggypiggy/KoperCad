@@ -162,7 +162,7 @@ fn a_device_part_is_saved_with_the_macro_and_assigned_on_placement() {
 }
 
 #[test]
-fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() {
+fn the_command_field_finds_a_starter_circuit_and_puts_it_on_the_pointer() {
     use novo_workflow::palette::{Mode, Target};
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -184,9 +184,107 @@ fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() 
             .collect::<Vec<_>>()
     );
     d.app.run_target(&ctx, rows[0].target.clone());
+    // The circuit follows the pointer; the form is not in the way.
+    assert!(!d.app.wb.macro_place.open);
+    assert!(d.app.wb.macro_place.ghost.is_some());
+    assert!(d.app.canvas.schematic_ref().unwrap().editor.pasting());
+}
+
+#[test]
+fn a_circuit_ghost_is_placed_by_a_click_and_cancelled_by_escape() {
+    use novo_workflow::palette::Target;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let target = Target::Macro("Motor starter DOL".into());
+    // Esc leaves nothing behind.
+    d.app.run_target(&ctx, target.clone());
+    d.frame();
+    d.editor_leave();
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    assert_eq!(d.doc().project().symbols().count(), 0);
+    // A click places it at the click, as one undo step, and the ghost sits
+    // under the pointer: what it showed is where the circuit lands.
+    d.app.run_target(&ctx, target.clone());
+    d.frame();
+    let page = d.app.current_page.unwrap();
+    let ghost_left = {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().unwrap();
+        let doc = app.backend.document_mut().unwrap();
+        view.editor
+            .hover(doc, page, novo_core::Point::new(200.0, 60.0), 2.0);
+        let preview = view.editor.preview(doc, page);
+        preview
+            .symbols
+            .iter()
+            .map(|s| s.placement.origin.x)
+            .fold(f64::INFINITY, f64::min)
+    };
+    assert!(
+        (200.0..=225.0).contains(&ghost_left),
+        "the ghost starts at the pointer, not at the circuit's own origin: {ghost_left}"
+    );
+    d.click(novo_core::Point::new(200.0, 60.0));
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    let left = d
+        .doc()
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin.x)
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        d.doc().project().symbols().count() > 1 && (left - ghost_left).abs() < 0.01,
+        "the circuit lands where the ghost was: {left} against {ghost_left}"
+    );
+    d.app.undo_redo(false);
+    d.frame();
+    assert_eq!(d.doc().project().symbols().count(), 0, "one undo step");
+    // A click outside the sheet changes nothing and drops the ghost.
+    d.app.run_target(&ctx, target.clone());
+    d.frame();
+    d.click(novo_core::Point::new(-500.0, -500.0));
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    assert_eq!(d.doc().project().symbols().count(), 0, "nothing placed");
+    // Options hands the circuit to the form.
+    d.app.run_target(&ctx, target);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_some());
+    assert_eq!(
+        d.app.macro_ghost_name().map(|(n, _)| n),
+        Some("Motor starter DOL")
+    );
+    assert!(
+        d.app
+            .mode_chips()
+            .iter()
+            .any(|c| c.label.contains("Options") && c.command == "macro.place"),
+        "the status bar chip offers the form"
+    );
+    // The keyboard reaches the form too: O.
+    d.key(eframe::egui::Key::O, eframe::egui::Modifiers::NONE);
+    assert!(d.app.wb.macro_place.ghost.is_none(), "O opens the form");
     assert!(d.app.wb.macro_place.open);
-    // Picked by its whole name, so the window already has it chosen.
+    d.app.wb.macro_place.open = false;
+    d.app.run_target(
+        &ctx,
+        novo_workflow::palette::Target::Macro("Motor starter DOL".into()),
+    );
+    d.frame();
+    d.app.run_command(&ctx, "macro.place", None);
+    d.frame();
+    assert!(d.app.wb.macro_place.ghost.is_none());
+    assert!(d.app.wb.macro_place.open, "the form opens on the circuit");
     assert!(d.app.wb.macro_place.selected.is_some());
+    assert!(!d.app.canvas.schematic_ref().unwrap().editor.pasting());
 }
 
 /// Audit C-59: the PLC input card macro only draws symbols, so placing it says
@@ -311,5 +409,116 @@ fn a_circuit_lands_where_the_pointer_last_was_and_says_what_is_left_to_connect()
         said,
         "{:?}",
         d.app.messages.iter().map(|m| &m.text).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_pointer_beside_the_sheet_still_puts_the_circuit_on_the_sheet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let breaker = d.place("mcb3", 20.0, 20.0);
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .select_ids(&[AnyId::Symbol(breaker)]);
+    d.app.run_command(&ctx, "macro.save", Some("Breaker"));
+    let draft = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(draft);
+    let page = d.app.current_page.unwrap();
+    let (w, h) = d.doc().project().page(page).unwrap().format.size_mm();
+    for spot in [(-300.0, -300.0), (w + 300.0, h + 300.0), (-300.0, 100.0)] {
+        d.app.wb.last_pointer = Some((page, novo_core::Point::new(spot.0, spot.1)));
+        let before: Vec<_> = d.doc().project().symbols().map(|s| s.id).collect();
+        d.app.run_command(&ctx, "macro.place", Some("Breaker"));
+        d.app.wb.macro_place.select("Breaker.kcmacro");
+        d.frame();
+        d.app.place_picked_macro();
+        let placed: Vec<_> = d
+            .doc()
+            .project()
+            .symbols()
+            .filter(|s| !before.contains(&s.id))
+            .map(|s| s.placement.origin)
+            .collect();
+        assert!(!placed.is_empty(), "placed from {spot:?}");
+        assert!(
+            placed
+                .iter()
+                .all(|p| (0.0..=w).contains(&p.x) && (0.0..=h).contains(&p.y)),
+            "on the sheet for a pointer at {spot:?}: {placed:?}"
+        );
+    }
+}
+
+#[test]
+fn a_circuit_ghost_near_the_sheet_edge_is_drawn_where_it_will_land() {
+    use novo_workflow::palette::Target;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    d.app
+        .run_target(&ctx, Target::Macro("Motor starter DOL".into()));
+    d.frame();
+    let page = d.app.current_page.unwrap();
+    let (w, h) = d.doc().project().page(page).unwrap().format.size_mm();
+    // The pointer low and to the right: over the title block.
+    let at = novo_core::Point::new(w - 30.0, h - 20.0);
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().unwrap();
+        let doc = app.backend.document_mut().unwrap();
+        view.editor.hover(doc, page, at, 2.0);
+    }
+    // The frame loop does this each frame; a frame with no real pointer
+    // would clear the pointer, so call it directly.
+    d.app.keep_macro_ghost_on_sheet();
+    let ghost: Vec<novo_core::Point> = {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().unwrap();
+        let doc = app.backend.document_mut().unwrap();
+        view.editor
+            .preview(doc, page)
+            .symbols
+            .iter()
+            .map(|s| s.placement.origin)
+            .collect()
+    };
+    assert!(!ghost.is_empty());
+    assert!(
+        ghost
+            .iter()
+            .all(|p| p.x > 0.0 && p.x < w - 10.0 && p.y > 0.0 && p.y < h - 10.0),
+        "the ghost stays on the sheet: {ghost:?}"
+    );
+    assert!(
+        d.app.macro_ghost_name().is_some_and(|(_, moved)| moved),
+        "the chip says it was moved"
+    );
+    let ghost_left = ghost.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let ghost_top = ghost.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    d.click(at);
+    d.frame();
+    let placed: Vec<novo_core::Point> = d
+        .doc()
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin)
+        .collect();
+    let left = placed.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let top = placed.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    assert!(
+        (left - ghost_left).abs() < 0.01 && (top - ghost_top).abs() < 0.01,
+        "it lands where the ghost was drawn: ({left}, {top}) against ({ghost_left}, {ghost_top})"
     );
 }
