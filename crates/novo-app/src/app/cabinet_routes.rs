@@ -106,14 +106,14 @@ impl Overlay {
     /// One line for the header strip: routed wires, those no duct path
     /// reaches, the fullest duct.
     /// Everything the Routes panel explains, for its "?": what the card
-    /// is, the wire rules and the entry, then each note on the plan.
+    /// is, the wire rules and the entry. The problems on the plan are the
+    /// chips below it.
     pub(super) fn help_text(&self) -> String {
-        let mut parts = vec![
-            "Routes: every wire with both ends on this plate, through the ducts. Lengths are measured along the ducts, loops included.".to_owned(),
-            "Wire rules are kept in the project. They set cut lengths, the wire list and the wire cut file.".to_owned(),
-            "Entry point: where wires from outside come in (origin top left). Wires to the outside are routed to it.".to_owned(),
+        let parts = [
+            "Routes: every wire with both ends on this plate, through the ducts. Lengths are measured along the ducts, loops included.",
+            "Wire rules are kept in the project. They set cut lengths, the wire list and the wire cut file.",
+            "Entry point: where wires from outside come in (origin top left). Wires to the outside are routed to it.",
         ];
-        parts.extend(self.notes.iter().map(|n| format!("\u{26a0} {n}")));
         parts.join("\n\n")
     }
 
@@ -576,12 +576,6 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                 ui.strong("Routes");
                 if !help.is_empty() {
                     super::window_help::mark(ui, &help);
-                }
-                if !overlay.notes.is_empty() {
-                    ui.colored_label(
-                        crate::theme::ui_palette().warning,
-                        format!("\u{26a0} {}", overlay.notes.len()),
-                    );
                 }
             });
             if let Some(a) = rules_section(ui, &overlay.rules) {
