@@ -137,6 +137,7 @@ mod example_pump;
 mod faults;
 mod flags;
 mod flags_edit;
+mod flags_inline;
 mod flags_jobs;
 mod flags_shell;
 mod handover;
@@ -283,6 +284,8 @@ mod potentials;
 mod preferences;
 mod print_preview;
 mod probe;
+#[cfg(test)]
+mod problem_census_terminals;
 mod project_rules;
 mod project_settings;
 mod protection;
