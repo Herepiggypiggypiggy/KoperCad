@@ -154,6 +154,33 @@ fn the_plate_draws_its_triangles_and_locate_selects_the_device() {
     let _ = (cab, egui::Pos2::ZERO);
 }
 
+#[test]
+fn a_rule_flag_is_in_the_top_bar_count_and_the_issues_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _) = overlapping(&mut d);
+    synced(&mut d);
+    let before = d.app.counted_summary();
+    let flag = cabinet_flags::draft(
+        cab,
+        "place.test".to_owned(),
+        vec![novo_flags::Anchor::Device(a.to_string())],
+        "Place rule broken",
+        "Too close to the duct.".to_owned(),
+    );
+    d.app
+        .wb
+        .flags
+        .store
+        .replace_source(&novo_flags::Source::Layout, vec![flag]);
+    // Same revision and rules: the sync must keep what the store holds.
+    d.app.sync_flags();
+    assert_eq!(d.app.layout_counts(), (0, 1));
+    let after = d.app.counted_summary();
+    assert_eq!(after.warnings, before.warnings + 1, "{before:?} {after:?}");
+    assert_eq!(after.errors, before.errors);
+}
+
 /// The census of the Cabinet area (design section 12): lines that still say a
 /// problem in a toast, banner or coloured sentence. The ceiling in
 /// `census/cabinet.ceiling` only goes down; each lane lowers its own file.
