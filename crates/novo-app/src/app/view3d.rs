@@ -2376,7 +2376,7 @@ fn heat_controls(
             ui.label(
                 egui::RichText::new(super::heat::ESTIMATE_TAG)
                     .small()
-                    .color(crate::theme::ui_palette().warning),
+                    .color(crate::theme::ui_palette().info),
             );
         }
         let mut extra = vec![heat_numbers::NUMBERS_HELP];
