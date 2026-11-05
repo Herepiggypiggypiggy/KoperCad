@@ -64,6 +64,7 @@ struct ModelFrame {
     highlight: Option<usize>,
     state: CraneState,
     load: Option<[f32; 3]>,
+    layout: CraneLayout,
     scene: Arc<Scene>,
     library: Arc<MeshLibrary>,
 }
@@ -99,6 +100,11 @@ impl Default for Hoist3d {
 fn new_swing() -> Swing {
     Swing::new(4.0, DEFAULT_DAMPING_RATIO).expect("the default swing numbers are valid")
 }
+
+/// What the picture says about a model that holds only a hoist unit.
+const HOIST_UNIT_LEAVES_OUT: &[&str] = &[
+    "Your model has no rails or girders, so its hook and hoist solids stand in the generic crane: the runway, bridge, trolley and rope around them are not yours, and the drum does not turn",
+];
 
 /// What one frame of travel did to the picture: the positions of the bridge and the trolley and
 /// the hook's lean, in the order (x, z).
@@ -186,8 +192,8 @@ impl Hoist3d {
     /// shown, else the runway and the span of the generic crane.
     fn travel_ends(&self) -> (f32, f32) {
         match self.model.motion() {
-            Some(m) => (m.rig.extent_m[0], m.rig.extent_m[1]),
-            None => (self.layout.runway_m, self.layout.span_m),
+            Some(m) if m.unit.is_none() => (m.rig.extent_m[0], m.rig.extent_m[1]),
+            _ => (self.layout.runway_m, self.layout.span_m),
         }
     }
 
@@ -215,6 +221,7 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
         };
     };
     CraneState {
+        user: None,
         bridge_m,
         trolley_m,
         hook_m: m.height_m() as f32,
@@ -264,6 +271,7 @@ pub(super) fn winch_state_of(m: &ClWinchModule, bridge_m: f32, trolley_m: f32) -
         ]
     });
     CraneState {
+        user: None,
         lamps,
         slack_m: m.snapshot().map_or(0.0, |s| s.slack_m as f32),
         bridge_m,
@@ -471,8 +479,8 @@ impl NovoApp {
         let rope_m = {
             let g = &self.wb.hoist.three_d;
             f64::from(match g.model.motion() {
-                Some(m) => m.rig.rope_length_mm(hook_m),
-                None => rope_length_mm(&g.layout, hook_m),
+                Some(m) if m.unit.is_none() => m.rig.rope_length_mm(hook_m),
+                _ => rope_length_mm(&g.layout, hook_m),
             }) / 1000.0
         };
         let travel = self.wb.hoist.three_d.travel(dt, driven, rope_m);
@@ -529,7 +537,8 @@ impl NovoApp {
                             });
                     }
                     let mut refit = false;
-                    let model_on = g.model.shown();
+                    let unit = g.model.motion().is_some_and(|m| m.unit.is_some());
+                    let model_on = g.model.shown() && !unit;
                     let (bridge_end, trolley_end) = g.travel_ends();
                     {
                         ui.label(if g.bridge_axis.is_some() {
@@ -620,7 +629,8 @@ impl NovoApp {
                 let (bridge_end, trolley_end) = g.travel_ends();
                 g.bridge_m = g.bridge_m.clamp(0.0, bridge_end);
                 g.trolley_m = g.trolley_m.clamp(0.0, trolley_end);
-                let model_on = g.model.shown();
+                let unit = g.model.motion().is_some_and(|m| m.unit.is_some());
+                let model_on = g.model.shown() && !unit;
                 {
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Bridge driven by");
@@ -703,6 +713,7 @@ impl NovoApp {
                     }
                 }
                 let state = CraneState {
+                    user: g.model.motion().and_then(|m| m.unit.cloned()),
                     swing_rad: travel.swing_rad,
                     bridge_limits: bridge_marks,
                     trolley_limits: trolley_marks,
@@ -729,6 +740,7 @@ impl NovoApp {
                     let b = g
                         .model
                         .motion()
+                        .filter(|m| m.unit.is_none())
                         .and_then(|m| m.rig.hook_view(state.hook_m))
                         .or_else(|| g.model.hook_bounds())
                         .unwrap_or_else(|| hook_bounds(&g.layout, &state));
@@ -758,7 +770,13 @@ impl NovoApp {
                 } else {
                     CRANE_PICTURE_LEAVES_OUT
                 };
-                for line in own.iter().chain(SWING_MODEL_LEAVES_OUT).chain(winch_notes) {
+                let unit_note: &[&str] = if unit { HOIST_UNIT_LEAVES_OUT } else { &[] };
+                for line in unit_note
+                    .iter()
+                    .chain(own)
+                    .chain(SWING_MODEL_LEAVES_OUT)
+                    .chain(winch_notes)
+                {
                     notes.push_str(&format!("\n\u{2022} {line}"));
                 }
                 super::window_help::add(ui.ctx(), notes);
@@ -808,13 +826,17 @@ impl Hoist3d {
                 f.generation == m.generation
                     && f.highlight == m.highlight
                     && f.load == load
+                    && f.layout == self.layout
                     && f.state == *state
             });
             if !fresh {
                 self.revision += 1;
-                let mut scene = novo_view3d::crane_motion::scene_with(
-                    m.plan, m.rig, state, load, m.highlight,
-                );
+                // A hoist unit stands in the generic crane; a whole crane moves by its roles.
+                let mut scene = if state.user.is_some() {
+                    build(&self.layout, state)
+                } else {
+                    novo_view3d::crane_motion::scene_with(m.plan, m.rig, state, load, m.highlight)
+                };
                 scene.revision = self.revision;
                 // Keep the model's meshes while only the numbers change.
                 let mut library = match &self.model_built {
@@ -829,6 +851,7 @@ impl Hoist3d {
                     highlight: m.highlight,
                     state: state.clone(),
                     load,
+                    layout: self.layout,
                     scene: Arc::new(scene),
                     library,
                 });

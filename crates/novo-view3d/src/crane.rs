@@ -77,6 +77,9 @@ pub struct TravelMark {
 /// The moving numbers of one frame.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CraneState {
+    /// Solids of the user's own hoist unit that replace the generic hoist and hook; `None` keeps
+    /// the generic ones.
+    pub user: Option<crate::crane_user::UserCrane>,
     /// The two state lamps on the control box: brake and drive. `Off` when nothing reports.
     pub lamps: [Lamp; 2],
     /// Rope paid out beyond the hook while it rests on the ground, m. Above 0 a heap of loose rope
@@ -199,6 +202,9 @@ const RAW_BUFFER: u64 = 110;
 const RAW_MARK: u64 = 120;
 const RAW_LAMP: u64 = 130;
 const RAW_SLACK: u64 = 200;
+/// The solids of a user's hoist unit (hoist, hook), one id each.
+const RAW_USER_HOIST: u64 = 20_000;
+const RAW_USER_HOOK: u64 = 21_000;
 /// Longest straight piece of the slack rope heap and the most pieces drawn.
 const SLACK_PIECE: f32 = 600.0;
 const SLACK_PIECES_MAX: usize = 12;
@@ -736,44 +742,57 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             YELLOW,
         ));
     }
-    // Turning the drum: the rope pays out 1 mm per mm of hook travel, per fall, and the block
-    // hangs on two falls, so the drum turns twice as far as one fall's length.
-    let drum_spin = Quat::from_rotation_z(-2.0 * state.hook_m * 1000.0 / (size::DRUM[0] * 0.5));
-    push(part_item(
-        RAW_DRUM,
-        other,
-        Part::Drum {
-            dia: mm(size::DRUM[0]),
-            len: mm(size::DRUM[2]),
-        },
-        Vec3::new(rope_x, drum_cy, trolley),
-        drum_spin,
-        STEEL,
-    ));
-    push(part_item(
-        RAW_HOIST_DRIVE,
-        other,
-        Part::Gearbox {
-            w: 320,
-            h: 320,
-            l: 260,
-        },
-        Vec3::new(rope_x, drum_cy, trolley + half_len + 25.0 + 14.0 + 145.0),
-        Quat::from_rotation_y(FRAC_PI_2),
-        GEARBOX,
-    ));
-    push(part_item(
-        RAW_HOIST_DRIVE + 1,
-        other,
-        Part::Motor { dia: 300, len: 560 },
-        Vec3::new(
-            rope_x + 130.0,
-            drum_cy,
-            trolley + half_len + 25.0 + 14.0 + 145.0,
-        ),
-        z_to_x,
-        MOTOR,
-    ));
+    if let Some(u) = state.user.as_ref().filter(|u| !u.hoist.is_empty()) {
+        // The user's drum, motor and gearbox, centred where the generic drum sits.
+        let anchor = Vec3::new(rope_x, drum_cy, trolley);
+        for (k, part) in u.hoist.iter().enumerate() {
+            push(crate::crane_user::item(
+                RAW_USER_HOIST + k as u64,
+                part,
+                anchor,
+                part.role.tint(),
+            ));
+        }
+    } else {
+        // Turning the drum: the rope pays out 1 mm per mm of hook travel, per fall, and the block
+        // hangs on two falls, so the drum turns twice as far as one fall's length.
+        let drum_spin = Quat::from_rotation_z(-2.0 * state.hook_m * 1000.0 / (size::DRUM[0] * 0.5));
+        push(part_item(
+            RAW_DRUM,
+            other,
+            Part::Drum {
+                dia: mm(size::DRUM[0]),
+                len: mm(size::DRUM[2]),
+            },
+            Vec3::new(rope_x, drum_cy, trolley),
+            drum_spin,
+            STEEL,
+        ));
+        push(part_item(
+            RAW_HOIST_DRIVE,
+            other,
+            Part::Gearbox {
+                w: 320,
+                h: 320,
+                l: 260,
+            },
+            Vec3::new(rope_x, drum_cy, trolley + half_len + 25.0 + 14.0 + 145.0),
+            Quat::from_rotation_y(FRAC_PI_2),
+            GEARBOX,
+        ));
+        push(part_item(
+            RAW_HOIST_DRIVE + 1,
+            other,
+            Part::Motor { dia: 300, len: 560 },
+            Vec3::new(
+                rope_x + 130.0,
+                drum_cy,
+                trolley + half_len + 25.0 + 14.0 + 145.0,
+            ),
+            z_to_x,
+            MOTOR,
+        ));
+    }
 
     // Hook block, hook, load and the two falls of rope.
     let (still_top, clamped) = block_top_mm(l, state.hook_m);
@@ -802,46 +821,66 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             Vec3::new(size::ROPE, size::ROPE, len),
         ));
     }
-    push(part_item(
-        RAW_BLOCK,
-        other,
-        Part::Block {
-            w: mm(size::BLOCK[0]),
-            h: mm(size::BLOCK[1]),
-            d: mm(size::BLOCK[2]),
-        },
-        Vec3::new(hook_x, top, hook_z),
-        Quat::IDENTITY,
-        block_tint,
-    ));
-    // The two sheaves in the block turn with the rope (the picture shows the rope moving).
-    let sheave_spin = Quat::from_rotation_z(2.0 * state.hook_m * 1000.0 / (size::SHEAVE * 0.5));
-    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+    let hook_bottom = if let Some(u) = state.user.as_ref().filter(|u| !u.hook.is_empty()) {
+        // The user's block and hook hang from the rope's end at the size the file gives.
+        let anchor = Vec3::new(hook_x, top, hook_z);
+        for (k, part) in u.hook.iter().enumerate() {
+            let tint = if warn && part.role == crate::crane_model::PartRole::HookBlock {
+                BLOCK_WARN
+            } else {
+                part.role.tint()
+            };
+            push(crate::crane_user::item(
+                RAW_USER_HOOK + k as u64,
+                part,
+                anchor,
+                tint,
+            ));
+        }
+        top - u.hook_height
+    } else {
         push(part_item(
-            RAW_SHEAVE + k as u64,
+            RAW_BLOCK,
             other,
-            Part::Sheave {
-                dia: mm(size::SHEAVE),
-                w: 70,
+            Part::Block {
+                w: mm(size::BLOCK[0]),
+                h: mm(size::BLOCK[1]),
+                d: mm(size::BLOCK[2]),
             },
-            Vec3::new(hook_x, top - size::BLOCK[1] * 0.31, hook_z + s * half_fall),
-            z_to_x * sheave_spin,
-            WHEEL,
+            Vec3::new(hook_x, top, hook_z),
+            Quat::IDENTITY,
+            block_tint,
         ));
-    }
-    let hook_part = Part::Hook {
-        h: mm(size::HOOK[1]),
+        // The two sheaves in the block turn with the rope (the picture shows the rope moving).
+        let sheave_spin = Quat::from_rotation_z(2.0 * state.hook_m * 1000.0 / (size::SHEAVE * 0.5));
+        for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+            push(part_item(
+                RAW_SHEAVE + k as u64,
+                other,
+                Part::Sheave {
+                    dia: mm(size::SHEAVE),
+                    w: 70,
+                },
+                Vec3::new(hook_x, top - size::BLOCK[1] * 0.31, hook_z + s * half_fall),
+                z_to_x * sheave_spin,
+                WHEEL,
+            ));
+        }
+        let hook_part = Part::Hook {
+            h: mm(size::HOOK[1]),
+        };
+        let hook_top = top - size::BLOCK[1];
+        let hook_bottom = hook_top - crate::crane_parts::entry(hook_part).size.y;
+        push(part_item(
+            RAW_HOOK,
+            other,
+            hook_part,
+            Vec3::new(hook_x, hook_top, hook_z),
+            Quat::IDENTITY,
+            STEEL,
+        ));
+        hook_bottom
     };
-    let hook_top = top - size::BLOCK[1];
-    let hook_bottom = hook_top - crate::crane_parts::entry(hook_part).size.y;
-    push(part_item(
-        RAW_HOOK,
-        other,
-        hook_part,
-        Vec3::new(hook_x, hook_top, hook_z),
-        Quat::IDENTITY,
-        STEEL,
-    ));
     if let Some([w, h, d]) = l.load_m {
         let (w, h, d) = (w * 1000.0, h * 1000.0, d * 1000.0);
         let load_top = hook_bottom - size::SLING;
@@ -979,9 +1018,13 @@ pub fn hook_bounds(layout: &CraneLayout, state: &CraneState) -> crate::math::Aab
     })
     .size
     .y;
+    let hanging = state
+        .user
+        .as_ref()
+        .filter(|u| !u.hook.is_empty())
+        .map_or(size::BLOCK[1] + hook_h, |u| u.hook_height);
     let bottom = top
-        - size::BLOCK[1]
-        - hook_h
+        - hanging
         - layout
             .load_m
             .map_or(0.0, |[_, h, _]| size::SLING + h * 1000.0);

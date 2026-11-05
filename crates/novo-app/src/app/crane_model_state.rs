@@ -10,6 +10,7 @@ use novo_view3d::crane_model::{
     CraneModel, ModelPlan, Orientation, PartRole, hook_bounds, plan,
 };
 use novo_view3d::crane_motion::{Group, Rig, rig};
+use novo_view3d::crane_user::{UserCrane, from_plan, is_hoist_unit};
 use novo_view3d::math::Aabb;
 use novo_view3d::mesh::MeshLibrary;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,8 @@ struct Loaded {
     plan: ModelPlan,
     /// What moves with what, from the roles.
     rig: Rig,
+    /// The hook and hoist solids to put in the generic crane, when the model is a hoist unit only.
+    unit: Option<UserCrane>,
     library: Arc<MeshLibrary>,
     /// Counts the plans of the slot, so the window knows when to hand the renderer a new scene.
     generation: u64,
@@ -65,6 +68,7 @@ pub(super) struct Motion<'a> {
     pub generation: u64,
     pub plan: &'a ModelPlan,
     pub rig: &'a Rig,
+    pub unit: Option<&'a UserCrane>,
     pub library: &'a Arc<MeshLibrary>,
     pub highlight: Option<usize>,
 }
@@ -219,6 +223,7 @@ impl ModelSlot {
             generation: l.generation,
             plan: &l.plan,
             rig: &l.rig,
+            unit: l.unit.as_ref(),
             library: &l.library,
             highlight: self.highlight,
         })
@@ -323,6 +328,7 @@ impl Loaded {
     ) -> Self {
         let library = Arc::new(plan.library.clone());
         let rig = rig(&plan);
+        let unit = is_hoist_unit(&plan).then(|| from_plan(&plan, &rig));
         Self {
             path,
             raw,
@@ -331,6 +337,7 @@ impl Loaded {
             roles,
             plan,
             rig,
+            unit,
             library,
             generation,
         }
@@ -345,6 +352,7 @@ impl Loaded {
         let p = plan(&self.raw, orientation, &roles);
         self.library = Arc::new(p.library.clone());
         self.rig = rig(&p);
+        self.unit = is_hoist_unit(&p).then(|| from_plan(&p, &self.rig));
         self.plan = p;
         self.orientation = orientation;
         self.roles = roles;

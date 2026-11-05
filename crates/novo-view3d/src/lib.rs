@@ -15,6 +15,7 @@ pub mod crane;
 pub mod crane_model;
 pub mod crane_motion;
 pub mod crane_parts;
+pub mod crane_user;
 pub mod cube;
 pub mod cull;
 pub mod demo;
