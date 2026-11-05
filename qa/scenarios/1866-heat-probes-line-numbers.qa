@@ -25,7 +25,7 @@ click_text Simulate #2
 wait_s 200
 click_text Probe
 wait 10
-click 640 440
+click 850 450
 wait 10
 expect "Probe:"
 click_text Pin
