@@ -1339,9 +1339,10 @@ impl NovoApp {
                 }
                 format!("Preview: {n} {}", if n == 1 { "device" } else { "devices" })
             });
+            // The heat advice is a result of the search: it stays in the banner.
             if let Some(heat) = heat {
-                help.push(' ');
-                help.push_str(&heat);
+                text.push(' ');
+                text.push_str(&heat);
             }
             if left > 0 {
                 text.push_str(&format!(" · {left} do not fit"));
@@ -2632,7 +2633,7 @@ impl NovoApp {
                             ),
                             _ => (
                                 "No mounting plate yet",
-                                "Set the size of the mounting plate to start placing devices.",
+                                "Set the size of the mounting plate to start placing devices. You can change the size later under Plate setup.",
                             ),
                         };
                         ui.label(short);

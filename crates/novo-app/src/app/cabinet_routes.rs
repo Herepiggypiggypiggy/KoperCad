@@ -103,20 +103,25 @@ pub(super) struct Overlay {
 }
 
 impl Overlay {
-    /// One line for the header strip: routed wires, those no duct path
-    /// reaches, the fullest duct.
     /// Everything the Routes panel explains, for its "?": what the card
-    /// is, the wire rules and the entry. The problems on the plan are the
-    /// chips below it.
+    /// is, the wire rules and the entry, and how to fix an unusable entry
+    /// point. The problems on the plan are the chips below it.
     pub(super) fn help_text(&self) -> String {
-        let parts = [
+        let mut parts = vec![
             "Routes: every wire with both ends on this plate, through the ducts. Lengths are measured along the ducts, loops included.",
             "Wire rules are kept in the project. They set cut lengths, the wire list and the wire cut file.",
             "Entry point: where wires from outside come in (origin top left). Wires to the outside are routed to it.",
         ];
+        if self.entry_hidden {
+            parts.push(
+                "A stored entry point is incomplete or outside the plate and cannot be used. Set a new one.",
+            );
+        }
         parts.join("\n\n")
     }
 
+    /// One line for the header strip: routed wires, those no duct path
+    /// reaches, the fullest duct.
     pub(super) fn summary(&self) -> String {
         let free = self.routes.iter().filter(|r| r.free_air).count();
         let routed = self.routes.len() - free;
@@ -574,9 +579,7 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
             let help = overlay.help_text();
             ui.horizontal(|ui| {
                 ui.strong("Routes");
-                if !help.is_empty() {
-                    super::window_help::mark(ui, &help);
-                }
+                super::window_help::mark(ui, &help);
             });
             if let Some(a) = rules_section(ui, &overlay.rules) {
                 ask = Some(a);
@@ -823,9 +826,8 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
     if overlay.entry_hidden {
         ui.colored_label(
             crate::theme::ui_palette().warning,
-            "Entry point unusable",
-        )
-        .on_hover_text("A stored entry point is incomplete or outside the plate and cannot be used. Set a new one.");
+            "Entry point unusable (see the ? beside Routes)",
+        );
     }
     ask
 }

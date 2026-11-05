@@ -281,13 +281,15 @@ impl DoorState {
 }
 
 fn line(ui: &mut egui::Ui, bad: bool, text: String) {
-    // Only a problem stays on the card; what is fine goes behind the "?".
-    if !bad {
-        super::window_help::add(ui.ctx(), text);
-        return;
-    }
+    // Results stay on the card, problems in the error colour and fine ones
+    // weak; only explanations go behind the "?".
     let style = theme::cabinet_style();
-    ui.label(egui::RichText::new(text).color(paint_color(style.error)));
+    let color = if bad {
+        paint_color(style.error)
+    } else {
+        ui.visuals().weak_text_color()
+    };
+    ui.label(egui::RichText::new(text).color(color));
 }
 
 /// The report as sentences, problems first.
