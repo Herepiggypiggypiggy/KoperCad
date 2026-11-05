@@ -113,9 +113,13 @@ impl NovoApp {
                 continue;
             };
             let Some(at) = free_slot(&layout, &p) else {
-                self.message(
-                    super::Level::Warning,
-                    "No free room on the plate for a copy of the selected device",
+                self.view3d.flags.refuse(
+                    "No room for a copy",
+                    &["No free room on the plate for a copy of the selected device."],
+                    sources
+                        .iter()
+                        .map(|d| novo_flags::Anchor::Device(d.to_string()))
+                        .collect(),
                 );
                 return;
             };

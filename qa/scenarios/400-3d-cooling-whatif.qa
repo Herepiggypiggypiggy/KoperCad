@@ -8,6 +8,16 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+# Opening Heat starts an automatic run: stop it, switch Auto off so it does not restart, and stop again.
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
 shot heat-panel
 click_text "Cooling what-if"
 wait 20
@@ -26,9 +36,13 @@ expect "Model estimate"
 shot ranked-and-previewed
 check_blank ranked-and-previewed
 check_layout
-scroll 250 560 -420
+# The window is shorter at 1366 and taller at 1920: scroll its list at the height where it sits in each.
+scroll 250 420 -420
+scroll 250 800 -420
 wait 10
 shot ranked-scrolled
+scroll 250 300 900
+wait 10
 click_text "Copy the table"
 wait 6
 expect "The table is on the clipboard."

@@ -1,0 +1,39 @@
+@title 3D view: device problem and refused copy are triangles (1366x768)
+@area 3D
+@sizes 1366x768
+# T3: -K1 stands off the small plate: the check is a red triangle on it in 3D. A click opens its popover; Locate selects the device; Escape closes it. Refused edits (no room for a copy) are a yellow triangle on the selection that goes on the next input.
+open qa/fixtures/cabinet-3d-no-room.novo
+wait 20
+click_text 3D #1
+wait 40
+shot triangle-on-device
+check_layout
+# A refusal: select -F1, ask for a copy, no free room on the plate.
+click 556 270
+wait 8
+key ctrl+k
+text duplicate the selected devices in 3d
+wait 5
+key Enter
+wait 10
+move 300 600
+wait 6
+expect "No room for a copy"
+shot refusal-amber-triangle-pointer-elsewhere
+check_layout
+# The next input ends it.
+click 300 600
+wait 8
+expect_not "No room for a copy"
+shot refusal-gone
+
+# The triangle on -K1: a click opens its popover.
+click 788 410
+wait 8
+expect "Locate"
+expect "Waive"
+shot popover
+check_layout
+click_text Locate Button
+wait 8
+expect_not "Locate"
