@@ -297,7 +297,14 @@ impl NovoApp {
                                 chosen = Some(action.clone());
                             }
                         }
-                        if flag.life == Life::Until && ui.button("Dismiss").clicked() {
+                        // Job flags list their own Dismiss.
+                        let has_dismiss = flag.actions.iter().any(
+                            |a| matches!(a, Action::Open(k) if k == super::flags_jobs::DISMISS),
+                        );
+                        if flag.life == Life::Until
+                            && !has_dismiss
+                            && ui.button("Dismiss").clicked()
+                        {
                             chosen = Some(Action::Open("dismiss".into()));
                         }
                     });
