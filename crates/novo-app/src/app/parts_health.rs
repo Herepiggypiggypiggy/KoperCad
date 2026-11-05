@@ -86,6 +86,9 @@ pub(crate) fn report_text(h: &StepHealth) -> String {
     t
 }
 
+/// Notes shown in the pane; the rest are in the copied report.
+const NOTES_SHOWN: usize = 3;
+
 /// The block under "3D model". Returns true when "Check model" was clicked.
 pub(crate) fn block(
     ui: &mut egui::Ui,
@@ -115,10 +118,16 @@ pub(crate) fn block(
         if h.verdict == Verdict::Clean {
             ui.label(line);
         } else {
-            ui.colored_label(ui.visuals().warn_fg_color, line);
+            ui.colored_label(crate::theme::ui_palette().warning, line);
         }
-        for n in &h.notes {
+        for n in h.notes.iter().take(NOTES_SHOWN) {
             ui.weak(n);
+        }
+        if h.notes.len() > NOTES_SHOWN {
+            ui.weak(format!(
+                "{} more in Copy report",
+                h.notes.len() - NOTES_SHOWN
+            ));
         }
         if ui.small_button("Copy report").clicked() {
             ui.ctx().copy_text(report_text(h));
