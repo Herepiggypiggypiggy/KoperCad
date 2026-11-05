@@ -97,7 +97,14 @@ impl NovoApp {
                     self.add_generated_pages();
                 }
             }
-            Err(e) => self.message(Level::Warning, format!("Project rules: {e}")),
+            Err(e) => self.control_flag(
+                "project_rules",
+                "rules",
+                false,
+                "Rules not saved",
+                format!("Project rules: {e}"),
+                None,
+            ),
         }
     }
 
@@ -140,7 +147,14 @@ impl NovoApp {
         });
         match result {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Warning, format!("Pin templates: {e}")),
+            Err(e) => self.control_flag(
+                "project_rules",
+                "pin_templates",
+                false,
+                "Pin names not saved",
+                format!("Pin templates: {e}"),
+                None,
+            ),
         }
     }
 
@@ -211,6 +225,8 @@ impl NovoApp {
             .pin_templates_text
             .take()
             .unwrap_or_else(|| stored_templates.clone());
+        let mine = self.control_flags("project_rules");
+        let mut flag_asked = None;
         let mut save_templates = false;
         let (mut load_shared, mut save_shared) = (false, false);
         let stored_offer = self.pin_offer_wanted();
@@ -226,6 +242,7 @@ impl NovoApp {
             [width, 640.0],
             |ui| {
                 super::panel::fill_above(ui, 44.0, |ui| {
+                    flag_asked = super::flags_shell::flag_row(ui, &mine);
                     super::dialog_ui::hint(
                         ui,
                         "Saved in the project file. Every rule is explicit; undo takes one back.",
@@ -322,7 +339,13 @@ impl NovoApp {
                             );
                         }
                         Err(e) => {
-                            ui.label(egui::RichText::new(e.as_str()).color(p.error));
+                            super::flags_shell::inline_flag(
+                                ui,
+                                true,
+                                false,
+                                "Pin names not valid",
+                                e.as_str(),
+                            );
                         }
                     }
                     let changed = templates.trim() != stored_templates.trim();
@@ -370,7 +393,14 @@ impl NovoApp {
                         "Loaded the company pin names; Save pin names keeps them in this project",
                     );
                 }
-                Err(e) => self.message(Level::Warning, e),
+                Err(e) => self.control_flag(
+                    "project_rules",
+                    "company_file",
+                    false,
+                    "Company file not loaded",
+                    e,
+                    None,
+                ),
             }
         }
         if save_shared {
@@ -379,15 +409,26 @@ impl NovoApp {
                 .and_then(|p| write_shared_templates(&p, &templates))
             {
                 Ok(()) => self.message(Level::Info, "Saved as the company pin names file"),
-                Err(e) => self.message(Level::Error, format!("Could not save the file: {e}")),
+                Err(e) => self.control_flag(
+                    "project_rules",
+                    "company_file",
+                    true,
+                    "Company file not saved",
+                    format!("Could not save the file: {e}"),
+                    None,
+                ),
             }
         }
         if !(modal.inner || modal.should_close()) {
             self.wb.pin_templates_text = Some(templates);
         }
         self.set_project_rules(rules);
+        if flag_asked.is_some() {
+            self.wb.flags.open = flag_asked;
+        }
         if modal.inner || modal.should_close() {
             self.wb.project_rules = false;
+            self.control_clear_all("project_rules");
         }
     }
 }

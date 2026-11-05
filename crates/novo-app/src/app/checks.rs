@@ -700,6 +700,13 @@ impl NovoApp {
             .map_or(0, |doc| doc.project().revision());
         self.wb.problem_flash = Some((index, std::time::Instant::now(), revision, false));
         let Some(page) = problem.page else {
+            // A problem of a mounting plate has no page: go to the plate.
+            if let Some(draft) = super::flags::draft(&problem) {
+                let flag = novo_flags::Flag::from_draft(draft);
+                if super::cabinet_flags::is_plate_flag(&flag) {
+                    self.locate_on_plate(&flag);
+                }
+            }
             return;
         };
         let symbol = problem.at.iter().find_map(|id| match id {

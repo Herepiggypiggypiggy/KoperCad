@@ -298,12 +298,7 @@ pub(super) fn judge(project: &Project, structure: StructureId, rules: &RuleSet) 
 
 /// Adds, to every device the inspector shows, the rule that applies to it,
 /// why `Place all` put it there, and the rules it breaks now.
-pub(super) fn annotate(
-    facts: &mut Facts,
-    state: &RulesState,
-    judged: &Judgement,
-    tag_of: &impl Fn(u64) -> String,
-) {
+pub(super) fn annotate(facts: &mut Facts, state: &RulesState, judged: &Judgement) {
     let Facts::Devices(devices) = facts else {
         return;
     };
@@ -320,13 +315,6 @@ pub(super) fn annotate(
             .as_ref()
             .filter(|e| e.decision(d.id).is_some())
             .map(|e| e.describe(d.id, &state.rules));
-        for v in judged
-            .violations
-            .iter()
-            .filter(|v| v.devices().contains(&d.id))
-        {
-            d.problems.push(v.describe(&state.rules, &|id| tag_of(id)));
-        }
     }
 }
 

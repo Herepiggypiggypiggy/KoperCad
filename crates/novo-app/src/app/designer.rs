@@ -424,10 +424,16 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return false;
         };
+        if let Some(why) = super::flags_jobs::qa_forced_error("designer.save") {
+            self.job_fail("designer.save", "Templates not saved", Level::Error, why);
+            return false;
+        }
         let mut list = match store::project_templates(project) {
             Ok(l) => l,
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "designer.save",
+                    "Templates not saved",
                     Level::Error,
                     format!("The project's templates cannot be read, not overwriting them: {e}"),
                 );
