@@ -86,6 +86,8 @@ pub(super) struct CabinetForm {
     /// The enclosure cards and the pick (`None` is the standard plate).
     pub(super) picker: super::enclosure_pick::Picker,
     pub(super) choices: Vec<super::enclosure_pick::Choice>,
+    /// The STEP file given for the enclosure.
+    pub(super) step: super::enclosure_pick::StepSlot,
     first_page: bool,
     focused: bool,
 }
@@ -2465,6 +2467,7 @@ impl NovoApp {
             group,
             picker: Default::default(),
             choices,
+            step: Default::default(),
             first_page: true,
             focused: false,
         });
@@ -2571,6 +2574,33 @@ impl NovoApp {
         let exists = tree::level_exists(project, Aspect::Location, &[form.name.trim().to_owned()]);
         let valid = super::pages::clean_level(&form.name, Aspect::Location);
         let mut open_list = false;
+        // The STEP file: one being read is taken in, a file dropped on the zone
+        // is read on a worker thread.
+        form.step.poll();
+        let hint = form
+            .picker
+            .picked
+            .and_then(|i| form.choices.get(i))
+            .map(|c| c.size_text())
+            .unwrap_or_default();
+        let dropped: Option<std::path::PathBuf> = ctx.input(|i| {
+            let over = form
+                .step
+                .drop_rect
+                .zip(i.pointer.latest_pos())
+                .is_some_and(|(r, pos)| r.contains(pos));
+            over.then(|| {
+                i.raw
+                    .dropped_files
+                    .iter()
+                    .map(|f| f.path().to_path_buf())
+                    .find(|p| !p.as_os_str().is_empty())
+            })
+            .flatten()
+        });
+        if let Some(path) = dropped {
+            form.step.start(ctx, path, hint.clone());
+        }
         let modal =
             super::panel::modal_fill(ctx, "cabinet_form", "New cabinet", [680.0, 600.0], |ui| {
                 super::panel::fill_above(ui, 48.0, |ui| {
@@ -2636,12 +2666,21 @@ impl NovoApp {
                         });
                     ui.add_space(6.0);
                     ui.label("Enclosure");
-                    super::enclosure_pick::show(ui, &mut form.picker, &form.choices);
-                    match form.picker.picked.and_then(|i| form.choices.get(i)) {
+                    if super::enclosure_pick::show(ui, &mut form.picker, &form.choices) {
+                        form.step.clear();
+                    }
+                    let picked = form
+                        .picker
+                        .picked
+                        .and_then(|i| form.choices.get(i))
+                        .cloned();
+                    let eff =
+                        super::enclosure_pick::effective(picked.as_ref(), form.step.read.as_ref());
+                    match &eff.choice {
                         Some(c) => {
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(super::enclosure_pick::summary(c));
-                                if c.spec.notice().is_some() {
+                                if super::enclosure_pick::is_estimate(c) {
                                     ui.colored_label(
                                         crate::theme::ui_palette().warning,
                                         "(estimate)",
@@ -2659,6 +2698,12 @@ impl NovoApp {
                                 DEFAULT_PLATE.width, DEFAULT_PLATE.height
                             ));
                         }
+                    }
+                    if let Some(path) =
+                        super::enclosure_pick::show_step(ui, &mut form.step, picked.as_ref(), &eff)
+                    {
+                        let hint = picked.as_ref().map(|c| c.size_text()).unwrap_or_default();
+                        form.step.start(ui.ctx(), path, hint);
                     }
                     if ui.small_button("Edit the enclosure list…").clicked() {
                         open_list = true;
@@ -2683,11 +2728,11 @@ impl NovoApp {
             return;
         }
         if (ok || enter) && !valid.is_empty() {
-            let choice = form
-                .picker
-                .picked
-                .and_then(|i| form.choices.get(i))
-                .cloned();
+            let choice = super::enclosure_pick::effective(
+                form.picker.picked.and_then(|i| form.choices.get(i)),
+                form.step.read.as_ref(),
+            )
+            .choice;
             let plate = choice.as_ref().map_or(DEFAULT_PLATE, |c| c.plate);
             let name = valid.trim_start_matches('+').to_owned();
             let spec = CabinetSpec {
