@@ -77,6 +77,9 @@ pub struct TravelMark {
 /// The moving numbers of one frame.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CraneState {
+    /// Solids of the user's own hoist unit that replace the generic hoist and hook; `None` keeps
+    /// the generic ones.
+    pub user: Option<crate::crane_user::UserCrane>,
     /// The two state lamps on the control box: brake and drive. `Off` when nothing reports.
     pub lamps: [Lamp; 2],
     /// Rope paid out beyond the hook while it rests on the ground, m. Above 0 a heap of loose rope
@@ -115,7 +118,7 @@ pub enum Lamp {
 }
 
 impl Lamp {
-    fn tint(self) -> [u8; 3] {
+    pub(crate) fn tint(self) -> [u8; 3] {
         match self {
             Lamp::Off => [48, 50, 56],
             Lamp::Green => [60, 200, 90],
@@ -199,6 +202,9 @@ const RAW_BUFFER: u64 = 110;
 const RAW_MARK: u64 = 120;
 const RAW_LAMP: u64 = 130;
 const RAW_SLACK: u64 = 200;
+/// The solids of a user's hoist unit (hoist, hook), one id each.
+const RAW_USER_HOIST: u64 = 20_000;
+const RAW_USER_HOOK: u64 = 21_000;
 /// Longest straight piece of the slack rope heap and the most pieces drawn.
 const SLACK_PIECE: f32 = 600.0;
 const SLACK_PIECES_MAX: usize = 12;
@@ -253,7 +259,7 @@ fn girder_bottom_mm(layout: &CraneLayout) -> f32 {
 }
 
 /// An axis-aligned box from its lowest corner and its extents (x, y up, z), mm.
-fn boxed(raw: u64, kind: ItemKind, min: Vec3, extent: Vec3, tint: [u8; 3]) -> Item {
+pub(crate) fn boxed(raw: u64, kind: ItemKind, min: Vec3, extent: Vec3, tint: [u8; 3]) -> Item {
     // The scene's local box is centred in x and y and runs from 0 to size.z along local z; turning
     // local z to world y makes local y the world's negative z.
     let pose = Pose {
@@ -325,6 +331,131 @@ pub(crate) fn push_floor(scene: &mut Scene, runway: f32, span: f32) {
             ));
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pieces the crane model's scene (`crane_model_motion`) draws the same way as the generic crane:
+// the ropes, the load, the slack heap and the flags. They are written out here rather than shared
+// with `build` so the generic crane's scene stays exactly as it was.
+
+/// One of the two falls of rope from `a` (on the drum) to `b` (the top of the hook parts).
+pub(crate) fn push_fall(scene: &mut Scene, k: usize, a: Vec3, b: Vec3) {
+    let d = b - a;
+    let len = d.length().max(1.0);
+    scene.push(stretched(
+        if k == 0 { RAW_ROPE } else { RAW_ROPE2 },
+        ItemKind::Other,
+        Part::Bar {
+            r: mm(size::ROPE * 0.5),
+        },
+        a,
+        Quat::from_rotation_arc(Vec3::Z, d / len),
+        ROPE_STEEL,
+        Vec3::new(size::ROPE, size::ROPE, len),
+    ));
+}
+
+/// A load of `load` metres (width, height, depth) on two slings under a hook whose tip is at
+/// (`x`, `tip_y`, `z`).
+pub(crate) fn push_load(scene: &mut Scene, x: f32, tip_y: f32, z: f32, load: [f32; 3]) {
+    let [w, h, d] = load.map(|v| v * 1000.0);
+    let load_top = tip_y - size::SLING;
+    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+        let from = Vec3::new(x, tip_y + 30.0, z);
+        let to = Vec3::new(x + s * w * 0.4, load_top, z);
+        let dir = to - from;
+        let len = dir.length().max(1.0);
+        scene.push(stretched(
+            if k == 0 { RAW_SLING } else { RAW_SLING2 },
+            ItemKind::Other,
+            Part::Bar {
+                r: mm(size::ROPE * 0.3),
+            },
+            from,
+            Quat::from_rotation_arc(Vec3::Z, dir / len),
+            ROPE_STEEL,
+            Vec3::new(size::ROPE * 0.6, size::ROPE * 0.6, len),
+        ));
+    }
+    scene.push(boxed(
+        RAW_LOAD,
+        ItemKind::Other,
+        Vec3::new(x - w * 0.5, load_top - h, z - d * 0.5),
+        Vec3::new(w, h, d),
+        LOAD,
+    ));
+}
+
+/// The heap of slack rope on the floor beside a block at (`x`, `z`).
+pub(crate) fn push_slack(scene: &mut Scene, slack_m: f32, x: f32, z: f32) {
+    let total = slack_m * 1000.0;
+    let n = ((total / SLACK_PIECE).ceil() as usize).clamp(1, SLACK_PIECES_MAX);
+    let each = (total / n as f32).min(SLACK_PIECE);
+    for k in 0..n {
+        let forward = k % 2 == 0;
+        scene.push(stretched(
+            RAW_SLACK + k as u64,
+            ItemKind::Other,
+            Part::Bar { r: mm(size::ROPE) },
+            Vec3::new(
+                x + 700.0 + if forward { 0.0 } else { each },
+                size::ROPE,
+                z - 400.0 + k as f32 * 45.0,
+            ),
+            if forward {
+                Quat::from_rotation_y(FRAC_PI_2)
+            } else {
+                Quat::from_rotation_y(-FRAC_PI_2)
+            },
+            SLACK_ROPE,
+            Vec3::new(size::ROPE * 2.0, size::ROPE * 2.0, each),
+        ));
+    }
+}
+
+fn flag_tint(kind: LimitFlag) -> [u8; 3] {
+    match kind {
+        LimitFlag::Upper => UPPER_FLAG,
+        LimitFlag::Lower => LOWER_FLAG,
+    }
+}
+
+/// The flag of a hoist limit switch: `at` is its left edge (x), the middle of its height (y) and
+/// the middle of its depth (z).
+pub(crate) fn push_hoist_flag(scene: &mut Scene, k: usize, kind: LimitFlag, at: Vec3) {
+    scene.push(boxed(
+        RAW_FLAG + k as u64,
+        ItemKind::Other,
+        Vec3::new(at.x, at.y - size::FLAG[1] * 0.5, at.z - size::FLAG[2] * 0.5),
+        Vec3::new(size::FLAG[0], size::FLAG[1], size::FLAG[2]),
+        flag_tint(kind),
+    ));
+}
+
+/// The upright flag of a travel end limit standing on `base` (x and z are the middle of its
+/// footprint along the travel, y its foot). A bridge flag lies along x, a trolley flag along z.
+pub(crate) fn push_travel_flag(
+    scene: &mut Scene,
+    bridge: bool,
+    k: usize,
+    kind: LimitFlag,
+    base: Vec3,
+) {
+    let [along, up, across] = size::TRAVEL_FLAG;
+    let (raw, min, ext) = if bridge {
+        (
+            RAW_BRIDGE_FLAG + k as u64,
+            Vec3::new(base.x - along * 0.5, base.y, base.z),
+            Vec3::new(along, up, across),
+        )
+    } else {
+        (
+            RAW_TROLLEY_FLAG + k as u64,
+            Vec3::new(base.x - across * 0.5, base.y, base.z - along * 0.5),
+            Vec3::new(across, up, along),
+        )
+    };
+    scene.push(boxed(raw, ItemKind::Other, min, ext, flag_tint(kind)));
 }
 
 /// The scene for one frame.
@@ -617,44 +748,57 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             YELLOW,
         ));
     }
-    // Turning the drum: the rope pays out 1 mm per mm of hook travel, per fall, and the block
-    // hangs on two falls, so the drum turns twice as far as one fall's length.
-    let drum_spin = Quat::from_rotation_z(-2.0 * state.hook_m * 1000.0 / (size::DRUM[0] * 0.5));
-    push(part_item(
-        RAW_DRUM,
-        other,
-        Part::Drum {
-            dia: mm(size::DRUM[0]),
-            len: mm(size::DRUM[2]),
-        },
-        Vec3::new(rope_x, drum_cy, trolley),
-        drum_spin,
-        STEEL,
-    ));
-    push(part_item(
-        RAW_HOIST_DRIVE,
-        other,
-        Part::Gearbox {
-            w: 320,
-            h: 320,
-            l: 260,
-        },
-        Vec3::new(rope_x, drum_cy, trolley + half_len + 25.0 + 14.0 + 145.0),
-        Quat::from_rotation_y(FRAC_PI_2),
-        GEARBOX,
-    ));
-    push(part_item(
-        RAW_HOIST_DRIVE + 1,
-        other,
-        Part::Motor { dia: 300, len: 560 },
-        Vec3::new(
-            rope_x + 130.0,
-            drum_cy,
-            trolley + half_len + 25.0 + 14.0 + 145.0,
-        ),
-        z_to_x,
-        MOTOR,
-    ));
+    if let Some(u) = state.user.as_ref().filter(|u| !u.hoist.is_empty()) {
+        // The user's drum, motor and gearbox, centred where the generic drum sits.
+        let anchor = Vec3::new(rope_x, drum_cy, trolley);
+        for (k, part) in u.hoist.iter().enumerate() {
+            push(crate::crane_user::item(
+                RAW_USER_HOIST + k as u64,
+                part,
+                anchor,
+                part.role.tint(),
+            ));
+        }
+    } else {
+        // Turning the drum: the rope pays out 1 mm per mm of hook travel, per fall, and the block
+        // hangs on two falls, so the drum turns twice as far as one fall's length.
+        let drum_spin = Quat::from_rotation_z(-2.0 * state.hook_m * 1000.0 / (size::DRUM[0] * 0.5));
+        push(part_item(
+            RAW_DRUM,
+            other,
+            Part::Drum {
+                dia: mm(size::DRUM[0]),
+                len: mm(size::DRUM[2]),
+            },
+            Vec3::new(rope_x, drum_cy, trolley),
+            drum_spin,
+            STEEL,
+        ));
+        push(part_item(
+            RAW_HOIST_DRIVE,
+            other,
+            Part::Gearbox {
+                w: 320,
+                h: 320,
+                l: 260,
+            },
+            Vec3::new(rope_x, drum_cy, trolley + half_len + 25.0 + 14.0 + 145.0),
+            Quat::from_rotation_y(FRAC_PI_2),
+            GEARBOX,
+        ));
+        push(part_item(
+            RAW_HOIST_DRIVE + 1,
+            other,
+            Part::Motor { dia: 300, len: 560 },
+            Vec3::new(
+                rope_x + 130.0,
+                drum_cy,
+                trolley + half_len + 25.0 + 14.0 + 145.0,
+            ),
+            z_to_x,
+            MOTOR,
+        ));
+    }
 
     // Hook block, hook, load and the two falls of rope.
     let (still_top, clamped) = block_top_mm(l, state.hook_m);
@@ -683,46 +827,66 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             Vec3::new(size::ROPE, size::ROPE, len),
         ));
     }
-    push(part_item(
-        RAW_BLOCK,
-        other,
-        Part::Block {
-            w: mm(size::BLOCK[0]),
-            h: mm(size::BLOCK[1]),
-            d: mm(size::BLOCK[2]),
-        },
-        Vec3::new(hook_x, top, hook_z),
-        Quat::IDENTITY,
-        block_tint,
-    ));
-    // The two sheaves in the block turn with the rope (the picture shows the rope moving).
-    let sheave_spin = Quat::from_rotation_z(2.0 * state.hook_m * 1000.0 / (size::SHEAVE * 0.5));
-    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+    let hook_bottom = if let Some(u) = state.user.as_ref().filter(|u| !u.hook.is_empty()) {
+        // The user's block and hook hang from the rope's end at the size the file gives.
+        let anchor = Vec3::new(hook_x, top, hook_z);
+        for (k, part) in u.hook.iter().enumerate() {
+            let tint = if warn && part.role == crate::crane_model::PartRole::HookBlock {
+                BLOCK_WARN
+            } else {
+                part.role.tint()
+            };
+            push(crate::crane_user::item(
+                RAW_USER_HOOK + k as u64,
+                part,
+                anchor,
+                tint,
+            ));
+        }
+        top - u.hook_height
+    } else {
         push(part_item(
-            RAW_SHEAVE + k as u64,
+            RAW_BLOCK,
             other,
-            Part::Sheave {
-                dia: mm(size::SHEAVE),
-                w: 70,
+            Part::Block {
+                w: mm(size::BLOCK[0]),
+                h: mm(size::BLOCK[1]),
+                d: mm(size::BLOCK[2]),
             },
-            Vec3::new(hook_x, top - size::BLOCK[1] * 0.31, hook_z + s * half_fall),
-            z_to_x * sheave_spin,
-            WHEEL,
+            Vec3::new(hook_x, top, hook_z),
+            Quat::IDENTITY,
+            block_tint,
         ));
-    }
-    let hook_part = Part::Hook {
-        h: mm(size::HOOK[1]),
+        // The two sheaves in the block turn with the rope (the picture shows the rope moving).
+        let sheave_spin = Quat::from_rotation_z(2.0 * state.hook_m * 1000.0 / (size::SHEAVE * 0.5));
+        for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+            push(part_item(
+                RAW_SHEAVE + k as u64,
+                other,
+                Part::Sheave {
+                    dia: mm(size::SHEAVE),
+                    w: 70,
+                },
+                Vec3::new(hook_x, top - size::BLOCK[1] * 0.31, hook_z + s * half_fall),
+                z_to_x * sheave_spin,
+                WHEEL,
+            ));
+        }
+        let hook_part = Part::Hook {
+            h: mm(size::HOOK[1]),
+        };
+        let hook_top = top - size::BLOCK[1];
+        let hook_bottom = hook_top - crate::crane_parts::entry(hook_part).size.y;
+        push(part_item(
+            RAW_HOOK,
+            other,
+            hook_part,
+            Vec3::new(hook_x, hook_top, hook_z),
+            Quat::IDENTITY,
+            STEEL,
+        ));
+        hook_bottom
     };
-    let hook_top = top - size::BLOCK[1];
-    let hook_bottom = hook_top - crate::crane_parts::entry(hook_part).size.y;
-    push(part_item(
-        RAW_HOOK,
-        other,
-        hook_part,
-        Vec3::new(hook_x, hook_top, hook_z),
-        Quat::IDENTITY,
-        STEEL,
-    ));
     if let Some([w, h, d]) = l.load_m {
         let (w, h, d) = (w * 1000.0, h * 1000.0, d * 1000.0);
         let load_top = hook_bottom - size::SLING;
@@ -860,9 +1024,13 @@ pub fn hook_bounds(layout: &CraneLayout, state: &CraneState) -> crate::math::Aab
     })
     .size
     .y;
+    let hanging = state
+        .user
+        .as_ref()
+        .filter(|u| !u.hook.is_empty())
+        .map_or(size::BLOCK[1] + hook_h, |u| u.hook_height);
     let bottom = top
-        - size::BLOCK[1]
-        - hook_h
+        - hanging
         - layout
             .load_m
             .map_or(0.0, |[_, h, _]| size::SLING + h * 1000.0);
