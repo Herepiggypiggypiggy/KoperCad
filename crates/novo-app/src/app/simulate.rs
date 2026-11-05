@@ -298,7 +298,11 @@ impl super::NovoApp {
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let Some(motor_symbol) = state.motor else {
-                    ui.weak("The project has no motor. Place one and give it a power (kW).");
+                    ui.weak("No motor");
+                    super::window_help::note(
+                        ui,
+                        "The project has no motor. Place one and give it a power (kW).",
+                    );
                     return;
                 };
                 ui.horizontal(|ui| {
@@ -467,14 +471,15 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
     ));
     let (bd, _) = m.breakdown();
     ui.weak(format!(
-        "Estimated from the nameplate: locked-rotor torque {:.1} × rated, breakdown {:.1} × rated",
+        "Locked-rotor torque {:.1} × rated, breakdown {:.1} × rated (estimate)",
         m.locked_rotor_torque() / m.rated_torque(),
         bd / m.rated_torque()
     ));
+    super::window_help::note(ui, "Estimated from the motor's nameplate data.");
     ui.add_space(4.0);
     chart(ui, r, m);
     for n in &run.notes {
-        ui.weak(&n.text);
+        super::window_help::note(ui, &n.text);
     }
     super::model_labels::badge(ui, super::model_labels::Model::MotorStart);
     super::model_labels::note(ui, super::model_labels::Model::MotorStart);

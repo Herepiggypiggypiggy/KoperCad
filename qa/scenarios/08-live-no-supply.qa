@@ -23,7 +23,7 @@ key Escape
 wait 4
 click_text "Why?"
 wait 10
-expect "Until a feed is placed"
+expect "Click a wire or a device"
 click_text "Place a feed"
 wait 20
 shot live-place-feed
