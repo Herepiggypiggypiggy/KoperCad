@@ -1,0 +1,63 @@
+@title Crane model in motion: the hook block and hook of your own crane rise with a hoist run, the ropes follow
+@area Simulate
+# Hoist in 3D with the synthetic STEP crane (23 solids, roles guessed from names). A Hoist run is
+# started and the up button held: the solids that hold the hook (block, hook, whatever touches them)
+# rise with the hook height, the two falls of rope shorten between the drum and the block, and the
+# rest of the crane stands still. The Parts window says what each solid moves with.
+open qa/fixtures/hoist-two-speed.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 40
+key ctrl+k
+wait 3
+text Simulate hoist run
+wait 4
+key Enter
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+answer_dialog qa/fixtures/crane-model/workshop-crane.stp
+click_text "Crane model…"
+wait 120
+expect "workshop-crane.stp"
+expect "Bridge"
+expect "Trolley"
+expect "Load"
+shot own-crane-at-rest
+check_layout
+click_text "Parts"
+wait 30
+expect "Crane model parts"
+expect "hook"
+expect "trolley"
+shot parts-moves-with
+check_layout
+click_text "Parts"
+wait 20
+mouse_down 123 359
+wait 200
+shot hook-rising
+wait 500
+shot hook-risen
+mouse_up 123 359
+wait 20
+click_text "Hook"
+wait 250
+move 1000 500
+wait 100
+move 1010 505
+wait 100
+shot hook-framed
+check_layout

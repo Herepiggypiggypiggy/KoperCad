@@ -434,7 +434,13 @@ pub(crate) fn push_hoist_flag(scene: &mut Scene, k: usize, kind: LimitFlag, at: 
 
 /// The upright flag of a travel end limit standing on `base` (x and z are the middle of its
 /// footprint along the travel, y its foot). A bridge flag lies along x, a trolley flag along z.
-pub(crate) fn push_travel_flag(scene: &mut Scene, bridge: bool, k: usize, kind: LimitFlag, base: Vec3) {
+pub(crate) fn push_travel_flag(
+    scene: &mut Scene,
+    bridge: bool,
+    k: usize,
+    kind: LimitFlag,
+    base: Vec3,
+) {
     let [along, up, across] = size::TRAVEL_FLAG;
     let (raw, min, ext) = if bridge {
         (

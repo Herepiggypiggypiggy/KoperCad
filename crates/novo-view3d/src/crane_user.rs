@@ -124,7 +124,12 @@ mod tests {
                 up: UpAxis::Y,
                 turns: 0,
             },
-            &[PartRole::Drum, PartRole::Motor, PartRole::HookBlock, PartRole::Hook],
+            &[
+                PartRole::Drum,
+                PartRole::Motor,
+                PartRole::HookBlock,
+                PartRole::Hook,
+            ],
         );
         let r = rig(&p);
         (p, r)
@@ -145,7 +150,11 @@ mod tests {
         assert!((u.hook_height - 700.0).abs() < 1e-3);
         // The anchor is the top middle of the hook solids (y = 300 in the file): the block's box
         // centre is 150 below it, the hook's 500 below.
-        let block = u.hook.iter().find(|x| x.role == PartRole::HookBlock).unwrap();
+        let block = u
+            .hook
+            .iter()
+            .find(|x| x.role == PartRole::HookBlock)
+            .unwrap();
         let hook = u.hook.iter().find(|x| x.role == PartRole::Hook).unwrap();
         assert!((block.offset.y + 150.0).abs() < 1e-3, "{block:?}");
         assert!((hook.offset.y + 500.0).abs() < 1e-3, "{hook:?}");
@@ -173,7 +182,11 @@ mod tests {
         // The top of the user's hook solids is where the generic block's top is.
         let top = |sc: &crate::scene::Scene, raws: &[u64]| {
             raws.iter()
-                .map(|r| sc.world_bounds(sc.items.iter().find(|i| i.id.raw == *r).unwrap()).max.y)
+                .map(|r| {
+                    sc.world_bounds(sc.items.iter().find(|i| i.id.raw == *r).unwrap())
+                        .max
+                        .y
+                })
                 .fold(f32::MIN, f32::max)
         };
         let (a, b) = (top(&s, &[21_000, 21_001]), top(&generic, &[10]));

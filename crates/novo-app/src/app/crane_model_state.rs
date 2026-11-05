@@ -6,9 +6,7 @@
 
 use super::crane_model_load::{Loading, guess_roles};
 use super::crane_setup::ModelRef;
-use novo_view3d::crane_model::{
-    CraneModel, ModelPlan, Orientation, PartRole, hook_bounds, plan,
-};
+use novo_view3d::crane_model::{CraneModel, ModelPlan, Orientation, PartRole, hook_bounds, plan};
 use novo_view3d::crane_motion::{Group, Rig, rig};
 use novo_view3d::crane_user::{UserCrane, from_plan, is_hoist_unit};
 use novo_view3d::math::Aabb;
@@ -240,7 +238,12 @@ impl ModelSlot {
                 continue;
             }
             let b = rotated_size(part.mesh.bounds, l.orientation);
-            let moves_with = l.rig.groups.get(rows.len()).copied().unwrap_or(Group::Frame);
+            let moves_with = l
+                .rig
+                .groups
+                .get(rows.len())
+                .copied()
+                .unwrap_or(Group::Frame);
             rows.push(PartRow {
                 name: part.name.clone(),
                 role: l.roles.get(i).copied().unwrap_or(PartRole::Other),
@@ -343,12 +346,7 @@ impl Loaded {
         }
     }
 
-    fn replan(
-        &mut self,
-        orientation: Orientation,
-        roles: Vec<PartRole>,
-        generation: u64,
-    ) {
+    fn replan(&mut self, orientation: Orientation, roles: Vec<PartRole>, generation: u64) {
         let p = plan(&self.raw, orientation, &roles);
         self.library = Arc::new(p.library.clone());
         self.rig = rig(&p);
@@ -516,5 +514,26 @@ mod tests {
         slot.install(want.path.clone(), model, &want);
         let rows = slot.rows();
         assert!(rows.iter().all(|r| r.role == r.guessed));
+    }
+
+    #[test]
+    fn the_synthetic_crane_groups_its_solids_and_frames_a_small_hook() {
+        let mut slot = ModelSlot::default();
+        load_now(&mut slot, &fixture());
+        for r in slot.rows() {
+            eprintln!(
+                "{:20} {:10} {}",
+                r.name,
+                r.role.label(),
+                r.moves_with.label()
+            );
+        }
+        let m = slot.motion().unwrap();
+        let v = m.rig.hook_view(0.0).unwrap();
+        eprintln!(
+            "hook view {:?} {:?} extent {:?}",
+            v.min, v.max, m.rig.extent_m
+        );
+        assert!(v.size().x < 6000.0 && v.size().z < 6000.0, "{:?}", v.size());
     }
 }

@@ -508,14 +508,14 @@ impl NovoApp {
         };
         let (bridge_end, trolley_end) = self.wb.hoist.three_d.travel_ends();
         let outside = [(&bridge_marks, bridge_end), (&trolley_marks, trolley_end)]
-        .iter()
-        .map(|(marks, end)| {
-            marks
-                .iter()
-                .filter(|m| !(0.0..=*end).contains(&m.position_m))
-                .count()
-        })
-        .sum::<usize>();
+            .iter()
+            .map(|(marks, end)| {
+                marks
+                    .iter()
+                    .filter(|m| !(0.0..=*end).contains(&m.position_m))
+                    .count()
+            })
+            .sum::<usize>();
         let g = &mut self.wb.hoist.three_d;
         let swinging = g.swinging();
         let drive_running = self.wb.drive_run.is_running();

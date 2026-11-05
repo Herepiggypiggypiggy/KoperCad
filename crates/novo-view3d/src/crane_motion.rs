@@ -191,7 +191,12 @@ fn by_role(p: &Placed) -> (Option<Group>, Option<Spin>) {
 }
 
 /// The group of the solid `i` taken from the nearest of the `anchors` (solids whose role decided).
-fn nearest_group(plan: &ModelPlan, i: usize, anchors: &[usize], decided: &[Option<Group>]) -> Group {
+fn nearest_group(
+    plan: &ModelPlan,
+    i: usize,
+    anchors: &[usize],
+    decided: &[Option<Group>],
+) -> Group {
     let b = &plan.placed[i].bounds;
     let mut best: Option<(f32, f32, Group)> = None;
     for &a in anchors {
@@ -238,12 +243,15 @@ pub fn rig(plan: &ModelPlan) -> Rig {
     // between boxes, and of those that touch (within a millimetre) the biggest.
     let anchors: Vec<usize> = (0..n).filter(|i| groups[*i].is_some()).collect();
     let decided = groups.clone();
-    for i in 0..n {
-        if groups[i].is_none() {
-            groups[i] = Some(nearest_group(plan, i, &anchors, &decided));
+    for (i, g) in groups.iter_mut().enumerate() {
+        if g.is_none() {
+            *g = Some(nearest_group(plan, i, &anchors, &decided));
         }
     }
-    let groups: Vec<Group> = groups.into_iter().map(|g| g.unwrap_or(Group::Frame)).collect();
+    let groups: Vec<Group> = groups
+        .into_iter()
+        .map(|g| g.unwrap_or(Group::Frame))
+        .collect();
 
     let rails = union_of(plan, |_, p| p.role == PartRole::Rail);
     let girders = union_of(plan, |_, p| p.role == PartRole::Girder);
@@ -254,7 +262,14 @@ pub fn rig(plan: &ModelPlan) -> Rig {
 
     // The bridge runs between the ends of the rails; without rails it may go one half model length
     // each way. The trolley runs along the girders (or along the bridge when no part is a girder).
-    let (b_ref, b_group) = (rails, if bridge.is_empty() { None } else { Some(bridge) });
+    let (b_ref, b_group) = (
+        rails,
+        if bridge.is_empty() {
+            None
+        } else {
+            Some(bridge)
+        },
+    );
     let bridge_track = match b_group {
         None => (0.0, 0.0),
         Some(g) if !b_ref.is_empty() => track(b_ref.min.x, b_ref.max.x, g.min.x, g.max.x),
@@ -271,7 +286,12 @@ pub fn rig(plan: &ModelPlan) -> Rig {
         track(t_ref.min.z, t_ref.max.z, t_group.min.z, t_group.max.z)
     } else {
         let half = model.size().z * 0.5;
-        track(t_group.min.z - half, t_group.max.z + half, t_group.min.z, t_group.max.z)
+        track(
+            t_group.min.z - half,
+            t_group.max.z + half,
+            t_group.min.z,
+            t_group.max.z,
+        )
     };
 
     // The ropes leave the underside of the biggest drum.
@@ -324,7 +344,10 @@ impl Rig {
             return (0.0, false);
         }
         let lo = -self.hook.min.y;
-        let hi = self.pivot.map_or(f32::MAX, |p| p.y - self.hook.max.y).max(lo);
+        let hi = self
+            .pivot
+            .map_or(f32::MAX, |p| p.y - self.hook.max.y)
+            .max(lo);
         let dy = want.clamp(lo, hi);
         (dy, (dy - want).abs() > 0.5)
     }
@@ -386,7 +409,8 @@ pub fn scene_with(
         .pivot
         .unwrap_or_else(|| Vec3::new(rig.hook.center().x, rig.hook.max.y, rig.hook.center().z))
         + Vec3::new(dx, 0.0, dz);
-    let swing = Quat::from_rotation_z(state.swing_rad[0]) * Quat::from_rotation_x(-state.swing_rad[1]);
+    let swing =
+        Quat::from_rotation_z(state.swing_rad[0]) * Quat::from_rotation_x(-state.swing_rad[1]);
     let warn = state.warning || held;
     // Where the wheel and the drum are in their turn: distance rolled over radius, kept below one
     // turn so a long travel does not lose the angle to float rounding.
@@ -487,7 +511,11 @@ pub fn scene_with(
     } else {
         rig.girders.max.y
     };
-    let x_start = if rig.rails.is_empty() { rig.bridge.min.x - rig.rest_m[0] * 1000.0 } else { rig.rails.min.x };
+    let x_start = if rig.rails.is_empty() {
+        rig.bridge.min.x - rig.rest_m[0] * 1000.0
+    } else {
+        rig.rails.min.x
+    };
     let z_start = if rig.girders.is_empty() {
         rig.bridge.min.z
     } else {
@@ -498,7 +526,12 @@ pub fn scene_with(
             continue;
         }
         let x = x_start + mark.position_m * 1000.0;
-        let z = if rig.rails.is_empty() { plan.bounds.min.z } else { rig.rails.min.z } - size::TRAVEL_FLAG[2] - 100.0;
+        let z = if rig.rails.is_empty() {
+            plan.bounds.min.z
+        } else {
+            rig.rails.min.z
+        } - size::TRAVEL_FLAG[2]
+            - 100.0;
         push_travel_flag(&mut scene, true, k, mark.kind, Vec3::new(x, rail_top, z));
     }
     for (k, mark) in state.trolley_limits.iter().enumerate() {
@@ -554,16 +587,66 @@ mod tests {
         use PartRole::*;
         let parts: &[(&str, PartRole, [f32; 3], [f32; 3])] = &[
             ("rail A", Rail, [0.0, 7000.0, 0.0], [12000.0, 7060.0, 60.0]),
-            ("rail B", Rail, [0.0, 7000.0, 7940.0], [12000.0, 7060.0, 8000.0]),
-            ("support A", Other, [0.0, 6700.0, 0.0], [12000.0, 7000.0, 300.0]),
-            ("girder", Girder, [2100.0, 7400.0, 0.0], [2400.0, 8000.0, 8000.0]),
-            ("truck A", Other, [1700.0, 7220.0, 0.0], [2800.0, 7400.0, 400.0]),
-            ("bridge wheel", Wheel, [1740.0, 7060.0, 0.0], [2060.0, 7380.0, 80.0]),
-            ("trolley wheel", Wheel, [2150.0, 8000.0, 3500.0], [2210.0, 8090.0, 3590.0]),
-            ("drum", Drum, [2030.0, 8080.0, 3600.0], [2470.0, 8520.0, 4400.0]),
-            ("motor", Motor, [2050.0, 8200.0, 4500.0], [2450.0, 8500.0, 4900.0]),
-            ("block", HookBlock, [2100.0, 6700.0, 3900.0], [2400.0, 7100.0, 4100.0]),
-            ("hook", Hook, [2200.0, 6300.0, 3950.0], [2300.0, 6700.0, 4050.0]),
+            (
+                "rail B",
+                Rail,
+                [0.0, 7000.0, 7940.0],
+                [12000.0, 7060.0, 8000.0],
+            ),
+            (
+                "support A",
+                Other,
+                [0.0, 6700.0, 0.0],
+                [12000.0, 7000.0, 300.0],
+            ),
+            (
+                "girder",
+                Girder,
+                [2100.0, 7400.0, 0.0],
+                [2400.0, 8000.0, 8000.0],
+            ),
+            (
+                "truck A",
+                Other,
+                [1700.0, 7220.0, 0.0],
+                [2800.0, 7400.0, 400.0],
+            ),
+            (
+                "bridge wheel",
+                Wheel,
+                [1740.0, 7060.0, 0.0],
+                [2060.0, 7380.0, 80.0],
+            ),
+            (
+                "trolley wheel",
+                Wheel,
+                [2150.0, 8000.0, 3500.0],
+                [2210.0, 8090.0, 3590.0],
+            ),
+            (
+                "drum",
+                Drum,
+                [2030.0, 8080.0, 3600.0],
+                [2470.0, 8520.0, 4400.0],
+            ),
+            (
+                "motor",
+                Motor,
+                [2050.0, 8200.0, 4500.0],
+                [2450.0, 8500.0, 4900.0],
+            ),
+            (
+                "block",
+                HookBlock,
+                [2100.0, 6700.0, 3900.0],
+                [2400.0, 7100.0, 4100.0],
+            ),
+            (
+                "hook",
+                Hook,
+                [2200.0, 6300.0, 3950.0],
+                [2300.0, 6700.0, 4050.0],
+            ),
         ];
         let model = CraneModel::new(
             parts
@@ -647,7 +730,11 @@ mod tests {
         let (_, r) = placed();
         // The bridge stands between 1.7 m and 2.8 m of a 12 m rail.
         assert!((r.rest_m[0] - 1.7).abs() < 1e-3, "{:?}", r.rest_m);
-        assert!((r.extent_m[0] - (12.0 - 1.1)).abs() < 1e-3, "{:?}", r.extent_m);
+        assert!(
+            (r.extent_m[0] - (12.0 - 1.1)).abs() < 1e-3,
+            "{:?}",
+            r.extent_m
+        );
         // The trolley (the wheel, the drum and the motor) stands between 3.5 m and 4.9 m of an 8 m girder.
         assert!((r.rest_m[1] - 3.5).abs() < 1e-3);
         assert!((r.extent_m[1] - (8.0 - 1.4)).abs() < 1e-3);
@@ -679,7 +766,10 @@ mod tests {
         let far = scene(&p, &r, &at(1000.0, 0.0), None);
         let i = index("girder");
         let end = middle(&far, i).x + 150.0;
-        assert!((end - 12000.0 + 400.0).abs() < 1.0 || end <= 12000.0, "{end}");
+        assert!(
+            (end - 12000.0 + 400.0).abs() < 1.0 || end <= 12000.0,
+            "{end}"
+        );
     }
 
     #[test]
@@ -713,7 +803,10 @@ mod tests {
         for name in ["block", "hook"] {
             let i = index(name);
             let d = middle(&up, i) - middle(&rest, i);
-            assert!((d - Vec3::new(0.0, 500.0, 0.0)).length() < 1e-2, "{name}: {d}");
+            assert!(
+                (d - Vec3::new(0.0, 500.0, 0.0)).length() < 1e-2,
+                "{name}: {d}"
+            );
         }
         assert!((middle(&up, index("drum")) - middle(&rest, index("drum"))).length() < 1e-2);
         // The rope is as long as the gap under the drum and shortens as the hook rises.
@@ -754,7 +847,11 @@ mod tests {
         assert_eq!(ropes.len(), 2);
         // Each is as long as the rope at rest.
         for rope in ropes {
-            assert!((rope.size.z - r.rope_length_mm(0.0)).abs() < 1.0, "{}", rope.size.z);
+            assert!(
+                (rope.size.z - r.rope_length_mm(0.0)).abs() < 1.0,
+                "{}",
+                rope.size.z
+            );
         }
     }
 
@@ -826,7 +923,12 @@ mod tests {
         s.slack_m = 0.4;
         let with = scene(&p, &r, &s, Some([1.2, 0.8, 0.8]));
         let without = scene(&p, &r, &rest_state(&r), None);
-        assert!(with.items.len() > without.items.len() + 6, "{} {}", with.items.len(), without.items.len());
+        assert!(
+            with.items.len() > without.items.len() + 6,
+            "{} {}",
+            with.items.len(),
+            without.items.len()
+        );
         // The load hangs under the hook's tip.
         let load = with.items.iter().find(|i| i.id.raw == 12).unwrap();
         let hook_tip = p.placed[index("hook")].bounds.min.y;
@@ -847,7 +949,10 @@ mod tests {
             },
             RawPart {
                 name: "girder".into(),
-                mesh: MeshData::from_boxes(&[(Vec3::new(1000.0, 60.0, 0.0), Vec3::new(1300.0, 500.0, 60.0))]),
+                mesh: MeshData::from_boxes(&[(
+                    Vec3::new(1000.0, 60.0, 0.0),
+                    Vec3::new(1300.0, 500.0, 60.0),
+                )]),
             },
         ]);
         let p = plan(
@@ -861,7 +966,15 @@ mod tests {
         let r = rig(&p);
         assert_eq!(r.rope_length_mm(0.3), 0.0);
         assert!(r.hook_view(0.0).is_none());
-        let s = scene(&p, &r, &CraneState { bridge_m: 1.0, ..Default::default() }, Some([1.0; 3]));
+        let s = scene(
+            &p,
+            &r,
+            &CraneState {
+                bridge_m: 1.0,
+                ..Default::default()
+            },
+            Some([1.0; 3]),
+        );
         assert!(s.items.iter().all(|i| i.id.raw != 9 && i.id.raw != 12));
         // The bridge moves 1 m of its 4.7 m of rail (5 m less the girder).
         assert!((r.extent_m[0] - 4.7).abs() < 1e-3, "{:?}", r.extent_m);
@@ -874,7 +987,10 @@ mod tests {
         use PartRole::*;
         let model = CraneModel::new(vec![RawPart {
             name: "girder".into(),
-            mesh: MeshData::from_boxes(&[(Vec3::new(4000.0, 0.0, 0.0), Vec3::new(4400.0, 500.0, 6000.0))]),
+            mesh: MeshData::from_boxes(&[(
+                Vec3::new(4000.0, 0.0, 0.0),
+                Vec3::new(4400.0, 500.0, 6000.0),
+            )]),
         }]);
         let p = plan(
             &model,
@@ -886,7 +1002,11 @@ mod tests {
         );
         let r = rig(&p);
         // The model is 400 mm long, so the bridge has 200 mm each way.
-        assert!(r.extent_m[0] > 0.0 && r.extent_m[0] < 1.0, "{:?}", r.extent_m);
+        assert!(
+            r.extent_m[0] > 0.0 && r.extent_m[0] < 1.0,
+            "{:?}",
+            r.extent_m
+        );
     }
 
     #[test]
