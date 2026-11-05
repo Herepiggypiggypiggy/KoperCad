@@ -159,6 +159,7 @@ impl DoorState {
         let top = ui.cursor().left_top();
 
         if layout.enclosure.is_none() {
+            ui.weak("Not stored");
             super::window_help::add(
                 ui.ctx(),
                 "Not stored yet: the inside size follows the plate until you apply it.",
