@@ -1,0 +1,4 @@
+KoperCAD experimental build 2026-11-05T23:31:05Z
+
+Included:
+main 2d974d780
