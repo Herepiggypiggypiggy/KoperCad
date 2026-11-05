@@ -20,9 +20,10 @@
 //!    re-radiating).
 //!
 //! Limits, stated on purpose: air is transparent; surfaces are grey and
-//! diffuse; **no occlusion** between surfaces (a device hides another one
-//! from the wall only in the 3D solver's ray tracing); emissivity is a
-//! planning value per surface, not a measurement.
+//! diffuse; occlusion by box blockers exists but is approximate
+//! (`view_factor_blocked`, `Enclosure::with_blockers`: sight lines to sample
+//! points, not exact shadow geometry); emissivity is a planning value per
+//! surface, not a measurement.
 //!
 //! Where the user finds it: Cabinet, Heat layer (radiation split) once the
 //! 2D model takes its device-to-wall factors from here (the next H2 step).
@@ -236,8 +237,9 @@ fn segment_hits_box(a: V3, b: V3, min: V3, max: V3) -> bool {
 
 /// View factor `F(a -> b)` with boxes `(min, max)` in the way: the exact
 /// unobstructed factor of each emitting point, times the share of
-/// sight lines to a 4 x 4 grid on `b` that no box cuts. A model, accurate
-/// to a few percent for shadows larger than the grid pitch.
+/// sight lines that no box cuts, to the sample points of `b` (2 x 2 cells
+/// with 16 Gauss points each, so 64 sight lines per emitting point). A model,
+/// accurate to a few percent for shadows larger than a cell.
 pub fn view_factor_blocked(a: &Polygon, b: &Polygon, div: usize, blockers: &[(V3, V3)]) -> f64 {
     view_factor_blocked_res(a, b, div, blockers, 2)
 }
