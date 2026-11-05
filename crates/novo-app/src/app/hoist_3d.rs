@@ -213,7 +213,7 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
 
 /// What the picture leaves out when it follows a closed-loop winch of Drive run.
 const WINCH_PICTURE_LEAVES_OUT: &[&str] = &[
-    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on and the load cell reading are in the line above the picture, not drawn; slack rope lies in a heap beside the block; the brake and drive state are the two lamps on the control box",
+    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on and the load cell reading are in the line above the picture, not drawn; slack rope lies in a heap beside the block (at most 12 pieces); the brake and drive state are the two lamps on the control box",
     "The swing is the same one-pendulum model as for a hoist, from the travel axes picked here; a rope that hangs at an angle from the start is not drawn",
 ];
 
