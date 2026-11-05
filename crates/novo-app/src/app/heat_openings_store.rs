@@ -95,6 +95,7 @@ impl super::NovoApp {
     /// has no frame (the Cooling advice adding a pair from the Cabinet).
     pub(super) fn sync_openings_now(&mut self) {
         self.sync_inside_fans_now();
+        self.sync_shell_now();
         let Some(document) = self.backend.document() else {
             return;
         };

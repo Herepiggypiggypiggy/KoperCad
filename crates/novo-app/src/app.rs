@@ -186,6 +186,7 @@ mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
 mod heat_settings;
+mod heat_shell;
 mod heat_spots;
 mod heat_status;
 #[cfg(test)]

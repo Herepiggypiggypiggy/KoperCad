@@ -74,6 +74,15 @@ impl Live {
         self.auto = Some(on);
     }
 
+    /// The scenario the project gives now, when it is the one with this key
+    /// (the cabinet shell of a result is read from it).
+    pub(super) fn scenario_for(&self, key: u64) -> Option<Arc<Scenario>> {
+        let c = self.current.as_ref()?;
+        (c.scenario_key == key)
+            .then(|| c.scenario.clone())
+            .flatten()
+    }
+
     pub(super) fn is_stale(&self) -> bool {
         self.stale
     }

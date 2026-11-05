@@ -1,0 +1,25 @@
+@title 3D Heat: Shell setup in Vents and fans, model words visible without hovering
+@area 3D
+@sizes 1366x768 1920x1080
+# Lane H7. The Shell section of Vents and fans: material, wall, paint, insulation, door frame, window, plate gap. Every value says where it came from (assumed at the start), and the section says "Model, not measurement" on the screen. Changing a value turns it into "typed by you".
+open_starter_example
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+scroll 170 560 -800
+wait 20
+expect "Shell"
+expect "Model, not measurement"
+expect "assumed"
+shot shell-defaults
+check_layout
+click_text "2.0 mm"
+key ctrl+a
+text 3
+key Enter
+wait 10
+expect "3.0 mm"
+shot shell-wall-typed
+check_layout

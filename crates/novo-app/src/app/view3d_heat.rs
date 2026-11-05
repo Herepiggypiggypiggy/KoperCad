@@ -174,6 +174,17 @@ pub(super) fn show(
                     super::heat_modes::paths_table(ui, &rows, tag_of);
                 });
         }
+        if let Some((sol, scn)) = state
+            .solution()
+            .and_then(|s| state.live.scenario_for(s.scenario_key).map(|c| (s, c)))
+        {
+            egui::CollapsingHeader::new("Cabinet shell")
+                .id_salt("view3d_heat_shell")
+                .show(ui, |ui| {
+                    let report = novo_cfd::shell_view::shell_report(&scn, &sol.snapshot);
+                    super::heat_shell::result_block(ui, &report);
+                });
+        }
         // Closed while a run goes: the form below the fold only hid the Cancel
         // row and could not be used anyway.
         let mut settings_header = egui::CollapsingHeader::new("Settings for the next run")
