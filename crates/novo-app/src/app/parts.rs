@@ -1554,7 +1554,10 @@ fn guide_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
     ui.group(|ui| {
         ui.horizontal(|ui| {
             ui.strong("Maker guide");
-            ui.weak("KoperCAD never contacts a maker site: you download, it reads.");
+            super::window_help::add(
+                ui.ctx(),
+                "KoperCAD never contacts a maker site: you download, it reads.",
+            );
             if ui.button("Hide").clicked() {
                 win.guide = false;
             }
@@ -1821,7 +1824,11 @@ fn parts_ui(
     if win.etim_job.is_some() {
         ui.horizontal(|ui| {
             ui.spinner();
-            ui.weak("Installing the ETIM release\u{2026} import maker files when it is done.");
+            ui.weak("Installing the ETIM release\u{2026}");
+            super::window_help::add(
+                ui.ctx(),
+                "Import maker files when the ETIM release is installed.",
+            );
         });
     }
     if let Some(text) = super::parts_identity::reading_text().filter(|_| !win.waiting.is_empty()) {
@@ -1896,11 +1903,13 @@ fn list_ui(
     if rows.is_empty() {
         ui.add_space(12.0);
         if win.query.trim().is_empty() && win.maker.is_none() {
-            ui.weak(
-                "The catalog is empty. Press Import catalog files above, or use File > Import... > Import parts folder to load a whole folder of maker files.",
+            ui.weak("The catalog is empty");
+            super::window_help::add(
+                ui.ctx(),
+                "Press Import catalog files above, or use File > Import... > Import parts folder to load a whole folder of maker files.",
             );
         } else {
-            ui.weak("No part matches. Change the search or the maker.");
+            ui.weak("No part matches");
         }
         return;
     }
@@ -2061,8 +2070,8 @@ fn suppliers_strip(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<P
 fn status_ui(ui: &mut egui::Ui, win: &PartsWindow, dragging: bool, actions: &mut Vec<PartsAction>) {
     if dragging {
         let who = win.target().map_or_else(
-            || "Select a part first, then drop its file here.".to_owned(),
-            |p| format!("Drop the file to import it for {p}."),
+            || "Select a part first".to_owned(),
+            |p| format!("Drop the file for {p}"),
         );
         ui.strong(who);
         return;
@@ -2077,21 +2086,46 @@ fn status_ui(ui: &mut egui::Ui, win: &PartsWindow, dragging: bool, actions: &mut
                 ui.strong(format!("Importing {}", import.label));
             });
             match (&win.downloads, import.watching()) {
-                (Some(dir), true) => ui.label(format!(
-                    "Save the file from the maker's page. It is picked up from {} by itself; \
+                (Some(dir), true) => {
+                    super::window_help::add(
+                        ui.ctx(),
+                        format!(
+                            "Save the file from the maker's page. It is picked up from {} by itself; \
 you can also drop it on this window.",
-                    dir.display()
-                )),
-                _ => ui.label("Drop the downloaded file on this window, or choose it."),
+                            dir.display()
+                        ),
+                    );
+                    ui.label("Waiting for the download")
+                }
+                _ => {
+                    super::window_help::add(
+                        ui.ctx(),
+                        "Drop the downloaded file on this window, or choose it.",
+                    );
+                    ui.label("Drop the file here")
+                }
             };
             let minutes = (super::parts_import::WAIT_LIMIT_SECONDS / 60.0).round();
             ui.weak(format!(
-                "Waiting for the download: {}. If nothing arrives within {minutes} minutes this stops by \
-itself; Stop ends it now.",
+                "Waiting for the download: {}",
                 import.waited_text()
             ));
+            super::window_help::add(
+                ui.ctx(),
+                format!(
+                    "If nothing arrives within {minutes} minutes the wait stops by itself; Stop ends it now."
+                ),
+            );
             if let Some(note) = &import.account {
-                ui.label(note);
+                match note.split_once(". ") {
+                    Some((head, rest)) => {
+                        ui.label(format!("{head}."));
+                        super::window_help::add(ui.ctx(), rest);
+                    }
+                    None => {
+                        ui.label(note);
+                    }
+                }
             }
             for (name, why) in import.left_alone() {
                 super::parts_flags::labelled(
@@ -2124,12 +2158,13 @@ itself; Stop ends it now.",
                 );
             }
             for (i, step) in import.steps.iter().enumerate() {
-                ui.label(format!("{}. {step}", i + 1));
+                super::window_help::add(ui.ctx(), format!("{}. {step}", i + 1));
             }
             if import.page_url.is_some() && !import.page_verified {
-                ui.weak(
-                    "This page address is not confirmed. If it does not show the part, find it \
-on the maker's site and drop the file here.",
+                ui.weak("Page address not confirmed");
+                super::window_help::add(
+                    ui.ctx(),
+                    "If the page does not show the part, find it on the maker's site and drop the file here.",
                 );
             }
             ui.horizontal(|ui| {
@@ -2154,7 +2189,10 @@ on the maker's site and drop the file here.",
                 ui.spinner();
                 ui.strong(format!("Reading the file for {}", import.label));
             });
-            ui.weak("This runs in the background; you can keep working.");
+            super::window_help::add(
+                ui.ctx(),
+                "This runs in the background; you can keep working.",
+            );
             if ui.button("Stop").clicked() {
                 actions.push(PartsAction::StopImport);
             }
@@ -2214,7 +2252,8 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
         .cloned()
     else {
         ui.add_space(8.0);
-        ui.weak("Pick a part in the list to see its data.");
+        ui.weak("No part picked");
+        super::window_help::add(ui.ctx(), "Pick a part in the list to see its data.");
         return;
     };
     let part = &part;
@@ -2282,11 +2321,15 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             }
             widgets::collapsing_section(ui, "parts_source", "Source", "", false, |ui| {
                 if records.is_empty() {
-                    ui.weak(if win.in_library(&key) {
-                        "In the library."
+                    if win.in_library(&key) {
+                        ui.weak("In the library");
                     } else {
-                        "Not imported yet. Import saves the maker's file on this computer."
-                    });
+                        ui.weak("Not imported yet");
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Import saves the maker's file on this computer.",
+                        );
+                    }
                 }
                 for r in &records {
                     ui.label(format!("{} ({} bytes)", r.file_name, r.bytes));
@@ -2304,7 +2347,16 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
                 }
             });
             widgets::collapsing_section(ui, "parts_model", "3D model", "", true, |ui| {
-                ui.label(model_status(win.model_state(part, &records).as_ref()));
+                let status = model_status(win.model_state(part, &records).as_ref());
+                match status.split_once(". ") {
+                    Some((head, rest)) => {
+                        ui.label(head);
+                        super::window_help::add(ui.ctx(), rest);
+                    }
+                    None => {
+                        ui.label(status);
+                    }
+                }
                 if ui.button("Import 3D model (STEP)...").clicked() {
                     actions.push(PartsAction::ChooseModel);
                 }
@@ -2330,7 +2382,8 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             if !records.is_empty() {
                 ui.add_space(8.0);
                 if win.confirm_remove.as_ref() == Some(&key) {
-                    ui.label("Delete the saved files? You can download them again from the maker.");
+                    ui.label("Delete the saved files?");
+                    super::window_help::add(ui.ctx(), "You can download them again from the maker.");
                     ui.horizontal(|ui| {
                         if widgets::danger_button(ui, "Remove").clicked() {
                             actions.push(PartsAction::Remove(key.clone()));
@@ -2795,7 +2848,7 @@ mod tests {
         let ctx = themed();
         frame(&ctx, &mut win, size, Vec::new());
         let (_, _, before) = frame(&ctx, &mut win, size, Vec::new());
-        assert!(before.contains("Pick a part in the list"), "{before}");
+        assert!(before.contains("No part picked"), "{before}");
         // Pick the part on the last visible-or-not row and draw it.
         let key = win.rows()[2].0.clone();
         let part = win.catalog.get(&key).unwrap().clone();
@@ -2803,7 +2856,7 @@ mod tests {
         frame(&ctx, &mut win, size, Vec::new());
         let (_, used, text) = frame(&ctx, &mut win, size, Vec::new());
         assert!(screen.contains_rect(used), "{used:?} leaves {screen:?}");
-        assert!(!text.contains("Pick a part in the list"));
+        assert!(!text.contains("No part picked"));
         assert!(text.contains("Use for selected device"), "{text}");
         for section in detail_sections(&part) {
             assert!(

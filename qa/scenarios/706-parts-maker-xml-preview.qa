@@ -16,7 +16,7 @@ wait 6
 expect "Connection point and hole positions are kept in the maker's own frame"
 click_text "Warning: Assumed" Button #1
 wait 6
-expect "Kept as written, not understood"
+expect "Not understood (name, count)"
 expect "part/colour"
 expect_enabled "Add to catalog"
 shot maker-xml-preview
