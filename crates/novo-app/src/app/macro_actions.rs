@@ -654,7 +654,7 @@ impl NovoApp {
                                         (n.clone(), v)
                                     })
                                     .collect();
-                                egui::CollapsingHeader::new("Mounting view")
+                                egui::CollapsingHeader::new(super::macro_mounting::HEADER)
                                     .id_salt("place_mounting")
                                     .show(ui, |ui| super::macro_mounting::show(ui, view, &texts));
                             }

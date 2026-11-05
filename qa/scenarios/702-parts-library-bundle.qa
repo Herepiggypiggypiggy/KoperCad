@@ -42,6 +42,10 @@ shot export-form
 check_layout
 click_text "Backup for me"
 wait 10
+# The warning sits behind its triangle (the label stays visible, the sentence is in the popover).
+expect "Keep this backup"
+click_text "Warning: Keep this backup"
+wait 10
 expect "Keep it for yourself"
 shot export-backup
 check_layout
