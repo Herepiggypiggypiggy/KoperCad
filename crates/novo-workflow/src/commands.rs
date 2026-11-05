@@ -3168,6 +3168,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["single line"],
     ),
     verb(
+        cmd(
+            "report.queries",
+            "My reports",
+            "View",
+            &[
+                "custom report",
+                "query",
+                "sql",
+                "saved report",
+                "report builder",
+                "own report",
+            ],
+            Needs::Project,
+        ),
+        &["my reports"],
+    ),
+    verb(
         with_arguments(
             cmd(
                 "report.add_page",

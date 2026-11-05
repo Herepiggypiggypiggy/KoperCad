@@ -31,6 +31,9 @@ const WIDE_TABLE_COLUMNS: usize = 8;
 /// Pixels per unit of column weight, and the widest a column's minimum gets.
 const WIDE_PX_PER_WEIGHT: f32 = 5.5;
 const WIDE_MAX_COLUMN: f32 = 230.0;
+/// A saved report's column: pixels per character of its longest text, and the widest it gets.
+const SAVED_PX_PER_CHAR: f32 = 7.5;
+const SAVED_MAX_COLUMN: f32 = 340.0;
 
 use super::learn_ui::chip_button;
 use super::workspace::Workspace;
@@ -114,6 +117,7 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.cable_schedule", "cableschedule"),
     ("report.plugs", "plugs"),
     ("report.singleline", "singleline"),
+    ("report.queries", "queries"),
 ];
 
 impl ReportsView {
@@ -444,7 +448,17 @@ impl NovoApp {
                         ui.add_space(12.0);
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
-                        ui.weak(empty_report_hint(&id));
+                        if id == novo_reports::query::SavedQueries::ID {
+                            let (text, hint) = saved_empty_state(
+                                output.sections.iter().all(|s| s.key == "presets"),
+                            );
+                            ui.horizontal(|ui| {
+                                ui.weak(text);
+                                novo_theme::widgets::help_mark(ui, hint);
+                            });
+                        } else {
+                            ui.weak(empty_report_hint(&id));
+                        }
                     }
                     jump
                 })
@@ -624,13 +638,9 @@ impl NovoApp {
         let bar = ui.spacing().scroll.allocated_width() + 4.0;
         let weights: Vec<f64> = section.columns.iter().map(|c| c.width).collect();
         let mut mins = header_min_widths(ui, &columns);
-        let wide = columns.len() > WIDE_TABLE_COLUMNS;
+        let wide = columns.len() > WIDE_TABLE_COLUMNS || section.fit_content;
         if wide {
-            // Many columns would be squeezed until the cells are cut: give
-            // each a readable width and scroll sideways when they do not fit.
-            for (min, weight) in mins.iter_mut().zip(&weights) {
-                *min = min.max((*weight as f32 * WIDE_PX_PER_WEIGHT).min(WIDE_MAX_COLUMN));
-            }
+            wide_minimums(&mut mins, &weights, section.fit_content);
         }
         let available = ui.available_width() - bar;
         let widths = column_widths_min(available, &weights, &mins);
@@ -1380,6 +1390,7 @@ mod tests {
                 "Cable schedule",
                 "Plug connection list",
                 "Single-line diagram",
+                "My reports",
             ]
         );
         // The palette still finds a report by the name it used to have.
@@ -1490,6 +1501,21 @@ mod tests {
 }
 
 /// What an empty report says, with how to get rows into it.
+/// Gives each column of a wide table a readable minimum width, so the table
+/// scrolls sideways instead of cutting cells. A saved report's weights are
+/// character counts of its longest text (`fit_content`): those get room for
+/// the text plus padding; other wide reports keep their own, tighter, scale.
+fn wide_minimums(mins: &mut [f32], weights: &[f64], fit_content: bool) {
+    let (per_weight, padding, widest) = if fit_content {
+        (SAVED_PX_PER_CHAR, 12.0, SAVED_MAX_COLUMN)
+    } else {
+        (WIDE_PX_PER_WEIGHT, 0.0, WIDE_MAX_COLUMN)
+    };
+    for (min, weight) in mins.iter_mut().zip(weights) {
+        *min = min.max((*weight as f32 * per_weight + padding).min(widest));
+    }
+}
+
 fn empty_report_hint(id: &str) -> &'static str {
     match id {
         "io" => {
@@ -1506,6 +1532,63 @@ fn empty_report_hint(id: &str) -> &'static str {
         }
         "queries" => "No saved reports yet. Open Edit my reports above to write one.",
         _ => "Nothing to list yet",
+    }
+}
+
+/// Empty-state line and its "?" text for the My reports page. No sections
+/// means nothing is saved; sections without rows means a report that simply
+/// matches nothing right now.
+fn saved_empty_state(nothing_saved: bool) -> (&'static str, &'static str) {
+    if nothing_saved {
+        ("No saved reports", empty_report_hint("queries"))
+    } else {
+        (
+            "No rows",
+            "Nothing matches this report right now. It fills in when matching items exist.",
+        )
+    }
+}
+
+#[cfg(test)]
+mod saved_empty_tests {
+    use super::saved_empty_state;
+
+    #[test]
+    fn no_rows_is_not_no_saved_reports() {
+        assert_eq!(saved_empty_state(true).0, "No saved reports");
+        assert_eq!(saved_empty_state(false).0, "No rows");
+        assert_ne!(saved_empty_state(true).1, saved_empty_state(false).1);
+    }
+}
+
+#[cfg(test)]
+mod wide_minimum_tests {
+    use super::wide_minimums;
+
+    /// An 11-column report (the wire list) keeps the minimum widths it had
+    /// before saved reports existed.
+    #[test]
+    fn a_wide_report_keeps_its_old_minimums() {
+        let weights = [
+            15.0, 35.0, 35.0, 15.0, 12.0, 10.0, 25.0, 15.0, 14.0, 12.0, 20.0,
+        ];
+        let mut mins = vec![40.0_f32; weights.len()];
+        wide_minimums(&mut mins, &weights, false);
+        let old: Vec<f32> = weights
+            .iter()
+            .map(|w| 40.0_f32.max((*w as f32 * 5.5).min(230.0)))
+            .collect();
+        assert_eq!(mins, old);
+    }
+
+    #[test]
+    fn a_saved_report_gets_room_for_its_longest_text() {
+        let mut mins = vec![40.0_f32];
+        wide_minimums(&mut mins, &[18.0], true);
+        assert_eq!(mins[0], 18.0 * 7.5 + 12.0);
+        let mut mins = vec![40.0_f32];
+        wide_minimums(&mut mins, &[400.0], true);
+        assert_eq!(mins[0], 340.0);
     }
 }
 

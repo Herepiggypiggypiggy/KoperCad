@@ -145,6 +145,10 @@ pub struct Section {
     /// unless the report language says otherwise. Spreadsheets keep real
     /// numbers and format them by their own locale.
     pub decimal: char,
+    /// The column weights are character counts of the longest text in each
+    /// column, so a screen table gives every column room for that text and
+    /// scrolls sideways instead of cutting it (saved "My reports" tables).
+    pub fit_content: bool,
 }
 
 impl Section {
@@ -156,6 +160,7 @@ impl Section {
             rows: Vec::new(),
             flow: false,
             decimal: '.',
+            fit_content: false,
         }
     }
 

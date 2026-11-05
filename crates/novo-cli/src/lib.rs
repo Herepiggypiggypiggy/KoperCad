@@ -321,6 +321,9 @@ enum Export {
     Plugs(ReportArgs),
     /// Single-line diagram schedule: protection, cable, current and voltage drop per feeder.
     SingleLine(ReportArgs),
+    /// "My reports": the reports saved in the project, as one table each
+    /// (CSV holds the first only when there is one; use .xlsx for several).
+    Queries(ReportArgs),
     /// Every report in one workbook, one sheet each.
     Reports {
         file: PathBuf,
@@ -730,6 +733,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
+        Cmd::Export(Export::Queries(args)) => export_reports(&args.file, &["queries"], &args, out),
         Cmd::Export(Export::Cutlist(args)) => export_reports(&args.file, &["cutlist"], &args, out),
         Cmd::Export(Export::Wirecut(args)) => export_wirecut(&args, out),
         Cmd::Export(Export::Terminals(args)) => {
