@@ -702,7 +702,9 @@ impl GridIndex {
     }
 
     fn is_large(x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
-        (x1 as i64 - x0 as i64 + 1) * (y1 as i64 - y0 as i64 + 1) > Self::MAX_CELLS_PER_ITEM
+        // Each side can span the whole i32 range, so the product needs 128 bits.
+        (x1 as i128 - x0 as i128 + 1) * (y1 as i128 - y0 as i128 + 1)
+            > Self::MAX_CELLS_PER_ITEM as i128
     }
 
     fn insert(&mut self, slot: u32, b: &Aabb) {
@@ -770,6 +772,12 @@ mod tests {
     use super::*;
     use crate::shape::Shape;
     use crate::style::{Color, Stroke};
+
+    #[test]
+    fn an_item_spanning_the_whole_cell_range_is_large_and_does_not_overflow() {
+        assert!(GridIndex::is_large(i32::MIN, i32::MIN, i32::MAX, i32::MAX));
+        assert!(!GridIndex::is_large(0, 0, 3, 3));
+    }
 
     fn line_item(a: Vec2, b: Vec2) -> Item {
         Item::new(LayerId(0)).with(Primitive::stroked(
