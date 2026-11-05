@@ -24,6 +24,7 @@ use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::heat_flow;
 use super::heat_legend;
+use super::heat_numbers;
 use super::heat_openings;
 use super::heat_probe::{self, ProbeState};
 use super::heat_spots;
@@ -966,19 +967,24 @@ impl NovoApp {
         let mut heat_changed = false;
         if !mode.probe.on {
             mode.probe.at = None;
+            mode.probe.line_on = false;
         }
         let probe_key = solution.as_ref().map(|s| (s.id, mode.probe.at));
-        let probe_changed = probe_key != mode.probe.shown;
+        let probe_changed = probe_key != mode.probe.shown || mode.probe.rev != mode.probe.shown_rev;
         mode.probe.shown = probe_key;
-        let probe_marker = |sol: &super::heat_run::Solution, at: [f64; 3]| {
-            heat_probe::marker(
-                Place {
-                    plate_x: sol.plate[0],
-                    plate_y: sol.plate[1],
-                    frame: scene.frame,
-                },
-                at,
-            )
+        mode.probe.shown_rev = mode.probe.rev;
+        let probe_marks = |sol: &super::heat_run::Solution, probe: &ProbeState| {
+            let place = Place {
+                plate_x: sol.plate[0],
+                plate_y: sol.plate[1],
+                frame: scene.frame,
+            };
+            let mut all = Vec::new();
+            if let Some(at) = probe.at {
+                all.push(heat_probe::marker(place, at));
+            }
+            all.extend(heat_probe::pin_overlays(place, probe));
+            all
         };
         let tracing = solution.is_some()
             && (mode.heat.lines || mode.heat.heat_flow.draws_air())
@@ -1106,8 +1112,8 @@ impl NovoApp {
         }
         let marker = solution
             .as_ref()
-            .zip(mode.probe.at)
-            .map(|(sol, at)| probe_marker(sol, at));
+            .map(|sol| probe_marks(sol, &mode.probe))
+            .unwrap_or_default();
         if !animating && (heat_changed || ghost_changed || probe_changed) {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
@@ -1894,10 +1900,18 @@ impl NovoApp {
             // A point belongs to the result it was read from.
             mode.probe.bind(sol.id);
             if let Some(click) = &out.clicked {
-                mode.probe.at = heat_probe::locate(&sol.snapshot, place, &click.ray, plane);
+                let hit = heat_probe::locate(&sol.snapshot, place, &click.ray, plane);
+                if mode.probe.line_on {
+                    if let Some(p) = hit {
+                        mode.probe.line_click(p);
+                    }
+                } else {
+                    mode.probe.at = hit;
+                }
             }
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 mode.probe.at = None;
+                mode.probe.clear_line();
             }
             // Without a clicked point the strip shows what is under the pointer.
             let (at, pointed) = match mode.probe.at {
@@ -2354,7 +2368,25 @@ fn heat_controls(
             ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
             ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
-        heat_legend::help(ui, h, range, top_speed, top_flux);
+        let estimate = sol
+            .messages
+            .iter()
+            .any(|m| m == novo_layout::spec::ESTIMATE_NOTICE);
+        if estimate {
+            ui.label(
+                egui::RichText::new(super::heat::ESTIMATE_TAG)
+                    .small()
+                    .color(crate::theme::ui_palette().info),
+            );
+        }
+        let mut extra = vec![heat_numbers::NUMBERS_HELP];
+        if probe.line_on {
+            extra.push(heat_numbers::LINE_HELP);
+        }
+        if estimate {
+            extra.push(novo_layout::spec::ESTIMATE_NOTICE);
+        }
+        heat_legend::help(ui, h, range, top_speed, top_flux, &extra);
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
         );
@@ -2450,6 +2482,7 @@ fn heat_controls(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
+        heat_numbers::menu(ui, probe, &sol.snapshot, sol.ambient);
         scale_menu(ui, h, heat_3d::range(&sol.snapshot, sol.ambient));
         if probe.on {
             // Its own row, always there while the probe is on, so the strip
@@ -2461,6 +2494,30 @@ fn heat_controls(
                 probe.text.as_str()
             };
             ui.label(egui::RichText::new(text).small());
+            if ui
+                .add_enabled(probe.at.is_some(), egui::Button::new("Pin").small())
+                .on_hover_text("Keep this point; the Numbers menu lists the pinned points")
+                .clicked()
+            {
+                probe.pin();
+            }
+            if ui
+                .selectable_label(probe.line_on, "Line")
+                .on_hover_text("Click two points in the air to plot temperature and speed along the line")
+                .clicked()
+            {
+                probe.line_on = !probe.line_on;
+                if !probe.line_on {
+                    probe.clear_line();
+                }
+            }
+        }
+        if probe.line_on {
+            let profile = heat_numbers::profile(probe, &sol.snapshot);
+            if !heat_numbers::plot_window(ui.ctx(), profile.as_ref(), sol.ambient, estimate) {
+                probe.line_on = false;
+                probe.clear_line();
+            }
         }
         if let Some(t) = through {
             ui.end_row();
