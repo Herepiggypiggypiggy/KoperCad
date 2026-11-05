@@ -17,4 +17,5 @@ Not done (see INVENTORY.md for every long label found)
 Resume: `scripts/qa.sh --only help-icons --out <dir>` (needs `KOPERCAD_BIN_DIR` after `cargo build -p novo-app -p novo-cli`). To re-measure a whole area: set `KOPERCAD_QA_TEXT_AUDIT`.
 Traps: a lesson or scenario that quotes removed text (grep `assets/lessons` and `qa/scenarios` for the old wording; heat-and-sizing quotes the 2D legend, which still shows it).
 
+Second PR (Learn, Assistant, Start, Help, App menu, Preferences): see PROGRESS.md 18:10 entry. Still open: Parts, Macros, Cabinet, Reports, Schematic, 3D, Check, Add-ons (see INVENTORY.md). Learn lesson-step text and the Ask Claude consent notice stay visible by design.
 Slice 2 (this PR): `window_help::add` where the surface is a panel or dialog, `window_help::mark` for headerless rows. Still long: report documents themselves (EMC record, Contents.pdf are files, not screens), Commissioning hint sentences from `step.same_number_hint()` (now behind "?"), hover tooltips, `emc_stub.rs` finding details (result text), Reports preview pages, Bench "Not set:" banner (result sentence, 29 words).

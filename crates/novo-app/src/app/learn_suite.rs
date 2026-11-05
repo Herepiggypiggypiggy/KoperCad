@@ -214,6 +214,14 @@ impl NovoApp {
         }
     }
 
+    /// A page heading; what the page is about goes into the window's one "?"
+    /// instead of lines of text under it. The early-access note stays.
+    fn heading_row(&self, ui: &mut egui::Ui, title: &str, about: &str) {
+        ui.heading(title);
+        super::window_help::add(ui.ctx(), about);
+        self.early_note(ui);
+    }
+
     /// Search and the level chips. Returns whether Enter was pressed in the
     /// search field, which starts the first result.
     fn suite_toolbar(&mut self, ui: &mut egui::Ui, first_frame: bool) -> bool {
@@ -501,9 +509,11 @@ impl NovoApp {
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
         ui.add_space(2.0);
-        ui.heading(self.learn.say("learn_title"));
-        ui.weak(self.learn.say("learn_hint"));
-        self.early_note(ui);
+        self.heading_row(
+            ui,
+            &self.learn.say("learn_title"),
+            &self.learn.say("learn_hint"),
+        );
         ui.add_space(8.0);
         let hero = self.recommendation();
         match &hero {
@@ -613,10 +623,7 @@ impl NovoApp {
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
         self.eyebrow(ui, "eyebrow_path");
-        ui.label(egui::RichText::new(path.title(lang)).heading());
-        ui.add_space(2.0);
-        ui.weak(path.summary(lang));
-        self.early_note(ui);
+        self.heading_row(ui, path.title(lang), path.summary(lang));
         ui.add_space(6.0);
         let sum = self
             .learn
@@ -640,14 +647,11 @@ impl NovoApp {
         let lang = self.learn.lang;
         let drafts = self.learn.show_drafts;
         self.eyebrow(ui, "eyebrow_topic");
-        ui.label(egui::RichText::new(track.title(lang)).heading());
-        ui.add_space(2.0);
         let summary = match (lang, &track.summary_nl) {
             (novo_learn::Lang::Nl, Some(nl)) => nl.as_str(),
             _ => track.summary.as_str(),
         };
-        ui.weak(summary);
-        self.early_note(ui);
+        self.heading_row(ui, track.title(lang), summary);
         ui.add_space(6.0);
         let sum = self
             .learn
@@ -780,8 +784,8 @@ impl NovoApp {
                         ui.set_width(text_w);
                         section_label(ui, reason);
                         ui.add_space(2.0);
-                        ui.label(egui::RichText::new(lesson.title(lang)).heading());
-                        ui.label(lesson.summary(lang));
+                        ui.label(egui::RichText::new(lesson.title(lang)).heading())
+                            .on_hover_text(lesson.summary(lang));
                         ui.add_space(4.0);
                         self.meta_line(ui, &lesson);
                     });
@@ -833,14 +837,8 @@ impl NovoApp {
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.label(egui::RichText::new(path.title(lang)).strong().size(15.0));
-                ui.add_space(2.0);
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(path.summary(lang)).color(p.text_secondary),
-                    )
-                    .wrap(),
-                );
+                ui.label(egui::RichText::new(path.title(lang)).strong().size(15.0))
+                    .on_hover_text(path.summary(lang));
                 ui.add_space(6.0);
                 if let (Some(low), Some(high)) = (low, high) {
                     ui.horizontal(|ui| {
@@ -959,13 +957,8 @@ impl NovoApp {
                             title.color(p.text_tertiary)
                         } else {
                             title
-                        });
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(lesson.summary(lang)).color(p.text_secondary),
-                            )
-                            .wrap(),
-                        );
+                        })
+                        .on_hover_text(lesson.summary(lang));
                         ui.add_space(2.0);
                         self.meta_line(ui, &lesson);
                         if coming {
