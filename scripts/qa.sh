@@ -68,7 +68,21 @@ pkg=target/addons/controllers-0.2.0.kcaddon
 case ${1:-run} in list|report) ;; *)
   if [ ! -f "$pkg" ] || [ -n "$(find addons/controllers crates/novo-controller/src -type f -newer "$pkg" -print -quit 2>/dev/null)" ]; then
     echo "qa.sh: building $pkg for the add-on scenarios" >&2
-    scripts/build-controllers-addon.sh >&2 || echo "qa.sh: WARNING: could not build the Controllers add-on (rustup target add wasm32-unknown-unknown); scenarios 5620 and 1580 will fail at the trust prompt" >&2
+    scripts/build-controllers-addon.sh >&2 || echo "qa.sh: could not build the Controllers add-on (rustup target add wasm32-unknown-unknown)" >&2
+  fi
+  # Without the package those scenarios die at "I trust this file" / "Add-on action failed", which
+  # reads as an app regression (it was reported as red on main). Refuse a run that would include them.
+  if [ ! -f "$pkg" ]; then
+    only=""; prev=""
+    for a in "$@"; do [ "$prev" = "--only" ] && only=$a; prev=$a; done
+    case $only in
+      "")
+        echo "qa.sh: WARNING: $pkg is missing: scenarios 5620, 5630 and 1580 will fail at \"I trust this file\" for that reason, not as app regressions." >&2 ;;
+      *5620* | *5630* | *1580*)
+        echo "qa.sh: REFUSING to run: $pkg is missing, so the add-on scenarios (5620, 5630, 1580) would fail for the wrong reason." >&2
+        echo "  rustup target add wasm32-unknown-unknown && scripts/build-controllers-addon.sh, or pick other scenarios with --only." >&2
+        exit 5 ;;
+    esac
   fi ;;
 esac
 case ${1:-run} in
