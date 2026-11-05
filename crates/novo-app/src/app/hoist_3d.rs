@@ -192,6 +192,7 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
         hook_m: m.height_m() as f32,
         swing_rad: [0.0; 2],
         lamps: [Lamp::Off; 2],
+        slack_m: 0.0,
         warning: !conditions(m).is_empty(),
         bridge_limits: Vec::new(),
         trolley_limits: Vec::new(),
@@ -212,7 +213,7 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
 
 /// What the picture leaves out when it follows a closed-loop winch of Drive run.
 const WINCH_PICTURE_LEAVES_OUT: &[&str] = &[
-    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on, slack rope and the load cell reading are in the line above the picture, not drawn; the brake and drive state are the two lamps on the control box",
+    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on and the load cell reading are in the line above the picture, not drawn; slack rope lies in a heap beside the block; the brake and drive state are the two lamps on the control box",
     "The swing is the same one-pendulum model as for a hoist, from the travel axes picked here; a rope that hangs at an angle from the start is not drawn",
 ];
 
@@ -236,6 +237,7 @@ pub(super) fn winch_state_of(m: &ClWinchModule, bridge_m: f32, trolley_m: f32) -
     });
     CraneState {
         lamps,
+        slack_m: m.snapshot().map_or(0.0, |s| s.slack_m as f32),
         bridge_m,
         trolley_m,
         hook_m: m.height_m() as f32,

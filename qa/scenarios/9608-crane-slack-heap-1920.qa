@@ -1,0 +1,34 @@
+@title Crane in 3D: slack rope of a closed-loop winch lies in a heap beside the block
+@area Simulate
+@sizes 1920x1080
+# The closed-loop fixture has the ground 0.3 m below the hook start. Holding the down button lands the hook and
+# the drum pays out rope; Hoist in 3D then shows the loose rope as a heap on the floor next to the block, and the
+# line under the controls gives the slack rope in mm.
+open qa/fixtures/closed-winch-ground.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key Home
+wait 30
+mouse_down 371 440
+wait 2300
+mouse_up 371 440
+wait 600
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 60
+shot slack-heap-in-the-picture
+expect "slack rope"
+expect "Picture, not measurement"
+check_layout
