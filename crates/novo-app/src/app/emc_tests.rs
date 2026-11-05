@@ -392,8 +392,7 @@ fn the_emc_record_lists_findings_with_what_to_do_and_writes_both_files() {
 }
 
 /// Writes `qa/fixtures/enclosure-spec-wide.novo` and
-/// `qa/fixtures/enclosure-spec-small.novo`: the EMC cabinet fixture with two
-/// different chosen enclosures (synthetic catalogue numbers, no maker file),
+/// `qa/fixtures/enclosure-spec-small.novo` and `enclosure-spec-default.novo`: the EMC cabinet fixture with different chosen enclosures (synthetic catalogue numbers, no maker file),
 /// for scenarios 18900 and 18901. -T1 stands 230 mm deep.
 /// `cargo test -p novo-app --lib write_the_enclosure_spec_fixtures -- --ignored`
 #[test]
@@ -401,9 +400,11 @@ fn the_emc_record_lists_findings_with_what_to_do_and_writes_both_files() {
 fn write_the_enclosure_spec_fixtures() {
     use novo_layout::spec::{CatalogueRow, Field, Source};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures");
-    for (name, w, h, d) in [
-        ("wide", 1200.0, 1000.0, 400.0),
-        ("small", 900.0, 500.0, 240.0),
+    for (name, w, h, d, source) in [
+        ("wide", 1200.0, 1000.0, 400.0, Source::Catalogue),
+        ("small", 900.0, 500.0, 240.0, Source::Catalogue),
+        // Program-default numbers: too deep is a warning, not an error.
+        ("default", 900.0, 500.0, 240.0, Source::Default),
     ] {
         let mut project = novo_storage::ProjectFile::open(root.join("emc-cabinet.novo"))
             .unwrap()
@@ -427,7 +428,15 @@ fn write_the_enclosure_spec_fixtures() {
             terms: "none: invented numbers".into(),
         }
         .spec();
-        spec.plate_setback = Some(Field::new(20.0, Source::Catalogue));
+        spec.plate_setback = Some(Field::new(20.0, source));
+        for f in [
+            &mut spec.width,
+            &mut spec.height,
+            &mut spec.depth,
+            &mut spec.wall,
+        ] {
+            *f = f.map(|f| Field::new(f.value, source));
+        }
         let mut props = project.get::<Structure>(cab).unwrap().properties.clone();
         spec.write(&mut props);
         project
