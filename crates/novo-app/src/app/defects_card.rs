@@ -22,6 +22,7 @@ use novo_sim::walkthrough::{
 };
 use novo_sim::{Clock, PoleState, Settled, rest_state, settle_timed};
 
+use super::flag_rows::{problem_row, triangle_slot};
 use super::{Level, NovoApp};
 
 /// The project property that holds the saved walk-throughs.
@@ -48,6 +49,8 @@ pub(crate) struct DefectsLive {
     synced: Option<String>,
     dirty: bool,
     damaged: Option<String>,
+    /// Why the walk-throughs could not be kept in the project; the card shows a triangle.
+    save_failed: Option<String>,
     report: Option<Report>,
     rec: Option<Rec>,
     /// Frame time in seconds, for the recorder.
@@ -465,14 +468,14 @@ impl NovoApp {
                 let defects = &mut self.wb.live.defects;
                 defects.synced = Some(text);
                 defects.dirty = false;
+                defects.save_failed = None;
                 self.changed_outside_canvas(&changes);
             }
             Err(e) => {
-                self.wb.live.defects.dirty = false;
-                self.message(
-                    Level::Error,
-                    format!("Walk-throughs could not be saved: {e}"),
-                );
+                let defects = &mut self.wb.live.defects;
+                defects.dirty = false;
+                log::error!("Walk-throughs could not be saved: {e}");
+                defects.save_failed = Some(super::error_words::plain(&e.to_string()));
             }
         }
     }
@@ -494,7 +497,6 @@ fn draw_card(
     plc_running: bool,
     actions: &mut Vec<CardAction>,
 ) {
-    let palette = crate::theme::ui_palette();
     ui.horizontal(|ui| {
         if ui.small_button("✕ Close").clicked() {
             actions.push(CardAction::Close);
@@ -513,15 +515,16 @@ fn draw_card(
         .wrap(),
     );
     if plc_running && d.active() {
-        ui.colored_label(
-            palette.warning,
+        problem_row(
+            ui,
+            false,
             "Defects are not applied while a PLC program runs.",
         );
     }
     ui.separator();
     add_form(ui, d, project);
     ui.separator();
-    active_list(ui, d, palette.warning);
+    active_list(ui, d);
     ui.separator();
     ui.label(egui::RichText::new("Different from a healthy plant").strong());
     if !d.active() {
@@ -532,7 +535,7 @@ fn draw_card(
         );
     } else {
         for line in &d.differences {
-            ui.add(egui::Label::new(egui::RichText::new(line).color(palette.error)).wrap());
+            ui.add(egui::Label::new(line).wrap());
         }
     }
     ui.separator();
@@ -633,7 +636,7 @@ fn pin_pick(ui: &mut egui::Ui, project: &Project, d: &mut DefectsLive) {
     };
 }
 
-fn active_list(ui: &mut egui::Ui, d: &mut DefectsLive, warn: egui::Color32) {
+fn active_list(ui: &mut egui::Ui, d: &mut DefectsLive) {
     ui.label(egui::RichText::new("In the plant now").strong());
     if d.set.is_empty() {
         ui.weak("No defects: the plant is as drawn.");
@@ -654,7 +657,7 @@ fn active_list(ui: &mut egui::Ui, d: &mut DefectsLive, warn: egui::Color32) {
         });
     }
     for p in d.problems() {
-        ui.add(egui::Label::new(egui::RichText::new(p).color(warn)).wrap());
+        problem_row(ui, false, p);
     }
     let mut all = false;
     if d.set.defects().len() > 1 && ui.small_button("Repair everything").clicked() {
@@ -674,16 +677,16 @@ fn walkthroughs(
     _poles: &PoleState,
     actions: &mut Vec<CardAction>,
 ) {
-    let palette = crate::theme::ui_palette();
     ui.label(egui::RichText::new("Walk-throughs").strong());
     if let Some(why) = d.damaged.clone() {
-        ui.colored_label(palette.error, why);
-        ui.weak("The stored text is kept in the project and not overwritten.");
+        problem_row(ui, true, format!("{why} The stored text is kept."));
+    }
+    if let Some(why) = d.save_failed.clone() {
+        problem_row(ui, true, format!("Walk-throughs not saved: {why}"));
     }
     if d.rec.is_some() {
         let steps = d.rec.as_ref().map_or(0, |r| r.recorder.len());
-        ui.colored_label(palette.error, format!("Recording: {steps} steps"));
-        ui.weak("Operate the circuit and inject defects as usual.");
+        ui.label(egui::RichText::new(format!("● Recording: {steps} steps")).strong());
         if ui.button("■ Stop and keep").clicked() {
             actions.push(CardAction::StopRecord);
         }
@@ -734,26 +737,20 @@ fn report_view(ui: &mut egui::Ui, report: &Report) {
     } else {
         verdict
     };
-    ui.label(egui::RichText::new(verdict).strong().color(color));
+    ui.horizontal(|ui| {
+        if !report.ok() {
+            triangle_slot(ui, true, false, "Error: a walk-through step failed");
+        }
+        ui.label(egui::RichText::new(verdict).strong().color(color));
+    });
     for p in &report.problems {
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(format!("Not applied: {p}")).color(palette.warning),
-            )
-            .wrap(),
-        );
+        problem_row(ui, false, format!("Not applied: {p}"));
     }
     for step in &report.steps {
         let line = format!("{:.1} s  {}", step.t, step.label);
         match step.verdict {
             Verdict::Fail => {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(format!("✗ {line}: {}", step.detail))
-                            .color(palette.error),
-                    )
-                    .wrap(),
-                );
+                problem_row(ui, true, format!("{line}: {}", step.detail));
             }
             Verdict::Pass => {
                 ui.add(egui::Label::new(format!("✓ {line}")).wrap());

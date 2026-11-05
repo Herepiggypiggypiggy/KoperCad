@@ -1005,6 +1005,13 @@ fn totals(input: &Input) -> (f64, usize, usize) {
 /// Tells a first-time user that some loss figures are planning estimates, so
 /// the temperatures follow from them and are not maker-verified. `None` when
 /// every known loss is a maker or typed value.
+/// The enclosure source line and the estimate sentence of the bridge
+/// (`BridgeReport::messages_with_enclosure`): caveats, so they sit behind
+/// the panel's "?" and not as orange lines.
+pub(super) fn is_enclosure_line(m: &str) -> bool {
+    m.starts_with("Enclosure ") || m == novo_layout::spec::ESTIMATE_NOTICE
+}
+
 fn estimate_note(input: &Input) -> Option<String> {
     let known = input.items.iter().filter(|i| i.loss_known).count();
     let estimated = input
@@ -2140,6 +2147,10 @@ fn thin_ticks(ticks: Vec<f64>, range: range::Range, height: f32, gap: f32) -> Ve
 }
 
 /// The one line the legend starts with while the map is a preview.
+/// Short tag that stays on screen while a result rests on an estimate; the
+/// sentences behind it sit under the panel's "?".
+pub(super) const ESTIMATE_TAG: &str = "(estimate)";
+
 const PREVIEW_NOTE: &str = "Preview, not a solver result";
 
 fn legend(
@@ -2305,8 +2316,17 @@ fn legend(
                 crate::theme::ui_palette().text_primary,
             ));
         }
-        if let Some(note) = estimate_note(input) {
-            ui.label(small(&note, crate::theme::ui_palette().warning));
+        // Sentences that explain a caveat sit behind the panel's "?"; a short
+        // visible tag stays next to the results while any number rests on an
+        // estimate (planning loss figures or catalogue enclosure numbers).
+        let note = estimate_note(input);
+        let enclosure_estimate = matches!(&cache.source, Source::Solved(sol)
+            if sol.messages.iter().any(|m| m == novo_layout::spec::ESTIMATE_NOTICE));
+        if note.is_some() || enclosure_estimate {
+            ui.label(small(ESTIMATE_TAG, crate::theme::ui_palette().warning));
+        }
+        if let Some(note) = note {
+            super::window_help::add(ctx, note);
         }
         if unknown > 0 {
             let (noun, verb) = if unknown == 1 {
@@ -2340,12 +2360,12 @@ fn legend(
                     .default_open(false)
                     .show(ui, |ui| {
                         ui.label(small(r, crate::theme::ui_palette().text_secondary));
-                        ui.label(small(
+                        super::window_help::add(
+                            ctx,
                             "Cold devices are lumped into row blocks and thin ducts and \
-                                     rails are widened to porous strips so a big cabinet fits \
-                                     the cell budget. More under Notes on this run.",
-                            crate::theme::ui_palette().text_secondary,
-                        ));
+                             rails are widened to porous strips so a big cabinet fits \
+                             the cell budget. More under Notes on this run.",
+                        );
                     });
                 }
                 if stale {
@@ -2364,12 +2384,16 @@ fn legend(
                 // The status line above already names the level.
                 let headline = without_level_name(&a.headline, p.fidelity.label());
                 if !headline.is_empty() {
-                    ui.label(small(&headline, crate::theme::ui_palette().text_secondary));
+                    super::window_help::add(ctx, headline);
                 }
                 // Warnings stay in view; the run's detailed notes fold away
                 // so a short window is not cut off mid-sentence.
                 for m in &sol.messages {
-                    ui.label(small(m, crate::theme::ui_palette().warning));
+                    if is_enclosure_line(m) {
+                        super::window_help::add(ctx, m.clone());
+                    } else {
+                        ui.label(small(m, crate::theme::ui_palette().warning));
+                    }
                 }
                 super::heat_cooling::show(ui, sol, cooling, stale, false);
                 // The headline fits the narrow panel; what it rests on is
