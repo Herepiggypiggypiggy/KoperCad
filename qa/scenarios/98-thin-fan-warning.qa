@@ -30,6 +30,13 @@ key Enter
 wait 10
 expect "Opening 1: fan only 20 mm across"
 shot thin-fan-warned
+# The sentence under the warning is behind the "?" in the Vents and fans header (#1846).
+click 317 343
+wait 6
+expect "about 38 mm"
+shot thin-fan-help
+click 317 343
+wait 6
 check_layout
 move 170 560
 wait 5

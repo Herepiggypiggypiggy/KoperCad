@@ -441,6 +441,7 @@ impl CoolingAdvice {
             )
         };
         super::panel::dialog(ctx, "Cooling advice", [WINDOW_WIDTH, 0.0])
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
             // The list scrolls inside; the buttons below it stay in view.
             .scroll([false, false])
