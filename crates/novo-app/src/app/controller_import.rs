@@ -474,8 +474,16 @@ impl NovoApp {
                 }
             }
             Action::Save => match self.save_controller_profile() {
-                Ok(path) => self.message_file("Controller profile saved", &path),
-                Err(e) => self.message(Level::Error, format!("Could not save the profile: {e}")),
+                Ok(path) => {
+                    self.job_ok("controller.profile_save");
+                    self.message_file("Controller profile saved", &path);
+                }
+                Err(e) => self.job_fail(
+                    "controller.profile_save",
+                    "Profile not saved",
+                    Level::Error,
+                    format!("Could not save the profile: {e}"),
+                ),
             },
             Action::Copy => {
                 if let Some(w) = &self.wb.controller_wizard {
@@ -496,6 +504,12 @@ impl NovoApp {
         let Some(path) = dialog.pick_file() else {
             return;
         };
+        self.controller_read_file(path);
+    }
+
+    /// Reads a picked table or EPLAN export into the wizard; a failure is a
+    /// `controller.table_read` flag, the next success clears it.
+    pub(super) fn controller_read_file(&mut self, path: PathBuf) {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -513,24 +527,37 @@ impl NovoApp {
                 });
             match read {
                 Ok(file) if file.pages.is_empty() => {
+                    self.job_ok("controller.table_read");
                     self.message(Level::Info, format!("{name} has no pages"));
                 }
                 Ok(file) => {
+                    self.job_ok("controller.table_read");
                     if let Some(w) = &mut self.wb.controller_wizard {
                         w.pxf = Some((name, file, 0));
                     }
                 }
-                Err(e) => self.message(Level::Error, format!("Could not read {name}: {e}")),
+                Err(e) => self.job_fail(
+                    "controller.table_read",
+                    "File not read",
+                    Level::Error,
+                    format!("Could not read {name}: {e}"),
+                ),
             }
         } else {
             match read_table_file(&path) {
                 Ok(text) => {
+                    self.job_ok("controller.table_read");
                     if let Some(w) = &mut self.wb.controller_wizard {
                         w.pxf = None;
                         w.set_text(text, name);
                     }
                 }
-                Err(e) => self.message(Level::Error, format!("Could not read {name}: {e}")),
+                Err(e) => self.job_fail(
+                    "controller.table_read",
+                    "File not read",
+                    Level::Error,
+                    format!("Could not read {name}: {e}"),
+                ),
             }
         }
     }
