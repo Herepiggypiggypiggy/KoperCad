@@ -140,6 +140,7 @@ pub(super) fn emc_title(rule: &str) -> &'static str {
         "EMC-19" => "Field at sensitive device",
         "EMC-20" => "Induced voltage in a run",
         "EMC-21" => "Motor cable leakage",
+        "EMC-22" => "Box resonance, drive inside",
         _ => "EMC finding",
     }
 }
