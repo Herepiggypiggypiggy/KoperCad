@@ -83,7 +83,7 @@ impl NovoApp {
         let mut hover: Option<usize> = None;
         let mut open = true;
         // Floats beside the picture: a pane docked in the right strip would fold the list away.
-        super::panel::dialog(ctx, "Crane model parts", [470.0, 440.0])
+        super::panel::dialog(ctx, "Crane model parts", [560.0, 440.0])
             .floating()
             .default_pos([ctx.content_rect().min.x + 70.0, 110.0])
             .open(super::panel::esc(ctx, &mut open))
@@ -124,7 +124,7 @@ impl NovoApp {
                     |ui, range| {
                         egui::Grid::new("crane_model_rows")
                             .striped(true)
-                            .num_columns(3)
+                            .num_columns(4)
                             .show(ui, |ui| {
                                 for n in range {
                                     let r = &rows[n];
@@ -162,6 +162,7 @@ impl NovoApp {
                                     if role != r.role {
                                         set_role = Some((n, role));
                                     }
+                                    ui.weak(r.moves_with.label());
                                     let [x, y, z] = r.size_mm;
                                     ui.weak(format!("{x:.0} \u{d7} {y:.0} \u{d7} {z:.0}"));
                                     ui.end_row();
@@ -172,7 +173,7 @@ impl NovoApp {
                 super::window_help::add(
                     ui.ctx(),
                     "Point at a row to see its solid in the picture. A solid's role is a guess from its name. Change it here: the colour follows the role, and in the moving picture so does the motion (wheels turn, the drum turns, the hook block and hook follow the rope). \
-                     Up is the axis of your file that points up; Turn lays the runway along the picture's long side. Sizes are in millimetres along the runway, up and across the span.",
+                     Up is the axis of your file that points up; Turn lays the runway along the picture's long side. The third column says what the solid moves with: the bridge, the trolley, the hook, or nothing (the frame). Sizes are in millimetres along the runway, up and across the span.",
                 );
             });
         let slot = &mut self.wb.hoist.three_d.model;

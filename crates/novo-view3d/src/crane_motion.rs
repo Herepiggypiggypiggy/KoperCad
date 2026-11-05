@@ -17,7 +17,7 @@ use crate::crane::{
     CraneState, boxed, push_fall, push_floor, push_hoist_flag, push_load, push_slack,
     push_travel_flag, size,
 };
-use crate::crane_model::{ModelPlan, PartRole, Placed};
+use crate::crane_model::{HIGHLIGHT, ModelPlan, PartRole, Placed};
 use crate::math::Aabb;
 use crate::scene::{Item, ItemId, ItemKind, PlateFrame, Pose, Scene, Shape};
 use glam::{Quat, Vec3};
@@ -353,6 +353,18 @@ const BLOCK_WARN: [u8; 3] = [220, 60, 50];
 /// hook, and the flags and lamps the generic crane has. `state.bridge_m` and `state.trolley_m`
 /// are positions along the travel (0 to `rig.extent_m`), as `rig.rest_m` is.
 pub fn scene(plan: &ModelPlan, rig: &Rig, state: &CraneState, load: Option<[f32; 3]>) -> Scene {
+    scene_with(plan, rig, state, load, None)
+}
+
+/// [`scene`] with the `highlight`th placed solid in the highlight colour (the one the person points
+/// at in the parts list).
+pub fn scene_with(
+    plan: &ModelPlan,
+    rig: &Rig,
+    state: &CraneState,
+    load: Option<[f32; 3]>,
+    highlight: Option<usize>,
+) -> Scene {
     let size3 = if plan.bounds.is_empty() {
         Vec3::ZERO
     } else {
@@ -420,7 +432,9 @@ pub fn scene(plan: &ModelPlan, rig: &Rig, state: &CraneState, load: Option<[f32;
             },
             s,
         );
-        item.tint = Some(if warn && p.role == PartRole::HookBlock {
+        item.tint = Some(if highlight == Some(i) {
+            HIGHLIGHT
+        } else if warn && p.role == PartRole::HookBlock {
             BLOCK_WARN
         } else {
             p.role.tint()

@@ -53,8 +53,19 @@ pub(crate) struct Hoist3d {
     frame_hook: bool,
     /// The crane model of the user's own that replaces the generic crane, when one is asked for.
     pub(super) model: ModelSlot,
-    /// The model scene the renderer has, and the plan it came from.
-    model_scene: Option<(u64, Arc<Scene>)>,
+    /// The scene of the model's last frame with what it was built from, and the meshes it needs.
+    model_built: Option<ModelFrame>,
+}
+
+/// One frame of the moving model: what it was built from, so an unchanged picture is not built
+/// and uploaded again.
+struct ModelFrame {
+    generation: u64,
+    highlight: Option<usize>,
+    state: CraneState,
+    load: Option<[f32; 3]>,
+    scene: Arc<Scene>,
+    library: Arc<MeshLibrary>,
 }
 
 impl Default for Hoist3d {
@@ -80,7 +91,7 @@ impl Default for Hoist3d {
             pending_preset: None,
             frame_hook: false,
             model: ModelSlot::default(),
-            model_scene: None,
+            model_built: None,
         }
     }
 }
@@ -135,10 +146,8 @@ impl Hoist3d {
         rope_m: f64,
     ) -> Travel {
         let start = [f64::from(self.bridge_m), f64::from(self.trolley_m)];
-        let end = [
-            f64::from(self.layout.runway_m),
-            f64::from(self.layout.span_m),
-        ];
+        let (bridge_end, trolley_end) = self.travel_ends();
+        let end = [f64::from(bridge_end), f64::from(trolley_end)];
         let mut pos = [0.0; 2];
         let mut at_end = [false; 2];
         for i in 0..2 {
@@ -170,6 +179,15 @@ impl Hoist3d {
             ],
             bridge_at_end: at_end[0],
             trolley_at_end: at_end[1],
+        }
+    }
+
+    /// How far the bridge and the trolley can travel, m: the model's rails and girder when one is
+    /// shown, else the runway and the span of the generic crane.
+    fn travel_ends(&self) -> (f32, f32) {
+        match self.model.motion() {
+            Some(m) => (m.rig.extent_m[0], m.rig.extent_m[1]),
+            None => (self.layout.runway_m, self.layout.span_m),
         }
     }
 
@@ -450,7 +468,13 @@ impl NovoApp {
                 g.trolley_axis.as_deref().and_then(|id| drive.travel_of(id)),
             ]
         };
-        let rope_m = f64::from(rope_length_mm(&self.wb.hoist.three_d.layout, hook_m)) / 1000.0;
+        let rope_m = {
+            let g = &self.wb.hoist.three_d;
+            f64::from(match g.model.motion() {
+                Some(m) => m.rig.rope_length_mm(hook_m),
+                None => rope_length_mm(&g.layout, hook_m),
+            }) / 1000.0
+        };
         let travel = self.wb.hoist.three_d.travel(dt, driven, rope_m);
         let hoist_state = match follow.checked_sub(hoist_count) {
             None => self
@@ -474,10 +498,8 @@ impl NovoApp {
                 travel_marks(project, g.trolley_axis.as_deref(), g.trolley_m),
             )
         };
-        let outside = [
-            (&bridge_marks, self.wb.hoist.three_d.layout.runway_m),
-            (&trolley_marks, self.wb.hoist.three_d.layout.span_m),
-        ]
+        let (bridge_end, trolley_end) = self.wb.hoist.three_d.travel_ends();
+        let outside = [(&bridge_marks, bridge_end), (&trolley_marks, trolley_end)]
         .iter()
         .map(|(marks, end)| {
             marks
@@ -508,7 +530,8 @@ impl NovoApp {
                     }
                     let mut refit = false;
                     let model_on = g.model.shown();
-                    if !model_on {
+                    let (bridge_end, trolley_end) = g.travel_ends();
+                    {
                         ui.label(if g.bridge_axis.is_some() {
                             "Bridge start"
                         } else {
@@ -516,7 +539,7 @@ impl NovoApp {
                         });
                         ui.add(
                             egui::DragValue::new(&mut g.bridge_m)
-                                .range(0.0..=g.layout.runway_m)
+                                .range(0.0..=bridge_end)
                                 .speed(0.05)
                                 .suffix(" m"),
                         );
@@ -527,10 +550,12 @@ impl NovoApp {
                         });
                         ui.add(
                             egui::DragValue::new(&mut g.trolley_m)
-                                .range(0.0..=g.layout.span_m)
+                                .range(0.0..=trolley_end)
                                 .speed(0.05)
                                 .suffix(" m"),
                         );
+                    }
+                    if !model_on {
                         ui.label("Runway");
                         refit |= ui
                             .add(
@@ -564,6 +589,8 @@ impl NovoApp {
                         .on_hover_text(
                             "Height of the top of the hook block above the floor at hook height 0",
                         );
+                    }
+                    {
                         let mut with_load = g.layout.load_m.is_some();
                         if ui.checkbox(&mut with_load, "Load").changed() {
                             g.layout.load_m = with_load.then_some([1.2, 0.8, 0.8]);
@@ -590,10 +617,11 @@ impl NovoApp {
                     }
                     super::crane_model_ui::bar(ui, &mut g.model);
                 });
-                g.bridge_m = g.bridge_m.clamp(0.0, g.layout.runway_m);
-                g.trolley_m = g.trolley_m.clamp(0.0, g.layout.span_m);
+                let (bridge_end, trolley_end) = g.travel_ends();
+                g.bridge_m = g.bridge_m.clamp(0.0, bridge_end);
+                g.trolley_m = g.trolley_m.clamp(0.0, trolley_end);
                 let model_on = g.model.shown();
-                if !model_on {
+                {
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Bridge driven by");
                     axis_picker(ui, "hoist3d_bridge_axis", &axes, &mut g.bridge_axis);
@@ -700,7 +728,9 @@ impl NovoApp {
                 if std::mem::take(&mut g.frame_hook) {
                     let b = g
                         .model
-                        .hook_bounds()
+                        .motion()
+                        .and_then(|m| m.rig.hook_view(state.hook_m))
+                        .or_else(|| g.model.hook_bounds())
                         .unwrap_or_else(|| hook_bounds(&g.layout, &state));
                     g.view.frame_bounds(&b, now, reduced);
                 }
@@ -769,27 +799,47 @@ fn axis_picker(ui: &mut egui::Ui, id: &str, axes: &[String], choice: &mut Option
 }
 
 impl Hoist3d {
-    /// The scene to draw and the meshes it needs: the crane model of the user's own when one is
-    /// shown, else the generic crane for `state`.
+    /// The scene to draw and the meshes it needs: the crane model of the user's own, moving with
+    /// `state`, when one is shown, else the generic crane for `state`.
     fn picture(&mut self, state: &CraneState) -> (Arc<Scene>, Arc<MeshLibrary>) {
-        if let Some((generation, scene, library)) = self.model.scene() {
-            let stale = self
-                .model_scene
-                .as_ref()
-                .is_none_or(|(g, _)| *g != generation);
-            if stale {
+        if let Some(m) = self.model.motion() {
+            let load = self.layout.load_m;
+            let fresh = self.model_built.as_ref().is_some_and(|f| {
+                f.generation == m.generation
+                    && f.highlight == m.highlight
+                    && f.load == load
+                    && f.state == *state
+            });
+            if !fresh {
                 self.revision += 1;
-                let mut s = (*scene).clone();
-                s.revision = self.revision;
-                self.model_scene = Some((generation, Arc::new(s)));
+                let mut scene = novo_view3d::crane_motion::scene_with(
+                    m.plan, m.rig, state, load, m.highlight,
+                );
+                scene.revision = self.revision;
+                // Keep the model's meshes while only the numbers change.
+                let mut library = match &self.model_built {
+                    Some(f) if f.generation == m.generation => f.library.clone(),
+                    _ => m.library.clone(),
+                };
+                if novo_view3d::crane_parts::lacks(&library, &scene) {
+                    novo_view3d::crane_parts::ensure(Arc::make_mut(&mut library), &scene);
+                }
+                self.model_built = Some(ModelFrame {
+                    generation: m.generation,
+                    highlight: m.highlight,
+                    state: state.clone(),
+                    load,
+                    scene: Arc::new(scene),
+                    library,
+                });
                 // The generic crane is built again with a newer revision when it comes back.
                 self.built = None;
             }
-            if let Some((_, s)) = &self.model_scene {
-                return (s.clone(), library);
+            if let Some(f) = &self.model_built {
+                return (f.scene.clone(), f.library.clone());
             }
         }
-        self.model_scene = None;
+        self.model_built = None;
         (self.scene_for(state), self.library.clone())
     }
 
