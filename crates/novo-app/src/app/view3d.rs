@@ -2368,7 +2368,25 @@ fn heat_controls(
             ui.set_min_size(egui::vec2(ui.available_width(), STRIP_HEIGHT));
             ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
-        heat_legend::help(ui, h, range, top_speed, top_flux);
+        let estimate = sol
+            .messages
+            .iter()
+            .any(|m| m == novo_layout::spec::ESTIMATE_NOTICE);
+        if estimate {
+            ui.label(
+                egui::RichText::new(super::heat::ESTIMATE_TAG)
+                    .small()
+                    .color(crate::theme::ui_palette().warning),
+            );
+        }
+        let mut extra = vec![heat_numbers::NUMBERS_HELP];
+        if probe.line_on {
+            extra.push(heat_numbers::LINE_HELP);
+        }
+        if estimate {
+            extra.push(novo_layout::spec::ESTIMATE_NOTICE);
+        }
+        heat_legend::help(ui, h, range, top_speed, top_flux, &extra);
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
         );
@@ -2496,7 +2514,7 @@ fn heat_controls(
         }
         if probe.line_on {
             let profile = heat_numbers::profile(probe, &sol.snapshot);
-            if !heat_numbers::plot_window(ui.ctx(), profile.as_ref(), sol.ambient) {
+            if !heat_numbers::plot_window(ui.ctx(), profile.as_ref(), sol.ambient, estimate) {
                 probe.line_on = false;
                 probe.clear_line();
             }

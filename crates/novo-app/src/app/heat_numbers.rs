@@ -10,6 +10,13 @@ use novo_heatview::probes::{self, AirNumbers, Profile};
 
 use super::heat_probe::{self, ProbeState};
 
+/// What the Numbers menu and the pinned points mean; behind the strip's "?".
+pub(crate) const NUMBERS_HELP: &str = "Numbers: the volume of air (not devices or walls) hotter than the level, from the solved cells. A coarse grid counts a cell as a whole. Pinned probes: turn on Probe, click the air, press Pin. Model results, not measurements.";
+/// What the plot along a line shows; behind the strip's "?" and the plot's.
+pub(crate) const LINE_HELP: &str = "Plot along line: temperature along the line you clicked, in the solved air. Grey stretches run through a device or wall and show its own temperature. The dashed line is the ambient air. Click the air twice: the start and the end of the line.";
+
+/// The plot window's panel name.
+const PLOT_ID: &str = "heat_line_plot";
 /// Samples along a plotted line.
 const LINE_SAMPLES: usize = 120;
 /// Bars in the histogram.
@@ -83,9 +90,6 @@ pub(crate) fn menu(ui: &mut egui::Ui, probe: &mut ProbeState, snap: &CfdSnapshot
             {
                 probe.level_c = Some(lv);
             }
-            ui.label("?").on_hover_text(
-                "Volume of air (not devices or walls) hotter than the level, from the solved cells. A model result, not a measurement; a coarse grid counts a cell as a whole",
-            );
         });
         let lv = level(probe, ambient);
         match probes::air_numbers(snap, lv, None) {
@@ -100,10 +104,7 @@ pub(crate) fn menu(ui: &mut egui::Ui, probe: &mut ProbeState, snap: &CfdSnapshot
         ui.separator();
         ui.label(egui::RichText::new("Pinned probes").small());
         if probe.pins.is_empty() {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("None").small());
-                ui.label("?").on_hover_text("Turn on Probe, click the air, press Pin");
-            });
+            ui.label(egui::RichText::new("None").small());
         }
         let mut drop = None;
         for (n, at) in probe.pins.iter().enumerate() {
@@ -149,9 +150,21 @@ fn histogram(ui: &mut egui::Ui, snap: &CfdSnapshot, level_c: f64) {
 
 /// The plot of the line, a card that can be docked like the other tool
 /// panes. Returns false when the user closed it.
-pub(crate) fn plot_window(ctx: &egui::Context, profile: Option<&Profile>, ambient: f64) -> bool {
+pub(crate) fn plot_window(
+    ctx: &egui::Context,
+    profile: Option<&Profile>,
+    ambient: f64,
+    estimate: bool,
+) -> bool {
+    // Docked at the bottom unless the person floated it: it never covers the
+    // 3D view on its own.
+    if super::panel_dock::slot_of(ctx, PLOT_ID).is_none()
+        && !super::panel_dock::was_floated(ctx, PLOT_ID)
+    {
+        super::panel_dock::set(ctx, PLOT_ID, Some(super::panel_dock::Slot::Bottom));
+    }
     super::panel::Panel::new(
-        "heat_line_plot",
+        PLOT_ID,
         "Plot along line",
         ctx.content_rect(),
         super::panel::Side::BottomLeft,
@@ -161,11 +174,17 @@ pub(crate) fn plot_window(ctx: &egui::Context, profile: Option<&Profile>, ambien
     .dockable()
     .fit()
     .show(ctx, |ui| {
+        super::window_help::add(ui.ctx(), LINE_HELP);
+        if estimate {
+            ui.label(
+                egui::RichText::new(super::heat::ESTIMATE_TAG)
+                    .small()
+                    .color(crate::theme::ui_palette().warning),
+            );
+            super::window_help::add(ui.ctx(), novo_layout::spec::ESTIMATE_NOTICE);
+        }
         let Some(p) = profile else {
-            ui.horizontal(|ui| {
-                ui.label("Pick two points");
-                ui.label("?").on_hover_text("Click the air twice: the start and the end of the line");
-            });
+            ui.label("Pick two points");
             return;
         };
         plot(ui, p, ambient);
@@ -189,20 +208,15 @@ pub(crate) fn plot_window(ctx: &egui::Context, profile: Option<&Profile>, ambien
         } else {
             ui.label("The whole line lies inside solids.");
         }
-        ui.horizontal(|ui| {
-            if ui
-                .small_button("Copy as CSV")
-                .on_hover_text("Distance, temperature and speed per point, for a spreadsheet")
-                .clicked()
-            {
-                ui.ctx().copy_text(p.csv());
-            }
-            ui.label("?").on_hover_text(
-                "Temperature along the line you clicked, in the solved air. Grey stretches run through a device or wall and show its own temperature. The dashed line is the ambient air. Model, not measurement",
-            );
-        });
+        if ui
+            .small_button("Copy as CSV")
+            .on_hover_text("Distance, temperature and speed per point, for a spreadsheet")
+            .clicked()
+        {
+            ui.ctx().copy_text(p.csv());
+        }
     });
-    !super::panel::take_closed(ctx, "heat_line_plot")
+    !super::panel::take_closed(ctx, PLOT_ID)
 }
 
 fn plot(ui: &mut egui::Ui, p: &Profile, ambient: f64) {

@@ -105,8 +105,16 @@ pub(crate) fn strip(
 
 /// The "?" of the Heat strip: what each active layer means, one paragraph per
 /// layer. The strip itself shows only the colour keys.
-pub(crate) fn help(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
-    let notes = notes(h, range, top_speed, top_flux);
+pub(crate) fn help(
+    ui: &mut egui::Ui,
+    h: &Heat3d,
+    range: Range,
+    top_speed: f32,
+    top_flux: f32,
+    extra: &[&str],
+) {
+    let mut notes = notes(h, range, top_speed, top_flux);
+    notes.extend(extra.iter().map(|e| (*e).to_owned()));
     if !notes.is_empty() {
         super::window_help::mark(ui, &notes.join("\n\n"));
     }
