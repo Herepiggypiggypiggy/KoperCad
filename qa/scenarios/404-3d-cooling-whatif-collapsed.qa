@@ -8,6 +8,16 @@ click_text 3D #1
 wait 30
 click_text Heat #1
 wait 20
+# Opening Heat starts an automatic run: stop it, switch Auto off so it does not restart, and stop again.
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
 click_text "Cooling what-if"
 wait 20
 click_text "Try the fixes"

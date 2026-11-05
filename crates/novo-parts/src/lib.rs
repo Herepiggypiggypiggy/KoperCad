@@ -32,6 +32,7 @@
 
 mod assign;
 mod bmecat;
+pub mod body;
 mod browser;
 mod bulk;
 mod bundle;
@@ -48,6 +49,7 @@ mod macros;
 mod makers;
 mod panel;
 mod pins;
+pub mod place_list;
 mod plain;
 mod quality;
 mod recipes;
@@ -56,6 +58,7 @@ mod search;
 mod sheet;
 mod stated;
 mod step;
+pub mod supplier_site;
 mod table;
 mod tablefile;
 mod tablemap;

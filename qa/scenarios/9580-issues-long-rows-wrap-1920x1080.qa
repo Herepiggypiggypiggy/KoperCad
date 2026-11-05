@@ -1,0 +1,24 @@
+@title Long Issues rows wrap beside their triangle (1920x1080)
+@area Schematic
+@sizes 1920x1080
+# Regression from T0b: the Issues rows lost their wrapping; a long message ran off the edge. Each row wraps in the width left after the triangle.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+click 1759 103
+wait 4
+text motor starter dol
+wait 5
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button
+wait 30
+expect_scene "-K1"
+click_text "warnings" Button
+wait 10
+shot issues-long-rows
+check_layout

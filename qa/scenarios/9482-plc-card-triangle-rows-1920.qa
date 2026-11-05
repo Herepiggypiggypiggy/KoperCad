@@ -1,0 +1,28 @@
+@title PLC card dialog and overview: a bad layout is a triangle row with its reason in a popup
+@area Schematic
+@sizes 1920x1080
+# T8: Draw > PLC > Add PLC card. A layout that does not parse is a triangle row in the dialog (click it for the reason); the popup holds the reason.
+key ctrl+n
+wait 20
+key ctrl+k
+wait 4
+text add plc card
+wait 6
+key Enter
+wait 15
+click 1770 334
+wait 3
+key ctrl+a
+wait 2
+text abc
+wait 3
+click_text "Add card"
+wait 10
+shot bad-layout-row
+check_layout
+# The popup names the reason and offers Copy.
+click 1616 486
+wait 6
+expect "the slot must be a number"
+expect "Copy"
+shot bad-layout-popup

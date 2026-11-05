@@ -905,6 +905,30 @@ impl NovoApp {
             symbol_name(project, s)
         });
         let supply = novo_sim::explain::has_supply(&solved.netlist);
+        let mut live_drafts = Vec::new();
+        if !supply {
+            live_drafts.push(super::sim_flags::live_draft(
+                "no_supply",
+                false,
+                "No supply in the drawing",
+                vec![novo_sim::explain::NO_SUPPLY.to_owned()],
+            ));
+        }
+        if legend.shorted > 0 {
+            live_drafts.push(super::sim_flags::live_draft(
+                "short",
+                true,
+                "Short circuit",
+                vec![format!(
+                    "{} short{}: potentials meet",
+                    legend.shorted,
+                    if legend.shorted == 1 { "" } else { "s" }
+                )],
+            ));
+        }
+        super::sim_flags::set_flags(&mut self.wb.flags, super::sim_flags::LIVE, live_drafts);
+        let live_flags = super::sim_flags::flags_in(&self.wb.flags.store, super::sim_flags::LIVE);
+        let mut flag_click = None;
         let answer = why_target.map(|target| {
             let name = |s: SymbolId| symbol_name(project, s);
             match target {
@@ -1406,12 +1430,11 @@ impl NovoApp {
             {
                 leave = true;
             }
+            if let Some(c) = super::sim_flags::strip(ui, &live_flags) {
+                flag_click = Some(c);
+            }
             if !supply {
                 // Nothing can light up, whatever is pressed: say so first.
-                ui.colored_label(
-                    crate::theme::ui_palette().warning,
-                    egui::RichText::new(novo_sim::explain::NO_SUPPLY).strong(),
-                );
                 ui.add(egui::Label::new(novo_sim::explain::NO_SUPPLY_FIX).wrap());
                 ui.horizontal_wrapped(|ui| {
                     if ui
@@ -1547,16 +1570,6 @@ impl NovoApp {
                     ui.weak(format!("{nets} net{}", if *nets == 1 { "" } else { "s" }));
                 });
             }
-            if legend.shorted > 0 {
-                ui.colored_label(
-                    crate::theme::ui_palette().error,
-                    format!(
-                        "{} short{}: potentials meet",
-                        legend.shorted,
-                        if legend.shorted == 1 { "" } else { "s" }
-                    ),
-                );
-            }
             if let Some(left) = timing {
                 ui.weak(format!("A timer is running, {left:.1} s left"));
             }
@@ -1658,6 +1671,9 @@ impl NovoApp {
             || plc_running
         {
             ctx.request_repaint();
+        }
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
         }
         if let Some(page) = go_to {
             self.show_page(page);

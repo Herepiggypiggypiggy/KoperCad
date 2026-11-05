@@ -146,7 +146,9 @@ impl NovoApp {
                 }
                 self.changed_outside_canvas(&changes);
             }
-            Err(e) => self.message(
+            Err(e) => self.job_fail(
+                "report.generated_pages",
+                "Generated pages not added",
                 super::Level::Error,
                 format!("Could not add the generated pages: {e}"),
             ),

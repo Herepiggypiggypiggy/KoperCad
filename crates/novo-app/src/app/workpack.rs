@@ -324,7 +324,7 @@ pub fn work_packs(project: &Project) -> Vec<Pack> {
         add_strip_cards(&mut pack, &groups);
         add_wiring_opening_cards(&mut pack, &layout);
         let stored = heat_openings_store::stored_text(project, enclosure.id);
-        let vents = heat_openings_store::parse(&stored);
+        let (vents, _) = heat_openings_store::parse(&stored);
         if !vents.is_empty() {
             // The openings as the Heat panel and the solver cut them: moved and
             // trimmed to lie inside their wall, in the interior's millimetres.
@@ -631,13 +631,10 @@ impl NovoApp {
         if !self.is_project_file(path) {
             return false;
         }
-        self.message(
-            Level::Error,
-            format!(
+        self.job_fail("export.workpack", "Work cards not written", Level::Error, format!(
                 "{} is the open project file, so the work cards were not written. Choose another name for the PDF.",
                 path.display()
-            ),
-        );
+            ));
         true
     }
 
@@ -779,6 +776,7 @@ impl NovoApp {
         };
         match write_replacing(path, bytes) {
             Ok(()) => {
+                self.job_ok("export.workpack");
                 self.message_file(
                     format!("{verb} {}. Print at 100 % (actual size)", path.display()),
                     path,
@@ -787,7 +785,12 @@ impl NovoApp {
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not export the work card: {e}"));
+                self.job_fail(
+                    "export.workpack",
+                    "Work cards not written",
+                    Level::Error,
+                    format!("Could not export the work card: {e}"),
+                );
                 None
             }
         }
@@ -827,6 +830,7 @@ impl NovoApp {
             Ok(()) => {
                 self.remember_print(record);
                 let verb = if replaced { "Replaced" } else { "Exported" };
+                self.job_ok("export.workpack");
                 self.message_file(
                     format!(
                         "{verb} {}. Print at 100 % (actual size), then cut each sheet in half",
@@ -838,7 +842,9 @@ impl NovoApp {
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "export.workpack",
+                    "Work cards not written",
                     Level::Error,
                     format!("Could not export the work cards: {e}"),
                 );

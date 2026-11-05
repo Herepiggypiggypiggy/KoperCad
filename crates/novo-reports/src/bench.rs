@@ -431,6 +431,43 @@ impl FerruleTable {
             sections.push(table);
         }
 
+        // Ring, fork, spade and pin lugs stated on the wire ends, counted like
+        // the ferrules.
+        let lugs: Vec<_> = crate::crimp_list(jobs, standard)
+            .into_iter()
+            .filter(|c| c.kind != crate::TerminationKind::Ferrule)
+            .collect();
+        if !lugs.is_empty() {
+            let mut table = Section::new(
+                "lugs",
+                "Lugs to crimp",
+                vec![
+                    Column::new("done", "", 5.0),
+                    Column::new("kind", "Type", 12.0),
+                    Column::new("size", "Size", 12.0),
+                    Column::new("mm2", "mm²", 8.0).right(),
+                    Column::new("ends", "Wire ends", 10.0).right(),
+                    Column::new("pieces", "Crimp", 8.0).right(),
+                    Column::new("prepare", "Prepare", 10.0).right(),
+                ],
+            );
+            for c in &lugs {
+                table.push(
+                    vec![
+                        Cell::text(TICK_BOX),
+                        Cell::text(c.kind.label()),
+                        Cell::text(c.size.clone()),
+                        c.mm2.into(),
+                        Cell::Int(c.ends as i64),
+                        Cell::Int(c.pieces as i64),
+                        Cell::Int(c.to_prepare as i64),
+                    ],
+                    Vec::new(),
+                );
+            }
+            sections.push(table);
+        }
+
         let (unknown, off) = ends_without_ferrule(jobs);
         let stated = ends_with_stated_processing(jobs);
         if unknown + off + stated > 0 {

@@ -54,7 +54,9 @@ fn input(runs: Vec<Run>, ducts: Vec<Duct>) -> Input {
             tag: "+CAB".into(),
             finish: None,
             door_bonded: None,
+            shell: None,
         }],
+        cables: Vec::new(),
         params: Params::default(),
     }
 }
@@ -273,10 +275,11 @@ fn motor_cable_rules() {
 }
 
 #[test]
-fn pigtail_impedance_is_the_rule_of_thumb() {
-    // 80 mm at 1 nH/mm = 80 nH; 2 pi * 10 MHz * 80 nH = 5.03 ohm.
+fn pigtail_impedance_is_computed_from_the_wire() {
+    // 2 mm wire, 80 mm: 2e-7 H/m * 0.08 m * (ln(2 * 80 / 1) - 1) = 65.20 nH
+    // (ln 160 = 5.07517); 2 pi * 10 MHz * 65.20 nH = 4.097 ohm.
     let z = geometry::pigtail_ohm(80.0, 10.0e6);
-    assert!((z - 5.0265).abs() < 1e-3, "{z}");
+    assert!((z - 4.0966).abs() < 1e-3, "{z}");
     let mut m = run(1, EmcClass::Analog, &[], &[]);
     m.cable = Some(3);
     m.shield = Some(Shield {
@@ -287,7 +290,7 @@ fn pigtail_impedance_is_the_rule_of_thumb() {
     let f = r.of_rule("EMC-05").next().unwrap();
     assert_eq!(f.level, Level::Estimate);
     assert!(
-        f.metrics.iter().any(|m| m.value.starts_with("5.0 ohm")),
+        f.metrics.iter().any(|m| m.value.starts_with("4.1 ohm")),
         "{:?}",
         f.metrics
     );
@@ -703,5 +706,191 @@ fn wires_that_stay_on_the_door_or_have_no_device_end_do_not_cross_the_hinge() {
         analyse(&i)
             .of_rule("EMC-12")
             .any(|f| f.message.contains("without a shield"))
+    );
+}
+
+// ---- computed inductance and capacitance (hand-checked) ----------------------
+
+fn near(a: f64, b: f64, tol: f64) {
+    assert!((a - b).abs() <= tol * b.abs().max(1e-12), "{a} vs {b}");
+}
+
+#[test]
+fn round_wire_inductance_matches_the_textbook_formula() {
+    // l = 100 mm, d = 2 mm: 2e-7 * 0.1 * (ln(200) - 1) = 2e-8 * 4.29832 = 85.97 nH.
+    near(geometry::round_wire_nh(100.0, 2.0), 85.966, 1e-4);
+    assert_eq!(geometry::round_wire_nh(0.0, 2.0), 0.0);
+}
+
+#[test]
+fn a_strap_is_far_below_a_round_wire_of_the_same_length() {
+    // 100 x 20 x 0.5 mm: w + t = 20.5; ln(200 / 20.5) = 2.27780;
+    // 0.2 * 100 * (2.27780 + 0.5005 + 20.5 / 300) = 20 * 2.84663 = 56.93 nH.
+    let s = geometry::strap_nh(100.0, 20.0, 0.5);
+    near(s, 56.93, 2e-3);
+    assert!(s < 0.7 * geometry::round_wire_nh(100.0, 2.0));
+    // Wider is lower.
+    assert!(geometry::strap_nh(100.0, 40.0, 0.5) < s);
+}
+
+#[test]
+fn wire_over_plane_loop_inductance_is_acosh() {
+    // h = 15 mm, d = 3 mm, r = 1.5: acosh(10) = 2.99322; 2e-7 * 2.99322 = 598.6 nH/m.
+    near(geometry::loop_over_plane_nh_per_m(15.0, 3.0), 598.64, 1e-4);
+    near(geometry::loop_over_plane_nh(500.0, 15.0, 3.0), 299.32, 1e-4);
+}
+
+#[test]
+fn capacitance_closed_forms_hit_their_exact_points() {
+    let two_pi_eps0 = 55.6325; // pF/m
+    // Coax with D/d = e and eps_r 1: exactly 2 pi eps0.
+    near(
+        geometry::coax_pf_per_m(std::f64::consts::E, 1.0),
+        two_pi_eps0,
+        1e-4,
+    );
+    // Wire over a plane with h/r = cosh(1): acosh = 1, so 2 pi eps0 again.
+    let r = 1.0;
+    let h = 1.0_f64.cosh() * r;
+    near(
+        geometry::wire_over_plane_pf_per_m(h, 2.0 * r),
+        two_pi_eps0,
+        1e-4,
+    );
+    // Two wires with d / (2 r) = cosh(1): pi eps0.
+    near(
+        geometry::two_wire_pf_per_m(2.0 * r * 1.0_f64.cosh(), 2.0 * r, 1.0),
+        two_pi_eps0 / 2.0,
+        1e-4,
+    );
+    // PVC-ish cable: D/d 2.2, eps 3: 1.6690e-10 / 0.78846 = 211.7 pF/m.
+    near(geometry::coax_pf_per_m(2.2, 3.0), 211.68, 1e-3);
+}
+
+#[test]
+fn leakage_and_charging_current_follow_ohms_law_for_a_capacitor() {
+    // 1 nF at 230 V, 50 Hz: 2 pi 50 * 1e-9 * 230 = 72.26 uA.
+    near(geometry::leakage_ma(1000.0, 230.0, 50.0), 0.07226, 1e-3);
+    // 1 nF and 1 kV/us: C dV/dt = 1e-9 * 1e9 = 1 A.
+    near(geometry::charging_current_a(1000.0, 1.0), 1.0, 1e-9);
+}
+
+fn motor_cable_input(len_m: Option<f64>, maker: Option<f64>) -> Input {
+    let mut runs = Vec::new();
+    for id in 1..=3 {
+        let mut r = motor(id, &[], &[]);
+        r.cable = Some(100);
+        runs.push(r);
+    }
+    let mut i = input(runs, vec![]);
+    i.cables.push(CableData {
+        id: 100,
+        length_m: len_m,
+        core_shield_pf_per_m: maker,
+    });
+    i
+}
+
+#[test]
+fn motor_cable_leakage_uses_the_formula_without_maker_data() {
+    // 50 m, 3 cores, 211.68 pF/m: 31.75 nF; 2 pi 50 * 31.75e-9 * 230 = 2.294 mA.
+    let r = analyse(&motor_cable_input(Some(50.0), None));
+    let f = r.of_rule("EMC-21").next().expect("a finding");
+    assert_eq!(f.severity, Severity::Info);
+    assert!(f.message.contains("2.3 mA"), "{}", f.message);
+    assert!(
+        f.metrics
+            .iter()
+            .any(|m| m.value.starts_with("31.75 nF") || m.value.starts_with("31.76 nF")),
+        "{:?}",
+        f.metrics
+    );
+    assert!(
+        f.metrics
+            .iter()
+            .any(|m| m.label.starts_with("Charging") && m.value.starts_with("31.8 A"))
+    );
+}
+
+#[test]
+fn motor_cable_leakage_uses_maker_data_and_warns_over_15_ma() {
+    // 1000 pF/m * 100 m * 3 = 300 nF; 2 pi 50 * 300e-9 * 230 = 21.68 mA.
+    let r = analyse(&motor_cable_input(Some(100.0), Some(1000.0)));
+    let f = r.of_rule("EMC-21").next().unwrap();
+    assert_eq!(f.severity, Severity::Warning);
+    assert!(f.message.contains("21.7 mA"), "{}", f.message);
+    assert!(f.message.contains("maker data"));
+}
+
+#[test]
+fn motor_cable_without_a_length_gives_no_number() {
+    let r = analyse(&motor_cable_input(None, None));
+    assert_eq!(r.of_rule("EMC-21").count(), 0);
+    let s = r.rules.iter().find(|s| s.rule == "EMC-21").unwrap();
+    assert_eq!(s.status, Status::NotEvaluated);
+}
+
+fn with_shell(inside: Result<(f64, f64, f64), String>) -> Input {
+    let mut i = input(vec![], vec![]);
+    i.plates[0].shell = Some(novo_emc::Shell {
+        article: "T-1".into(),
+        inside,
+        source: "catalogue",
+        notice: Some(novo_layout::spec::ESTIMATE_NOTICE),
+    });
+    i.devices = vec![dev(1, "-T1", Role::Drive, (0.0, 0.0, 100.0, 200.0))];
+    i
+}
+
+#[test]
+fn the_lowest_cavity_resonance_follows_the_inside_size() {
+    // 1.0 x 0.8 m: c/2 * sqrt(1 + 1.5625) = 239.9 MHz (closed form).
+    let f = novo_emc::rules::lowest_cavity_hz((1000.0, 800.0, 300.0));
+    assert!((f / 1.0e6 - 239.9).abs() < 0.1, "{f}");
+    // The depth only matters when it is one of the two longest sides.
+    assert_eq!(f, novo_emc::rules::lowest_cavity_hz((300.0, 1000.0, 800.0)));
+
+    // Changing the enclosure changes the result: a big box is flagged, a
+    // small one resonates above the limit and is quiet.
+    let big = analyse(&with_shell(Ok((1000.0, 800.0, 300.0))));
+    let f21 = big.of_rule("EMC-22").next().unwrap();
+    assert!(f21.message.contains("240 MHz") && f21.message.contains("catalogue"));
+    let small = analyse(&with_shell(Ok((400.0, 300.0, 200.0))));
+    assert_eq!(small.of_rule("EMC-22").count(), 0);
+}
+
+#[test]
+fn a_chosen_enclosure_without_a_size_is_flagged_not_guessed() {
+    let r = analyse(&with_shell(Err(
+        "The enclosure has no wall thickness.".into()
+    )));
+    let f = r.of_rule("EMC-22").next().unwrap();
+    assert_eq!(f.severity, novo_emc::Severity::Warning);
+    assert!(f.message.contains("no wall thickness"));
+    // No enclosure record, no finding, rule not applicable.
+    let none = analyse(&input(vec![], vec![]));
+    assert_eq!(none.of_rule("EMC-22").count(), 0);
+}
+
+#[test]
+fn the_estimate_notice_ends_the_shell_message_only_while_the_record_is_an_estimate() {
+    let est = analyse(&with_shell(Ok((1000.0, 800.0, 300.0))));
+    assert!(
+        est.of_rule("EMC-22")
+            .next()
+            .unwrap()
+            .message
+            .ends_with(novo_layout::spec::ESTIMATE_NOTICE)
+    );
+    let mut i = with_shell(Ok((1000.0, 800.0, 300.0)));
+    i.plates[0].shell.as_mut().unwrap().notice = None;
+    let measured = analyse(&i);
+    assert!(
+        !measured
+            .of_rule("EMC-22")
+            .next()
+            .unwrap()
+            .message
+            .contains("Estimate from catalogue data")
     );
 }

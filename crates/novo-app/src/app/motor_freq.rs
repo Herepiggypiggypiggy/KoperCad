@@ -206,6 +206,9 @@ impl super::NovoApp {
             .map(|s| s.id)
             .collect();
         let name = |id: SymbolId| symbol_tag(project, id);
+        let sim_flags = self.sim_flags_of(super::sim_flags::MOTOR_FREQ);
+        let mut flag_click = None;
+        let flags_ui = &mut self.wb.flags;
         let state = &mut self.wb.motor_freq;
         if state.motor.is_none_or(|m| !motors.contains(&m)) {
             state.motor = motors.first().copied();
@@ -236,17 +239,34 @@ impl super::NovoApp {
                         let texts: Vec<String> = notes.into_iter().map(|n| n.text).collect();
                         compute(&m, &texts, &params)
                     });
+                    let drafts = match &result {
+                        Err(why) => {
+                            let device = project
+                                .symbol(symbol)
+                                .and_then(|s| s.device())
+                                .map(|d| d.raw().to_string());
+                            vec![super::sim_flags::motor_freq_draft(
+                                &name(symbol),
+                                device,
+                                why,
+                            )]
+                        }
+                        Ok(_) => Vec::new(),
+                    };
+                    super::sim_flags::set_flags(flags_ui, super::sim_flags::MOTOR_FREQ, drafts);
+                    ui.ctx().request_repaint();
                     state.cache = Some((key, result));
                 }
-                match state.cache.as_ref().map(|(_, r)| r) {
-                    Some(Ok(view)) => show(ui, view, state.show_continuous, state.cooling_percent),
-                    Some(Err(why)) => {
-                        ui.add_space(6.0);
-                        ui.colored_label(crate::theme::ui_palette().warning, why);
-                    }
-                    None => {}
+                if let Some(c) = super::sim_flags::strip(ui, &sim_flags) {
+                    flag_click = Some(c);
+                }
+                if let Some(Ok(view)) = state.cache.as_ref().map(|(_, r)| r) {
+                    show(ui, view, state.show_continuous, state.cooling_percent);
                 }
             });
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
+        }
         if !open {
             self.wb.motor_freq.open = false;
         }
@@ -500,7 +520,26 @@ fn table(ui: &mut egui::Ui, v: &View) {
                 ui.label(format!("{:.0}", r.volts_ll));
                 match (r.rated_torque_rpm, r.rated_torque_current_a) {
                     (Some(rpm), Some(a)) => ui.label(format!("{rpm:.0} rpm, {a:.1} A")),
-                    _ => ui.colored_label(crate::theme::ui_palette().warning, "not reachable"),
+                    _ => {
+                        let (slot, tip) =
+                            ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
+                        novo_theme::widgets::flag_triangle(
+                            ui.painter(),
+                            slot.center(),
+                            13.0,
+                            false,
+                            false,
+                            novo_theme::Palette::of(ui),
+                        );
+                        tip.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Label,
+                                true,
+                                "Warning: rated torque not reachable",
+                            )
+                        });
+                        tip.on_hover_text("Rated torque is not reachable at this frequency")
+                    }
                 };
                 let reach = if r.breakdown_reachable {
                     ""

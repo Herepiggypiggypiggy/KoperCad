@@ -162,6 +162,8 @@ pub(crate) struct Workbench {
     pub(super) options: Option<super::variants::OptionsWindow>,
     /// The Generate pages from a spec sheet window, while open.
     pub(super) generate: Option<super::variants::GenerateWindow>,
+    /// The Place from a list window, while open.
+    pub(super) place_list: Option<super::place_list::PlaceListWindow>,
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
@@ -225,6 +227,8 @@ pub(crate) struct Workbench {
     pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
+    /// The problem triangles: one store for every flag, built from the problems.
+    pub(super) flags: super::flags::FlagUi,
     /// The design check running on a worker thread (big projects only).
     pub(super) check_job: Option<super::checks::CheckJob>,
     /// The revision whose background check died, and how many were started.
@@ -236,6 +240,8 @@ pub(crate) struct Workbench {
     /// Where the issue pill was drawn, so its own click does not close
     /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
+    /// Where the failed-jobs triangle was drawn last frame (lane T12).
+    pub(super) job_pill_rect: egui::Rect,
     /// The open project is a recovered copy that nobody has checked yet:
     /// the lines of what it holds and what was left out. Cleared by "I have
     /// checked every page", or when another project is opened.
@@ -299,6 +305,10 @@ pub(crate) struct Workbench {
     pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
     /// Part proposals waiting for Accept all or Cancel.
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
+    /// The Devices drawer filtered to devices without a part, while open.
+    pub(super) parts_pass: Option<super::parts_pass::PartsPass>,
+    /// The part last used per device class (`K`), for the parts pass.
+    pub(super) last_part_by_class: std::collections::HashMap<String, novo_parts::PartKey>,
     /// A rename of part terminals offered after a part was assigned.
     pub(super) pin_offer: Option<super::pin_offer::PinOffer>,
     /// The text of the company pin names file offered to a new project.
@@ -405,6 +415,7 @@ impl Default for Workbench {
             sheet: 0,
             options: None,
             generate: None,
+            place_list: None,
             nav: Navigator::default(),
             pending: None,
             deferred_jump: None,
@@ -434,11 +445,13 @@ impl Default for Workbench {
             ghost_left_out: true,
             clip: Default::default(),
             problems: None,
+            flags: super::flags::FlagUi::default(),
             check_job: None,
             check_failed: None,
             check_started: 0,
             last_issue_total: None,
             pill_rect: egui::Rect::NOTHING,
+            job_pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
             problem_flash: None,
@@ -467,6 +480,8 @@ impl Default for Workbench {
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
+            parts_pass: None,
+            last_part_by_class: Default::default(),
             pin_offer: None,
             company_pin_offer: None,
             describe: None,
@@ -708,6 +723,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "report.cable_schedule",
     "report.plugs",
     "report.singleline",
+    "report.queries",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -783,6 +799,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "project.tie",
     "project.untie",
     "project.generate",
+    "place.list",
     "export.variant_pdf",
     "export.spec",
     "revision.issue",
@@ -816,6 +833,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.simulate",
     "heat.cooling_advice",
     "heat.cooling_whatif",
+    "heat.export_vtk",
+    "heat.open_paraview",
     "heat.cooler_layout",
     "heat.vents",
     "heat.add_filter_fan",
@@ -1041,12 +1060,17 @@ impl NovoApp {
     /// the canvas first. Taken before the canvas runs, which would read it
     /// as its own Escape ladder while the pointer is over the drawing.
     pub(super) fn escape_popups(&mut self, ctx: &egui::Context) {
-        let open = self.wb.field.is_open() || self.wb.occurrences.is_some() || self.outline_open;
+        let open = self.wb.field.is_open()
+            || self.wb.occurrences.is_some()
+            || self.wb.flags.open.is_some()
+            || self.outline_open;
         if open && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             if self.wb.field.is_open() {
                 self.wb.field.close();
             } else if self.wb.occurrences.is_some() {
                 self.wb.occurrences = None;
+            } else if self.wb.flags.open.is_some() {
+                self.wb.flags.open = None;
             } else {
                 self.outline_open = false;
             }
@@ -1190,6 +1214,12 @@ impl NovoApp {
                 // The preview is drawn in the 3D view, so the wizard lives there.
                 self.switch_workspace(Workspace::View3d);
                 self.cabinet.heat.command(id);
+            }
+            "heat.export_vtk" if self.is_open() => {
+                self.export_heat_vtk();
+            }
+            "heat.open_paraview" if self.is_open() => {
+                self.open_heat_in_paraview();
             }
             "heat.cooling_advice" if self.is_open() => {
                 // Stays in the 3D view when it is the one open.
@@ -1774,6 +1804,7 @@ impl NovoApp {
             "project.tie" => self.tie_command(argument),
             "project.untie" => self.untie_command(),
             "project.generate" => self.open_generate(),
+            "place.list" => self.open_place_list(),
             "export.variant_pdf" => {
                 self.export_variant_pdf(argument);
             }

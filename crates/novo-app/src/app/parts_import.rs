@@ -604,7 +604,8 @@ pub(crate) fn import_path(
         &part.order_number,
         today,
     )
-    .with_step_measurer(novo_interop::part3d::measure_step);
+    .with_step_measurer(novo_interop::part3d::measure_step)
+    .with_body_reader(novo_interop::part3d::read_body);
     if let Some(model) = installed_etim() {
         job = job.with_etim(model);
     }
@@ -629,8 +630,30 @@ pub(crate) fn import_path(
             Err(e) => eplan_lines.push(format!("{name}: no EPLAN parts ({e}).")),
         }
     }
+    // An enclosure or a mounting plate: its size and, for a plate, the
+    // holes it is delivered with go on the part (the maker's model is the
+    // source, so the drill plan says "maker data").
+    let mut body_dimensions = None;
+    if let Some(body) = &outcome.body {
+        let data = body.data(&part.description);
+        if !data.is_empty() {
+            let mut p = changed
+                .iter()
+                .find(|c| c.key() == part.key())
+                .cloned()
+                .unwrap_or_else(|| part.clone());
+            changed.retain(|c| c.key() != part.key());
+            p.data.extend(data);
+            if p.dimensions.is_none() {
+                body_dimensions = body.dimensions(&part.description);
+                p.dimensions = body_dimensions;
+            }
+            changed.push(p);
+        }
+    }
     if let Some(d) = outcome.dimensions
         && part.dimensions.is_none()
+        && body_dimensions.is_none()
     {
         changed.push(CatalogPart {
             dimensions: Some(d),
@@ -658,7 +681,9 @@ pub(crate) fn import_path(
             r.file_name, r.bytes
         ));
     }
-    if let Some(d) = outcome.dimensions {
+    if let Some(d) = outcome.dimensions
+        && body_dimensions.is_none()
+    {
         summary.lines.push(format!(
             "Size read from the STEP file: {} \u{d7} {} \u{d7} {} mm{}.",
             d.width_mm,
@@ -670,6 +695,9 @@ pub(crate) fn import_path(
                 ""
             }
         ));
+    }
+    if let Some(body) = &outcome.body {
+        summary.lines.extend(body.summary(&part.description));
     }
     if !outcome.parts.is_empty() {
         summary.lines.push(format!(

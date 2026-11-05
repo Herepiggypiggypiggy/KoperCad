@@ -310,6 +310,16 @@ fn slot_rect(ctx: &egui::Context, slot: Slot) -> Option<egui::Rect> {
     ctx.data(|d| d.get_temp(rect_id(slot)))
 }
 
+/// The left edge of the right strip while a pane is docked there: a card
+/// hanging from the right edge of the canvas stays left of it, even when the
+/// canvas has not yet been made smaller.
+pub(super) fn right_strip_left(ctx: &egui::Context) -> Option<f32> {
+    if shown_before(ctx, Slot::Right).is_empty() {
+        return None;
+    }
+    slot_rect(ctx, Slot::Right).map(|r| r.left())
+}
+
 /// The panels that drew a pane in a slot, this pass and the one before: the
 /// slot is only there (and the canvas only made smaller) while one did.
 fn shown_id(slot: Slot, previous: bool) -> egui::Id {
@@ -412,6 +422,17 @@ pub(super) fn open_tall(ctx: &egui::Context, name: &str) {
     }
 }
 
+/// A pane gets `height` the first time it docks (a height the person gave it
+/// stays). For forms that need more than the default but not the whole slot.
+pub(super) fn open_at(ctx: &egui::Context, name: &str, height: f32) {
+    let all: Vec<(String, f32)> = ctx
+        .data_mut(|d| d.get_persisted(heights_id()))
+        .unwrap_or_default();
+    if !all.iter().any(|(n, _)| n == name) {
+        set_pane_height(ctx, name, Some(height.min(PANE_MAX_HEIGHT)));
+    }
+}
+
 fn set_pane_height(ctx: &egui::Context, name: &str, height: Option<f32>) {
     let mut all: Vec<(String, f32)> = ctx
         .data_mut(|d| d.get_persisted(heights_id()))
@@ -434,6 +455,50 @@ fn stack_scroll(ctx: &egui::Context, slot: Slot) -> f32 {
     ctx.data(|d| d.get_temp(scroll_id(slot))).unwrap_or(0.0)
 }
 
+/// Shares `room` among panes that ask for `asked` heights (0 = none). When
+/// they all fit each gets what it asked; otherwise the small ones keep their
+/// size and the large ones split what is left equally, so a short form never
+/// takes room a long form needs.
+fn share(room: f32, asked: &[f32]) -> Vec<f32> {
+    if asked.iter().sum::<f32>() <= room {
+        return asked.to_vec();
+    }
+    // A pane that asks for the whole slot (a chat) leaves the others their
+    // minimum and takes the rest.
+    if asked.iter().any(|h| *h >= PANE_MAX_HEIGHT) {
+        let fills = asked.iter().filter(|h| **h >= PANE_MAX_HEIGHT).count() as f32;
+        let others: f32 = asked
+            .iter()
+            .filter(|h| **h < PANE_MAX_HEIGHT)
+            .map(|h| h.min(PANE_MIN_HEIGHT))
+            .sum();
+        let each = ((room - others) / fills).max(PANE_MIN_HEIGHT);
+        return asked
+            .iter()
+            .map(|h| {
+                if *h >= PANE_MAX_HEIGHT {
+                    each
+                } else {
+                    h.min(PANE_MIN_HEIGHT)
+                }
+            })
+            .collect();
+    }
+    let mut order: Vec<usize> = (0..asked.len()).filter(|i| asked[*i] > 0.0).collect();
+    order.sort_by(|a, b| asked[*a].total_cmp(&asked[*b]));
+    let mut out = vec![0.0; asked.len()];
+    let mut left = room;
+    let mut n = order.len();
+    for i in order {
+        let fair = left / n as f32;
+        let got = asked[i].min(fair);
+        out[i] = got;
+        left -= got;
+        n -= 1;
+    }
+    out
+}
+
 /// A side slot's panes as a stack from the top: each pane with its offset from
 /// the top of the stack and its height, and how much the stack is taller than
 /// `total`. A folded pane is its header; the others have the height they ask
@@ -444,20 +509,21 @@ fn stack_scroll(ctx: &egui::Context, slot: Slot) -> f32 {
 fn stack_layout(total: f32, items: &[(f32, bool)]) -> (Vec<(f32, f32)>, f32) {
     let header = HEADER + 1.0;
     let fixed: f32 = items.iter().filter(|(_, f)| *f).count() as f32 * header;
-    let asked: f32 = items.iter().filter(|(_, f)| !*f).map(|(h, _)| *h).sum();
     let room = (total - fixed).max(0.0);
-    let scale = if asked > room && asked > 0.0 {
-        room / asked
-    } else {
-        1.0
-    };
+    let heights = share(
+        room,
+        &items
+            .iter()
+            .map(|(h, f)| if *f { 0.0 } else { *h })
+            .collect::<Vec<_>>(),
+    );
     let mut top = 0.0;
     let mut out = Vec::with_capacity(items.len());
-    for (h, folded) in items {
+    for ((h, folded), got) in items.iter().zip(heights) {
         let height = if *folded {
             header
         } else {
-            (h * scale).max(PANE_MIN_HEIGHT.min(*h))
+            got.max(PANE_MIN_HEIGHT.min(*h))
         };
         out.push((top, height));
         top += height;
@@ -706,6 +772,7 @@ pub(super) fn show_docked<R>(
     let mut ask = None;
     let mut closed = false;
     let mut fold_clicked = false;
+    let add = |ui: &mut egui::Ui| super::window_help::scope(ctx, name, || add(ui));
     let mut out = egui::Area::new(id.with("docked"))
         .order(egui::Order::Background)
         .fixed_pos(sub.min)
@@ -746,8 +813,22 @@ pub(super) fn show_docked<R>(
                     )
                     .on_hover_text(if is_fold { "Unfold" } else { "Fold up" });
                 fold_clicked = fold.clicked();
+                let help = super::window_help::text(ctx, name);
+                let title_x = if let Some(help) = &help {
+                    super::window_help::header_button(
+                        ui,
+                        egui::Rect::from_center_size(
+                            header.left_center() + egui::vec2(4.0 + BUTTON * 1.5, 0.0),
+                            egui::vec2(BUTTON, BUTTON),
+                        ),
+                        help,
+                    );
+                    8.0 + BUTTON * 2.0
+                } else {
+                    8.0 + BUTTON
+                };
                 ui.painter().text(
-                    header.left_center() + egui::vec2(8.0 + BUTTON, 0.0),
+                    header.left_center() + egui::vec2(title_x, 0.0),
                     egui::Align2::LEFT_CENTER,
                     title,
                     egui::FontId::proportional(13.0),
@@ -862,7 +943,12 @@ pub(super) fn show_docked<R>(
 /// The dock buttons in the title bar of a floating panel: painted on the
 /// window's own layer and hit-tested by hand, since egui's title bar has no
 /// room for more buttons of ours. Returns the slot that was clicked.
-pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Order) -> Option<Slot> {
+pub(super) fn title_buttons(
+    ctx: &egui::Context,
+    id: egui::Id,
+    name: &str,
+    order: egui::Order,
+) -> Option<Slot> {
     let title = ctx.read_response(id.with("__title_click"))?;
     let layer = egui::LayerId::new(order, id);
     let pal = crate::theme::ui_palette();
@@ -871,6 +957,13 @@ pub(super) fn title_buttons(ctx: &egui::Context, id: egui::Id, order: egui::Orde
     let clicked = ctx.input(|i| i.pointer.primary_clicked());
     let right = title.rect.right() - 4.0;
     let mut chosen = None;
+    if let Some(help) = super::window_help::text(ctx, name) {
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(right - BUTTON / 2.0 - 2.0 * BUTTON, title.rect.center().y),
+            egui::vec2(BUTTON, BUTTON),
+        );
+        super::window_help::title_button(ctx, layer, name, rect, &help);
+    }
     for (k, slot) in [Slot::Right, Slot::Left].into_iter().enumerate() {
         let rect = egui::Rect::from_center_size(
             egui::pos2(
@@ -1463,6 +1556,19 @@ mod tests {
     }
 
     #[test]
+    fn a_shortage_is_taken_from_the_long_pane_not_the_short_one() {
+        // A short form (200) and a long one (700) in a slot of 600: the short
+        // one keeps its size, the long one gets the rest.
+        let (rects, over) = stack_layout(600.0, &[(200.0, false), (700.0, false)]);
+        assert_eq!(over, 0.0);
+        assert!((rects[0].1 - 200.0).abs() < 0.01, "{rects:?}");
+        assert!((rects[1].1 - 400.0).abs() < 0.01, "{rects:?}");
+        // Two long ones share equally.
+        let (rects, _) = stack_layout(600.0, &[(700.0, false), (700.0, false)]);
+        assert!((rects[0].1 - 300.0).abs() < 0.01 && (rects[1].1 - 300.0).abs() < 0.01);
+    }
+
+    #[test]
     fn a_stack_taller_than_its_slot_shrinks_then_scrolls() {
         let (rects, over) = stack_layout(700.0, &[(340.0, false), (340.0, false)]);
         assert_eq!(over, 0.0);
@@ -1576,6 +1682,16 @@ mod tests {
         );
         assert!(rects[1].1 >= PANE_MIN_HEIGHT - 0.01, "{rects:?}");
         assert!(rects[0].1 > 500.0 && over < 100.0, "{rects:?} {over}");
+    }
+
+    #[test]
+    fn a_form_opens_at_its_height_once_and_keeps_one_the_person_set() {
+        let ctx = egui::Context::default();
+        open_at(&ctx, "modal:plc_card", 520.0);
+        assert_eq!(pane_height(&ctx, "modal:plc_card"), 520.0);
+        set_pane_height(&ctx, "modal:plc_card", Some(400.0));
+        open_at(&ctx, "modal:plc_card", 520.0);
+        assert_eq!(pane_height(&ctx, "modal:plc_card"), 400.0);
     }
 
     #[test]

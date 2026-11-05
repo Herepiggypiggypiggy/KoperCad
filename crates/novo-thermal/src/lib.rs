@@ -13,10 +13,15 @@
 
 mod advice;
 pub mod bridge;
+pub mod busbar;
 pub mod cooling;
 mod flow;
+pub mod forced;
+pub mod gaps;
+pub mod heatup;
 mod linalg;
 pub mod lump;
+pub mod mass;
 pub mod model;
 pub mod outside;
 pub mod placement;
@@ -24,6 +29,7 @@ pub mod placement_project;
 mod report;
 pub mod result;
 mod setup;
+pub mod shell;
 pub mod sweep;
 mod thermal;
 pub mod whatif;
@@ -33,7 +39,7 @@ pub use model::*;
 pub use result::*;
 pub use setup::Error;
 /// Surface coefficient of a device, shared with the 3D engine (`novo-cfd`).
-pub use thermal::device_h;
+pub use thermal::{device_h, device_h_turbulent};
 
 use setup::Setup;
 
@@ -45,7 +51,9 @@ pub(crate) fn run_steady_from(
     scn: &Scenario,
     init: Option<&thermal::State>,
 ) -> Result<(Setup, thermal::State), Error> {
-    let s = Setup::new(scn)?;
+    scn.check_sources()?;
+    let lowered = scn.lowered();
+    let s = Setup::new(&lowered)?;
     let st = thermal::steady_from(&s, 1.0, init);
     Ok((s, st))
 }
@@ -101,6 +109,8 @@ pub fn simulate_steady_with_advice(scn: &Scenario) -> Result<ThermalResult, Erro
 /// Steady state with the extras chosen in `options`. Without bands the
 /// bands equal the central estimate.
 pub fn simulate_steady_with(scn: &Scenario, options: Options) -> Result<ThermalResult, Error> {
+    let resolved = outside::resolve(scn)?;
+    let scn = &resolved;
     let (s, st) = run_steady(scn)?;
     let mut res = report::build(scn, &s, &st, 1.0, None);
     if options.bands {
@@ -156,7 +166,10 @@ pub fn simulate_transient(
             "a transient run needs a duration and steps".into(),
         ));
     }
-    let s = Setup::new(scn)?;
+    scn.check_sources()?;
+    let resolved = outside::resolve(scn)?;
+    let lowered = resolved.lowered();
+    let s = Setup::new(&lowered)?;
     let load_at = |t: f64| -> f64 {
         settings
             .load_schedule

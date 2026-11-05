@@ -65,6 +65,8 @@ check_layout
 answer_dialog qa/fixtures/addons/future-addon-1.0.0.kcaddon
 click_text "Install from file..."
 wait 10
+click_text "Warning: Add-on notice" Button
+wait 6
 expect "needs KoperCAD 9.0.0 or newer"
 shot needs-newer
 check_layout

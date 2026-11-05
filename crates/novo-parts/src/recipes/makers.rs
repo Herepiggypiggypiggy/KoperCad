@@ -448,24 +448,26 @@ pub static RECIPES: &[MakerRecipe] = &[
         manufacturer: "Rittal",
         aliases: &["Rittal GmbH", "Rittal GmbH & Co. KG"],
         route: Route {
-            portal: "rittal.com product page",
-            page: None,
+            portal: "Rittal CAD models (CADENAS PARTcommunity)",
+            page: Some(
+                "https://rittal.partcommunity.com/3d-cad-models/?catalog=rittal&part={order}",
+            ),
             home: "https://www.rittal.com",
-            login: Login::Unknown,
+            login: Login::Required,
             verified: Verified::Unverified,
-            terms: None,
+            terms: Some("https://www.cadenas.de/terms-of-use-3d-cad-models"),
         },
         steps: &[
-            "Search for {order} on the page that opens and open the product page.",
-            "Download the CAD data (STEP or DXF) or the product data (ETIM/BMEcat).",
-            "The file arrives in Downloads and is imported by itself.",
+            "Sign in to your PARTcommunity account on the page that opens (search for {order} if the link lands on the catalogue). KoperCAD never signs in for you.",
+            "Pick the format STEP and download it. Take DXF as well if you want the 2D outline.",
+            "The ZIP arrives in Downloads and is imported by itself. The model stays on this computer for your own design work: it is never shared or put in a bundle.",
         ],
         accepts: &[
+            FileKind::Zip,
             FileKind::Step,
             FileKind::Dxf,
             FileKind::Edz,
             FileKind::Bmecat,
-            FileKind::Zip,
             FileKind::Csv,
         ],
         cable_maker: false,
@@ -598,6 +600,23 @@ mod tests {
             assert!(w.is_some_and(|w| w.contains("order number")), "{maker} {n}");
         }
         assert!(r("WAGO").check_order(" ").unwrap().contains("empty"));
+    }
+
+    #[test]
+    fn rittal_goes_through_partcommunity_with_a_login_and_the_cadenas_terms() {
+        let rec = r("Rittal");
+        assert_eq!(rec.route.login, Login::Required);
+        assert_eq!(
+            rec.page_for("1500510"),
+            "https://rittal.partcommunity.com/3d-cad-models/?catalog=rittal&part=1500510"
+        );
+        assert!(rec.route.terms.is_some_and(|t| t.contains("cadenas")));
+        assert!(rec.accepts.contains(&FileKind::Zip));
+        assert!(
+            rec.steps_for("1500510")
+                .iter()
+                .any(|s| s.contains("never signs in"))
+        );
     }
 
     #[test]

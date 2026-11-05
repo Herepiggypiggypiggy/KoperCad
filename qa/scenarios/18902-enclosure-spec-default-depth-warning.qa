@@ -1,0 +1,15 @@
+@title Chosen enclosure with default numbers: too deep is a warning
+@area Check
+@sizes 1366x768 1920x1080
+# The EMC cabinet with a 900 x 500 x 240 enclosure whose numbers are program defaults (synthetic): -T1 is too deep for the door, shown as a warning with the estimate notice, not as an error.
+open qa/fixtures/enclosure-spec-default.novo
+wait 20
+key ctrl+k
+text Problems
+key enter
+wait 10
+expect "too deep"
+expect "enclosure data: default"
+expect "Estimate from program defaults"
+shot too-deep-warning-default-numbers
+check_layout

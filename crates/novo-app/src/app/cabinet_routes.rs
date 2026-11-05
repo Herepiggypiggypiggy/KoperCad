@@ -54,6 +54,30 @@ pub(super) struct RouteRow {
     pub(super) ducts: usize,
 }
 
+/// One thing to look at in the routes, as a count.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Chip {
+    pub(super) count: usize,
+    /// Two or three words after the count: `no size`, `no entry`.
+    pub(super) label: &'static str,
+    /// The full sentence, shown behind the chip's "?".
+    pub(super) sentence: String,
+    /// The one-click fix, if any: its button text and what it asks for.
+    pub(super) fix: Option<(&'static str, FixKind)>,
+}
+
+/// What a chip's fix button does. `Entry` is turned into a cabinet ask with
+/// the plate's own size when it is clicked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FixKind {
+    /// Open Bench output, where the missing wire sizes are filled in.
+    SizeWires,
+    /// Set the cabinet entry at the bottom middle of the plate.
+    Entry,
+    /// Open Parts, where connection points are detected.
+    DetectPins,
+}
+
 /// Everything drawn over the plate for the routes.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(super) struct Overlay {
@@ -61,8 +85,9 @@ pub(super) struct Overlay {
     pub(super) ducts: Vec<DuctFill>,
     /// The routes as a table, longest first.
     pub(super) rows: Vec<RouteRow>,
-    /// What the designer has to look at, in words.
-    pub(super) notes: Vec<String>,
+    /// What the designer has to look at: a count each, a one-click fix where
+    /// there is one, the full sentence behind a "?".
+    pub(super) chips: Vec<Chip>,
     /// The project's wire production rules the lengths were made with.
     pub(super) rules: WireRules,
     /// The plate's size and its entry point (where outside wires arrive).
@@ -128,7 +153,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         };
     };
     let rows = rows(project, &routed, plan);
-    let notes = notes(project, structure, plan, &routed, &rows);
+    let chips = chips(project, structure, plan, &routed, &rows);
     let routes = plan
         .routes
         .iter()
@@ -144,7 +169,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         routes,
         ducts,
         rows,
-        notes,
+        chips,
         rules,
         plate,
         entry,
@@ -213,12 +238,20 @@ fn rows(
                     )
                 })
                 .unwrap_or_default();
-            let to_door = routed
+            let door_leg = routed
                 .surface_legs
                 .get(&r.job)
-                .is_some_and(|leg| leg.opening.is_some());
+                .filter(|leg| leg.opening.is_some());
             let basis = match r.kind {
-                _ if to_door => "door, no gap",
+                _ if routed.spec_estimate.contains(&r.job) && door_leg.is_none() => {
+                    "~ routed (catalogue)"
+                }
+                _ if door_leg.is_some_and(|l| l.spec_gap.is_some()) => "~ door, spec has no depth",
+                _ if door_leg.is_some_and(|l| l.depth_mm > 0.0 && l.estimate) => {
+                    "~ door + depth (catalogue)"
+                }
+                _ if door_leg.is_some_and(|l| l.depth_mm > 0.0) => "door + depth (spec)",
+                _ if door_leg.is_some() => "door, no gap",
                 _ if routed.entry_legs.contains_key(&r.job) => "to entry, outside not included",
                 Kind::FreeAir => "no duct path, estimate",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
@@ -242,91 +275,164 @@ fn rows(
     rows
 }
 
-/// The plan's problems and the unknown depths, as sentences.
-fn notes(
+/// The plan's problems and the unknown depths, as counted chips.
+fn chips(
     project: &Project,
     structure: StructureId,
     plan: &novo_routing::Plan,
     routed: &novo_routing::model::Routed,
     rows: &[RouteRow],
-) -> Vec<String> {
+) -> Vec<Chip> {
     use novo_routing::Problem;
     let plural =
         |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
     let count = |f: &dyn Fn(&Problem) -> bool| plan.problems.iter().filter(|p| f(p)).count();
-    let mut notes = Vec::new();
+    let mut chips = Vec::new();
+    let mut add = |count: usize,
+                   label: &'static str,
+                   sentence: String,
+                   fix: Option<(&'static str, FixKind)>| {
+        if count > 0 {
+            chips.push(Chip {
+                count,
+                label,
+                sentence,
+                fix,
+            });
+        }
+    };
     let free = count(&|p| matches!(p, Problem::FreeAir { .. }));
-    if free > 0 {
-        notes.push(format!(
+    add(
+        free,
+        "no duct path",
+        format!(
             "{} no duct path: not drawn (ends marked in red), length is an estimate. Add a duct that joins them",
             plural(free, "wire has", "wires have")
-        ));
-    }
+        ),
+        None,
+    );
     let through = count(&|p| matches!(p, Problem::StubThroughDevice { .. }));
-    if through > 0 {
-        notes.push(format!(
+    add(
+        through,
+        "cross a device",
+        format!(
             "{} cross a device on the way to a duct: no free way round it. Move the duct or the device",
             plural(through, "wire has to", "wires have to")
-        ));
-    }
+        ),
+        None,
+    );
     let along = plan.routes.iter().filter(|r| !r.rails.is_empty()).count();
-    if along > 0 {
-        notes.push(format!(
+    add(
+        along,
+        "along a rail",
+        format!(
             "{} run along a DIN rail beside the devices on it",
             plural(along, "wire", "wires")
-        ));
-    }
+        ),
+        None,
+    );
     let overfull = count(&|p| matches!(p, Problem::OverfullDuct { .. }));
-    if overfull > 0 {
-        notes.push(format!(
+    add(
+        overfull,
+        "ducts over limit",
+        format!(
             "{} over the fill limit",
             plural(overfull, "duct is", "ducts are")
-        ));
-    }
+        ),
+        None,
+    );
     let no_size = count(&|p| matches!(p, Problem::UnsizedDuct { .. }));
-    if no_size > 0 {
-        notes.push(format!(
+    add(
+        no_size,
+        "ducts no size",
+        format!(
             "{} no size, so its fill is not checked",
             plural(no_size, "duct has", "ducts have")
-        ));
-    }
+        ),
+        None,
+    );
     let guessed = count(&|p| matches!(p, Problem::GuessedWire { .. }));
-    if guessed > 0 {
-        notes.push(format!(
+    add(
+        guessed,
+        "wires no size",
+        format!(
             "{} no size: duct fill assumes 3 mm",
             plural(guessed, "wire has", "wires have")
-        ));
-    }
+        ),
+        Some(("Size them", FixKind::SizeWires)),
+    );
     let leaving = wires_leaving_without_entry(project, structure, routed);
-    if leaving > 0 {
-        notes.push(format!(
+    add(
+        leaving,
+        "no entry",
+        format!(
             "{} the cabinet but it has no entry point: set the cabinet entry to route {} to it",
             plural(leaving, "wire leaves", "wires leave"),
             if leaving == 1 { "it" } else { "them" }
-        ));
-    }
+        ),
+        Some(("Set entry", FixKind::Entry)),
+    );
     let estimated = rows
         .iter()
         .filter(|r| routed.estimated.contains(&r.wire))
         .count();
-    if estimated > 0 {
-        notes.push(format!(
+    add(
+        estimated,
+        "estimated terminals",
+        format!(
             "{} end{} at an estimated terminal position: the part has no terminal data (Parts > Detect connection points)",
             plural(estimated, "wire", "wires"),
             if estimated == 1 { "s" } else { "" }
-        ));
-    }
+        ),
+        Some(("Detect pins", FixKind::DetectPins)),
+    );
+    let from_spec = rows
+        .iter()
+        .filter(|r| routed.spec_estimate.contains(&r.wire))
+        .count();
+    add(
+        from_spec,
+        "~ catalogue ducts",
+        format!(
+            "{} through ducts or to an entry from the enclosure's catalogue data: an estimate, not a measurement of your cabinet",
+            plural(from_spec, "wire runs", "wires run")
+        ),
+        None,
+    );
+    let gap = routed.spec_gaps.iter().find(|(s, _)| *s == structure);
+    add(
+        usize::from(gap.is_some()),
+        match gap.map(|(_, f)| *f) {
+            Some("outside width") => "no outside width",
+            Some("outside height") => "no outside height",
+            Some("outside depth") => "no outside depth",
+            Some("wall thickness") => "no wall thickness",
+            _ => "no plate setback",
+        },
+        format!(
+            "Enclosure {} has no {}: door wires are cut without the plate-to-door distance (~)",
+            project
+                .get::<novo_core::Structure>(structure)
+                .map(|s| s.tag.to_string())
+                .unwrap_or_default(),
+            gap.map_or("", |(_, field)| *field)
+        ),
+        None,
+    );
     let flat = rows
         .iter()
         .filter(|r| routed.unknown_height.contains(&r.wire))
         .count();
-    if flat > 0 {
-        notes.push(format!(
+    add(
+        flat,
+        "no depth",
+        format!(
             "{} measured from the plate: a part has no depth",
             plural(flat, "wire is", "wires are")
-        ));
-    }
-    notes
+        ),
+        None,
+    );
+    chips
 }
 
 /// Wires with one end on this plate and the other outside it (a supply, a
@@ -465,8 +571,8 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                 return;
             }
             ui.weak(overlay.summary());
-            for note in &overlay.notes {
-                ui.colored_label(crate::theme::ui_palette().warning, note);
+            if let Some(a) = chips_row(ui, overlay, plate) {
+                ask = Some(a);
             }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
@@ -538,6 +644,38 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
         panel.response.rect,
         false,
     );
+    ask
+}
+
+/// The things to look at as one wrapped row of count chips. Each chip has a
+/// "?" with the full sentence and, where there is one, a fix button. Neutral
+/// colours: how problems are shown is decided by the problem triangles.
+fn chips_row(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
+    let mut ask = None;
+    // Plain widgets straight in a wrapped row, so every item can wrap to the
+    // next line; a framed chip in its own sub-layout does not wrap and pushes
+    // the pane wider than the window.
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        for chip in &overlay.chips {
+            ui.label(egui::RichText::new(format!("{} {}", chip.count, chip.label)).strong())
+                .on_hover_text(&chip.sentence);
+            ui.weak("?").on_hover_text(&chip.sentence);
+            if let Some((button, kind)) = chip.fix
+                && ui.small_button(button).clicked()
+            {
+                ask = Some(match kind {
+                    FixKind::SizeWires => Ask::OpenBench,
+                    FixKind::DetectPins => Ask::OpenParts,
+                    FixKind::Entry => {
+                        let (w, h) = overlay.plate.unwrap_or((0.0, 0.0));
+                        Ask::SetEntryPoint(plate, Some((w / 2.0, h)))
+                    }
+                });
+            }
+            ui.add_space(8.0);
+        }
+    });
     ask
 }
 
@@ -887,9 +1025,9 @@ mod tests {
         assert!(o.ducts.is_empty());
         assert_eq!(o.summary(), "0 wires routed, 1 without a duct path");
         assert!(
-            o.notes.iter().any(|n| n.contains("no duct path")),
+            o.chips.iter().any(|c| c.sentence.contains("no duct path")),
             "{:?}",
-            o.notes
+            o.chips
         );
         assert_eq!(o.rows[0].basis, "no duct path, estimate");
     }

@@ -27,11 +27,11 @@ shot picture-before-lifting
 expect "Hoist in 3D"
 expect "hook +0.00 m from its start"
 # Radio step 2 (S2) lifts the hook; the line follows it.
-mouse_down 123 351
+mouse_down 123 370
 wait 3000
 expect "rising"
 shot hook-rising-in-the-picture
-mouse_up 123 351
+mouse_up 123 370
 wait 800
 expect "Picture, not measurement"
 check_layout

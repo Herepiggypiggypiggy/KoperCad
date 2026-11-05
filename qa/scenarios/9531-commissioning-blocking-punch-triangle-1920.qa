@@ -1,0 +1,32 @@
+@title Commissioning: a Blocking punch item draws a red triangle with a popover
+@area Commissioning
+@sizes 1920x1080
+# T13: Punch tab at 1920x1080. A Blocking item gets a red triangle on its row and on the wire or device; a Minor item has none. Won't fix takes the triangle away.
+open_starter_example
+wait 20
+click_text Commissioning #1
+wait 20
+click_text Punch
+wait 10
+click 170 259
+text Loose lug at the motor
+click_text Minor
+wait 4
+click_text Blocking
+wait 4
+click_text Add
+wait 10
+shot blocking-row
+expect "Error: Blocking punch item"
+click_text "Error: Blocking punch item"
+wait 6
+shot popover
+expect "Open"
+expect "Copy"
+key Escape
+wait 4
+click_text "Won't fix"
+wait 10
+expect_not "Error: Blocking punch item"
+shot gone
+check_layout

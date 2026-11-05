@@ -51,7 +51,9 @@ fn input(runs: Vec<Run>, devices: Vec<Device>) -> Input {
             tag: "+CAB".into(),
             finish: None,
             door_bonded: None,
+            shell: None,
         }],
+        cables: Vec::new(),
         params: Params::default(),
     }
 }

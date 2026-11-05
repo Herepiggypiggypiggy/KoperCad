@@ -1,0 +1,54 @@
+@title PR1903: My reports saved result in full, Delete, and persistence after reopening
+@area Reports
+@sizes 1366x768 1920x1080
+# Written without a GUI box: adjust coordinates if a click misses. A typed query error is not covered:
+# the SQL box has no label to click, so QA needs to add that step with a coordinate (error text is the
+# parser message, e.g. expect "Did you mean").
+# A new project, so Ctrl+S asks for a file (answered below) and the saved project can be reopened.
+fresh
+key ctrl+n
+wait 20
+key ctrl+k
+text my reports
+wait 3
+key Enter
+wait 10
+click_text "Start from example"
+wait 5
+click_text "Devices without a part"
+wait 5
+shot example-loaded
+click_text "Save report"
+wait 8
+expect "Devices without a part"
+shot saved-result
+check_layout
+# Delete the report just saved (its tab is the open one; Delete only exists on a saved report).
+click_text "Delete"
+wait 5
+expect_not "Devices without a part (does not run)"
+shot after-delete
+check_layout
+# Persistence: save the project, reopen it, the report is still there.
+click_text "+ New report"
+wait 4
+click_text "Start from example"
+wait 4
+click_text "Parts to order"
+wait 4
+click_text "Save report"
+wait 8
+answer_dialog ~/Documents/KoperCAD/my-reports.kopercad
+key ctrl+s
+wait 20
+expect_file ~/Documents/KoperCAD/my-reports.kopercad 4000
+open ~/Documents/KoperCAD/my-reports.kopercad
+wait 20
+key ctrl+k
+text my reports
+wait 3
+key Enter
+wait 10
+expect "Parts to order"
+shot reopened
+check_layout

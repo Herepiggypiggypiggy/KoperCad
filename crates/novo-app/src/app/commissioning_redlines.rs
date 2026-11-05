@@ -16,7 +16,9 @@ use novo_xref::Place;
 
 use super::cabinet_bar::note_ctx;
 use super::commissioning::{CommissioningMode, now, place_of};
+use super::commissioning_flags::job;
 use super::{Level, NovoApp};
+use novo_flags::Anchor;
 
 /// What the Redlines tab asks the app to do after the frame.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -136,7 +138,7 @@ pub(super) fn redlines_tab(
             let p = Palette::of(ui);
             for r in list.iter().rev() {
                 let color = match r.state {
-                    RedlineState::Open => p.warning,
+                    RedlineState::Open => p.text_secondary,
                     RedlineState::Applied => p.text_secondary,
                     RedlineState::Rejected => p.text_tertiary,
                 };
@@ -147,7 +149,11 @@ pub(super) fn redlines_tab(
                     Change::TerminalName(n) => format!("{} → designation {}", r.label, n.trim()),
                 };
                 let row = widgets::row(ui, false, |ui| {
-                    ui.label(egui::RichText::new(icons::CIRCLE).color(color));
+                    // An open redline is the machine differing from the drawing: yellow.
+                    let anchor = Anchor::Control(format!("commissioning.redline.{}", r.id));
+                    if !mode.panel_flags.slot(ui, &anchor) {
+                        ui.label(egui::RichText::new(icons::CIRCLE).color(color));
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             egui::RichText::new(r.state.label())
@@ -246,7 +252,7 @@ impl NovoApp {
             match self.execute(batch) {
                 Some(Ok(_)) => {}
                 Some(Err(e)) => {
-                    self.message(Level::Error, format!("Could not apply the redlines: {e}"));
+                    self.job_error(job::REDLINES, "Redlines not applied", &e, true);
                     return;
                 }
                 None => return,
@@ -276,8 +282,12 @@ impl NovoApp {
                 format!("Applied {applied} redlines to the drawing"),
             );
         }
-        for why in failed {
-            self.message(Level::Warning, format!("Redline not applied: {why}"));
+        if failed.is_empty() {
+            self.job_ok(job::REDLINES);
+        } else {
+            let mut lines = vec![format!("{} redline(s) stay open", failed.len())];
+            lines.extend(failed.iter().map(ToString::to_string));
+            self.job_doubtful(job::REDLINES, "Some redlines not applied", lines);
         }
         if issue && applied + notes.len() > 0 {
             self.open_issue_revision(Some(&description));

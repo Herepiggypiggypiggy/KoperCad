@@ -27,6 +27,10 @@ enum CardAction {
     Pad(super::controller_pad::PadAction),
     /// Where the Gamepad section is drawn, for the lesson anchor.
     PadAnchor(egui::Rect),
+    /// The flags of the broken bindings, as drawn this frame.
+    Flags(Vec<novo_flags::FlagDraft>),
+    /// A triangle on a signal row was clicked.
+    FlagOpen(novo_flags::FlagId, egui::Pos2),
 }
 
 /// The keys of the keyboard map (see [`key_map`]).
@@ -238,6 +242,11 @@ impl NovoApp {
     pub(super) fn controller_card(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.wb.live.on || !(self.wb.live.ctl.open || !self.wb.live.ctl.popped.is_empty()) {
             self.wb.live.ctl.pad_card_closed();
+            super::sim_flags::set_flags(
+                &mut self.wb.flags,
+                super::sim_flags::CONTROLLER,
+                Vec::new(),
+            );
             return;
         }
         self.controller_keys(ctx);
@@ -245,6 +254,7 @@ impl NovoApp {
             return;
         };
         let project = doc.project();
+        let flags = self.sim_flags_of(super::sim_flags::CONTROLLER);
         let ctl = &mut self.wb.live.ctl;
         ctl.sync(project);
         // The pad has the focus rules of a hand: a window in the background lets go.
@@ -265,11 +275,13 @@ impl NovoApp {
             .fit()
             .dockable()
             .scrolls()
-            .show(ctx, |ui| draw_card(ui, ctl, project, &mut actions))
+            .show(ctx, |ui| {
+                draw_card(ui, ctl, project, &flags, &mut actions);
+            })
         } else {
             None
         };
-        popped_panels(ctx, canvas, ctl, project);
+        popped_panels(ctx, canvas, ctl, project, &flags, &mut actions);
         if let Some(card) = card {
             self.anchor("live.controller", card.response.rect, "Controller card");
         }
@@ -286,6 +298,7 @@ impl NovoApp {
                 ctx.request_repaint_after(std::time::Duration::from_millis(33));
             }
         }
+        let mut drafts = Vec::new();
         for action in actions {
             match action {
                 CardAction::OpenWizard => self.open_controller_import(),
@@ -296,11 +309,14 @@ impl NovoApp {
                 CardAction::Pad(super::controller_pad::PadAction::OpenWizard) => {
                     self.wb.live.ctl.pad_open_wizard();
                 }
+                CardAction::Flags(more) => drafts.extend(more),
+                CardAction::FlagOpen(id, at) => self.wb.flags.open = Some((id, at)),
                 CardAction::PadAnchor(rect) => {
                     self.anchor("live.controller.gamepad", rect, "Gamepad section");
                 }
             }
         }
+        super::sim_flags::set_flags(&mut self.wb.flags, super::sim_flags::CONTROLLER, drafts);
         self.controllers_save();
     }
 
@@ -347,8 +363,23 @@ fn draw_card(
     ui: &mut egui::Ui,
     ctl: &mut ControllerLive,
     project: &Project,
+    flags: &[novo_flags::Flag],
     actions: &mut Vec<CardAction>,
 ) {
+    let mut drafts = Vec::new();
+    draw_card_body(ui, ctl, project, flags, actions, &mut drafts);
+    actions.push(CardAction::Flags(drafts));
+}
+
+fn draw_card_body(
+    ui: &mut egui::Ui,
+    ctl: &mut ControllerLive,
+    project: &Project,
+    flags: &[novo_flags::Flag],
+    actions: &mut Vec<CardAction>,
+    drafts: &mut Vec<novo_flags::FlagDraft>,
+) {
+    use super::sim_flags::card_draft;
     let palette = crate::theme::ui_palette();
     ui.horizontal(|ui| {
         if ui.small_button("✕ Close").clicked() {
@@ -357,14 +388,28 @@ fn draw_card(
         ui.weak("Simulation of wiring and logic");
     });
     if let Some(why) = ctl.damaged.clone() {
-        ui.colored_label(palette.error, &why);
-        ui.weak("It is kept in the project until you discard it.");
+        drafts.push(card_draft(
+            "damaged",
+            true,
+            "Stored controllers damaged",
+            vec![
+                why,
+                "It is kept in the project until you discard it.".to_owned(),
+            ],
+            None,
+        ));
         if ui.small_button("Discard the stored controllers").clicked() {
             ctl.discard_damaged();
         }
     }
     for note in ctl.notes.clone() {
-        ui.add(egui::Label::new(egui::RichText::new(note).color(palette.warning)).wrap());
+        drafts.push(card_draft(
+            "note",
+            false,
+            "Controller note",
+            vec![note],
+            None,
+        ));
     }
     instance_row(ui, ctl, actions);
     let Some(id) = ctl.selected.clone() else {
@@ -449,20 +494,21 @@ fn draw_card(
     filter_bar(ui, ctl);
     signals_block(ui, ctl, &id, project);
     ui.separator();
-    bindings_block(ui, ctl, &id, project);
+    bindings_block(ui, ctl, &id, project, actions, drafts);
     machine_block(ui, ctl, project);
-    ownership_lines(ui, ctl, &id);
-    let findings = ctl.findings(project);
-    if !findings.is_empty() {
-        ui.separator();
-        ui.label(egui::RichText::new("Checks").strong());
-        for f in &findings {
-            let color = match f.severity {
-                Severity::Error => palette.error,
-                Severity::Warning => palette.warning,
-            };
-            ui.add(egui::Label::new(egui::RichText::new(&f.text).color(color)).wrap());
-        }
+    ownership_lines(ui, ctl, &id, drafts);
+    for f in ctl.findings(project) {
+        drafts.push(card_draft(
+            "check",
+            f.severity == Severity::Error,
+            "Controller check",
+            vec![f.text],
+            f.key.as_ref().map(|k| k.controller.as_str()),
+        ));
+    }
+    // Where the lines of the checks were: the rows above keep their places.
+    if let Some(c) = super::sim_flags::strip(ui, &super::sim_flags::card_level(flags)) {
+        actions.push(CardAction::FlagOpen(c.0, c.1));
     }
     ui.separator();
     ui.horizontal(|ui| {
@@ -642,7 +688,12 @@ fn instance_controls(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, prof
 }
 
 /// Who else drives the targets of this instance, and who has them right now.
-fn ownership_lines(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
+fn ownership_lines(
+    ui: &mut egui::Ui,
+    ctl: &mut ControllerLive,
+    id: &str,
+    drafts: &mut Vec<novo_flags::FlagDraft>,
+) {
     let palette = crate::theme::ui_palette();
     let rows = ctl.shared_targets(id);
     if rows.is_empty() {
@@ -675,24 +726,28 @@ fn ownership_lines(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str) {
                 .collect();
             format!("{} driving", who.join(" and "))
         };
-        let (color, note) = if o.contested {
-            (palette.error, " (both pressing)")
-        } else if o.conflict {
-            (palette.warning, " (not marked shared)")
-        } else {
-            (palette.text_secondary, "")
-        };
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(format!(
-                    "{} also driven by {}: {now}{note}",
-                    short(&o.target),
-                    others.join(", ")
-                ))
-                .color(color),
-            )
-            .wrap(),
+        let line = format!(
+            "{} also driven by {}: {now}",
+            short(&o.target),
+            others.join(", ")
         );
+        if o.contested || o.conflict {
+            drafts.push(super::sim_flags::card_draft(
+                if o.contested { "contested" } else { "shared" },
+                o.contested,
+                if o.contested {
+                    "Both controllers press"
+                } else {
+                    "Target not marked shared"
+                },
+                vec![line],
+                Some(id),
+            ));
+        } else {
+            ui.add(
+                egui::Label::new(egui::RichText::new(line).color(palette.text_secondary)).wrap(),
+            );
+        }
     }
 }
 
@@ -703,7 +758,10 @@ fn popped_panels(
     canvas: egui::Rect,
     ctl: &mut ControllerLive,
     project: &Project,
+    flags: &[novo_flags::Flag],
+    actions: &mut Vec<CardAction>,
 ) {
+    let mut drafts: Vec<novo_flags::FlagDraft> = Vec::new();
     let popped: Vec<String> = ctl
         .popped
         .iter()
@@ -756,22 +814,30 @@ fn popped_panels(
                     ui.colored_label(palette.warning, why);
                 }
                 effects_row(ui, ctl, id);
-                ownership_lines(ui, ctl, id);
+                ownership_lines(ui, ctl, id, &mut drafts);
                 for f in findings
                     .iter()
                     .filter(|f| f.key.as_ref().is_some_and(|k| k.controller == *id))
                 {
-                    let color = match f.severity {
-                        Severity::Error => palette.error,
-                        Severity::Warning => palette.warning,
-                    };
-                    ui.add(egui::Label::new(egui::RichText::new(&f.text).color(color)).wrap());
+                    drafts.push(super::sim_flags::card_draft(
+                        "check",
+                        f.severity == Severity::Error,
+                        "Controller check",
+                        vec![f.text.clone()],
+                        Some(id),
+                    ));
+                }
+                if let Some(c) =
+                    super::sim_flags::strip(ui, &super::sim_flags::instance_level(flags, id))
+                {
+                    actions.push(CardAction::FlagOpen(c.0, c.1));
                 }
             });
         if !open {
             ctl.set_popped(id, false);
         }
     }
+    actions.push(CardAction::Flags(drafts));
 }
 
 /// The most of a name a tab shows.
@@ -972,8 +1038,16 @@ fn signals_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project:
         });
 }
 
-fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project: &Project) {
+fn bindings_block(
+    ui: &mut egui::Ui,
+    ctl: &mut ControllerLive,
+    id: &str,
+    project: &Project,
+    actions: &mut Vec<CardAction>,
+    drafts: &mut Vec<novo_flags::FlagDraft>,
+) {
     let palette = crate::theme::ui_palette();
+    let mut found: Vec<novo_flags::FlagDraft> = Vec::new();
     egui::CollapsingHeader::new("Bindings")
         .id_salt(("controller_bindings", id))
         .default_open(true)
@@ -1044,7 +1118,6 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                             let mut chosen: Option<(Target, bool)> = None;
                             let mut unbind = false;
                             let color = match &state {
-                                Some(Resolved::Broken(_)) => palette.error,
                                 Some(_) => palette.text_primary,
                                 None => palette.text_tertiary,
                             };
@@ -1080,8 +1153,37 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
                                     }
                                     machine_picker(ui, &modules, &mut chosen);
                                 });
-                            if let Some(Resolved::Broken(why)) = &state {
-                                ui.colored_label(palette.error, "!").on_hover_text(why);
+                            if let (Some(Resolved::Broken(why)), Some((target, _))) =
+                                (&state, &current)
+                            {
+                                let draft = super::sim_flags::broken_binding_draft(
+                                    project, id, name, target, why,
+                                );
+                                let flag_id = novo_flags::Flag::from_draft(draft.clone()).id;
+                                let (slot, tri) = ui.allocate_exact_size(
+                                    egui::vec2(20.0, 20.0),
+                                    egui::Sense::click(),
+                                );
+                                novo_theme::widgets::flag_triangle(
+                                    ui.painter(),
+                                    slot.center(),
+                                    15.0,
+                                    true,
+                                    false,
+                                    novo_theme::Palette::of(ui),
+                                );
+                                tri.widget_info(|| {
+                                    egui::WidgetInfo::labeled(
+                                        egui::WidgetType::Button,
+                                        true,
+                                        format!("Error: {}", draft.title),
+                                    )
+                                });
+                                let tri = tri.on_hover_text(why);
+                                if tri.clicked() {
+                                    actions.push(CardAction::FlagOpen(flag_id, slot.left_bottom()));
+                                }
+                                found.push(draft);
                             }
                             if unbind {
                                 changes.push((key.clone(), None));
@@ -1100,6 +1202,7 @@ fn bindings_block(ui: &mut egui::Ui, ctl: &mut ControllerLive, id: &str, project
             }
             plc_row(ui, ctl, id, project);
         });
+    drafts.extend(found);
 }
 
 /// The machine part of the target picker: one fold per module with its ports. A chain port also
@@ -1315,7 +1418,7 @@ ungated = true
         };
         let project = Project::default();
         let mut actions = Vec::new();
-        let mut out = ctx.run_ui(input, |ui| draw_card(ui, ctl, &project, &mut actions));
+        let mut out = ctx.run_ui(input, |ui| draw_card(ui, ctl, &project, &[], &mut actions));
         out.textures_delta.clear();
         out.shapes
             .iter()

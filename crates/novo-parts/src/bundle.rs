@@ -187,6 +187,22 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Whether a stored file came with CADENAS terms (a PARTcommunity download:
+/// Rittal, WAGO and others). Those models are personal: not shared.
+pub fn is_personal_model(r: &SourceRecord) -> bool {
+    let cadenas = |t: &Option<String>| {
+        t.as_deref()
+            .is_some_and(|t| t.to_ascii_lowercase().contains("cadenas"))
+    };
+    cadenas(&r.terms_url)
+        || r.url.as_deref().is_some_and(|u| {
+            u.to_ascii_lowercase().contains("partcommunity")
+                // A download from a supplier window: the user's own sign-in and
+                // terms, so personal. The marker does not depend on the supplier list.
+                || crate::supplier_site::is_window_source(u)
+        })
+}
+
 /// Writes a bundle of the user's parts to `out`.
 ///
 /// `library` supplies the files; without it no file is included. The ZIP is
@@ -247,9 +263,21 @@ pub fn export_bundle(
                     .records()
                     .map_err(|e| BundleError::Library(e.to_string()))?
                 {
-                    if wanted.contains(&r.key()) {
-                        records.push(r);
+                    if !wanted.contains(&r.key()) {
+                        continue;
                     }
+                    // CADENAS PARTcommunity models (Rittal, WAGO, ...) are
+                    // for the downloader's own design work: their terms bar
+                    // passing them on, so a share bundle never holds them,
+                    // whatever the user confirmed.
+                    if opts.mode == BundleMode::Share && is_personal_model(&r) {
+                        report.notes.push(format!(
+                            "{} of {} {} was left out: models from CADENAS PARTcommunity are for your own use and cannot be passed on.",
+                            r.file_name, r.manufacturer, r.order_number
+                        ));
+                        continue;
+                    }
+                    records.push(r);
                 }
             }
         }
@@ -757,6 +785,114 @@ mod tests {
             all.push_str(&String::from_utf8_lossy(&bytes));
         }
         all
+    }
+
+    #[test]
+    fn a_partcommunity_model_never_goes_into_a_share_bundle_even_when_confirmed() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = LocalLibrary::at(dir.path().join("lib"));
+        let mut catalog = Catalog::new();
+        // The user wrote this part themselves, but its model is Rittal's.
+        let own = part("Rittal", "1500510", Some("authored"));
+        library
+            .store(
+                &NewSource {
+                    terms_url: Some("https://www.cadenas.de/terms-of-use-3d-cad-models"),
+                    ..source(&own, "Rittal_1500510.stp")
+                },
+                b"STEP from PARTcommunity",
+            )
+            .unwrap();
+        catalog.upsert(own);
+        let out = dir.path().join("share.kcpl");
+        let r = export_bundle(
+            &catalog,
+            Some(&library),
+            &options(BundleMode::Share, true, true),
+            &out,
+        )
+        .unwrap();
+        assert_eq!((r.parts, r.files), (1, 0));
+        assert!(
+            r.notes.iter().any(|n| n.contains("own use")),
+            "{:?}",
+            r.notes
+        );
+        assert!(!zip_text(&out).contains("STEP from PARTcommunity"));
+        // The user's own backup keeps it.
+        let out = dir.path().join("backup.kcpl");
+        let r = export_bundle(
+            &catalog,
+            Some(&library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        assert_eq!(r.files, 1);
+    }
+
+    #[test]
+    fn a_file_landed_from_a_supplier_window_stays_out_of_a_share_bundle() {
+        use crate::import::{ImportJob, ImportState, ScriptedFetcher, SourceTable};
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        // A supplier id that is in no list: a custom or a removed supplier.
+        let landing = dir
+            .path()
+            .join("browser")
+            .join("landing")
+            .join("my-own-shop");
+        fs::create_dir_all(&landing).unwrap();
+        let file = landing.join("1-3RT2016.step");
+        fs::write(&file, b"STEP from the supplier window").unwrap();
+        let library = LocalLibrary::at(dir.path().join("lib"));
+        let sources = SourceTable::builtin();
+        let fetcher = ScriptedFetcher::default();
+        let own = part("Siemens", "3RT2016-1BB41", Some("authored"));
+        let mut job = ImportJob::new(
+            &library,
+            &sources,
+            &fetcher,
+            "Siemens",
+            "3RT2016-1BB41",
+            "2026-11-04",
+        );
+        assert!(matches!(
+            job.import_file(&file, ImportFlow::Downloads),
+            ImportState::Done(_)
+        ));
+        let mut catalog = Catalog::new();
+        catalog.upsert(own);
+        let out = dir.path().join("share.kcpl");
+        let r = export_bundle(
+            &catalog,
+            Some(&library),
+            &options(BundleMode::Share, true, true),
+            &out,
+        )
+        .unwrap();
+        assert_eq!(r.files, 0, "{:?}", r.notes);
+        assert!(
+            r.notes.iter().any(|n| n.contains("own use")),
+            "{:?}",
+            r.notes
+        );
+        assert!(!zip_text(&out).contains("STEP from the supplier window"));
+        // The user's backup keeps it.
+        let out = dir.path().join("backup.kcpl");
+        let r = export_bundle(
+            &catalog,
+            Some(&library),
+            &options(BundleMode::Backup, true, false),
+            &out,
+        )
+        .unwrap();
+        assert_eq!(r.files, 1);
+        // The same file from Downloads is not tagged by this rule.
+        let plain = dir.path().join("Downloads").join("3RT2016.step");
+        fs::create_dir_all(plain.parent().unwrap()).unwrap();
+        fs::write(&plain, b"STEP from Downloads").unwrap();
+        assert_eq!(crate::supplier_site::landed_source_url(&plain), None);
     }
 
     #[test]

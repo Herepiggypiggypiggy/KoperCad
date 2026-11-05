@@ -133,6 +133,24 @@ pub struct Plate {
     /// The door is bonded to the frame with a strap (`emc.door_bonded`), when
     /// stated.
     pub door_bonded: Option<bool>,
+    /// The chosen enclosure's shell, when the plate's enclosure has a
+    /// record (`novo_layout::spec`); `None` for projects without one.
+    pub shell: Option<Shell>,
+}
+
+/// The shell of a chosen enclosure as the shielding estimate reads it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shell {
+    /// Maker article number.
+    pub article: String,
+    /// Inside size (width, height, depth) in mm, or the first missing
+    /// field in words; never a guessed size.
+    pub inside: Result<(f64, f64, f64), String>,
+    /// Where the weakest number came from, in words (`catalogue`, ...).
+    pub source: &'static str,
+    /// The estimate notice of the record, while any number is a catalogue
+    /// or default value; appended to every message about the shell.
+    pub notice: Option<&'static str>,
 }
 
 /// Thresholds and assumptions. Every field is shown next to the results it
@@ -190,6 +208,18 @@ impl Params {
     }
 }
 
+/// Electrical facts of a cable that the drawing holds (EMC-21).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CableData {
+    pub id: u64,
+    /// Length in metres, when stated (the cable's length, not only the part
+    /// inside the cabinet).
+    pub length_m: Option<f64>,
+    /// Capacitance from one core to the shield in pF per metre, from the
+    /// maker (`emc.cable_pf_per_m`); `None` when not stated.
+    pub core_shield_pf_per_m: Option<f64>,
+}
+
 /// Everything the rules read.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Input {
@@ -197,5 +227,6 @@ pub struct Input {
     pub ducts: Vec<Duct>,
     pub devices: Vec<Device>,
     pub plates: Vec<Plate>,
+    pub cables: Vec<CableData>,
     pub params: Params,
 }
