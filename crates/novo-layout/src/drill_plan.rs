@@ -136,6 +136,10 @@ pub struct DrillPlan {
     pub sheets: Vec<Sheet>,
     /// Part data that could not be read, as the drill table reports it.
     pub problems: Vec<String>,
+    /// What the chosen enclosure says about this plan (article, inside size,
+    /// whether the plate fits, where the numbers come from); empty when no
+    /// enclosure was chosen. Shown on the plate sheet.
+    pub enclosure: Vec<String>,
 }
 
 fn edges_text(x: f64, y: f64, (w, h): (f64, f64)) -> String {
@@ -408,6 +412,7 @@ pub fn plan(
         title: title.to_owned(),
         sheets,
         problems: table.problems.clone(),
+        enclosure: Vec::new(),
     }
 }
 
@@ -689,6 +694,11 @@ impl DrillPlan {
                 ),
                 true,
             );
+            if sheet.surface == Surface::Plate {
+                for line in &self.enclosure {
+                    f.wrapped(line, true);
+                }
+            }
             f.wrapped(
                 "Scribe the datum: a line along the top edge and one along the left edge. Measure every X and Y from them.",
                 true,

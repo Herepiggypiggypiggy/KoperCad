@@ -3,11 +3,11 @@
 //!
 //!   cargo run --release -p novo-view3d --features gpu --example crane_view -- \
 //!       --png out.png [--view iso|front|side|top] [--focus all|trolley|truck|hook] \
-//!       [--size 1920x1080] [--bridge 4.0] [--trolley 5.0] [--hook 0.0] [--swing 0.0]
+//!       [--size 1920x1080] [--bridge 4.0] [--trolley 5.0] [--hook 0.0] [--swing 0.0] [--lamps off|green|amber|red,...]
 
 use flate2::{Compression, write::ZlibEncoder};
 use glam::Vec3;
-use novo_view3d::crane::{CraneLayout, CraneState, build, hook_bounds};
+use novo_view3d::crane::{CraneLayout, CraneState, Lamp, build, hook_bounds};
 use novo_view3d::crane_parts;
 use novo_view3d::render::{Frame, Mode, Quality, Renderer, Tier, ViewTarget, read_rgba};
 use novo_view3d::{Aabb, Camera, Look, MeshLibrary, ViewPreset, ViewState};
@@ -61,6 +61,7 @@ fn main() {
     let mut view = String::from("iso");
     let mut focus = String::from("all");
     let (mut bridge, mut trolley, mut hook, mut swing) = (4.0f32, 5.0f32, 0.0f32, 0.0f32);
+    let mut lamps = [Lamp::Off; 2];
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -70,6 +71,17 @@ fn main() {
             "--bridge" => bridge = args.next().unwrap().parse().unwrap(),
             "--trolley" => trolley = args.next().unwrap().parse().unwrap(),
             "--hook" => hook = args.next().unwrap().parse().unwrap(),
+            "--lamps" => {
+                let v = args.next().unwrap();
+                for (k, w) in v.split(',').take(2).enumerate() {
+                    lamps[k] = match w {
+                        "green" => Lamp::Green,
+                        "amber" => Lamp::Amber,
+                        "red" => Lamp::Red,
+                        _ => Lamp::Off,
+                    };
+                }
+            }
             "--swing" => swing = args.next().unwrap().parse().unwrap(),
             "--size" => {
                 let s = args.next().unwrap();
@@ -85,6 +97,7 @@ fn main() {
         trolley_m: trolley,
         hook_m: hook,
         swing_rad: [swing, 0.0],
+        lamps,
         ..Default::default()
     };
     let scene = build(&layout, &state);

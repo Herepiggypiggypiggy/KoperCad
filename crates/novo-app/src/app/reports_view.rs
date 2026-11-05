@@ -618,6 +618,24 @@ impl NovoApp {
             // Too wide for the window: hide the low-value columns first.
             keep.retain(|&i| !section.columns[i].optional);
             layout = self.table_layout(ui, section, &keep);
+            let hidden: Vec<&str> = section
+                .columns
+                .iter()
+                .filter(|c| c.optional)
+                .map(|c| c.header.as_str())
+                .collect();
+            // Say so, and never leave the sort on a column that is not shown.
+            ui.label(
+                egui::RichText::new(format!("{} hidden (window narrow)", hidden.join(", ")))
+                    .small()
+                    .color(crate::theme::ui_palette().text_secondary),
+            );
+            if let Some((key, col, _)) = &self.reports_view.sort
+                && *key == section.key
+                && !keep.contains(col)
+            {
+                self.reports_view.sort = None;
+            }
         }
         if layout.wide && layout.total > available {
             let mut jump = None;

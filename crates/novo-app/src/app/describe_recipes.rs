@@ -47,10 +47,15 @@ impl NovoApp {
             .map(|p| RecipeSet::load_checked(&p))
             .unwrap_or_default();
         if let Some(why) = warning {
-            self.message(
-                Level::Warning,
-                format!("Using the built-in recipes: {why}. Saving replaces that file."),
+            self.job_flag(
+                "describe.recipes",
+                false,
+                "Built-in recipes in use",
+                format!("Using the built-in recipes: {why}.\nSaving replaces that file."),
+                None,
             );
+        } else {
+            self.job_ok("describe.recipes");
         }
         let kind = set.recipes.keys().next().cloned().unwrap_or_default();
         self.wb.describe = Some(DescribeDialog {
@@ -111,7 +116,13 @@ impl NovoApp {
                     if n == 1 { "" } else { "s" }
                 ),
             ),
-            Some(Err(e)) => self.message(Level::Error, format!("Could not describe: {e}")),
+            Some(Err(e)) => self.job_flag(
+                "describe.apply",
+                true,
+                "Descriptions not written",
+                format!("Could not describe: {e}"),
+                None,
+            ),
             None => {}
         }
     }
@@ -120,7 +131,6 @@ impl NovoApp {
         let Some(dialog) = &mut self.wb.describe else {
             return;
         };
-        let palette = crate::theme::ui_palette();
         let (mut apply_devices, mut apply_parts, mut save, mut close) =
             (false, false, false, false);
         let modal = super::panel::modal_fill(
@@ -209,7 +219,13 @@ impl NovoApp {
                                         remove = Some(at);
                                     }
                                     if let Some((_, e)) = problems.iter().find(|(i, _)| *i == at) {
-                                        ui.colored_label(palette.warning, e.to_string());
+                                        super::flags_shell::inline_flag(
+                                            ui,
+                                            false,
+                                            false,
+                                            "Segment",
+                                            &e.to_string(),
+                                        );
                                     }
                                 });
                             }
@@ -269,12 +285,27 @@ impl NovoApp {
             return;
         };
         let Some(path) = recipes_path() else {
-            self.message(Level::Error, "No profile folder to save the recipes in");
+            self.job_flag(
+                "describe.save",
+                true,
+                "Recipes not saved",
+                "There is no profile folder to save the recipes in.",
+                None,
+            );
             return;
         };
         match dialog.set.save(&path) {
-            Ok(()) => self.message(Level::Info, "Recipes saved"),
-            Err(e) => self.message(Level::Error, format!("Could not save the recipes: {e}")),
+            Ok(()) => {
+                self.job_ok("describe.save");
+                self.message(Level::Info, "Recipes saved");
+            }
+            Err(e) => self.job_flag(
+                "describe.save",
+                true,
+                "Recipes not saved",
+                format!("Could not save the recipes: {e}"),
+                None,
+            ),
         }
     }
 }

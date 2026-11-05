@@ -251,7 +251,9 @@ jobs:
           cp scripts/latest-build/run.cmd scripts/latest-build/import-parts.cmd scripts/latest-build/README.md stage/
           cp packaging/windows/portable/run-safe-graphics.cmd stage/
           size=$(stat -c %s stage/kopercad.exe)
-          if [ "$size" -gt 95000000 ]; then echo "kopercad.exe is $size bytes, over the git file limit; skipping the branch"; exit 0; fi
+          # GitHub refuses a pushed file over 100 MiB; stay under 100 MB. The exe was
+          # 95.5 MB on 2026-11-05, so the old 95 MB guard silently froze this branch.
+          if [ "$size" -gt 100000000 ]; then echo "::warning::kopercad.exe is $size bytes, over the git file limit; the latest-build branch was NOT updated"; exit 0; fi
           cd stage
           git init -q -b latest-build
           git config user.name "github-actions[bot]"

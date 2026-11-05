@@ -133,6 +133,7 @@ impl NovoApp {
         let catalog = translator.catalog();
         match super::pdf::write_replacing(path, catalog.to_json().as_bytes()) {
             Ok(()) => {
+                self.job_ok("language.export");
                 self.message(
                     Level::Info,
                     format!("Wrote {} ({} texts)", path.display(), catalog.entries.len()),
@@ -140,9 +141,12 @@ impl NovoApp {
                 Some(catalog.entries.len())
             }
             Err(e) => {
-                self.message(
-                    Level::Error,
+                self.job_flag(
+                    "language.export",
+                    true,
+                    "Language file not written",
                     format!("Could not write {}: {e}", path.display()),
+                    None,
                 );
                 None
             }
@@ -157,9 +161,12 @@ impl NovoApp {
         let text = match std::fs::read_to_string(path) {
             Ok(t) => t,
             Err(e) => {
-                self.message(
-                    Level::Error,
+                self.job_flag(
+                    "language.import",
+                    true,
+                    "Language file not read",
                     format!("Could not read {}: {e}", path.display()),
+                    None,
                 );
                 return false;
             }
@@ -167,10 +174,17 @@ impl NovoApp {
         let catalog = match i18n::Catalog::from_json(&text) {
             Ok(c) => c,
             Err(e) => {
-                self.message(Level::Error, format!("{}: {e}", path.display()));
+                self.job_flag(
+                    "language.import",
+                    true,
+                    "Not a language file",
+                    format!("{}: {e}", path.display()),
+                    None,
+                );
                 return false;
             }
         };
+        self.job_ok("language.import");
         let Some(project) = self.backend.document().map(|d| d.project().clone()) else {
             return false;
         };
@@ -281,9 +295,12 @@ impl NovoApp {
                             table_rows.len()
                         ));
                     } else {
-                        ui.colored_label(
-                            crate::theme::ui_palette().warning,
-                            format!(
+                        super::flags_shell::inline_flag(
+                            ui,
+                            false,
+                            false,
+                            &format!("{missing} texts not translated"),
+                            &format!(
                                 "{missing} of {} texts have no translation and print in English.",
                                 table_rows.len()
                             ),
@@ -308,7 +325,13 @@ impl NovoApp {
                         }
                     });
                     if let Some(error) = &win.error {
-                        ui.colored_label(crate::theme::ui_palette().error, error);
+                        super::flags_shell::inline_flag(
+                            ui,
+                            true,
+                            false,
+                            "Text not accepted",
+                            error,
+                        );
                     }
                     ui.separator();
                     // Leave room for the add-a-language rows under the table.

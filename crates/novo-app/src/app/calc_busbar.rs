@@ -236,13 +236,17 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
     ui.horizontal_wrapped(|ui| {
         ui.strong("Three-phase bars");
         badge(ui, Model::Busbar);
-        let hover = NOT_MODELLED.join("\n");
-        ui.label("?")
-            .on_hover_text(format!(
-                "{}\n\nStraight parallel bars, no steel nearby, no joints or bends. Planning numbers.\n\nCables are solid conductors here: the AC factor of a stranded cable is a little lower.\n\nNot modelled:\n{hover}",
-                busbar::MODEL_LABEL
-            ));
     });
+    // One "?" for the whole window: the model limits and the notes below go
+    // to the header of the Calculations window.
+    super::window_help::add(
+        ui.ctx(),
+        format!(
+            "{}\n\nStraight parallel bars, no steel nearby, no joints or bends. Planning numbers.\n\nCables are solid conductors here: the AC factor of a stranded cable is a little lower.\n\nNot modelled:\n{}",
+            busbar::MODEL_LABEL,
+            NOT_MODELLED.join("\n")
+        ),
+    );
     egui::Grid::new("busbar_inputs")
         .num_columns(4)
         .spacing([12.0, 4.0])
@@ -437,9 +441,10 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
         } else {
             "infinite".to_owned()
         };
-        ui.label("?").on_hover_text(format!(
-            "{ratio:.3} times the loss at DC resistance. Skin depth {skin_text}."
-        ));
+        super::window_help::add(
+            ui.ctx(),
+            format!("Busbar impedance: {ratio:.3} times the loss at DC resistance. Skin depth {skin_text}."),
+        );
     });
     ui.horizontal(|ui| {
         let sweeping = st.sweep_pending.is_some();
@@ -478,7 +483,8 @@ pub(super) fn busbar_tab(ui: &mut egui::Ui, st: &mut BusbarState) {
                         ui.end_row();
                     }
                 });
-            ui.label("?").on_hover_text(
+            super::window_help::add(
+                ui.ctx(),
                 "The sweep uses a coarser mesh (8 per side) and the inputs shown when it was run.",
             );
         }

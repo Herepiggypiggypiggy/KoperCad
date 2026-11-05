@@ -1,0 +1,26 @@
+@title Commissioning: a failed field results import is a job flag with Retry and Dismiss
+@area Commissioning
+# T13: a file that is not a field results file fails to import. The failure is a job flag on the top bar pill (one pill for every job); the popover has Retry, Copy details and Dismiss; Dismiss clears it. The menu items sit at fixed places in the panel (277 370 is "Import field results").
+open_starter_example
+wait 20
+click_text Commissioning #1
+wait 20
+answer_dialog qa/fixtures/files/not-a-drawing.dxf
+click_text "Your name"
+wait 6
+click 277 370
+wait 20
+shot failed-import
+expect "Not a field results file"
+click_text "Error: Not a field results file" Button
+wait 8
+expect "Retry"
+expect "Copy details"
+expect "Dismiss"
+shot popover
+check_layout
+click_text "Dismiss" Button
+wait 8
+expect_not "Not a field results file"
+shot dismissed
+check_layout
