@@ -6,12 +6,11 @@
 
 use super::crane_model_load::{Loading, guess_roles};
 use super::crane_setup::ModelRef;
-use novo_view3d::crane_model::{
-    CraneModel, ModelPlan, Orientation, PartRole, hook_bounds, plan, scene,
-};
+use novo_view3d::crane_model::{CraneModel, ModelPlan, Orientation, PartRole, hook_bounds, plan};
+use novo_view3d::crane_motion::{Group, Rig, rig};
+use novo_view3d::crane_user::{UserCrane, from_plan, is_hoist_unit};
 use novo_view3d::math::Aabb;
 use novo_view3d::mesh::MeshLibrary;
-use novo_view3d::scene::Scene;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -24,8 +23,11 @@ struct Loaded {
     orientation: Orientation,
     roles: Vec<PartRole>,
     plan: ModelPlan,
+    /// What moves with what, from the roles.
+    rig: Rig,
+    /// The hook and hoist solids to put in the generic crane, when the model is a hoist unit only.
+    unit: Option<UserCrane>,
     library: Arc<MeshLibrary>,
-    scene: Arc<Scene>,
     /// Counts the plans of the slot, so the window knows when to hand the renderer a new scene.
     generation: u64,
 }
@@ -55,6 +57,18 @@ pub(super) struct PartRow {
     pub guessed: PartRole,
     /// Size in the picture's axes (along the runway, up, across), mm.
     pub size_mm: [f32; 3],
+    /// What the solid moves with once the simulation drives the crane.
+    pub moves_with: Group,
+}
+
+/// The model as the picture of a running crane needs it.
+pub(super) struct Motion<'a> {
+    pub generation: u64,
+    pub plan: &'a ModelPlan,
+    pub rig: &'a Rig,
+    pub unit: Option<&'a UserCrane>,
+    pub library: &'a Arc<MeshLibrary>,
+    pub highlight: Option<usize>,
 }
 
 #[derive(Default)]
@@ -169,7 +183,7 @@ impl ModelSlot {
             let roles = effective_roles(&want, &l.guess);
             if l.orientation != want.orientation || l.roles != roles {
                 self.generation += 1;
-                l.replan(want.orientation, roles, self.highlight, self.generation);
+                l.replan(want.orientation, roles, self.generation);
                 changed = true;
             }
         }
@@ -189,21 +203,28 @@ impl ModelSlot {
             want.orientation,
             roles,
             p,
-            self.highlight,
             self.generation,
         ));
-    }
-
-    /// The scene and its library, with the number that changes when the scene does.
-    pub(super) fn scene(&self) -> Option<(u64, Arc<Scene>, Arc<MeshLibrary>)> {
-        let l = self.loaded.as_ref().filter(|_| self.shown())?;
-        Some((l.generation, l.scene.clone(), l.library.clone()))
     }
 
     /// What a camera frames to see the hook of the model.
     pub(super) fn hook_bounds(&self) -> Option<Aabb> {
         let l = self.loaded.as_ref().filter(|_| self.shown())?;
         Some(hook_bounds(&l.plan))
+    }
+
+    /// The model with its motion, for the picture of a running crane: the generation (counts the
+    /// plans), the plan, the rig, the meshes and the solid pointed at in the parts list.
+    pub(super) fn motion(&self) -> Option<Motion<'_>> {
+        let l = self.loaded.as_ref().filter(|_| self.shown())?;
+        Some(Motion {
+            generation: l.generation,
+            plan: &l.plan,
+            rig: &l.rig,
+            unit: l.unit.as_ref(),
+            library: &l.library,
+            highlight: self.highlight,
+        })
     }
 
     /// The solids with their roles, in file order (solids without triangles are not listed).
@@ -217,11 +238,18 @@ impl ModelSlot {
                 continue;
             }
             let b = rotated_size(part.mesh.bounds, l.orientation);
+            let moves_with = l
+                .rig
+                .groups
+                .get(rows.len())
+                .copied()
+                .unwrap_or(Group::Frame);
             rows.push(PartRow {
                 name: part.name.clone(),
                 role: l.roles.get(i).copied().unwrap_or(PartRole::Other),
                 guessed: l.guess.get(i).copied().unwrap_or(PartRole::Other),
                 size_mm: b,
+                moves_with,
             });
         }
         rows
@@ -264,11 +292,6 @@ impl ModelSlot {
             return;
         }
         self.highlight = n;
-        if let Some(l) = &mut self.loaded {
-            self.generation += 1;
-            l.scene = Arc::new(scene(&l.plan, n));
-            l.generation = self.generation;
-        }
     }
 
     pub(super) fn set_orientation(&mut self, o: Orientation) {
@@ -297,7 +320,6 @@ fn rotated_size(b: Aabb, o: Orientation) -> [f32; 3] {
 }
 
 impl Loaded {
-    #[allow(clippy::too_many_arguments)]
     fn new(
         path: String,
         raw: Arc<CraneModel>,
@@ -305,11 +327,11 @@ impl Loaded {
         orientation: Orientation,
         roles: Vec<PartRole>,
         plan: ModelPlan,
-        highlight: Option<usize>,
         generation: u64,
     ) -> Self {
-        let scene = Arc::new(scene(&plan, highlight));
         let library = Arc::new(plan.library.clone());
+        let rig = rig(&plan);
+        let unit = is_hoist_unit(&plan).then(|| from_plan(&plan, &rig));
         Self {
             path,
             raw,
@@ -317,22 +339,18 @@ impl Loaded {
             orientation,
             roles,
             plan,
+            rig,
+            unit,
             library,
-            scene,
             generation,
         }
     }
 
-    fn replan(
-        &mut self,
-        orientation: Orientation,
-        roles: Vec<PartRole>,
-        highlight: Option<usize>,
-        generation: u64,
-    ) {
+    fn replan(&mut self, orientation: Orientation, roles: Vec<PartRole>, generation: u64) {
         let p = plan(&self.raw, orientation, &roles);
-        self.scene = Arc::new(scene(&p, highlight));
         self.library = Arc::new(p.library.clone());
+        self.rig = rig(&p);
+        self.unit = is_hoist_unit(&p).then(|| from_plan(&p, &self.rig));
         self.plan = p;
         self.orientation = orientation;
         self.roles = roles;
@@ -381,9 +399,9 @@ mod tests {
         };
         assert_eq!(name, "workshop-crane.stp");
         assert_eq!(parts, 23);
-        let (_, scene, library) = slot.scene().unwrap();
-        assert!(scene.items.len() > parts);
-        assert!(library.len() >= parts);
+        let m = slot.motion().unwrap();
+        assert!(m.library.len() >= parts);
+        assert_eq!(m.plan.placed.len(), parts);
     }
 
     #[test]
@@ -402,7 +420,7 @@ mod tests {
             "{:?}",
             slot.status()
         );
-        assert!(!slot.shown() && slot.scene().is_none());
+        assert!(!slot.shown() && slot.motion().is_none());
         // Another frame does not start a second reading.
         slot.update(|| {});
         assert!(slot.loading.is_none());
@@ -416,7 +434,7 @@ mod tests {
         let mut slot = ModelSlot::default();
         load_now(&mut slot, &fixture());
         assert!(!slot.update(|| {}));
-        let (g0, ..) = slot.scene().unwrap();
+        let g0 = slot.motion().unwrap().generation;
         let rows = slot.rows();
         let i = rows.iter().position(|r| r.name == "Rope drum").unwrap();
         assert_eq!(rows[i].role, PartRole::Drum);
@@ -424,7 +442,7 @@ mod tests {
         assert!(slot.update(|| {}));
         assert_eq!(slot.rows()[i].role, PartRole::Other);
         assert_eq!(slot.rows()[i].guessed, PartRole::Drum);
-        let (g1, ..) = slot.scene().unwrap();
+        let g1 = slot.motion().unwrap().generation;
         assert!(g1 > g0);
         assert_eq!(slot.want().unwrap().roles.len(), 23);
         // Back to the guess: nothing is stored.
@@ -450,11 +468,11 @@ mod tests {
         use novo_view3d::crane_model::HIGHLIGHT;
         let mut slot = ModelSlot::default();
         load_now(&mut slot, &fixture());
-        let (g0, ..) = slot.scene().unwrap();
+        let g0 = slot.motion().unwrap().generation;
         let painted = |slot: &ModelSlot| {
-            slot.scene()
-                .unwrap()
-                .1
+            let m = slot.motion().unwrap();
+            let state = novo_view3d::crane::CraneState::default();
+            novo_view3d::crane_motion::scene_with(m.plan, m.rig, &state, None, m.highlight)
                 .items
                 .iter()
                 .filter(|i| i.tint == Some(HIGHLIGHT))
@@ -463,11 +481,8 @@ mod tests {
         assert_eq!(painted(&slot), 0);
         slot.set_highlight(Some(3));
         assert_eq!(painted(&slot), 1);
-        assert!(slot.scene().unwrap().0 > g0);
-        // The same row again changes nothing; moving away paints it back.
-        let g1 = slot.scene().unwrap().0;
-        slot.set_highlight(Some(3));
-        assert_eq!(slot.scene().unwrap().0, g1);
+        // The plan itself does not change; moving away paints it back.
+        assert_eq!(slot.motion().unwrap().generation, g0);
         slot.set_highlight(None);
         assert_eq!(painted(&slot), 0);
         // It stays through a re-placement.
@@ -485,7 +500,7 @@ mod tests {
         slot.clear();
         assert!(!slot.shown());
         assert!(slot.update(|| {}));
-        assert!(slot.scene().is_none() && slot.status() == Status::None);
+        assert!(slot.motion().is_none() && slot.status() == Status::None);
     }
 
     #[test]
@@ -499,5 +514,26 @@ mod tests {
         slot.install(want.path.clone(), model, &want);
         let rows = slot.rows();
         assert!(rows.iter().all(|r| r.role == r.guessed));
+    }
+
+    #[test]
+    fn the_synthetic_crane_groups_its_solids_and_frames_a_small_hook() {
+        let mut slot = ModelSlot::default();
+        load_now(&mut slot, &fixture());
+        for r in slot.rows() {
+            eprintln!(
+                "{:20} {:10} {}",
+                r.name,
+                r.role.label(),
+                r.moves_with.label()
+            );
+        }
+        let m = slot.motion().unwrap();
+        let v = m.rig.hook_view(0.0).unwrap();
+        eprintln!(
+            "hook view {:?} {:?} extent {:?}",
+            v.min, v.max, m.rig.extent_m
+        );
+        assert!(v.size().x < 6000.0 && v.size().z < 6000.0, "{:?}", v.size());
     }
 }
