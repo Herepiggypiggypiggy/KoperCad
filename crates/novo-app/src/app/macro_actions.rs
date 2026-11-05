@@ -1024,17 +1024,20 @@ impl NovoApp {
                 }
                 let text = if plc_note {
                     format!(
-                        "Placed {name} (symbols only, no I/O addresses) · {}",
+                        "Placed {name} (symbols only: use Draw > Add PLC card for addresses) · {}",
                         describe(&placed.report)
                     )
                 } else if fed > 0 && joined > 0 {
                     format!(
-                        "Placed {name}, supply fed · {} joined to the starter · {}",
+                        "Placed {name}, L1 L2 L3 N PE fed · {} joined to the starter's open entries · {}",
                         count_words::wires(joined),
                         describe(&placed.report)
                     )
                 } else if fed > 0 {
-                    format!("Placed {name}, supply fed · {}", describe(&placed.report))
+                    format!(
+                        "Placed {name}, L1 L2 L3 N PE fed · now wire its outputs to the starter · {}",
+                        describe(&placed.report)
+                    )
                 } else if joined > 0 {
                     format!(
                         "Placed {name}, {} joined to the Three-phase supply · {}",
@@ -1056,7 +1059,7 @@ impl NovoApp {
                     .count();
                 let text = if open > 0 && !plc_note {
                     format!(
-                        "{text} · {open} {} to connect",
+                        "{text} · {open} {} to connect to a supply (see the Issues list)",
                         if open == 1 { "point" } else { "points" }
                     )
                 } else {
@@ -1066,12 +1069,9 @@ impl NovoApp {
                     self.refuse(
                         Level::Warning,
                         format!(
-                            "{name}: {off_sheet} {} outside the page edge",
-                            if off_sheet == 1 {
-                                "symbol is"
-                            } else {
-                                "symbols are"
-                            }
+                            "{name}: {off_sheet} {} outside the page edge; move {} onto the sheet or use a bigger page",
+                            if off_sheet == 1 { "symbol is" } else { "symbols are" },
+                            if off_sheet == 1 { "it" } else { "them" }
                         ),
                     );
                 }

@@ -19,7 +19,7 @@ pub(super) fn show(ui: &mut egui::Ui, view: &MountingView, values: &[(String, St
     let width = ui.available_width().min(380.0);
     let height = (width as f64 * ph / pw.max(1.0)).clamp(90.0, 240.0) as f32;
     ui.weak(format!(
-        "Plate {pw:.0} x {ph:.0} mm, rails {}",
+        "Plate {pw:.0} x {ph:.0} mm, rails {} (suggestion)",
         view.rails.len()
     ));
     super::window_help::add(ui.ctx(), "Layout suggestion, not a measured cabinet.");
