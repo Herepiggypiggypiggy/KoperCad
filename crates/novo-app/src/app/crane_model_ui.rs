@@ -63,6 +63,7 @@ impl NovoApp {
     pub(super) fn crane_model_parts_window(&mut self, ctx: &egui::Context) {
         let slot = &mut self.wb.hoist.three_d.model;
         if !slot.parts_open {
+            slot.set_highlight(None);
             return;
         }
         let (
@@ -79,6 +80,7 @@ impl NovoApp {
         let mut orientation = want.orientation;
         let mut set_role: Option<(usize, PartRole)> = None;
         let mut reset = false;
+        let mut hover: Option<usize> = None;
         let mut open = true;
         // Floats beside the picture: a pane docked in the right strip would fold the list away.
         super::panel::dialog(ctx, "Crane model parts", [470.0, 440.0])
@@ -126,15 +128,18 @@ impl NovoApp {
                             .show(ui, |ui| {
                                 for n in range {
                                     let r = &rows[n];
-                                    ui.allocate_ui_with_layout(
+                                    let name = ui.allocate_ui_with_layout(
                                         egui::vec2(210.0, height - 4.0),
                                         egui::Layout::left_to_right(egui::Align::Center),
                                         |ui| {
                                             ui.add(egui::Label::new(&r.name).truncate());
                                         },
                                     );
+                                    if ui.rect_contains_pointer(name.response.rect) {
+                                        hover = Some(n);
+                                    }
                                     let mut role = r.role;
-                                    egui::ComboBox::from_id_salt(("crane_model_role", n))
+                                    let combo = egui::ComboBox::from_id_salt(("crane_model_role", n))
                                         .width(96.0)
                                         .selected_text(role.label())
                                         .show_ui(ui, |ui| {
@@ -151,6 +156,9 @@ impl NovoApp {
                                             "Guessed from the name: {}",
                                             r.guessed.label()
                                         ));
+                                    if combo.hovered() {
+                                        hover = Some(n);
+                                    }
                                     if role != r.role {
                                         set_role = Some((n, role));
                                     }
@@ -163,11 +171,12 @@ impl NovoApp {
                 );
                 super::window_help::add(
                     ui.ctx(),
-                    "A solid's role is a guess from its name. Change it here: the colour follows the role, and in the moving picture so does the motion (wheels turn, the drum turns, the hook block and hook follow the rope). \
+                    "Point at a row to see its solid in the picture. A solid's role is a guess from its name. Change it here: the colour follows the role, and in the moving picture so does the motion (wheels turn, the drum turns, the hook block and hook follow the rope). \
                      Up is the axis of your file that points up; Turn lays the runway along the picture's long side. Sizes are in millimetres along the runway, up and across the span.",
                 );
             });
         let slot = &mut self.wb.hoist.three_d.model;
+        slot.set_highlight(if open { hover } else { None });
         if !open {
             slot.parts_open = false;
         }

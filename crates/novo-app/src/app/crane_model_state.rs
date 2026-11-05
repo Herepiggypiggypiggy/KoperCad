@@ -64,6 +64,8 @@ pub(super) struct ModelSlot {
     loading: Option<Loading>,
     failed: Option<(String, String)>,
     generation: u64,
+    /// The solid the person points at in the parts list (index into the listed rows).
+    highlight: Option<usize>,
     pub(super) parts_open: bool,
 }
 
@@ -167,7 +169,7 @@ impl ModelSlot {
             let roles = effective_roles(&want, &l.guess);
             if l.orientation != want.orientation || l.roles != roles {
                 self.generation += 1;
-                l.replan(want.orientation, roles, self.generation);
+                l.replan(want.orientation, roles, self.highlight, self.generation);
                 changed = true;
             }
         }
@@ -187,6 +189,7 @@ impl ModelSlot {
             want.orientation,
             roles,
             p,
+            self.highlight,
             self.generation,
         ));
     }
@@ -255,6 +258,19 @@ impl ModelSlot {
         }
     }
 
+    /// Points at the `n`th listed solid (or at none): it shows in the highlight colour.
+    pub(super) fn set_highlight(&mut self, n: Option<usize>) {
+        if self.highlight == n {
+            return;
+        }
+        self.highlight = n;
+        if let Some(l) = &mut self.loaded {
+            self.generation += 1;
+            l.scene = Arc::new(scene(&l.plan, n));
+            l.generation = self.generation;
+        }
+    }
+
     pub(super) fn set_orientation(&mut self, o: Orientation) {
         if let Some(w) = &mut self.want {
             w.orientation = o;
@@ -281,6 +297,7 @@ fn rotated_size(b: Aabb, o: Orientation) -> [f32; 3] {
 }
 
 impl Loaded {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         path: String,
         raw: Arc<CraneModel>,
@@ -288,9 +305,10 @@ impl Loaded {
         orientation: Orientation,
         roles: Vec<PartRole>,
         plan: ModelPlan,
+        highlight: Option<usize>,
         generation: u64,
     ) -> Self {
-        let scene = Arc::new(scene(&plan));
+        let scene = Arc::new(scene(&plan, highlight));
         let library = Arc::new(plan.library.clone());
         Self {
             path,
@@ -305,9 +323,15 @@ impl Loaded {
         }
     }
 
-    fn replan(&mut self, orientation: Orientation, roles: Vec<PartRole>, generation: u64) {
+    fn replan(
+        &mut self,
+        orientation: Orientation,
+        roles: Vec<PartRole>,
+        highlight: Option<usize>,
+        generation: u64,
+    ) {
         let p = plan(&self.raw, orientation, &roles);
-        self.scene = Arc::new(scene(&p));
+        self.scene = Arc::new(scene(&p, highlight));
         self.library = Arc::new(p.library.clone());
         self.plan = p;
         self.orientation = orientation;
@@ -419,6 +443,38 @@ mod tests {
         });
         assert!(slot.update(|| {}));
         assert_ne!(slot.rows()[0].size_mm, before);
+    }
+
+    #[test]
+    fn pointing_at_a_row_paints_that_solid_and_pointing_away_paints_it_back() {
+        use novo_view3d::crane_model::HIGHLIGHT;
+        let mut slot = ModelSlot::default();
+        load_now(&mut slot, &fixture());
+        let (g0, ..) = slot.scene().unwrap();
+        let painted = |slot: &ModelSlot| {
+            slot.scene()
+                .unwrap()
+                .1
+                .items
+                .iter()
+                .filter(|i| i.tint == Some(HIGHLIGHT))
+                .count()
+        };
+        assert_eq!(painted(&slot), 0);
+        slot.set_highlight(Some(3));
+        assert_eq!(painted(&slot), 1);
+        assert!(slot.scene().unwrap().0 > g0);
+        // The same row again changes nothing; moving away paints it back.
+        let g1 = slot.scene().unwrap().0;
+        slot.set_highlight(Some(3));
+        assert_eq!(slot.scene().unwrap().0, g1);
+        slot.set_highlight(None);
+        assert_eq!(painted(&slot), 0);
+        // It stays through a re-placement.
+        slot.set_highlight(Some(5));
+        slot.set_role(0, PartRole::Girder);
+        slot.update(|| {});
+        assert_eq!(painted(&slot), 1);
     }
 
     #[test]

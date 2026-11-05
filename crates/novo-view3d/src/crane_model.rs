@@ -277,9 +277,12 @@ pub fn plan(model: &CraneModel, orient: Orientation, roles: &[PartRole]) -> Mode
 
 const RAW_PART: u64 = 10_000;
 
+/// The colour of the solid the person points at in the parts list.
+pub const HIGHLIGHT: [u8; 3] = [255, 70, 200];
+
 /// The scene of a placed model: the floor under its footprint and every solid in the colour of
-/// its role.
-pub fn scene(plan: &ModelPlan) -> Scene {
+/// its role, the one at `highlight` (an index into `plan.placed`) in the highlight colour.
+pub fn scene(plan: &ModelPlan, highlight: Option<usize>) -> Scene {
     let size = if plan.bounds.is_empty() {
         Vec3::ZERO
     } else {
@@ -302,7 +305,11 @@ pub fn scene(plan: &ModelPlan) -> Scene {
             },
             s,
         );
-        item.tint = Some(p.role.tint());
+        item.tint = Some(if highlight == Some(i) {
+            HIGHLIGHT
+        } else {
+            p.role.tint()
+        });
         scene.push(item);
     }
     scene.revision = 1;
@@ -418,7 +425,7 @@ mod tests {
         ]);
         let roles = [PartRole::Wheel, PartRole::Hook];
         let p = plan(&model, Orientation::default(), &roles);
-        let s = scene(&p);
+        let s = scene(&p, Some(1));
         let parts: Vec<&Item> = s
             .items
             .iter()
@@ -426,7 +433,15 @@ mod tests {
             .collect();
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[0].tint, Some(PartRole::Wheel.tint()));
-        assert_eq!(parts[1].tint, Some(PartRole::Hook.tint()));
+        // The highlighted solid is drawn in the highlight colour, the others keep their role's.
+        assert_eq!(parts[1].tint, Some(HIGHLIGHT));
+        let plain = scene(&p, None);
+        let hook = plain
+            .items
+            .iter()
+            .find(|i| i.shape == Shape::Part(p.placed[1].key))
+            .unwrap();
+        assert_eq!(hook.tint, Some(PartRole::Hook.tint()));
         assert!(s.items.iter().any(|i| i.id.kind == ItemKind::Plate));
         // An item stands where its box is.
         let w = s.world_bounds(parts[1]);

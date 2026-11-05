@@ -31,6 +31,12 @@ expect "Runway support A"
 shot parts-window
 check_layout
 check_text 20
+# Pointing at a row paints that solid in the picture.
+move 130 250
+wait 20
+shot pointing-at-a-row
+move 700 700
+wait 10
 # The first solid is a runway support (role other, yellow). Make it a girder: it turns blue in the picture.
 click_text "other"
 wait 10
