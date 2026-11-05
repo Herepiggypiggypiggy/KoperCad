@@ -1242,7 +1242,6 @@ impl NovoApp {
             &self.settings.camera_views,
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
-            &mut |_ui| {},
         );
         let mut owners = view3d_options::Owners {
             controls: &mut mode.controls,

@@ -68,39 +68,44 @@ pub(super) fn save(views: &mut Vec<CameraBookmark>, camera: &Camera) -> bool {
 }
 
 /// The Views menu in the toolbar.
-pub(super) fn menu(ui: &mut egui::Ui, views: &[CameraBookmark]) -> Option<ViewsAction> {
+pub(super) fn list(ui: &mut egui::Ui, views: &[CameraBookmark]) -> Option<ViewsAction> {
     let mut action = None;
-    ui.menu_button("Views", |ui| {
-        if ui
-            .add_enabled(views.len() < MAX_VIEWS, egui::Button::new("Save this view"))
-            .on_hover_text("Remember where the camera is now (kept for you, not in the project)")
-            .clicked()
-        {
-            action = Some(ViewsAction::Save);
-            ui.close();
-        }
-        if views.is_empty() {
-            ui.weak("No saved views yet");
-        } else {
-            ui.separator();
-        }
-        for (i, v) in views.iter().enumerate() {
-            ui.horizontal(|ui| {
-                if ui.button(&v.name).clicked() {
-                    action = Some(ViewsAction::Go(i));
-                    ui.close();
-                }
-                if ui
-                    .small_button("✕")
-                    .on_hover_text("Forget this view")
-                    .clicked()
-                {
-                    action = Some(ViewsAction::Delete(i));
-                    ui.close();
-                }
-            });
-        }
-    });
+    let title = if views.is_empty() {
+        "Views".to_owned()
+    } else {
+        format!("Views ({})", views.len())
+    };
+    egui::CollapsingHeader::new(title)
+        .id_salt("view3d_saved_views")
+        .default_open(false)
+        .show(ui, |ui| {
+            if ui
+                .add_enabled(views.len() < MAX_VIEWS, egui::Button::new("Save this view"))
+                .on_hover_text(
+                    "Remember where the camera is now (kept for you, not in the project)",
+                )
+                .clicked()
+            {
+                action = Some(ViewsAction::Save);
+            }
+            if views.is_empty() {
+                ui.weak("No saved views yet");
+            }
+            for (i, v) in views.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if ui.button(&v.name).clicked() {
+                        action = Some(ViewsAction::Go(i));
+                    }
+                    if ui
+                        .small_button("✕")
+                        .on_hover_text("Forget this view")
+                        .clicked()
+                    {
+                        action = Some(ViewsAction::Delete(i));
+                    }
+                });
+            }
+        });
     action
 }
 

@@ -30,8 +30,8 @@ pub(super) const ROWS: &[(&str, &str)] = &[
     ("Menu", "Right-click without dragging"),
 ];
 
-/// Whether the card is open. It starts folded to the chip: the open card
-/// covers a quarter of a small view, and the chip reopens it.
+/// Whether the card is open. It starts closed (the open card covers a quarter
+/// of a small view); View > 3D > Mouse and keys opens it as a pane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct Hints {
     pub(super) open: bool,
@@ -42,29 +42,23 @@ impl Hints {
         self.open ^= true;
     }
 
-    /// The legend at the view's bottom right corner.
+    /// The legend, as a pane of the right strip while it is open.
     pub(super) fn show(&mut self, ctx: &egui::Context, view: egui::Rect) {
+        if !self.open {
+            return;
+        }
         super::panel::Float::new(
             "view3d_hints",
             view,
             egui::Align2::RIGHT_BOTTOM,
             view.right_bottom() + egui::vec2(-MARGIN, -MARGIN),
         )
+        .dock("Mouse and keys")
         .show(ctx, |ui| {
-            if !self.open {
-                if ui
-                    .button("? Mouse and keys")
-                    .on_hover_text("Show how to move around and select in 3D")
-                    .clicked()
-                {
-                    self.open = true;
-                }
-                return;
-            }
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.strong("Mouse and keys");
-                    if ui.small_button("✕").on_hover_text("Fold away").clicked() {
+                    if ui.small_button("✕").on_hover_text("Close").clicked() {
                         self.open = false;
                     }
                 });
@@ -74,7 +68,7 @@ impl Hints {
                     .show(ui, |ui| {
                         for (what, how) in ROWS {
                             ui.label(egui::RichText::new(*what).small().strong());
-                            ui.label(egui::RichText::new(*how).small());
+                            ui.add(egui::Label::new(egui::RichText::new(*how).small()).wrap());
                             ui.end_row();
                         }
                     });

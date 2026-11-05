@@ -500,6 +500,11 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
     for (w, h) in [(1366.0, 768.0), (1024.0, 768.0), (900.0, 600.0)] {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
+        // The 3D view pane opens docked in the running app.
+        super::panel_dock::set_dialogs_dock_by_default(
+            &d.ctx,
+            w >= super::panel::DOCK_BY_DEFAULT_FROM,
+        );
         let (_, a, _) = cabinet_with_two_devices(&mut d);
         open_3d_with_selection(&mut d, a);
         let ctx = d.ctx.clone();
@@ -510,7 +515,11 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
             d.frame_sized(egui::vec2(w, h), Vec::new());
         }
         let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
-        let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
+        // Wide enough, the 3D view pane is docked in the right strip and has
+        // no rect over the view; a narrow window leaves it floating.
+        let docked = super::panel_dock::slot_of(&ctx, "view3d_toolbar").is_some();
+        assert_eq!(docked, w >= super::panel::DOCK_BY_DEFAULT_FROM, "{w}");
+        let toolbar = rect(super::panel::id("view3d_toolbar")).filter(|_| !docked);
         let inspector = rect(super::panel::id("cabinet_inspector")).expect("inspector");
         let heat = rect(super::panel::id("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
@@ -531,17 +540,19 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
             !heat.intersects(real_cube),
             "{w} x {h}: heat {heat:?} over the cube {real_cube:?} (canvas {canvas:?})"
         );
-        assert!(
-            !toolbar.intersects(real_cube),
-            "{w} x {h}: toolbar {toolbar:?} over the cube {real_cube:?} (canvas {canvas:?})"
-        );
-        let panels = [
-            ("toolbar", toolbar),
+        let mut panels = vec![
             ("inspector", inspector),
             ("heat", heat),
             ("stats", stats),
             ("cube", cube),
         ];
+        if let Some(toolbar) = toolbar {
+            assert!(
+                !toolbar.intersects(real_cube),
+                "{w} x {h}: toolbar {toolbar:?} over the cube {real_cube:?}"
+            );
+            panels.push(("toolbar", toolbar));
+        }
         for (i, (na, ra)) in panels.iter().enumerate() {
             for (nb, rb) in &panels[i + 1..] {
                 assert!(
@@ -695,6 +706,10 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
     for (w, h) in [(1366.0, 768.0), (900.0, 600.0)] {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
+        super::panel_dock::set_dialogs_dock_by_default(
+            &d.ctx,
+            w >= super::panel::DOCK_BY_DEFAULT_FROM,
+        );
         let (cab, a, _) = cabinet_with_two_devices(&mut d);
         d.app.cabinet_rail_ask(
             Some(cab),
@@ -718,19 +733,17 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
         }
         let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
         let card = rect(super::panel::id("view3d_rail")).expect("rail card");
-        let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
         let heat = rect(super::panel::id("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
+        let toolbar = rect(super::panel::id("view3d_toolbar"))
+            .filter(|_| super::panel_dock::slot_of(&ctx, "view3d_toolbar").is_none());
         let cube = egui::Rect::from_min_size(
             egui::pos2(heat.right() + 12.0 - 12.0 - 88.0, heat.top() - 8.0 - 88.0),
             egui::Vec2::splat(88.0),
         );
-        for (name, other) in [
-            ("toolbar", toolbar),
-            ("heat", heat),
-            ("stats", stats),
-            ("cube", cube),
-        ] {
+        let mut others = vec![("heat", heat), ("stats", stats), ("cube", cube)];
+        others.extend(toolbar.map(|r| ("toolbar", r)));
+        for (name, other) in others {
             assert!(
                 !card.intersects(other),
                 "{w} x {h}: rail card {card:?} over {name} {other:?}"

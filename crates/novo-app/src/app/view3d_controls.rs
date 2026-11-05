@@ -117,23 +117,25 @@ impl Controls {
     }
 }
 
-/// Wide enough for every toggle and the door slider on one row.
-const TOOLBAR_WIDTH: f32 = 980.0;
+/// The pane's width while it floats (docked, it takes its strip's).
+const PANE_WIDTH: f32 = 300.0;
+
+/// Whether the 3D view pane is docked in a strip: it then covers nothing of
+/// the picture, and the panels start at the top.
+fn pane_docked(ctx: &egui::Context) -> bool {
+    super::panel_dock::slot_of(ctx, "view3d_toolbar").is_some()
+}
 
 /// Where the panels under the toolbar start: the compact toolbar of a short
 /// window is one row, so they start higher.
 pub(super) fn below(ctx: &egui::Context) -> f32 {
-    if short_window(ctx) {
-        first_inset(ctx) + 14.0 + narrow_extra(ctx)
+    if pane_docked(ctx) {
+        MARGIN
     } else {
-        BELOW
+        // The pane floats over the top left (a narrow window, or the person
+        // floated it): the panels start under it.
+        PANE_ROOM
     }
-}
-
-/// The rail takes 48 pt of a narrow canvas and the toolbar wraps onto
-/// another row there; the panels under it start one row lower.
-fn narrow_extra(ctx: &egui::Context) -> f32 {
-    if narrow_window(ctx) { 30.0 } else { 0.0 }
 }
 
 /// A window under 1000 pt wide: the toolbar is one row taller than it was
@@ -142,48 +144,34 @@ pub(super) fn narrow_window(ctx: &egui::Context) -> bool {
     ctx.content_rect().width() < 1000.0
 }
 
-/// A window shorter than this (a 1280 x 688 one) gets the compact toolbar.
-/// The window, not the view: the view shrinks when the Heat strip opens, and
-/// the camera is fitted once, before that.
-const SHORT_WINDOW: f32 = 720.0;
-
-fn short_window(ctx: &egui::Context) -> bool {
-    ctx.content_rect().height() < SHORT_WINDOW
-}
-
-/// Where a panel under the toolbar starts, from the top of the view.
-pub(super) const BELOW: f32 = 140.0;
-
-/// The simulation status chip is the first row of the toolbar. In a window
-/// with a title bar it takes that bar's place; the compact toolbar of a short
-/// window has no bar, so the row adds this much.
-pub(super) const CHIP_ROW: f32 = 30.0;
+/// The room a floating 3D view pane takes at the top left, with its gap.
+const PANE_ROOM: f32 = 110.0;
 
 /// What the toolbar is assumed to cover before it has been drawn once, which
 /// is when the first fit of the camera happens.
 fn first_inset(ctx: &egui::Context) -> f32 {
-    if short_window(ctx) {
-        // The status row and one row of buttons, no title bar.
-        56.0 + CHIP_ROW
-    } else {
-        BELOW
-    }
+    if pane_docked(ctx) { 0.0 } else { PANE_ROOM }
 }
 
 /// How much of the view's height the toolbar covers at the top, as a
 /// fraction: a fit frames the model below it. Before the toolbar has been
-/// drawn once it is [`BELOW`].
+/// drawn once it is [`PANE_ROOM`], or nothing when the pane is docked.
 pub(super) fn toolbar_inset(ctx: &egui::Context, view: egui::Rect) -> f32 {
+    if pane_docked(ctx) {
+        return 0.0;
+    }
     let covered = ctx
         .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
         .map_or(first_inset(ctx), |r| r.bottom() - view.top());
     (covered / view.height().max(1.0)).clamp(0.0, 0.4)
 }
 
-/// The toolbar, top left of the view. `limit` is how far the enclosure's door
-/// opens, `None` when it has none. `values` is a snapshot of the registry
-/// (`view3d_options`): a switch edits it and the host writes the difference
-/// back to the owner of each option.
+/// The 3D view pane: saved views, the section plane while it is on, the
+/// quality warning and the door. It is a pane of the right strip (it folds,
+/// floats and moves to another edge), not a chip over the picture.
+/// `limit` is how far the enclosure's door opens, `None` when it has none.
+/// `values` is a snapshot of the registry (`view3d_options`): a switch edits
+/// it and the host writes the difference back to the owner of each option.
 #[allow(clippy::too_many_arguments)] // one call site; a struct would only rename them
 pub(super) fn toolbar(
     ctx: &egui::Context,
@@ -194,70 +182,49 @@ pub(super) fn toolbar(
     views: &[crate::settings::CameraBookmark],
     section: &mut Option<Section>,
     bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
-    status: &mut dyn FnMut(&mut egui::Ui),
 ) -> Changed {
     let mut changed = Changed::default();
-    // Leave the view cube (top right) uncovered.
-    let width = TOOLBAR_WIDTH
-        .min(
-            view.width()
-                - super::panel::flyout_width(ctx)
-                - super::view3d_heat::CUBE_SIZE
-                - 3.0 * MARGIN,
-        )
-        .max(300.0);
-    // The simulation status is the first row, where the title bar was: the
-    // toolbar has no title (it is still dragged by its body), so the status
-    // is in sight with every panel folded and takes no room from the panels
-    // under the toolbar.
     let panel = super::panel::Panel::new(
         "view3d_toolbar",
         "3D view",
         view,
         super::panel::Side::Left,
-        width,
+        PANE_WIDTH,
     )
     .top(MARGIN)
-    .bare()
-    .fit();
+    .fit()
+    .dockable()
+    .dock_by_default();
     panel.show(ctx, |ui| {
-        status(ui);
-        ui.horizontal_wrapped(|ui| {
-            // Layers, Move, Heat, EMC, Measure, Dimensions and Select and
-            // hide live on the 3D rail; this strip keeps only what the rail
-            // cannot hold: the simulation status, saved views, the section
-            // plane while it is on, the door and the quality warning.
-            changed.views = super::view3d_views::menu(ui, views);
-            if values.get(ViewOption::Section) {
-                section_menu(ui, values, section, bounds);
-            }
-            if controls.reduced {
-                ui.label(
-                    egui::RichText::new("Reduced quality")
-                        .color(ui.visuals().warn_fg_color)
-                        .small(),
-                )
-                .on_hover_text(
-                    "The view stayed slow, so it draws at lower resolution while it moves.",
-                );
-                if ui
-                    .button("Restore quality")
-                    .on_hover_text("Draw at full quality again (View > 3D > Restore 3D quality).")
-                    .clicked()
-                {
-                    controls.restore = true;
-                }
-            }
-            if let Some(limit) = limit
-                && values.get(ViewOption::Door)
+        // Layers, Move, Heat, EMC, Measure, Dimensions and Select and hide
+        // live on the 3D rail; this pane keeps what the rail cannot hold:
+        // saved views, the section plane while it is on, the door and the
+        // quality warning.
+        changed.views = super::view3d_views::list(ui, views);
+        if values.get(ViewOption::Section) {
+            ui.separator();
+            section_controls(ui, values, section, bounds);
+        }
+        if controls.reduced {
+            ui.separator();
+            ui.label(
+                egui::RichText::new("Reduced quality")
+                    .color(ui.visuals().warn_fg_color)
+                    .small(),
+            )
+            .on_hover_text("The view stayed slow, so it draws at lower resolution while it moves.");
+            if ui
+                .button("Restore quality")
+                .on_hover_text("Draw at full quality again (View > 3D > Restore 3D quality).")
+                .clicked()
             {
-                // The slider does not wrap by itself: in a narrow window the door
-                // gets its own row instead of running under the view cube.
-                if width < TOOLBAR_WIDTH {
-                    ui.end_row();
-                } else {
-                    ui.separator();
-                }
+                controls.restore = true;
+            }
+        }
+        if let Some(limit) = limit
+            && values.get(ViewOption::Door)
+        {
+            ui.horizontal(|ui| {
                 let label = if controls.door_deg > 0.0 {
                     "Close door"
                 } else {
@@ -286,26 +253,22 @@ pub(super) fn toolbar(
                 {
                     changed.door = true;
                 }
-            }
-        });
+            });
+        }
     });
     changed
 }
 
-/// The Section menu: a plane through the enclosure that cuts the front of
+/// The Section controls: a plane through the enclosure that cuts the front of
 /// the picture away so the inside shows. Only the picture is cut.
-fn section_menu(
+fn section_controls(
     ui: &mut egui::Ui,
     values: &mut Values,
     section: &mut Option<Section>,
     bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
 ) {
-    let title = if values.get(ViewOption::Section) {
-        "✔ Section"
-    } else {
-        "Section"
-    };
-    ui.menu_button(title, |ui| {
+    ui.strong("Section");
+    {
         let mut on = values.get(ViewOption::Section);
         if ui
             .checkbox(&mut on, "Cut the picture with a plane")
@@ -355,38 +318,12 @@ fn section_menu(
                     .on_hover_text("Where the plane stands");
             }
         }
-    });
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The content rect of a window of this height, after one frame.
-    fn ctx_of_height(height: f32) -> egui::Context {
-        let ctx = egui::Context::default();
-        let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(1280.0, height),
-            )),
-            ..Default::default()
-        };
-        let mut out = ctx.run_ui(input, |_| {});
-        out.textures_delta.clear();
-        ctx
-    }
-
-    #[test]
-    fn a_short_window_gets_the_compact_toolbar_and_panels_start_higher() {
-        let short = ctx_of_height(688.0);
-        let tall = ctx_of_height(768.0);
-        assert!(short_window(&short) && !short_window(&tall));
-        assert!(below(&short) < below(&tall));
-        assert_eq!(below(&tall), BELOW);
-        // The panels start under the one-row toolbar that the camera is fitted for.
-        assert!(below(&short) > first_inset(&short));
-    }
 
     #[test]
     fn the_quiet_defaults_hide_badges() {

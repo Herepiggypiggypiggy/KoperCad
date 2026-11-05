@@ -1,3 +1,4 @@
 # Chip docking: progress
 
 - 2026-11-02 Inventory written (INVENTORY.md). Step 1 done: simulation status chip (Cabinet card and first row of the 3D toolbar) is a status-bar slot in Cabinet and 3D; defect banner is a red status-bar chip; Fast keys pill is a status-bar chip. Steps 2 to 5 open.
+- 2026-11-03 Step 2: the 3D toolbar strip is the "3D view" pane (Views, Section, door, quality), docked right by default in windows 1100 wide or more, foldable, floatable (`Panel::dock_by_default`). `Float::dock(title)`: the 3D tool strips (Place, Measure, Position, Align, Wire it, Build order), Mouse and keys and the Build mode "away" strip are panes when docked (default right). The "? Mouse and keys" chip is gone (View > 3D > Mouse and keys opens the pane). Ambient occlusion row says why it is greyed. Left: lesson card (bare card, anchors for lessons), hover tips, toasts (transient, not chips).

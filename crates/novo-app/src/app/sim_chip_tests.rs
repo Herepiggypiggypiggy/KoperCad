@@ -108,6 +108,7 @@ fn the_3d_view_shows_the_chip_with_heat_off_and_every_panel_closed() {
     let ctx = d.ctx.clone();
     d.app.run_command(&ctx, "view.3d", None);
     assert!(!d.app.cabinet.heat.on);
+    super::panel_dock::set_dialogs_dock_by_default(&ctx, true);
     let size = egui::vec2(1366.0, 768.0);
     for _ in 0..4 {
         d.frame_sized(size, Vec::new());
@@ -117,17 +118,16 @@ fn the_3d_view_shows_the_chip_with_heat_off_and_every_panel_closed() {
     assert!(chip_rect(&ctx).is_none(), "3D has no separate chip card");
     let text = painted_text(&mut d, size);
     assert!(text.contains("Heat not run"), "{text}");
-    let canvas = d.app.learn_anchor("workspace.view3d").expect("canvas");
-    let toolbar = ctx
-        .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
-        .expect("toolbar");
+    // The strip over the picture is gone: its content is a pane of the
+    // right strip, so the panels start at the top of the view.
     assert!(
-        toolbar.left() - canvas.left() < 30.0 && toolbar.top() - canvas.top() < 30.0,
-        "{toolbar:?} {canvas:?}"
+        super::panel_dock::slot_of(&ctx, "view3d_toolbar").is_some(),
+        "the 3D view pane opens docked"
     );
-    assert!(
-        toolbar.bottom() - canvas.top() <= super::view3d_controls::BELOW,
-        "the panels under the toolbar start at BELOW: {toolbar:?} {canvas:?}"
+    assert_eq!(
+        super::view3d_controls::below(&ctx),
+        super::panel::MARGIN,
+        "nothing covers the top left of the view"
     );
 }
 

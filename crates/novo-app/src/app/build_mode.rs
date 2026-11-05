@@ -1227,6 +1227,7 @@ fn away_bar(ctx: &egui::Context, rect: egui::Rect, step: &str) -> bool {
         egui::Align2::LEFT_BOTTOM,
         egui::pos2(rect.left() + 14.0, rect.bottom() - 14.0),
     )
+    .dock("Build mode")
     .show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {

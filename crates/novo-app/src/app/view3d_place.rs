@@ -15,7 +15,7 @@ use novo_view3d::scene::{ItemId, ItemKind};
 use super::view3d_move::{Landing, rail_snap};
 
 /// Margin from the view's corner, in points. The list sits below the toolbar
-/// (`view3d_controls::BELOW`).
+/// (`view3d_controls::below`).
 const MARGIN: f32 = 12.0;
 
 /// The list: open or not, the device picked from it and where the pointer
@@ -100,6 +100,7 @@ pub(super) fn panel(
         egui::Align2::LEFT_TOP,
         view.left_top() + egui::vec2(MARGIN, super::view3d_controls::below(ctx)),
     )
+    .dock("Place")
     .show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_max_width(190.0);

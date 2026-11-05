@@ -1,0 +1,15 @@
+@title Under 1100 wide the 3D view pane stays floating at the top left and clears the view cube
+@sizes 1024x768
+@area 3D
+open_starter_example
+wait 20
+click_text 3D #1
+wait 40
+expect "3D view"
+expect "Open door"
+shot narrow-pane-floating
+check_layout
+click_text Views
+wait 8
+shot narrow-views-open
+check_layout

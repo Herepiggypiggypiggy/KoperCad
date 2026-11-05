@@ -34,6 +34,7 @@ pub(super) const PANELS: &[&str] = &[
     "view.emc",
     "view.3d_position",
     "view.3d_stats",
+    "view.3d_hints",
 ];
 
 /// The flyout rows of Align and spread, and of Hide and isolate.
@@ -114,6 +115,7 @@ impl NovoApp {
             "view.3d_place" => self.view3d.place.open,
             "view.3d_position" => !self.view3d.position.hidden,
             "view.3d_stats" => self.view3d.stats.shown,
+            "view.3d_hints" => self.view3d.hints.open,
             _ => false,
         }
     }
@@ -145,6 +147,13 @@ impl NovoApp {
                 };
                 if let Some(reason) = reason {
                     tip.push_str(&format!("\n{reason}"));
+                }
+                if id == "view.3d_ssao" && !self.view3d_ssao_available() {
+                    tip.push_str(
+                        "\nGreyed out: this computer has no separate (discrete) graphics \
+                         card. Integrated graphics and software drawing show the view \
+                         without ambient occlusion.",
+                    );
                 }
                 Some(FlyEntry {
                     id,
