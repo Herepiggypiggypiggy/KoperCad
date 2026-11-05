@@ -532,6 +532,9 @@ pub(super) struct HeatSettings {
     pub inside_selected: Option<usize>,
     /// What the project holds for the shown enclosure, as last read or written.
     pub(super) inside_stored: Option<(novo_core::StructureId, String)>,
+    /// Shell setup of the shown enclosure (lane H7).
+    pub shell: super::heat_shell::ShellSetup,
+    pub(super) shell_stored: Option<(novo_core::StructureId, String)>,
     /// A drag or a typed value is under way: it is one undo step.
     editing: bool,
     /// What the project holds for the shown enclosure, as last read or
@@ -556,6 +559,8 @@ impl Default for HeatSettings {
             inside: Vec::new(),
             inside_selected: None,
             inside_stored: None,
+            shell: Default::default(),
+            shell_stored: None,
             editing: false,
             stored: None,
             hovered: None,
@@ -589,6 +594,12 @@ impl HeatSettings {
         if let Some(seal) = &self.seal {
             s.vents.extend(gaps::leak_vents(&e, seal, &s.params));
         }
+        self.shell.apply(s);
+    }
+
+    /// A change to the shell setup is under way (one undo step).
+    pub(super) fn begin_shell_edit(&mut self) {
+        self.editing = true;
     }
 
     /// A change to a fan inside is under way: keeps the project write until

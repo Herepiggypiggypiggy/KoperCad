@@ -316,6 +316,7 @@ fn body(
         }
     }
     super::heat_inside_fans::section(ui, settings, e);
+    super::heat_shell::section(ui, settings, e);
     super::window_help::add(
         ui.ctx(),
         "Walls are named as seen from the front of the cabinet; the one you pick is tinted. \
