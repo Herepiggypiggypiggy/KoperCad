@@ -13,6 +13,8 @@
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
 2026-11-04 T14 Shell flags: job chip, control flags, inline flags; shell sites migrated (see t14/HANDOFF.md); scenarios 9540/9541; census ceiling 2
 
+## 2026-11-04 Lane T13 (commissioning)
+- `novo-flags` gets `Source::Commissioning`. New `app/commissioning_flags.rs` (builder, job flags with Retry, panel strip) and `app/flag_rows.rs` (`triangle_slot`, `problem_row`). Punch, check and redline rows lead with the triangle, schematic marks come from the flags, the Defects card draws triangle rows. Census `problem_census_commissioning` = 0. Details: `t13-commissioning/`.
 ## 2026-11-04 Lane T8 (terminals, cables, PLC, numbering, xref)
 - `app/flags_inline.rs`: `triangle` (20 pt slot, accessible name "Warning: title", click opens the detail), `note_row`/`flag_row` (triangle + plain title), `severity_of` (numbering words go through `novo_flags::map_word`, so its Info<Warning<Error order cannot flip), and the transient refusal: `NovoApp::refuse` / `refuse_red` show a chip in the status bar (not floating, not a toast, not in the count); the next key press or click elsewhere, or 12 s, clears it.
 - Cable drawer: the findings are the store's flags at `Anchor::Cable` (same flags as Check > Issues), one triangle row each, sentence in the detail. Terminals drawer: a triangle after the tick box on rows whose terminals or drawing symbols carry a `TerminalUse` flag. Rename terminals: taken/empty rows are red triangles. PLC overview, card dialog and PLC program window: triangles instead of coloured sentences. Wire numbering Conflicts tab: triangle per row (glyph characters gone).

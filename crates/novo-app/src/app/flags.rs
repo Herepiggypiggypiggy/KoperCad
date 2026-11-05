@@ -322,6 +322,7 @@ impl NovoApp {
                                     "Open folder"
                                 }
                                 Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
+                                Action::Open(_) => "Open",
                                 Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
@@ -374,7 +375,23 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        // Retry of a commissioning job is run here; Dismiss and the rest are the job path's.
+        if super::commissioning_flags::is_commissioning_job(flag) && action == Action::Retry {
+            self.retry_commissioning_job(flag);
+            return;
+        }
         if self.run_job_action(flag.id, &action) {
+            return;
+        }
+        if flag.source == Source::Commissioning {
+            match action {
+                Action::Locate => self.locate_commissioning_flag(flag),
+                Action::Open(panel) => self.open_commissioning_panel(&panel),
+                Action::Copy => {
+                    ctx.copy_text(format!("{}\n{}", flag.title, flag.detail.0.join("\n")))
+                }
+                _ => {}
+            }
             return;
         }
         match action {
