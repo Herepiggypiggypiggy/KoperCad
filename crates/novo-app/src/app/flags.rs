@@ -259,9 +259,11 @@ impl NovoApp {
                         ui.label(egui::RichText::new(&flag.title).strong());
                         ui.weak(flag.source.badge());
                     });
-                    for line in &flag.detail.0 {
-                        ui.label(line);
-                    }
+                    novo_theme::widgets::help_scroll(ui, |ui| {
+                        for line in &flag.detail.0 {
+                            ui.label(line);
+                        }
+                    });
                     ui.horizontal_wrapped(|ui| {
                         for action in &flag.actions {
                             let label = match action {
