@@ -15,8 +15,11 @@ expect "Model, not measurement"
 expect "assumed"
 shot shell-defaults
 check_layout
-click_text "Door frame"
+click_text "2.0 mm"
+key ctrl+a
+text 3
+key Enter
 wait 10
-expect "typed by you"
-shot shell-door-typed
+expect "3.0 mm"
+shot shell-wall-typed
 check_layout

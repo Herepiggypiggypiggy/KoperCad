@@ -20,7 +20,11 @@ click_text Quick
 wait 10
 click_text Simulate #2
 wait_s 120
+scroll 1150 600 -400
+wait 20
 click_text "Cabinet shell"
+wait 20
+scroll 1150 600 -600
 wait 20
 expect "Through the shell"
 expect "model"
