@@ -124,6 +124,11 @@ pub struct FlowConfig {
     pub device_length_m: Vec<f64>,
     pub device_emissivity: f64,
     pub device_view: f64,
+    /// Per device, the computed radiation exchange per m2 of exposed surface
+    /// (`novo_thermal::radiation::device_exchanges`); `None` = use
+    /// `device_emissivity x device_view`. The view then only scales the
+    /// favourable/unfavourable bands (`device_view / 0.5`).
+    pub device_rad_exchange: Vec<Option<f64>>,
     /// Surface-to-surface radiation between devices, plate and walls. When
     /// set, the device films are convection only (set `device_emissivity`
     /// to 0) and the solver refreshes the radiative heat every
@@ -163,6 +168,7 @@ impl FlowConfig {
             device_length_m: Vec::new(),
             device_emissivity: 0.85,
             device_view: 0.5,
+            device_rad_exchange: Vec::new(),
             radiation: None,
             interior_fans: Vec::new(),
         }
@@ -669,19 +675,29 @@ impl FlowSolver {
             let Some((t_dev, t_air, speed)) = self.device_film_state(slot) else {
                 continue;
             };
+            let exchange = self
+                .cfg
+                .device_rad_exchange
+                .get(slot)
+                .copied()
+                .flatten()
+                .filter(|_| self.cfg.device_emissivity > 0.0);
+            let (rad_e, rad_view) = match exchange {
+                Some(x) => (x, self.cfg.device_view / 0.5),
+                None => (self.cfg.device_emissivity, self.cfg.device_view),
+            };
             let h = novo_thermal::device_h(
                 self.cfg.device_length_m[slot],
                 t_dev,
                 t_air,
                 speed,
-                self.cfg.device_emissivity,
-                self.cfg.device_view,
+                rad_e,
+                rad_view,
             );
             let old = self.cfg.device_film_h.get(slot).copied().unwrap_or(h);
             // radiation share of the film (the 2D engine's linearisation)
             let tf = 0.5 * (t_dev + t_air) + 273.15;
-            let h_rad =
-                4.0 * self.cfg.device_emissivity * 5.670_374e-8 * tf.powi(3) * self.cfg.device_view;
+            let h_rad = 4.0 * rad_e * 5.670_374e-8 * tf.powi(3) * rad_view;
             self.set_device_film_split(slot, 0.5 * old + 0.5 * h, h_rad);
         }
     }
