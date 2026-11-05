@@ -91,6 +91,13 @@ pub struct Column {
     /// Relative width. A page splits its usable width between the columns
     /// in proportion to these, so `10.0` next to `30.0` is a quarter.
     pub width: f64,
+    /// Relative width on screen, when the table needs another split there
+    /// than on a printed page (`None`: same as `width`). Pages and exports
+    /// ignore it.
+    pub screen_width: Option<f64>,
+    /// A low-value column the screen may hide when the table is wider than
+    /// the window. Pages and exports always keep it.
+    pub optional: bool,
 }
 
 impl Column {
@@ -100,7 +107,21 @@ impl Column {
             header: header.to_owned(),
             align: Align::Left,
             width,
+            screen_width: None,
+            optional: false,
         }
+    }
+
+    /// The same column, hidden on screen when the table does not fit.
+    pub fn optional(mut self) -> Self {
+        self.optional = true;
+        self
+    }
+
+    /// The same column with its own width on screen.
+    pub fn on_screen(mut self, width: f64) -> Self {
+        self.screen_width = Some(width);
+        self
     }
 
     /// The same column, right-aligned (numbers).
@@ -145,6 +166,10 @@ pub struct Section {
     /// unless the report language says otherwise. Spreadsheets keep real
     /// numbers and format them by their own locale.
     pub decimal: char,
+    /// The column weights are character counts of the longest text in each
+    /// column, so a screen table gives every column room for that text and
+    /// scrolls sideways instead of cutting it (saved "My reports" tables).
+    pub fit_content: bool,
 }
 
 impl Section {
@@ -156,6 +181,7 @@ impl Section {
             rows: Vec::new(),
             flow: false,
             decimal: '.',
+            fit_content: false,
         }
     }
 

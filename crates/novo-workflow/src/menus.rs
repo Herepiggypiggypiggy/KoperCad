@@ -92,6 +92,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.cable_schedule", at("Reports")),
     ("report.plugs", under("Reports", "More reports")),
     ("report.singleline", under("Reports", "More reports")),
+    ("report.queries", under("Reports", "More reports")),
     ("report.add_page", at("Reports")),
     // Edit
     ("edit.rotate", at("Edit")),
@@ -849,7 +850,9 @@ mod tests {
             ("Draw", 12),
             ("View", 65),
             ("Check", 11),
-            ("Reports", 17),
+            // 18: "My reports" (the person's own saved queries) needs a menu row; it is a
+            // workspace entry, not a rail or palette-only command.
+            ("Reports", 18),
             // 25: one Simulate row merged in parallel with the ratchet (#1734) and was
             // counted by no PR; it stays until the rail move lands.
             ("Simulate", 25),
@@ -870,7 +873,7 @@ mod tests {
                 "{menu} has no ceiling"
             );
         }
-        assert!(total <= 186, "the menus hold {total} rows");
+        assert!(total <= 187, "the menus hold {total} rows");
     }
 
     /// The formats are listed in the Export centre, not in the menus: File

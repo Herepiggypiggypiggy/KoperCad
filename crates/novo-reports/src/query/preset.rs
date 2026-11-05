@@ -168,7 +168,16 @@ pub fn to_section(key: &str, title: &str, result: &QueryResult) -> Section {
                     .map(|r| &r[i])
                     .filter(|v| !v.is_null())
                     .all(|v| matches!(v, super::QValue::Int(_) | super::QValue::Num(_)));
-            let mut col = Column::new(&c.name, &c.header, 20.0);
+            // Width follows the longest text in the column, within limits, so a
+            // wide result stays readable at 1920 and scrolls instead of cutting.
+            let longest = result
+                .rows
+                .iter()
+                .map(|r| r[i].display().chars().count())
+                .chain([c.header.chars().count()])
+                .max()
+                .unwrap_or(0);
+            let mut col = Column::new(&c.name, &c.header, (longest as f64).clamp(8.0, 40.0));
             if numeric {
                 col.align = Align::Right;
             }
@@ -176,6 +185,7 @@ pub fn to_section(key: &str, title: &str, result: &QueryResult) -> Section {
         })
         .collect();
     let mut section = Section::new(key, title, columns);
+    section.fit_content = true;
     for (row, sources) in result.rows.iter().zip(&result.sources) {
         section.rows.push(Row::new(
             row.iter().map(super::QValue::to_cell).collect(),

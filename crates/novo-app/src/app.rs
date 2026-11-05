@@ -268,6 +268,7 @@ mod parts_cad;
 mod parts_flags;
 #[cfg(test)]
 mod parts_flags_tests;
+mod parts_health;
 mod parts_identity;
 mod parts_import;
 mod parts_pass;

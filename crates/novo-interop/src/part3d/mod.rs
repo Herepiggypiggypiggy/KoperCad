@@ -30,6 +30,7 @@ pub mod body;
 pub mod brep;
 pub mod build;
 pub mod cache;
+pub mod crane_roles;
 pub mod decimate;
 pub mod generated;
 pub mod health;

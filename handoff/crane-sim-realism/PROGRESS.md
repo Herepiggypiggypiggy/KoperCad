@@ -6,3 +6,5 @@
 2026-11-05 S2 floor line merged (#1940); S3 state lamps (brake, drive) on the control box started.
 
 2026-11-05 S3 lamps merged (#1952); S3b slack rope heap beside the block for a closed-loop winch.
+
+2026-11-05 R3 part 1: `kopercad-cli parts step-parts <file>` splits a STEP model into parts and guesses roles from names (novo-interop part3d::build::placed_parts, part3d::crane_roles).
