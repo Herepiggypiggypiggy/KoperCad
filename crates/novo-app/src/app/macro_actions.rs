@@ -61,6 +61,23 @@ pub(crate) struct PlaceWindow {
     mounting: Option<novo_parts::MountingView>,
     shown: Option<Shown>,
     status: String,
+    /// A circuit on the pointer, waiting for its click.
+    pub(super) ghost: Option<Ghost>,
+    /// Where the ghost was on screen when Options opened the form: the
+    /// form places there, in the view as the docked form leaves it.
+    anchor: Option<egui::Pos2>,
+}
+
+/// A circuit following the pointer as a ghost until a click places it.
+pub(crate) struct Ghost {
+    pub(super) path: String,
+    pub(super) name: String,
+    definition: BlockDefinition,
+    options: PlaceOptions,
+    /// The pointer's last place on the drawing, on screen.
+    pub(super) screen: Option<egui::Pos2>,
+    /// The ghost is drawn moved from the pointer to stay on the sheet.
+    pub(super) moved: bool,
 }
 
 impl PlaceWindow {
@@ -110,6 +127,8 @@ impl PlaceWindow {
             mounting: None,
             shown: None,
             status: String::new(),
+            ghost: None,
+            anchor: None,
         }
     }
 
@@ -455,6 +474,7 @@ impl NovoApp {
 
     pub(super) fn macro_place_window(&mut self, ctx: &egui::Context) {
         if !self.wb.macro_place.open {
+            self.wb.macro_place.anchor = None;
             return;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -706,6 +726,13 @@ impl NovoApp {
             .last_pointer
             .filter(|&(p, _)| p == page)
             .map(|(_, at)| at);
+        // Options from a circuit ghost: where the ghost was on screen, which
+        // is the same drawing point unless the docked form moved the view.
+        if let (Some(anchor), Some((_, rect))) = (self.wb.macro_place.anchor, self.wb.canvas_area) {
+            let local = anchor - rect.min;
+            let w = viewport.screen_to_world(novo_canvas::Vec2::new(local.x, local.y));
+            place.pointer = Some(novo_core::Point::new(f64::from(w.x), f64::from(w.y)));
+        }
         place.sheet = self
             .backend
             .document()
@@ -730,8 +757,190 @@ impl NovoApp {
         }
     }
 
+    /// `Target::Macro` from Ctrl+K or Q: the circuit follows the pointer as a
+    /// ghost and a click places it. The Place macro window stays reachable
+    /// from the strip beside the ghost, for parameters.
+    pub(super) fn begin_macro_ghost(&mut self, name: &str) {
+        let Some(page) = self.macro_target_page() else {
+            self.open_macro_place(Some(name));
+            return;
+        };
+        let win = &mut self.wb.macro_place;
+        if !win.started {
+            win.started = true;
+            if let Some(Err(e)) = win.library.as_ref().map(|l| l.install_standard()) {
+                win.status = format!("Starter macros: {e}");
+            }
+        }
+        let Some(entry) = win
+            .library
+            .as_ref()
+            .and_then(|l| l.search("").into_iter().find(|e| e.name == name))
+        else {
+            self.open_macro_place(Some(name));
+            return;
+        };
+        win.select(&entry.path);
+        let loaded = win
+            .library
+            .as_ref()
+            .and_then(|l| l.definition_for_project(&entry.path).ok());
+        let Some(definition) = loaded else {
+            self.open_macro_place(Some(name));
+            return;
+        };
+        let options = win.options();
+        let outline = self
+            .backend
+            .document()
+            .and_then(|d| ghost_outline(d.project(), &definition, page, &options));
+        let (Some((symbols, paths)), Some(view)) = (outline, self.canvas.schematic()) else {
+            self.open_macro_place(Some(name));
+            return;
+        };
+        // The pointer holds the top-left of what the circuit draws, so the
+        // ghost sits under the cursor.
+        let bounds = macro_place::definition_bounds(&definition);
+        let reach = macro_place::SYMBOL_REACH;
+        let anchor = novo_core::Point::new(bounds.min.x + reach, bounds.min.y + reach);
+        view.editor.begin_paste(symbols, paths, anchor);
+        self.wb.clip.pending = None;
+        self.wb.macro_place.ghost = Some(Ghost {
+            path: entry.path,
+            name: entry.name,
+            definition,
+            options,
+            screen: None,
+            moved: false,
+        });
+    }
+
+    /// Every frame: keeps the ghost on the sheet and clear of the title
+    /// block, the way the click will place it, so what is drawn is what lands.
+    pub(super) fn keep_macro_ghost_on_sheet(&mut self) {
+        let Some(ghost) = &self.wb.macro_place.ghost else {
+            return;
+        };
+        let bounds = macro_place::definition_bounds(&ghost.definition);
+        let size = self
+            .macro_target_page()
+            .and_then(|p| self.backend.document()?.project().page(p))
+            .map(|p| p.format.size_mm());
+        let Some(view) = self.canvas.schematic() else {
+            return;
+        };
+        let reach = macro_place::SYMBOL_REACH;
+        let hold = view.editor.cursor().map(|at| {
+            let top_left = macro_place::fit_on_sheet(
+                novo_core::Point::new(at.x - reach, at.y - reach),
+                bounds.size,
+                size,
+                0.0,
+            );
+            (
+                at,
+                novo_core::Point::new(top_left.x + reach, top_left.y + reach),
+            )
+        });
+        view.editor.hold_paste_at(hold.map(|(_, h)| h));
+        let moved =
+            hold.is_some_and(|(at, h)| (at.x - h.x).abs() > 0.5 || (at.y - h.y).abs() > 0.5);
+        if let Some(ghost) = self.wb.macro_place.ghost.as_mut() {
+            ghost.moved = moved;
+        }
+    }
+
+    /// The click that places the ghost circuit, or the Esc that dropped it.
+    /// `true` when the ghost took the click.
+    pub(super) fn after_macro_ghost(&mut self) -> bool {
+        if self.wb.macro_place.ghost.is_none() {
+            return false;
+        }
+        let Some(view) = self.canvas.schematic() else {
+            return false;
+        };
+        let at = view.editor.take_paste_request();
+        let pasting = view.editor.pasting();
+        let grid = view.editor.grid;
+        match at {
+            Some(at) => {
+                if let Some(ghost) = self.wb.macro_place.ghost.take() {
+                    let snap = |v: f64| {
+                        if grid > 0.0 {
+                            (v / grid).round() * grid
+                        } else {
+                            v
+                        }
+                    };
+                    let at = novo_core::Point::new(snap(at.x), snap(at.y));
+                    // A click outside the sheet drops the ghost and changes
+                    // nothing.
+                    let size = self
+                        .macro_target_page()
+                        .and_then(|p| self.backend.document()?.project().page(p))
+                        .map(|p| p.format.size_mm());
+                    if size.is_some_and(|(w, h)| at.x < 0.0 || at.y < 0.0 || at.x > w || at.y > h) {
+                        return true;
+                    }
+                    // The click puts the top-left of what the circuit draws
+                    // there, kept on the sheet and clear of the title block.
+                    let bounds = macro_place::definition_bounds(&ghost.definition);
+                    let reach = macro_place::SYMBOL_REACH;
+                    let at = novo_core::Point::new(at.x - reach, at.y - reach);
+                    let top_left = macro_place::fit_on_sheet(at, bounds.size, size, 0.0);
+                    let origin =
+                        novo_core::Point::new(top_left.x - bounds.min.x, top_left.y - bounds.min.y);
+                    self.place_definition(ghost.definition, ghost.options, Some(origin));
+                }
+            }
+            None if !pasting => self.wb.macro_place.ghost = None,
+            None => {}
+        }
+        true
+    }
+
+    /// `macro.place`: the form. While a circuit is on the pointer (the
+    /// status bar chip runs this command) the form opens on that circuit.
+    pub(super) fn macro_place_command(&mut self, argument: Option<&str>) {
+        let Some(ghost) = self.wb.macro_place.ghost.take() else {
+            self.open_macro_place(argument);
+            return;
+        };
+        if let Some(view) = self.canvas.schematic() {
+            view.editor.leave_tool();
+        }
+        self.open_macro_place(Some(&ghost.name));
+        self.wb.macro_place.anchor = ghost.screen;
+        self.wb.macro_place.select(&ghost.path);
+    }
+
+    /// The name of the circuit on the pointer, for the status bar chip, and
+    /// whether it is drawn moved to fit the sheet.
+    pub(super) fn macro_ghost_name(&self) -> Option<(&str, bool)> {
+        self.wb
+            .macro_place
+            .ghost
+            .as_ref()
+            .map(|g| (g.name.as_str(), g.moved))
+    }
+
     /// Places what the window previewed, as one undo step, and selects it.
     pub(super) fn place_picked_macro(&mut self) {
+        let Some(shown) = self.wb.macro_place.shown.take() else {
+            return;
+        };
+        let options = self.wb.macro_place.options();
+        self.place_definition(shown.definition, options, None);
+    }
+
+    /// Places `definition` as one undo step and selects it: at `at` when the
+    /// person clicked there, else in the part of the page on screen.
+    fn place_definition(
+        &mut self,
+        definition: BlockDefinition,
+        options: PlaceOptions,
+        at: Option<novo_core::Point>,
+    ) {
         let Some(page) = self.macro_target_page() else {
             self.refuse_tool(Level::Error,
                 "Could not place: the project has no drawing page, only generated pages. Add a page first.",
@@ -741,30 +950,30 @@ impl NovoApp {
         // A macro never lands on a generated page (contents, lists): the
         // first drawing page takes it, and the canvas goes there.
         let moved = self.current_page != Some(page);
-        let Some(shown) = self.wb.macro_place.shown.take() else {
-            return;
-        };
         let view = self.macro_view(Some(page));
-        let options = self.wb.macro_place.options();
-        let name = shown.definition.name.clone();
-        let plc_note = draws_plc_channels(&shown.definition);
+        self.wb.macro_place.anchor = None;
+        let name = definition.name.clone();
+        let plc_note = draws_plc_channels(&definition);
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
-        let (origin, outside) = macro_place::origin_in_view(
-            doc.project(),
-            page,
-            macro_place::definition_bounds(&shown.definition),
-            &view,
-            PLACE_GAP,
-        );
+        let (origin, outside) = match at {
+            Some(at) => (at, false),
+            None => macro_place::origin_in_view(
+                doc.project(),
+                page,
+                macro_place::definition_bounds(&definition),
+                &view,
+                PLACE_GAP,
+            ),
+        };
         // The supply circuit in a drawing with no supply: feed its open points.
         let feed_supply =
             name == supply_feeds::SUPPLY_MACRO && !supply_feeds::has_supply(doc.project());
         let mut fed = 0;
         let mut joined = 0;
         let result = doc.transact("Place macro", |tx| {
-            let placed = macro_place::place_macro(tx, shown.definition, page, origin, &options)?;
+            let placed = macro_place::place_macro(tx, definition, page, origin, &options)?;
             if feed_supply {
                 fed = supply_feeds::feed_open_points(tx, page, placed.instance)?;
             }
@@ -855,4 +1064,52 @@ impl NovoApp {
             }
         }
     }
+}
+
+/// The symbols and wires of `definition` as placed at the page origin, for
+/// the ghost that follows the pointer. Computed on a copy of the project.
+fn ghost_outline(
+    project: &novo_core::Project,
+    definition: &BlockDefinition,
+    page: novo_core::PageId,
+    options: &PlaceOptions,
+) -> Option<(Vec<novo_core::SymbolInstance>, Vec<Vec<novo_core::Point>>)> {
+    use novo_core::Endpoint;
+    let mut copy = project.clone();
+    let (placed, _) = copy
+        .transact("Ghost", |tx| {
+            macro_place::place_macro(
+                tx,
+                definition.clone(),
+                page,
+                novo_core::Point::ZERO,
+                options,
+            )
+        })
+        .ok()?;
+    let instance = copy.block_instance(placed.instance)?;
+    let mut symbols = Vec::new();
+    let mut wires = Vec::new();
+    for m in &instance.members {
+        match m.actual {
+            AnyId::Symbol(id) => symbols.extend(copy.symbol(id).cloned()),
+            AnyId::Wire(id) => wires.extend(copy.wire(id)),
+            _ => {}
+        }
+    }
+    let position = |end: Endpoint| match end {
+        Endpoint::Free { at } => Some(at),
+        Endpoint::Pin { symbol, pin } => copy.symbol(symbol).and_then(|s| s.pin_position(pin)),
+        Endpoint::Junction { junction } => copy.junction(junction).map(|j| j.position),
+    };
+    let paths = wires
+        .iter()
+        .filter_map(|w| {
+            let mut path = vec![position(w.from)?];
+            path.extend(w.route.iter().copied());
+            path.push(position(w.to)?);
+            Some(path)
+        })
+        .collect();
+    Some((symbols, paths))
 }

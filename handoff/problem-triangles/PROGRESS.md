@@ -11,6 +11,13 @@
 - `novo-theme`: `widgets::flag_triangle` (painted glyph), Issues pill draws triangles.
 - `novo-app` `app/flags.rs`: `draft(&Problem)` -> `FlagDraft` for all 76 kinds (Info is no flag; DepthUnknown, GuessedWire, UnsizedDuct dashed), `FlagUi` in `wb.flags` filled from `wb.problems` by revision, `flag_marks` (replaces the old marks), `flag_popover` (title, badge, detail, Locate / Fix / Waive / Explain / Copy; Esc or click away closes), Issues list rows lead with the triangle. Qa scenario 9400.
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
+
+## 2026-11-04 Lane T9 (parts and catalogue)
+- New `app/parts_flags.rs`: `RowFlag` + `slot`/`inline`/`labelled` (a 20 pt slot with the triangle and a click popover, accessible name "Error: <title>"), and job flags: `parts_job_failed(job, severity, title, detail)` sets a `Source::Parts` flag on `Anchor::Job("parts:<job>")` (`Life::Until`), `parts_job_ok(job)` clears it, `job_strip` draws them beside More in the Parts window with Dismiss and Copy. While the Parts window is closed the failure is still said once as a toast (bridge until the job tray, T12/T14).
+- Migrated: table import preview (leading triangle per row with column/message lines, columns problems, assumptions, repeated order numbers, footer), EPLAN parts preview, bulk import and auto-assign (not certain, no part fits, files without parts), part picker (weak match, thin data), trust badge and review (quality), pins read failure, library bundle caution, download strip (not taken), import failed. Toasts at `Level::Error/Warning` in these files became job flags (jobs: table, eplan, eplan.makers, import, inbox, catalog, assign, remove, set, window, folder).
+- Census `crates/novo-app/tests/problem_census_parts.rs` with ceilings in `tests/census/parts.txt`: 92 sites before, 22 after (quality grade/fill colours are a scale and stay; the picker match colour helper is tested; one toast bridge).
+- Not done: the Flags list and the top bar pill do not yet count or list `Source::Parts` job flags (store holds them); `Note` rows (novo-parts Severity::Note) never become flags and are only read in the popover of a row that has a real finding; EPLAN/portal sentences beyond the ones above.
+- QA: 9490 row triangle and popover, 9491 job flag and Dismiss, 9492 columns mapping.
 2026-11-04 T14 Shell flags: job chip, control flags, inline flags; shell sites migrated (see t14/HANDOFF.md); scenarios 9540/9541; census ceiling 2
 
 ## 2026-11-04 Lane T11 (EMC, safety, protection, calculations, standards)

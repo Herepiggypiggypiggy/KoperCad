@@ -326,7 +326,15 @@ pub(crate) fn block(
     }
     match &state.current {
         Some((k, Entry::Done(Err(why)))) if *k == key => {
-            ui.colored_label(ui.visuals().warn_fg_color, why);
+            let flag = super::parts_flags::RowFlag::new(
+                novo_flags::Severity::Yellow,
+                "Pins not read",
+                [why.clone()],
+            );
+            ui.horizontal(|ui| {
+                super::parts_flags::inline(ui, &flag);
+                ui.label("Pins not read");
+            });
         }
         Some((k, Entry::Done(Ok(d)))) if *k == key => {
             ui.weak(summary(d));

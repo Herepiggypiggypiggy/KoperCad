@@ -10,6 +10,8 @@ text "Motor starter DOL"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 01-picked
 click_text Place #1
 wait 20
@@ -22,6 +24,8 @@ text "Star-delta starter"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 02-picked
 click_text Place #1
 wait 20
@@ -34,6 +38,8 @@ text "E-stop chain"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 03-picked
 click_text Place #1
 wait 20
@@ -46,6 +52,8 @@ text "Power supply 24 V"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 04-picked
 click_text Place #1
 wait 20
@@ -58,6 +66,8 @@ text "Motor starter reversing"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 05-picked
 click_text Place #1
 wait 20
@@ -70,6 +80,8 @@ text "Start/stop latch"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 06-picked
 click_text Place #1
 wait 20
@@ -82,6 +94,8 @@ text "PLC input card"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 07-picked
 click_text Place #1
 wait 20
@@ -94,6 +108,8 @@ text "Frequency converter drive"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 08-picked
 click_text Place #1
 wait 20
@@ -106,6 +122,8 @@ text "Soft starter with bypass"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 09-picked
 click_text Place #1
 wait 20
@@ -118,6 +136,8 @@ text "Single-phase supply with 24 V"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 10-picked
 click_text Place #1
 wait 20
@@ -130,6 +150,8 @@ text "Motor with brake"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 11-picked
 click_text Place #1
 wait 20
@@ -142,6 +164,8 @@ text "Contactor with indication"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 12-picked
 click_text Place #1
 wait 20
@@ -154,6 +178,8 @@ text "Crane hoist up/down"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 13-picked
 click_text Place #1
 wait 20
@@ -166,6 +192,8 @@ text "Pump with float switch"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 14-picked
 click_text Place #1
 wait 20
@@ -178,6 +206,8 @@ text "Heater with thermostat"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 15-picked
 click_text Place #1
 wait 20
@@ -190,6 +220,8 @@ text "Three-phase supply"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 16-picked
 click_text Place #1
 wait 20
@@ -202,6 +234,8 @@ text "Emergency stop with safety relay"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 17-picked
 click_text Place #1
 wait 20
@@ -214,6 +248,8 @@ text "PLC network with switch"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 shot 18-picked
 click_text Place #1
 wait 20

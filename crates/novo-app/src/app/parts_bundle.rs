@@ -219,7 +219,6 @@ impl BundleUi {
         if !self.visible() {
             return;
         }
-        let pal = crate::theme::ui_palette();
         let mut export_now = false;
         let mut cancel = false;
         let mut import_now = false;
@@ -258,10 +257,15 @@ impl BundleUi {
                 );
                 if form.backup {
                     form.files = true;
-                    ui.colored_label(
-                        pal.warning,
-                        "A backup may hold files from makers that are not meant to be passed on. Keep it for yourself.",
+                    let flag = super::parts_flags::RowFlag::new(
+                        novo_flags::Severity::Yellow,
+                        "Keep this backup",
+                        [
+                            "A backup may hold files from makers that are not meant to be passed on. Keep it for yourself."
+                                .to_owned(),
+                        ],
                     );
+                    super::parts_flags::inline(ui, &flag);
                 } else {
                     ui.add_enabled(
                         true,
@@ -321,10 +325,12 @@ impl BundleUi {
                 }
                 let needs_yes = o.bundle.needs_confirmation();
                 if needs_yes {
-                    ui.colored_label(
-                        pal.warning,
-                        "This backup holds files from makers' sites.",
+                    let flag = super::parts_flags::RowFlag::new(
+                        novo_flags::Severity::Yellow,
+                        "Maker files inside",
+                        ["This backup holds files from makers' sites.".to_owned()],
                     );
+                    super::parts_flags::inline(ui, &flag);
                     ui.checkbox(&mut o.confirmed, "It is my own backup");
                 }
                 ui.horizontal(|ui| {

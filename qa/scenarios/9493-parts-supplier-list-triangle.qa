@@ -1,0 +1,21 @@
+@title Problem triangles T9: an unreadable suppliers.json leaves a triangle in the supplier strip
+@sizes 1366x768 1920x1080
+@area Parts
+# The supplier list problem used to be a coloured sentence; now it is a triangle with the detail in its popover.
+supplier_list qa/fixtures/parts/suppliers-broken.json
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+click_text "Get parts from supplier"
+wait 10
+shot supplier-menu
+click 480 49
+wait 6
+expect "suppliers.json not read"
+shot supplier-triangle
+check_layout

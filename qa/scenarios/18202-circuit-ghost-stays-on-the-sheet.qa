@@ -1,0 +1,22 @@
+@title A circuit ghost near the title block is drawn where it will land and says it was moved
+@area Schematic
+@sizes 1366x768 1920x1080
+# Workflow gap row 2: the pointer low on the sheet; the ghost is kept on the sheet and clear of the title block,
+# the status bar chip reads "moved to fit". A click lands it exactly there.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter"
+wait 5
+key Enter
+wait 10
+move 1000 650
+wait 5
+expect "moved to fit"
+shot ghost-moved-to-fit
+check_layout
+click 1000 650
+wait 20
+expect_scene "-K1"
+shot placed-on-the-sheet
+check_layout

@@ -476,7 +476,8 @@ const TITLE_BLOCK_WIDTH: f64 = 150.0;
 const TITLE_BLOCK_HEIGHT: f64 = 50.0;
 
 /// What one symbol covers beyond its origin, for the room a macro needs.
-const SYMBOL_REACH: f64 = 15.0;
+/// What a symbol covers around its origin and pins (body and tag text), mm.
+pub const SYMBOL_REACH: f64 = 15.0;
 
 /// What decides where a macro lands: the part of the page on screen, where
 /// the pointer last was on the drawing, the sheet and the grid.
@@ -490,6 +491,32 @@ pub struct PlaceView {
     pub sheet: Option<(f64, f64)>,
     /// Grid step in mm; zero is free.
     pub grid: f64,
+}
+
+/// The top-left `at` of a box of `extent` moved so the whole box is on the
+/// sheet with a margin, clear of the title block in the bottom right corner,
+/// and snapped to the grid.
+pub fn fit_on_sheet(at: Point, extent: (f64, f64), sheet: Option<(f64, f64)>, grid: f64) -> Point {
+    let snap = |v: f64| {
+        if grid > 0.0 {
+            (v / grid).round() * grid
+        } else {
+            v
+        }
+    };
+    let clamp = |v: f64, room: Option<f64>| match room {
+        Some(r) => v.min(r).max(10.0),
+        None => v.max(10.0),
+    };
+    let x = snap(clamp(at.x, sheet.map(|s| s.0 - extent.0 - 10.0)));
+    let under_title = sheet.is_some_and(|s| x + extent.0 > s.0 - TITLE_BLOCK_WIDTH);
+    let bottom = if under_title {
+        TITLE_BLOCK_HEIGHT
+    } else {
+        10.0
+    };
+    let y = snap(clamp(at.y, sheet.map(|s| s.1 - extent.1 - bottom)));
+    Point::new(x, y)
 }
 
 /// Where a macro goes (the origin to place it at) for a person looking at
@@ -521,32 +548,7 @@ pub fn origin_in_view(
         .visible
         .filter(|_| drawn)
         .map(|(min, _)| Point::new(min.x.max(10.0) + 10.0, min.y.max(10.0) + 10.0));
-    let snap = |v: f64| {
-        if view.grid > 0.0 {
-            (v / view.grid).round() * view.grid
-        } else {
-            v
-        }
-    };
-    // Keep the whole macro on the sheet, with a margin, and clear of the
-    // title block in the bottom right corner.
-    let fit = |p: Point| {
-        let clamp = |v: f64, room: Option<f64>| match room {
-            Some(r) => v.min(r).max(10.0),
-            None => v.max(10.0),
-        };
-        let x = snap(clamp(p.x, view.sheet.map(|s| s.0 - extent.0 - 10.0)));
-        let under_title = view
-            .sheet
-            .is_some_and(|s| x + extent.0 > s.0 - TITLE_BLOCK_WIDTH);
-        let bottom = if under_title {
-            TITLE_BLOCK_HEIGHT
-        } else {
-            10.0
-        };
-        let y = snap(clamp(p.y, view.sheet.map(|s| s.1 - extent.1 - bottom)));
-        Point::new(x, y)
-    };
+    let fit = |p: Point| fit_on_sheet(p, extent, view.sheet, view.grid);
     if pointer.is_none() && corner.is_none() {
         return (beside, false);
     }
