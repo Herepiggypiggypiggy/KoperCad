@@ -36,7 +36,7 @@ wait 10
 click 880 480
 click 1050 720
 wait 20
-expect "Plot along line"
+expect "Copy as CSV"
 expect "Along"
 shot line-plot
 click_text Numbers

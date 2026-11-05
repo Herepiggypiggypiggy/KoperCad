@@ -33,10 +33,10 @@ wait 10
 shot pinned
 click_text Line
 wait 10
-click 620 430
-click 700 540
+click 775 330
+click 730 440
 wait 20
-expect "Plot along line"
+expect "Copy as CSV"
 expect "Along"
 shot line-plot
 click_text Numbers
