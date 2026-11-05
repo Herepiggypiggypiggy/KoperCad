@@ -116,7 +116,9 @@ impl WireList {
                 Column::new("from", "From", 28.0).on_screen(20.0),
                 Column::new("to", "To", 28.0).on_screen(20.0),
                 Column::new("potential", "Potential", 15.0).on_screen(10.0),
-                Column::new("color", "Colour", 12.0).on_screen(8.0),
+                Column::new("color", "Colour", 12.0)
+                    .on_screen(8.0)
+                    .optional(),
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
                 Column::new("cable", "Cable", 20.0).on_screen(16.0),
                 Column::new("location", "Location", 15.0).on_screen(8.0),
@@ -124,7 +126,7 @@ impl WireList {
                     .right()
                     .on_screen(11.0),
                 Column::new("length_basis", "Length basis", 22.0).on_screen(18.0),
-                Column::new("torque", "Torque", 14.0),
+                Column::new("torque", "Torque", 14.0).optional(),
             ],
         );
         // The wire's own cross-section, else its cable core's.

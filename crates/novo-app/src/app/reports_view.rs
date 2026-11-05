@@ -608,24 +608,53 @@ impl NovoApp {
         if !section.title.is_empty() {
             section_label(ui, &section.title);
         }
-        let columns: Vec<TableColumn> = section
-            .columns
+        let bar = ui.spacing().scroll.allocated_width() + 4.0;
+        let available = ui.available_width() - bar;
+        let all: Vec<usize> = (0..section.columns.len()).collect();
+        let wide_all = all.len() > WIDE_TABLE_COLUMNS;
+        let mut keep = all.clone();
+        let mut layout = self.table_layout(ui, section, &keep);
+        if wide_all && layout.total > available {
+            // Too wide for the window: hide the low-value columns first.
+            keep.retain(|&i| !section.columns[i].optional);
+            layout = self.table_layout(ui, section, &keep);
+        }
+        if layout.wide && layout.total > available {
+            let mut jump = None;
+            egui::ScrollArea::horizontal()
+                .id_salt(("report_cols", &section.key))
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    jump = self.section_rows(ui, section, order, lit, &layout);
+                });
+            return jump;
+        }
+        self.section_rows(ui, section, order, lit, &layout)
+    }
+
+    fn table_layout(&self, ui: &egui::Ui, section: &Section, keep: &[usize]) -> TableLayout {
+        let bar = ui.spacing().scroll.allocated_width() + 4.0;
+        let columns: Vec<TableColumn> = keep
             .iter()
-            .map(|c| TableColumn {
-                header: c.header.clone(),
-                align: match c.align {
-                    Align::Left => TableAlign::Left,
-                    Align::Center => TableAlign::Center,
-                    Align::Right => TableAlign::Right,
-                },
+            .map(|&i| {
+                let c = &section.columns[i];
+                TableColumn {
+                    header: c.header.clone(),
+                    align: match c.align {
+                        Align::Left => TableAlign::Left,
+                        Align::Center => TableAlign::Center,
+                        Align::Right => TableAlign::Right,
+                    },
+                }
             })
             .collect();
-        // The vertical scroll bar of the rows takes room from the right edge.
-        let bar = ui.spacing().scroll.allocated_width() + 4.0;
-        let weights: Vec<f64> = section
-            .columns
+        let weights: Vec<f64> = keep
             .iter()
-            .map(|c| c.screen_width.unwrap_or(c.width))
+            .map(|&i| {
+                section.columns[i]
+                    .screen_width
+                    .unwrap_or(section.columns[i].width)
+            })
             .collect();
         let mut mins = header_min_widths(ui, &columns);
         let wide = columns.len() > WIDE_TABLE_COLUMNS;
@@ -639,17 +668,13 @@ impl NovoApp {
         let available = ui.available_width() - bar;
         let widths = column_widths_min(available, &weights, &mins);
         let total: f32 = widths.iter().sum::<f32>() + (widths.len() as f32) * 8.0;
-        if wide && total > available {
-            let mut jump = None;
-            egui::ScrollArea::horizontal()
-                .id_salt(("report_cols", &section.key))
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    jump = self.section_rows(ui, section, order, lit, &columns, &widths);
-                });
-            return jump;
+        TableLayout {
+            keep: keep.to_vec(),
+            columns,
+            widths,
+            total,
+            wide,
         }
-        self.section_rows(ui, section, order, lit, &columns, &widths)
     }
 
     /// The header and rows of a section laid out at fixed column widths.
@@ -659,19 +684,27 @@ impl NovoApp {
         section: &Section,
         order: &[usize],
         lit: &[AnyId],
-        columns: &[TableColumn],
-        widths: &[f32],
+        layout: &TableLayout,
     ) -> Option<AnyId> {
+        let TableLayout {
+            keep,
+            columns,
+            widths,
+            ..
+        } = layout;
+        let (keep, columns, widths) = (keep.as_slice(), columns.as_slice(), widths.as_slice());
         let sorted = match &self.reports_view.sort {
-            Some((key, col, asc)) if *key == section.key => Some((*col, *asc)),
+            Some((key, col, asc)) if *key == section.key => {
+                keep.iter().position(|&k| k == *col).map(|c| (c, *asc))
+            }
             _ => None,
         };
         if let Some(i) = table_header(ui, columns, widths, sorted) {
             self.reports_view.sort = match self.reports_view.sort.take() {
-                Some((key, col, asc)) if key == section.key && col == i => {
+                Some((key, col, asc)) if key == section.key && col == keep[i] => {
                     asc.then_some((key, col, false))
                 }
-                _ => Some((section.key.clone(), i, true)),
+                _ => Some((section.key.clone(), keep[i], true)),
             };
         }
 
@@ -692,13 +725,11 @@ impl NovoApp {
             for &index in &order[range] {
                 let row = &section.rows[index];
                 let texts: Vec<String> = row.cells.iter().map(|c| c.to_string()).collect();
-                let cells: Vec<TableCell> = row
-                    .cells
+                let cells: Vec<TableCell> = keep
                     .iter()
-                    .zip(&texts)
-                    .map(|(c, text)| TableCell {
-                        text,
-                        numeric: matches!(c, Cell::Int(_) | Cell::Number(_)),
+                    .map(|&i| TableCell {
+                        text: &texts[i],
+                        numeric: matches!(row.cells[i], Cell::Int(_) | Cell::Number(_)),
                     })
                     .collect();
                 let at_cursor = self
@@ -1522,4 +1553,12 @@ mod empty_hint_tests {
         }
         assert_eq!(empty_report_hint("toc"), "Nothing to list yet");
     }
+}
+
+struct TableLayout {
+    keep: Vec<usize>,
+    columns: Vec<TableColumn>,
+    widths: Vec<f32>,
+    total: f32,
+    wide: bool,
 }

@@ -95,6 +95,9 @@ pub struct Column {
     /// than on a printed page (`None`: same as `width`). Pages and exports
     /// ignore it.
     pub screen_width: Option<f64>,
+    /// A low-value column the screen may hide when the table is wider than
+    /// the window. Pages and exports always keep it.
+    pub optional: bool,
 }
 
 impl Column {
@@ -105,7 +108,14 @@ impl Column {
             align: Align::Left,
             width,
             screen_width: None,
+            optional: false,
         }
+    }
+
+    /// The same column, hidden on screen when the table does not fit.
+    pub fn optional(mut self) -> Self {
+        self.optional = true;
+        self
     }
 
     /// The same column with its own width on screen.
