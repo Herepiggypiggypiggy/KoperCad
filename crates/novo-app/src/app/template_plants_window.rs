@@ -26,8 +26,8 @@ impl NovoApp {
             plant.window_title(),
             [novo_theme::dialog_width::MEDIUM, 0.0],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ctx,
                     "Starts a project with the structure, the cover pages and a circuit from the \
 library on each page. You can change all of it afterwards.",
                 );
@@ -38,8 +38,8 @@ library on each page. You can change all of it afterwards.",
                 if widgets::segmented(ui, &mut count, &labels) {
                     options.count = count as u8 + 1;
                 }
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ctx,
                     match plant {
                         Plant::PumpStation => "Each pump gets its own feeder page and pump place.",
                         Plant::ControlCentre => "Each feeder gets its own section and page.",

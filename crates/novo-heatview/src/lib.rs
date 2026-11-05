@@ -16,5 +16,6 @@ pub mod probes;
 pub mod range;
 pub mod streamline;
 pub mod synthetic;
+pub mod vtk;
 
 pub use field::{FieldError, Scalar, Vector};

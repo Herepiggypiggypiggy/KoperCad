@@ -384,6 +384,7 @@ impl NovoApp {
             .map(|(id, name, _)| (*id, name.clone()))
             .collect();
         let mut written: Vec<PathBuf> = Vec::new();
+        let mut skipped = false;
         for set in &sets {
             let ids: BTreeSet<PageId> = pages
                 .iter()
@@ -391,7 +392,10 @@ impl NovoApp {
                 .map(|(id, _)| *id)
                 .collect();
             if ids.is_empty() {
-                self.message(
+                skipped = true;
+                self.job_fail(
+                    "export.plotsets",
+                    "Plot set has no pages",
                     Level::Warning,
                     format!("Plot set {} has no pages left, skipped", set.name),
                 );
@@ -405,6 +409,9 @@ impl NovoApp {
             if let Some(p) = self.write_plot_set(set, &ids, &path) {
                 written.push(p);
             }
+        }
+        if !skipped {
+            self.job_ok("export.plotsets");
         }
         state.note = Some(format!(
             "Wrote {} plot set PDF{}.",

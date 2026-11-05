@@ -295,7 +295,13 @@ impl NovoApp {
                 format!("Layout: {layout}. Left empty, the starts follow the cards already there.")
             });
             if let Some(p) = &form.problem {
-                ui.colored_label(crate::theme::ui_palette().warning, p);
+                super::flags_inline::note_row(
+                    ui,
+                    novo_flags::Severity::Yellow,
+                    false,
+                    "Card not added",
+                    std::slice::from_ref(p),
+                );
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -338,7 +344,7 @@ pub(crate) struct CardRow {
 pub(crate) fn overview(
     project: &Project,
     functions: &dyn novo_plc::index::Functions,
-) -> (Vec<CardRow>, Vec<String>) {
+) -> (Vec<CardRow>, Vec<(bool, String)>) {
     let index = PlcIndex::build(project, functions);
     let style = index.style;
     let range = |r: Option<std::ops::Range<u32>>, letter: char| {
@@ -375,8 +381,24 @@ pub(crate) fn overview(
             }
         })
         .collect();
-    let issues = index.issues().iter().map(|i| i.message(project)).collect();
+    let issues = index
+        .issues()
+        .iter()
+        .map(|i| (i.is_error(), i.message(project)))
+        .collect();
     (rows, issues)
+}
+
+/// A row title of at most 28 characters for a PLC issue: the sentence's
+/// first words (the full sentence is in the detail).
+fn issue_title(text: &str) -> String {
+    let text = text.trim();
+    if text.chars().count() <= 28 {
+        return text.to_owned();
+    }
+    let mut cut: String = text.chars().take(27).collect();
+    cut.push('\u{2026}');
+    cut
 }
 
 impl NovoApp {
@@ -444,7 +466,13 @@ impl NovoApp {
                                             r.output.as_deref().unwrap_or("none")
                                         ));
                                         if let Some(p) = &r.problem {
-                                            ui.colored_label(crate::theme::ui_palette().warning, p);
+                                            super::flags_inline::note_row(
+                                                ui,
+                                                novo_flags::Severity::Yellow,
+                                                false,
+                                                "Not a card layout",
+                                                std::slice::from_ref(p),
+                                            );
                                         }
                                         for (text, drawn) in &r.channels {
                                             ui.label(format!(
@@ -458,8 +486,19 @@ impl NovoApp {
                         if !issues.is_empty() {
                             ui.add_space(6.0);
                             ui.strong("Problems");
-                            for i in &issues {
-                                ui.colored_label(crate::theme::ui_palette().warning, i);
+                            for (red, text) in &issues {
+                                let severity = if *red {
+                                    novo_flags::Severity::Red
+                                } else {
+                                    novo_flags::Severity::Yellow
+                                };
+                                super::flags_inline::note_row(
+                                    ui,
+                                    severity,
+                                    false,
+                                    &issue_title(text),
+                                    std::slice::from_ref(text),
+                                );
                             }
                         }
                     });

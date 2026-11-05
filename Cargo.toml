@@ -26,6 +26,7 @@ novo-core = { path = "crates/novo-core" }
 novo-drive = { path = "crates/novo-drive" }
 novo-editor = { path = "crates/novo-editor" }
 novo-emc = { path = "crates/novo-emc" }
+novo-flags = { path = "crates/novo-flags" }
 novo-interop = { path = "crates/novo-interop" }
 novo-layout = { path = "crates/novo-layout" }
 novo-machine = { path = "crates/novo-machine" }

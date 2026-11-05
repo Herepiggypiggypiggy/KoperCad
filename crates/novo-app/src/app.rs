@@ -31,8 +31,10 @@ mod cabinet;
 mod cabinet_arrange;
 mod cabinet_bar;
 mod cabinet_door;
+mod cabinet_flags;
 mod cabinet_group;
 mod cabinet_inspector;
+mod cabinet_maker_plate;
 mod cabinet_menu;
 mod cabinet_panel;
 mod cabinet_rail_ends;
@@ -50,7 +52,10 @@ mod cable_cores;
 mod cable_cores_tests;
 #[cfg(test)]
 mod cable_proposals_fixture_tests;
+mod calc_busbar;
 mod calculations;
+mod calculations_busbar;
+mod calculations_mechanical;
 #[cfg(test)]
 mod calculations_tests;
 mod centre;
@@ -62,6 +67,9 @@ mod commissioning;
 mod commissioning_cabinet;
 #[cfg(test)]
 mod commissioning_cabinet_tests;
+mod commissioning_flags;
+#[cfg(test)]
+mod commissioning_flags_tests;
 mod commissioning_photos;
 mod commissioning_redlines;
 mod commissioning_signature;
@@ -111,6 +119,7 @@ mod emc_stub;
 #[cfg(test)]
 mod emc_tests;
 mod emc_view;
+mod enclosure_pick;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
@@ -129,6 +138,13 @@ mod example_mcc;
 mod example_plc;
 mod example_pump;
 mod faults;
+mod flag_rows;
+mod flags;
+mod flags_edit;
+mod flags_inline;
+mod flags_jobs;
+mod flags_shell;
+mod flags_wiring;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -143,9 +159,11 @@ mod heat_compare_tests;
 mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
+mod heat_export;
 mod heat_flow;
 #[cfg(test)]
 mod heat_flow_tests;
+mod heat_inside_fans;
 mod heat_layout;
 #[cfg(test)]
 mod heat_layout_tests;
@@ -176,6 +194,8 @@ mod heat_status_tests;
 mod heat_sweep;
 #[cfg(test)]
 mod heat_sweep_tests;
+#[cfg(test)]
+mod heat_tests_enclosure_lines;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
@@ -248,14 +268,17 @@ mod parts_bundle;
 mod parts_cad;
 mod parts_identity;
 mod parts_import;
+mod parts_pass;
 mod parts_pins;
 #[cfg(test)]
 mod parts_pins_tests;
 mod parts_quality;
+mod parts_suppliers;
 mod parts_table;
 mod pdf;
 mod pdf_options;
 mod pin_offer;
+mod place_list;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -269,6 +292,8 @@ mod potentials;
 mod preferences;
 mod print_preview;
 mod probe;
+#[cfg(test)]
+mod problem_census_terminals;
 mod project_rules;
 mod project_settings;
 mod protection;
@@ -278,6 +303,7 @@ mod rail_cabinet;
 mod rail_reports;
 mod rail_schematic;
 mod reports;
+mod reports_queries;
 mod reports_view;
 mod review_notes;
 mod revisions;
@@ -295,6 +321,9 @@ mod shortcuts_sheet;
 mod sim_chip;
 #[cfg(test)]
 mod sim_chip_tests;
+mod sim_flags;
+#[cfg(test)]
+mod sim_flags_tests;
 mod simulate;
 mod single_line_view;
 #[cfg(test)]
@@ -334,6 +363,9 @@ mod view3d_controls;
 mod view3d_drag_gaps;
 mod view3d_duct_fill;
 mod view3d_duplicate;
+mod view3d_flags;
+#[cfg(test)]
+mod view3d_flags_tests;
 mod view3d_heat;
 mod view3d_heat_labels;
 mod view3d_hints;
@@ -374,6 +406,7 @@ mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod winch_scenarios;
+mod window_help;
 mod wire_it_export;
 mod wire_panel;
 #[cfg(test)]
@@ -398,6 +431,8 @@ mod bench_tests;
 #[cfg(test)]
 mod cabinet_arrange_tests;
 #[cfg(test)]
+mod cabinet_flags_tests;
+#[cfg(test)]
 mod cabinet_group_tests;
 #[cfg(test)]
 mod cabinet_rails_tests;
@@ -417,6 +452,8 @@ mod cabinet_surface_size_tests;
 mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
+#[cfg(test)]
+mod census_safety_tests;
 #[cfg(test)]
 mod centre_tests;
 #[cfg(test)]
@@ -451,6 +488,16 @@ mod example_tests;
 mod faults_tests;
 #[cfg(test)]
 mod first_view_tests;
+#[cfg(test)]
+mod flags_edit_tests;
+#[cfg(test)]
+mod flags_jobs_tests;
+#[cfg(test)]
+mod flags_shell_tests;
+#[cfg(test)]
+mod flags_tests;
+#[cfg(test)]
+mod flags_wiring_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
@@ -493,6 +540,8 @@ mod parts_table_tests;
 mod pdf_options_tests;
 #[cfg(test)]
 mod print_preview_tests;
+#[cfg(test)]
+mod problem_census_wiring_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
@@ -619,13 +668,23 @@ pub struct Message {
     /// A file this message is about (an export): its toast offers to open
     /// the folder and stays up longer than a plain info message.
     pub file: Option<PathBuf>,
+    /// A button the toast offers, if any.
+    pub action: Option<MessageAction>,
+}
+
+/// What a toast's button does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MessageAction {
+    /// Opens the Devices drawer on the devices without a part.
+    ChooseParts,
 }
 
 impl Message {
     /// How long its toast stays up.
     fn expiry(&self) -> Option<Duration> {
         Some(match (self.level, &self.file) {
-            (Level::Info, None) => TOAST_INFO,
+            (Level::Info, None) if self.action.is_none() => TOAST_INFO,
+            (Level::Info, None) => TOAST_FILE,
             (Level::Info, Some(_)) => TOAST_FILE,
             (Level::Warning, _) => TOAST_WARNING,
             (Level::Error, _) => TOAST_ERROR,
@@ -1012,6 +1071,10 @@ impl NovoApp {
                 self.canvas.document_changed(doc, &changes);
                 self.backend.record(&changes);
                 self.reports_heard(&changes);
+                self.message(Level::Info, if redo { "Redone" } else { "Undone" });
+                // The undo has said what happened: the "No errors or warnings
+                // left" line of the check that follows must not replace it.
+                self.wb.last_issue_total = None;
             }
             Ok(None) => {}
             Err(e) => {
@@ -1158,7 +1221,47 @@ impl NovoApp {
         self.raise(Level::Info, text.into(), Some(file.to_owned()));
     }
 
+    /// Puts a message in the log only (no toast): a failed job shows as a flag.
+    /// Returns the plain words it logged. Never touches another message.
+    fn log_only(&mut self, level: Level, text: String) -> String {
+        match level {
+            Level::Info => log::info!("{text}"),
+            Level::Warning => log::warn!("{text}"),
+            Level::Error => log::error!("{text}"),
+        }
+        let text = error_words::plain(&text);
+        self.messages.push(Message {
+            level,
+            text: text.clone(),
+            at: Instant::now(),
+            dismissed: true,
+            count: 1,
+            file: None,
+            action: None,
+        });
+        if self.messages.len() > MESSAGE_HISTORY {
+            let excess = self.messages.len() - MESSAGE_HISTORY;
+            self.messages.drain(..excess);
+        }
+        text
+    }
+
+    /// An info toast with a button.
+    pub(super) fn raise_action(&mut self, text: String, action: MessageAction) {
+        self.raise_with(Level::Info, text, None, Some(action));
+    }
+
     fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
+        self.raise_with(level, text, file, None);
+    }
+
+    fn raise_with(
+        &mut self,
+        level: Level,
+        text: String,
+        file: Option<PathBuf>,
+        action: Option<MessageAction>,
+    ) {
         match level {
             Level::Info => log::info!("{text}"),
             Level::Warning => log::warn!("{text}"),
@@ -1172,7 +1275,13 @@ impl NovoApp {
             .messages
             .iter_mut()
             .rev()
-            .find(|m| !m.dismissed && m.level == level && m.text == text && m.file == file)
+            .find(|m| {
+                !m.dismissed
+                    && m.level == level
+                    && m.text == text
+                    && m.file == file
+                    && m.action == action
+            })
             .filter(|m| m.expiry().is_none_or(|e| m.at.elapsed() < e))
         {
             same.count += 1;
@@ -1186,6 +1295,7 @@ impl NovoApp {
             dismissed: false,
             count: 1,
             file,
+            action,
         });
         if self.messages.len() > MESSAGE_HISTORY {
             let excess = self.messages.len() - MESSAGE_HISTORY;
@@ -1563,13 +1673,17 @@ impl NovoApp {
     /// A different project was opened, created or closed: nothing cached
     /// for the old one carries over.
     fn document_replaced(&mut self) {
+        // A failed job belongs to the project it failed in: Retry must not run
+        // for another one.
+        self.forget_jobs();
+        self.drop_commissioning_flags();
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
         // Row counts are keyed by revision, which two projects can share.
         self.reports_view.forget_counts();
         // The openings of the Heat panel belong to the project's enclosure.
-        self.cabinet.heat.settings.load(Vec::new());
+        self.cabinet.heat.settings.load(Vec::new(), None);
         self.cabinet.heat.settings.stored = None;
         // A what-if answer is for the cabinet it was run on: its Apply would move
         // the devices of another file, and a run in flight would land there.
@@ -2044,7 +2158,9 @@ impl NovoApp {
                     self.canvas.show(ui, open);
                     self.after_canvas();
                     self.after_canvas_frame();
+                    self.flag_click();
                     self.wb.canvas_area = Some((ui.layer_id(), ui.min_rect()));
+                    self.flag_corner(ui.ctx());
                 } else {
                     self.start_screen(ui, &mut picked);
                 }
@@ -2052,6 +2168,8 @@ impl NovoApp {
             .response
             .rect;
 
+        self.expire_refusal(&ctx);
+        self.flag_popover(&ctx);
         if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         } else {
@@ -2142,6 +2260,7 @@ impl NovoApp {
         self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
+        self.place_list_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.restore_ask_dialog(&ctx);
         self.handover_ask_dialog(&ctx);
@@ -2171,6 +2290,8 @@ impl NovoApp {
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
+        let asked = std::mem::take(&mut self.cabinet.heat.app_commands);
+        self.wb.queued.extend(asked);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
         }
@@ -2436,6 +2557,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.job_pill(ui);
                 self.help_button(ui);
                 if fit.whats_new_pill {
                     self.whats_new_pill(ui);
@@ -2852,7 +2974,11 @@ impl NovoApp {
                 }
                 // The status bar shows plain info messages when it is on; a
                 // written file always gets its toast, with the folder action.
-                if m.level == Level::Info && m.file.is_none() && self.status_bar_shown() {
+                if m.level == Level::Info
+                    && m.file.is_none()
+                    && m.action.is_none()
+                    && self.status_bar_shown()
+                {
                     return false;
                 }
                 let life = m.expiry().unwrap_or(TOAST_INFO);
@@ -2881,6 +3007,7 @@ impl NovoApp {
         }
         let mut dismiss = Vec::new();
         let mut open = None;
+        let mut act = None;
         // Never wider than the canvas: a 683 point window has less room than
         // the usual 420.
         let width = 420.0_f32.min((canvas.width() - 24.0).max(160.0));
@@ -2919,15 +3046,31 @@ impl NovoApp {
                         {
                             open = file.parent().map(Path::to_owned);
                         }
+                        if let Some(action) = m.action
+                            && ui.button("Choose parts").clicked()
+                        {
+                            act = Some((i, action));
+                        }
                     });
                     let response = frame.response.interact(egui::Sense::click());
+                    // The frame sits over its button and takes the click: a toast
+                    // with an action runs it, any other is dismissed.
                     if response.on_hover_text("Click to dismiss").clicked() {
-                        dismiss.push(i);
+                        match m.action {
+                            Some(action) => act = Some((i, action)),
+                            None => dismiss.push(i),
+                        }
                     }
                 }
             });
         for i in dismiss {
             self.messages[i].dismissed = true;
+        }
+        if let Some((i, action)) = act {
+            self.messages[i].dismissed = true;
+            match action {
+                MessageAction::ChooseParts => self.start_parts_pass(),
+            }
         }
         if let Some(dir) = open
             && let Err(e) = parts_bulk::open_folder(&dir)

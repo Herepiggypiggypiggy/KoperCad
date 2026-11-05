@@ -126,10 +126,17 @@ impl HeatState {
         now: f64,
         ctx: &egui::Context,
     ) {
+        // The cooling selection follows the chosen enclosure of this cabinet
+        // (the Cabinet and the 3D view both come through here).
+        self.set_spec(
+            project
+                .get::<novo_core::Structure>(structure)
+                .map(|st| novo_layout::spec::EnclosureSpec::read(&st.properties)),
+        );
         // The vents of the settings are part of the cabinet being solved.
         let vents = {
             let mut h = std::collections::hash_map::DefaultHasher::new();
-            format!("{:?}", self.settings.vents).hash(&mut h);
+            format!("{:?}{:?}", self.settings.vents, self.settings.inside).hash(&mut h);
             h.finish()
         };
         let key = (
@@ -157,7 +164,7 @@ impl HeatState {
                     (
                         Some(Arc::new(b.scenario)),
                         [p.x, p.y, p.w, p.h],
-                        b.report.messages(),
+                        b.report.messages_with_enclosure(),
                     )
                 }
                 None => (None, [0.0; 4], Vec::new()),
@@ -189,7 +196,14 @@ impl HeatState {
         // The enclosure was sized (or whatever else was missing was given):
         // the "Cannot simulate" line is out of date before Simulate is pressed.
         let now_key = cur.scenario_key;
-        self.clear_cannot_simulate();
+        // An enclosure over the engine's limit stays refused: its line stays.
+        if !cur
+            .scenario
+            .as_ref()
+            .is_some_and(|s| super::heat::too_big(&s.enclosure))
+        {
+            self.clear_cannot_simulate();
+        }
         let stale = self.solution().is_some_and(|s| s.scenario_key != now_key);
         let run_old = self
             .pending

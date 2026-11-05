@@ -297,6 +297,23 @@ impl Server {
                     .collect();
                 text(lines.join("\n"))
             }
+            "check_text" => {
+                let max = a
+                    .get("max_words")
+                    .and_then(Value::as_u64)
+                    .map_or(crate::qa::TEXT_WORDS, |v| v as usize);
+                let r = self.send(json!({"cmd": "ui_tree"}))?;
+                let nodes = r["nodes"].as_array().cloned().unwrap_or_default();
+                let hits = crate::qa::text_hits(&nodes, max);
+                if hits.is_empty() {
+                    return text(format!("no label longer than {max} words on screen"));
+                }
+                let lines: Vec<String> = hits
+                    .iter()
+                    .map(|(sev, kind, title, detail)| format!("{sev} [{kind}] {title}: {detail}"))
+                    .collect();
+                text(lines.join("\n"))
+            }
             "finding" => {
                 let sev = a["severity"].as_str().unwrap_or("S3");
                 if !matches!(sev, "S1" | "S2" | "S3" | "S4") {
@@ -512,17 +529,44 @@ impl Server {
 
     // ---- talking to the app ---------------------------------------------
 
-    pub(crate) fn send(&mut self, mut req: Value) -> Result<Value, String> {
+    pub(crate) fn send(&mut self, req: Value) -> Result<Value, String> {
+        // A long `wait` is sent in pieces: one reply has to arrive within the socket's read
+        // timeout, and 600 frames of a heavy scene on a slow software renderer take longer than
+        // that (a closed-loop winch run with Hoist in 3D open at 1920x1080 took 67 s), which
+        // looked like a hung app although every frame was still being drawn.
+        if req["cmd"] == "wait" {
+            let frames = req["frames"].as_f64().unwrap_or(4.0).clamp(1.0, 600.0) as u32;
+            let mut last = Value::Null;
+            for part in wait_chunks(frames) {
+                let mut piece = req.clone();
+                piece["frames"] = json!(part);
+                last = self.send_one(piece)?;
+            }
+            return Ok(last);
+        }
+        self.send_one(req)
+    }
+
+    fn send_one(&mut self, mut req: Value) -> Result<Value, String> {
         self.ensure()?;
         let s = self.session.as_mut().ok_or("not connected")?;
         s.next_id += 1;
         req["id"] = json!(s.next_id);
         writeln!(s.stream, "{req}").map_err(|e| format!("app gone: {e}"))?;
         let mut line = String::new();
-        let n = s
-            .reader
-            .read_line(&mut line)
-            .map_err(|e| format!("app gone: {e}"))?;
+        let n = s.reader.read_line(&mut line).map_err(|e| {
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+            ) {
+                format!(
+                    "app gone: no answer within {} s (one frame, or a command, took that long): {e}",
+                    READ_TIMEOUT.as_secs()
+                )
+            } else {
+                format!("app gone: {e}")
+            }
+        })?;
         if n == 0 {
             self.session = None;
             return Err("the app closed; use restart".into());
@@ -553,7 +597,7 @@ impl Server {
         let stream = TcpStream::connect(("127.0.0.1", port))
             .map_err(|e| format!("cannot connect to the app on port {port}: {e}"))?;
         stream
-            .set_read_timeout(Some(Duration::from_secs(60)))
+            .set_read_timeout(Some(READ_TIMEOUT))
             .map_err(|e| e.to_string())?;
         let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
         let mut hello = stream.try_clone().map_err(|e| e.to_string())?;
@@ -905,6 +949,12 @@ fn tools() -> Value {
             json!([])
         ),
         tool(
+            "check_text",
+            "Explanation text on the current screen: labels longer than max_words (default 8) from the widget tree. Explanations belong behind the window's ? icon.",
+            json!({"max_words": num}),
+            json!([])
+        ),
+        tool(
             "finding",
             "File a finding for the audit report: severity S1 (data loss, crash, cannot start), S2 (core workflow blocked or a wrong number shown as fact), S3 (wrong or confusing), S4 (polish). Attaches the newest screenshot. steps: the user actions that led here.",
             json!({"severity": {"type": "string", "enum": ["S1", "S2", "S3", "S4"]},
@@ -939,9 +989,36 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// How long one reply from the app may take before the control socket gives up.
+const READ_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Most frames asked of the app in one `wait` request.
+const WAIT_CHUNK: u32 = 50;
+
+/// A wait of `frames` frames as requests of at most [`WAIT_CHUNK`] frames each.
+fn wait_chunks(frames: u32) -> Vec<u32> {
+    let frames = frames.max(1);
+    let mut parts = vec![WAIT_CHUNK; (frames / WAIT_CHUNK) as usize];
+    if !frames.is_multiple_of(WAIT_CHUNK) {
+        parts.push(frames % WAIT_CHUNK);
+    }
+    parts
+}
+
 #[cfg(test)]
 mod tests {
-    use super::base64;
+    use super::{base64, wait_chunks};
+
+    #[test]
+    fn a_long_wait_is_sent_in_pieces_that_add_up() {
+        assert_eq!(wait_chunks(0), [1]);
+        assert_eq!(wait_chunks(4), [4]);
+        assert_eq!(wait_chunks(50), [50]);
+        assert_eq!(wait_chunks(120), [50, 50, 20]);
+        let total: u32 = wait_chunks(600).iter().sum();
+        assert_eq!(total, 600);
+        assert!(wait_chunks(600).iter().all(|&p| p <= 50));
+    }
 
     #[test]
     fn base64_matches_the_standard_examples() {

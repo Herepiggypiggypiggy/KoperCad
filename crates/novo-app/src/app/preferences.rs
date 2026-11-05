@@ -237,7 +237,7 @@ impl NovoApp {
                         hint(ui, &line);
                     }
                     for problem in self.wb.custom_symbols.problems.iter().take(5) {
-                        ui.colored_label(crate::theme::ui_palette().warning, problem);
+                        super::flags_shell::inline_flag(ui, false, false, "Symbol file", problem);
                     }
                     section(ui, "Simulation", false);
                     ui.checkbox(&mut calm, "Reduce motion");

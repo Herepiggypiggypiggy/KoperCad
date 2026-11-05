@@ -286,6 +286,9 @@ impl super::NovoApp {
             .map(|s| s.id)
             .collect();
         let name = |id: SymbolId| symbol_tag(project, id);
+        let sim_flags = self.sim_flags_of(super::sim_flags::MOTOR_START);
+        let mut flag_click = None;
+        let flags_ui = &mut self.wb.flags;
         let state = &mut self.wb.sim;
         if state.motor.is_none_or(|m| !motors.contains(&m)) {
             state.motor = motors.first().copied();
@@ -358,6 +361,7 @@ impl super::NovoApp {
                 };
                 if state.run_key.as_ref() != Some(&key) {
                     let netlist = project.netlist();
+                    let mut refused = None;
                     state.run = match motor_of(project, &netlist, motor_symbol) {
                         Ok((motor, notes)) => {
                             let v_ll = motor.rated_ll;
@@ -388,23 +392,45 @@ impl super::NovoApp {
                             })
                         }
                         Err(why) => {
-                            ui.colored_label(crate::theme::ui_palette().warning, why);
+                            refused = Some(why.to_string());
                             None
                         }
                     };
+                    let tag = name(motor_symbol);
+                    let device = project
+                        .symbol(motor_symbol)
+                        .and_then(|s| s.device())
+                        .map(|d| d.raw().to_string());
+                    let drafts = match &state.run {
+                        Some(run) => super::sim_flags::motor_start_draft(
+                            &tag,
+                            device,
+                            run.result.stalled,
+                            (run.result.start_time.is_none() && !run.result.stalled)
+                                .then_some(40.0),
+                        )
+                        .into_iter()
+                        .collect(),
+                        None => vec![super::sim_flags::motor_unmodelled_draft(
+                            &tag,
+                            device,
+                            refused.as_deref(),
+                        )],
+                    };
+                    super::sim_flags::set_flags(flags_ui, super::sim_flags::MOTOR_START, drafts);
+                    ui.ctx().request_repaint();
                     state.run_key = Some(key);
                 }
-                match &state.run {
-                    Some(run) => show_run(ui, run),
-                    None => {
-                        ui.add_space(6.0);
-                        ui.colored_label(
-                            crate::theme::ui_palette().warning,
-                            "This motor cannot be modelled yet. Give it a power in kW on its device.",
-                        );
-                    }
+                if let Some(c) = super::sim_flags::strip(ui, &sim_flags) {
+                    flag_click = Some(c);
+                }
+                if let Some(run) = &state.run {
+                    show_run(ui, run);
                 }
             });
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
+        }
         if !open {
             self.wb.sim.motor_open = false;
         }
@@ -424,21 +450,13 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
     let m = &run.motor;
     ui.add_space(6.0);
     let rated = m.rated_current();
-    if r.stalled {
-        ui.colored_label(
-            crate::theme::ui_palette().error,
-            "The motor does not start: the load needs more torque than it makes at standstill",
-        );
-    } else if let Some(t) = r.start_time {
+    if !r.stalled
+        && let Some(t) = r.start_time
+    {
         ui.label(format!(
             "Up to speed in {t:.1} s · final speed {:.0} rpm",
             r.final_rpm
         ));
-    } else {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
-            "Not up to speed within 40 s",
-        );
     }
     ui.weak(format!(
         "Peak line current {:.0} A ({:.1} × rated {:.1} A) · I²t {:.0} kA²s",

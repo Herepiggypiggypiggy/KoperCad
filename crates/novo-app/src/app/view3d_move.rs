@@ -508,9 +508,16 @@ impl NovoApp {
             .iter()
             .any(|m| !novo_layout::ducts_in_the_way(&after, m).is_empty())
         {
-            self.message(
-                super::Level::Warning,
-                "Not moved: a duct cannot lie over another duct. Move it clear, or end it against the side of the other for a T or a corner",
+            self.view3d.flags.refuse(
+                "Duct over a duct",
+                &[
+                    "Not moved: a duct cannot lie over another duct.",
+                    "Move it clear, or end it against the side of the other for a T or a corner.",
+                ],
+                moved_ducts
+                    .iter()
+                    .map(|m| novo_flags::Anchor::Duct(m.id.to_string()))
+                    .collect(),
             );
             return;
         }
@@ -595,7 +602,20 @@ pub(super) fn show_warning(ctx: &egui::Context, text: &str) {
         .interactable(false)
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(egui::RichText::new(text).color(crate::theme::ui_palette().error));
+                ui.horizontal(|ui| {
+                    let p = crate::theme::ui_palette();
+                    let (slot, _) =
+                        ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+                    novo_theme::widgets::flag_triangle(
+                        ui.painter(),
+                        slot.center(),
+                        super::view3d_flags::SIZE,
+                        true,
+                        false,
+                        p,
+                    );
+                    ui.label(egui::RichText::new(text).color(p.error));
+                });
             });
         });
 }

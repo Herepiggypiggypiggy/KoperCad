@@ -101,6 +101,7 @@ mod order;
 pub mod packet;
 mod page;
 mod plugs;
+pub mod query;
 mod report;
 pub mod safety;
 mod schedule;
@@ -108,6 +109,7 @@ mod sheets;
 pub mod single_line;
 mod strip_diagram;
 mod table;
+mod termination;
 mod toc;
 mod wire_defaults;
 pub mod wire_rules;
@@ -151,6 +153,10 @@ pub use strip_diagram::{
     sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
 };
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
+pub use termination::{
+    CrimpLine, SLEEVE_TEXT_KEY, TERMINATION_A_KEY, TERMINATION_B_KEY, Termination, TerminationKind,
+    bare_ends, crimp_list, stated_sleeve, stated_termination,
+};
 pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
@@ -184,6 +190,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(Labels),
         Box::new(SingleLineDiagram),
         Box::new(FrontMatter),
+        Box::new(query::SavedQueries),
     ]
 }
 
@@ -192,6 +199,10 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
 pub fn generate_all(project: &Project) -> Vec<ReportOutput> {
     standard_reports()
         .iter()
+        // "My reports" is left out of an export until the project has one.
+        .filter(|report| {
+            report.id() != query::SavedQueries::ID || !query::Presets::of(project).list.is_empty()
+        })
         .map(|report| report.generate(project))
         .collect()
 }

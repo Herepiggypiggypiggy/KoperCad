@@ -23,8 +23,9 @@ use novo_layout::template::Paper;
 
 use novo_reports::packet::CoverLine;
 
+use super::NovoApp;
 use super::bench_packet::PACKET_FILE;
-use super::{Level, NovoApp};
+use super::flags_wiring::{JobRetry, job};
 
 /// Most pages one template PDF may take. A plate this large is a data entry
 /// slip (metres typed as millimetres); printing it would not be.
@@ -109,6 +110,8 @@ impl NovoApp {
 
     /// Writes the pack into `folder`, replacing the files of an earlier pack.
     pub fn export_workshop_to(&mut self, folder: &Path) -> Option<PathBuf> {
+        // A failed write below raises the flag again; a clean run leaves it off.
+        self.job_clear(job::WORKSHOP);
         let name = self.machine_title().unwrap_or_default();
         let paper = self.wb.workshop_paper;
         let (templates, too_big) = template_pdfs(&*self.machine()?, &name, paper);
@@ -265,9 +268,12 @@ impl NovoApp {
             None => skipped.push("bench packet".to_owned()),
         }
         if done.is_empty() {
-            self.message(
-                Level::Warning,
-                "Nothing to put in a workshop pack yet: set a mounting plate in the Cabinet and connect some wires",
+            self.wiring_job_flag(
+                job::WORKSHOP,
+                false,
+                "Nothing for a workshop pack",
+                "Set a mounting plate in the Cabinet and connect some wires.",
+                JobRetry::Workshop,
             );
             return None;
         }
@@ -323,9 +329,12 @@ impl NovoApp {
         match super::pdf::write_replacing(path, bytes) {
             Ok(()) => true,
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not write {}: {e}", path.display()),
+                self.wiring_job_flag(
+                    job::WORKSHOP,
+                    true,
+                    "Workshop file not written",
+                    &format!("{}: {e}", path.display()),
+                    JobRetry::Workshop,
                 );
                 false
             }

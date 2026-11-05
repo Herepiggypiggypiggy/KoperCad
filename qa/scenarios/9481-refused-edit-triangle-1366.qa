@@ -1,0 +1,25 @@
+@title A refused terminal edit is a transient triangle in the canvas corner, not a toast
+@area Schematic
+@sizes 1366x768
+# T8 on the T7 path: Set terminal level with no strip yet. The edit does not happen; a yellow triangle in the canvas corner holds the reason; the next input clears it. No toast.
+click_text "New project"
+wait 20
+key ctrl+k
+text "set terminal level"
+wait 5
+key Enter
+wait 10
+shot refusal-triangle
+check_layout
+# The triangle is at the top left of the canvas; its popup holds the reason and Copy.
+click 71 81
+wait 6
+expect "No terminal strip yet"
+expect "Copy"
+shot refusal-popup
+key Escape
+wait 5
+key Escape
+wait 5
+expect_not "No terminal strip yet"
+shot refusal-gone

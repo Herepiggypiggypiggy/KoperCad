@@ -25,10 +25,10 @@ try click_text "Next"
 wait 20
 shot 05-reading-step
 check_layout
-click 48 475
+click_text "" TextInput #1
 wait 5
 text 0.12
-click 48 523
+click_text "" TextInput #1
 wait 5
 text 50
 wait 5

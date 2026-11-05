@@ -101,8 +101,14 @@ pub(crate) fn strip(
     if wanted(h) || h.flow.mode != FlowMode::Off || h.cloud || h.carry {
         ui.end_row();
     }
+}
+
+/// The "?" of the Heat strip: what each active layer means, one paragraph per
+/// layer. The strip itself shows only the colour keys.
+pub(crate) fn help(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
+    let notes = notes(h, range, top_speed, top_flux);
     if !notes.is_empty() {
-        ui.label(egui::RichText::new(notes.join("   ·   ")).small());
+        super::window_help::mark(ui, &notes.join("\n\n"));
     }
 }
 

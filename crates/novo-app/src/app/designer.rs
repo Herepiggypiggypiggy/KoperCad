@@ -378,11 +378,17 @@ impl NovoApp {
             Act::NewFrom(id, title) => st.new_from_report(&id, &title),
             Act::SaveUser => {
                 let Some(dir) = st.user_dir.clone() else {
-                    self.message(Level::Error, "Could not find your template folder");
+                    self.job_fail(
+                        "designer.save",
+                        "Template not saved",
+                        Level::Error,
+                        "Could not find your template folder",
+                    );
                     return;
                 };
                 match store::save_to_dir(&dir, &st.draft) {
                     Ok(path) => {
+                        self.job_ok("designer.save");
                         self.message(Level::Info, format!("Saved template {}", path.display()));
                         st.base = st.draft.clone();
                         st.origin = Some(Origin::User);
@@ -390,7 +396,12 @@ impl NovoApp {
                             st.reload(doc.project());
                         }
                     }
-                    Err(e) => self.message(Level::Error, format!("Could not save template: {e}")),
+                    Err(e) => self.job_fail(
+                        "designer.save",
+                        "Template not saved",
+                        Level::Error,
+                        format!("Could not save template: {e}"),
+                    ),
                 }
             }
             Act::SaveProject => {
@@ -414,10 +425,16 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return false;
         };
+        if let Some(why) = super::flags_jobs::qa_forced_error("designer.save") {
+            self.job_fail("designer.save", "Template not saved", Level::Error, why);
+            return false;
+        }
         let mut list = match store::project_templates(project) {
             Ok(l) => l,
             Err(e) => {
-                self.message(
+                self.job_fail(
+                    "designer.save",
+                    "Template not saved",
                     Level::Error,
                     format!("The project's templates cannot be read, not overwriting them: {e}"),
                 );
@@ -437,6 +454,7 @@ impl NovoApp {
             })
         });
         if ok {
+            self.job_ok("designer.save");
             self.message(Level::Info, format!("Saved template {name} in the project"));
         }
         ok
@@ -479,14 +497,18 @@ impl NovoApp {
                 } else {
                     format!(" ({n} design problems)")
                 };
+                self.job_ok("export.designer_pdf");
                 self.message_file(format!("{verb} {}{tail}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.designer_pdf",
+                    "Designer PDF failed",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }

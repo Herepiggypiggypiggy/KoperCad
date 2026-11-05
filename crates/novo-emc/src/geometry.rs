@@ -215,10 +215,104 @@ pub fn mutual_per_m(h_mm: f64, d_mm: f64, wire_d_mm: f64) -> f64 {
     MU0 / (4.0 * std::f64::consts::PI) * (1.0 + 4.0 * h_mm * h_mm / (d * d)).ln()
 }
 
-/// Inductance of a straight round wire's pigtail in nH, rule of thumb
-/// 10 nH per cm (the figure in `docs/EMC.md`).
+/// Diameter assumed for a shield pigtail when the drawing does not say (mm):
+/// the twisted-up braid of a small cable is about a 2 mm wire.
+pub const PIGTAIL_WIRE_MM: f64 = 2.0;
+
+/// Free-space permittivity, F/m.
+const EPS0: f64 = 8.854_187_812_8e-12;
+
+/// Self inductance in nH of a straight round wire, `len_mm` long and
+/// `dia_mm` across, at high frequency (current on the surface, skin depth
+/// far below the radius): mu0 l / (2 pi) (ln(2 l / r) - 1). Rosa and Grover
+/// (Bureau of Standards, Formulas and Tables for the Calculation of Mutual
+/// and Self Inductance). Valid for l well over r. This is the partial
+/// inductance of the piece alone; the loop it closes adds the mutual term
+/// with its return path, see [`loop_over_plane_nh`].
+pub fn round_wire_nh(len_mm: f64, dia_mm: f64) -> f64 {
+    let l = len_mm.max(0.0) / 1000.0;
+    let r = (dia_mm.max(0.1) / 2.0) / 1000.0;
+    if l <= r {
+        return 0.0;
+    }
+    MU0 / (2.0 * std::f64::consts::PI) * l * ((2.0 * l / r).ln() - 1.0) * 1e9
+}
+
+/// Self inductance in nH of a flat strap (braid, bus strip), `len_mm` long,
+/// `width_mm` wide and `thick_mm` thick, high-frequency current:
+/// 0.2 l [ln(2 l / (w + t)) + 0.5005 + (w + t) / (3 l)] nH with l in mm
+/// (Grover, Inductance Calculations, flat strip). A strap is much lower
+/// than a round wire of the same length: width is what counts.
+pub fn strap_nh(len_mm: f64, width_mm: f64, thick_mm: f64) -> f64 {
+    let l = len_mm.max(0.0);
+    let wt = (width_mm.max(0.1) + thick_mm.max(0.0)).max(0.1);
+    if l <= wt {
+        return 0.0;
+    }
+    0.2 * l * ((2.0 * l / wt).ln() + 0.5005 + wt / (3.0 * l))
+}
+
+/// Loop inductance per metre in nH/m of a round wire `dia_mm` across, its
+/// axis `h_mm` above a conducting plane that carries the return:
+/// mu0 / (2 pi) acosh(h / r). The wire has to be higher than its radius.
+pub fn loop_over_plane_nh_per_m(h_mm: f64, dia_mm: f64) -> f64 {
+    let r = dia_mm.max(0.1) / 2.0;
+    let x = (h_mm / r).max(1.0);
+    MU0 / (2.0 * std::f64::consts::PI) * x.acosh() * 1e9
+}
+
+/// Loop inductance in nH of a straight wire of `len_mm` over a plane (see
+/// [`loop_over_plane_nh_per_m`]); end effects ignored, so it needs l >> h.
+pub fn loop_over_plane_nh(len_mm: f64, h_mm: f64, dia_mm: f64) -> f64 {
+    loop_over_plane_nh_per_m(h_mm, dia_mm) * len_mm.max(0.0) / 1000.0
+}
+
+/// Inductance of a shield pigtail in nH: the partial self inductance of a
+/// [`PIGTAIL_WIRE_MM`] wire of that length ([`round_wire_nh`]). It replaces
+/// the old rule of thumb of 1 nH per mm, which is the order of a pigtail
+/// with its return path included; a pigtail alone computes lower (80 mm:
+/// about 65 nH, not 80 nH).
 pub fn pigtail_nh(mm: f64) -> f64 {
-    mm.max(0.0) // 1 nH per mm
+    round_wire_nh(mm, PIGTAIL_WIRE_MM)
+}
+
+/// Capacitance in pF per metre of a round wire `dia_mm` across, axis `h_mm`
+/// above a plane, in air: 2 pi eps0 / acosh(h / r).
+pub fn wire_over_plane_pf_per_m(h_mm: f64, dia_mm: f64) -> f64 {
+    let r = dia_mm.max(0.1) / 2.0;
+    let x = (h_mm / r).max(1.0001);
+    2.0 * std::f64::consts::PI * EPS0 / x.acosh() * 1e12
+}
+
+/// Capacitance in pF per metre between a core and a concentric shield:
+/// 2 pi eps0 eps_r / ln(D / d), with `ratio` = D / d, the inner diameter of
+/// the shield over the diameter of the core. Only the ratio counts, not
+/// the size.
+pub fn coax_pf_per_m(ratio: f64, eps_r: f64) -> f64 {
+    2.0 * std::f64::consts::PI * EPS0 * eps_r / ratio.max(1.0001).ln() * 1e12
+}
+
+/// Capacitance in pF per metre between two parallel round wires, centres
+/// `d_mm` apart, `dia_mm` across, in a medium of relative permittivity
+/// `eps_r`: pi eps0 eps_r / acosh(d / (2 r)).
+pub fn two_wire_pf_per_m(d_mm: f64, dia_mm: f64, eps_r: f64) -> f64 {
+    let r = dia_mm.max(0.1) / 2.0;
+    let x = (d_mm / (2.0 * r)).max(1.0001);
+    std::f64::consts::PI * EPS0 * eps_r / x.acosh() * 1e12
+}
+
+/// Current in mA through `c_pf` to earth at `v_rms` volts and `f_hz`
+/// (I = 2 pi f C V, a sine; the cable's leakage to earth at mains
+/// frequency).
+pub fn leakage_ma(c_pf: f64, v_rms: f64, f_hz: f64) -> f64 {
+    2.0 * std::f64::consts::PI * f_hz * c_pf * 1e-12 * v_rms * 1e3
+}
+
+/// Charging current in A that a voltage edge of `dv_dt_kv_per_us` pushes
+/// through `c_pf` (I = C dV/dt): the short pulses a drive's output edges
+/// send through the motor cable capacitance.
+pub fn charging_current_a(c_pf: f64, dv_dt_kv_per_us: f64) -> f64 {
+    c_pf * 1e-12 * dv_dt_kv_per_us * 1e9
 }
 
 /// Impedance in ohm of a pigtail of `mm` at `f_hz`.

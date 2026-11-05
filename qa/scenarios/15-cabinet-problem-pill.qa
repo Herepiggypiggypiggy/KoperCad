@@ -1,11 +1,13 @@
-@title Cabinet: the problems pill opens the list of what is wrong
+@title Cabinet: the Cabinet pill counts the plate's flags and opens the list
 @area Cabinet
 open_starter_example
 wait 20
 click_text Cabinet #1
 wait 30
 shot cabinet
-click_text "1 problem"
+# The pill is the top bar's triangle pill for this plate (the example has one door-room warning).
+click_text "1 warning" Button
 wait 10
+expect "more room in front"
 shot pill-open
 check_layout

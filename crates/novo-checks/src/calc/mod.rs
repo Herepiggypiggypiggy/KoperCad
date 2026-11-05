@@ -13,6 +13,7 @@
 //! | [`drop`] | Voltage drop over length and current, as volts and percent of the supply |
 //! | [`short_circuit`] | Short-circuit current along a feeder: breaking capacity, minimum current for disconnection, thermal withstand of the conductor |
 //! | [`motor`] | Basic motor starter coordination: overload relay setting, contactor rating, short-circuit protection |
+//! | [`mechanical`] | Busbar short-circuit force and support spacing, rail and plate deflection under device load (closed-form estimates) |
 //! | [`pe`] | Protective conductor size, and loop impedance for automatic disconnection |
 //!
 //! # Sources and limits
@@ -34,6 +35,7 @@ pub mod cable;
 pub mod circuit;
 pub mod curves;
 pub mod drop;
+pub mod mechanical;
 pub mod motor;
 pub mod network;
 pub mod pe;

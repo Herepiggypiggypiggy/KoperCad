@@ -1,0 +1,15 @@
+[package]
+name = "novo-flags"
+description = "Problem triangles: flags, severity and locations shown on the canvas (pure engine; docs/design/problem-triangles.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }
