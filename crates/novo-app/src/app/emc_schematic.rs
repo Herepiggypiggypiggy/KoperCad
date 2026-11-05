@@ -469,7 +469,7 @@ impl NovoApp {
             // The panel stays this wide when a fix preview opens (its long
             // lines wrap) instead of growing over the drawing.
             ui.set_max_width(WIDTH - 24.0);
-            super::window_help::add(ui.ctx(), "Indicative: classes are read from the drawing. A design aid, not a test result.");
+            super::window_help::add(ui.ctx(), "Classes are read from the drawing.");
             if live {
                 ui.label(egui::RichText::new("Live view is on").small().color(pal.warning));
                 super::window_help::add(
