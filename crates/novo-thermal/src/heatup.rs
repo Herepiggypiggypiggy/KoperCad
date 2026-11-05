@@ -3,42 +3,31 @@
 //!
 //! The cabinet is a small network: the **air** (one mean temperature), the
 //! **devices** as one lump that carries all the losses, the **plate** and the
-//! six **wall faces** as slabs across their thickness. The conductances are
-//! chosen so that, in steady state, the walls carry exactly the IEC 60890
-//! overall coefficient `k b A` per face; the wall only adds *mass* and a
-//! surface temperature, it does not change the steady total. The wall's
-//! inner film follows the 3D solver (`1.5 k b`), the outer film is what is
-//! left of the IEC coefficient.
+//! six **wall faces** as stacks of the layers of the shell
+//! ([`crate::shell::ShellModel`], `Scenario::shell()`): sheet, insulation, air
+//! gap, door window, door-frame bridge, plate setback and, when set, the
+//! physical outer film. With the default shell the walls carry exactly the
+//! IEC 60890 `k b A` per face; the wall only adds *mass* and a surface
+//! temperature, it does not change the steady total. Values the enclosure
+//! record does not give stay the shell defaults and the result says so
+//! (`HeatUp::provenance`).
 //!
 //! **Model, not exact.** One air temperature (no stratification), devices
 //! lumped, rails, ducts and wires not counted as mass, no radiation between
-//! walls, no door gasket, no sun. The values of the lumped pieces (wall
-//! steel, plate) are the standard material constants.
+//! walls, no air leaks, no sun in the transient (the outer film, wind and
+//! mounting gaps of the shell are used).
 
 use crate::Error;
 use crate::mass::{Layer, Network, Phase, Slab, Solved, Trajectory};
 use crate::model::Scenario;
-use crate::setup::{REAR, surface_factors};
-use novo_layout::sizing::Material;
+use crate::shell::{FRONT, REAR};
 
-/// Cells across a wall.
-const WALL_CELLS: usize = 3;
 /// Air at room temperature: density times specific heat, J/(m3 K).
 const AIR_RHO_CP: f64 = 1.16 * 1007.0;
 /// Steel: density times specific heat, J/(m3 K).
 const STEEL_RHO_CP: f64 = 7850.0 * 490.0;
 /// Mass left on a wall or plate in the comparison "as before".
 const NO_MASS: f64 = 1.0e-6;
-
-/// Conductivity (W/m K) and rho c (J/m3 K) of the wall material.
-pub fn wall_properties(m: Material) -> (f64, f64) {
-    match m {
-        Material::Steel => (50.0, STEEL_RHO_CP),
-        Material::Stainless => (15.0, 7900.0 * 500.0),
-        Material::Aluminium => (160.0, 2700.0 * 900.0),
-        Material::Plastic => (0.3, 1400.0 * 1300.0),
-    }
-}
 
 /// How to run the heat-up.
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +79,11 @@ pub struct FaceTemps {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeatUp {
     pub budget: MassBudget,
+    /// Where the wall and plate values come from (assumed, catalogue, measured).
+    pub provenance: crate::shell::ShellProvenance,
+    /// Catalogue enclosure weight over the weight of the modelled wall layers
+    /// (see `ShellModel::mass_check`); `None` without a catalogue weight.
+    pub mass_check: Option<f64>,
     /// Time constants of the cabinet, s, longest first.
     pub time_constants_s: Vec<f64>,
     /// Mean air at full load once everything has settled, degrees C.
@@ -132,6 +126,35 @@ impl RiseTimes {
     }
 }
 
+/// The layers of a face as network layers: zero-thickness layers dropped,
+/// the air gap as a layer with its equivalent conductivity, cells by
+/// thickness.
+fn mass_layers(layers: &[crate::shell::Layer], mass: f64) -> Vec<Layer> {
+    layers
+        .iter()
+        .filter(|l| l.thickness_mm > 0.0)
+        .map(|l| {
+            let t = l.thickness_mm / 1000.0;
+            let cells = match l.material {
+                crate::shell::LayerMaterial::AirGap => 1,
+                _ => (2 + (l.thickness_mm / 8.0) as usize).min(6),
+            };
+            Layer {
+                thickness_m: t,
+                k: t / l.r().max(1e-12),
+                rho_cp: l.material.rho_cp() * mass,
+                cells,
+            }
+        })
+        .collect()
+}
+
+/// Series conductance air to ambient of one wall part, W/K.
+fn series_ua(layers: &[crate::shell::Layer], f: crate::shell::Films, area: f64) -> f64 {
+    let r: f64 = layers.iter().map(crate::shell::Layer::r).sum();
+    area / (1.0 / f.h_in + r + 1.0 / f.h_out)
+}
+
 struct Built {
     net: Network,
     air: usize,
@@ -152,16 +175,9 @@ fn build(scn: &Scenario, wall_mass: f64) -> Result<Built, Error> {
             "the enclosure needs a size and a wall".into(),
         ));
     }
-    let (wo, ho, d_o) = (
-        e.width_mm / 1000.0,
-        e.height_mm / 1000.0,
-        e.depth_mm / 1000.0,
-    );
-    let (lam, wall_rho_cp) = wall_properties(e.material);
-    let t_wall = e.wall_mm / 1000.0;
-    let k = e.material.k() * p.wall_k_scale;
-    let b = surface_factors(e.installation);
-    let areas = [wo * ho, wo * ho, d_o * ho, d_o * ho, wo * d_o, wo * d_o];
+    let shell = scn.shell();
+    let b = shell.b_factors(e);
+    let areas = crate::shell::FaceAreas::of(e).outer;
 
     let mut net = Network::new();
     let mut devices_loss = 0.0;
@@ -203,6 +219,7 @@ fn build(scn: &Scenario, wall_mass: f64) -> Result<Built, Error> {
 
     // Plate.
     let plate_area = (e.plate.w * e.plate.h / 1.0e6).min(areas[REAR]);
+    let mut ua = 0.0;
     let plate = if plate_area > 1.0e-6 {
         let c = STEEL_RHO_CP * p.plate_thickness_mm / 1000.0 * plate_area * wall_mass;
         Some(net.add_node(c.max(1.0e-9)))
@@ -213,55 +230,78 @@ fn build(scn: &Scenario, wall_mass: f64) -> Result<Built, Error> {
         net.link(devices, pl, p.plate_contact_h * dev_foot.max(1.0e-4));
     }
 
-    // Walls.
-    let layers = [Layer {
-        thickness_m: t_wall,
-        k: lam,
-        rho_cp: wall_rho_cp * wall_mass,
-        cells: WALL_CELLS,
-    }];
+    // Walls: the layers of the shell, face by face. Conduction and films act
+    // over the share `b` of the face that gives off heat (IEC surface factor),
+    // the heat capacity over the whole face.
     let mut h_in_wall = [0.0; 6];
     let mut h_out_wall = [0.0; 6];
-    let mut ua = 0.0;
     let mut walls_c = 0.0;
     let mut slabs = Vec::with_capacity(6);
+    let outer = crate::shell::FaceAreas::of(e).outer;
     for f in 0..6 {
-        let u = k * b[f];
-        let slab = net.add_slab(&layers, areas[f]);
+        let films = shell.films_of(f);
+        let share = b[f].max(0.0);
+        let win_share = if f == FRONT {
+            shell
+                .window
+                .as_ref()
+                .map_or(0.0, |w| w.area_fraction.clamp(0.0, 0.95))
+        } else {
+            0.0
+        };
+        let a_panel = outer[f] * (1.0 - win_share);
+        let layers = mass_layers(&shell.faces[f].layers, wall_mass);
+        let slab = net.add_slab_with(&layers, a_panel, a_panel * share);
         walls_c += slab.nodes.iter().map(|&n| net.capacity(n)).sum::<f64>();
-        if u > 0.0 {
-            // 1/u = 1/h_in + t/lambda + 1/h_out
-            let h_in = 1.5 * u;
-            let rest = 1.0 / u - 1.0 / h_in - t_wall / lam;
-            let h_out = if rest > 1.0e-9 { 1.0 / rest } else { 1.0e6 };
-            h_in_wall[f] = h_in;
-            h_out_wall[f] = h_out;
-            ua += u * areas[f];
-            slab.connect_outer(&mut net, None, h_out);
+        if share > 0.0 {
+            h_in_wall[f] = films.h_in;
+            h_out_wall[f] = films.h_out;
+            slab.connect_outer(&mut net, None, films.h_out);
             if f == REAR {
-                let ap = plate_area;
-                slab.connect_inner_area(&mut net, Some(air), h_in, areas[f] - ap);
+                let ap = plate_area.min(a_panel);
+                slab.connect_inner_area(
+                    &mut net,
+                    Some(air),
+                    films.h_in,
+                    (a_panel - ap).max(0.0) * share,
+                );
                 if let Some(pl) = plate {
-                    // Air to plate to wall in series equals the film h_in over
-                    // the covered part, as in the 2D engine.
-                    let g_air = p.h_in.max(1.2 * h_in) * ap;
-                    let g_tot = h_in * ap;
-                    let g_rear = 1.0 / (1.0 / g_tot - 1.0 / g_air);
+                    let g_air = p.h_in.max(1.2 * films.h_in) * ap;
                     net.link(air, pl, g_air);
-                    slab.connect_inner_area(&mut net, Some(pl), g_rear / ap, ap);
+                    let g_wall = match shell.plate_gap_h_w_m2k() {
+                        // Plate stands off the wall: the gap is the path.
+                        Some(h_gap) => h_gap * ap,
+                        // Plate on the wall: air to plate to wall in series
+                        // equals the inner film over the covered part.
+                        None => 1.0 / (1.0 / (films.h_in * share * ap) - 1.0 / g_air),
+                    };
+                    slab.connect_inner_area(&mut net, Some(pl), g_wall / ap, ap);
                 }
             } else {
-                slab.connect_inner(&mut net, Some(air), h_in);
+                slab.connect_inner_area(&mut net, Some(air), films.h_in, a_panel * share);
             }
+            ua += series_ua(&shell.faces[f].layers, films, a_panel * share);
         } else {
             // Face with no path outwards (standing on the floor): mass only.
-            slab.connect_inner(&mut net, Some(air), 1.5 * k * 0.5);
+            slab.connect_inner(&mut net, Some(air), films.h_in);
+        }
+        if let (true, Some(w)) = (win_share > 0.0, shell.window.as_ref()) {
+            // The window pane: its own layers, same films.
+            let a_win = outer[f] * win_share;
+            let wl = mass_layers(&w.layers, wall_mass);
+            let ws = net.add_slab_with(&wl, a_win, a_win * share);
+            walls_c += ws.nodes.iter().map(|&n| net.capacity(n)).sum::<f64>();
+            if share > 0.0 {
+                ws.connect_inner(&mut net, Some(air), films.h_in);
+                ws.connect_outer(&mut net, None, films.h_out);
+                ua += series_ua(&w.layers, films, a_win * share);
+            }
         }
         slabs.push(slab);
     }
-    if plate.is_none() {
-        // The rear wall had its whole film to the air; nothing to add.
-    }
+    let edge = shell.door_edge_w_per_k(e) * p.wall_k_scale;
+    net.to_ambient(air, edge);
+    ua += edge;
     let mut power = vec![0.0; net.len()];
     power[devices] = devices_loss;
     let budget = MassBudget {
@@ -318,6 +358,8 @@ pub fn heat_up(scn: &Scenario, set: &HeatUpSettings) -> Result<HeatUp, Error> {
             "a heat-up run needs a duration and a sample spacing".into(),
         ));
     }
+    let resolved = crate::outside::resolve(scn)?;
+    let scn = &resolved;
     let built = build(scn, 1.0)?;
     let solved = built.net.solve()?;
     let amb = scn.ambient_c;
@@ -383,8 +425,11 @@ pub fn heat_up(scn: &Scenario, set: &HeatUpSettings) -> Result<HeatUp, Error> {
 
     let steady_air_c = solved.steady(&built.power, amb)[built.air];
     let time_to_limit_s = set.limit_c.and_then(|l| traj.first_reach(built.air, l));
+    let shell = scn.shell();
     Ok(HeatUp {
         budget: built.budget,
+        provenance: shell.provenance,
+        mass_check: shell.mass_check(&scn.enclosure),
         time_constants_s: solved.time_constants_s(),
         steady_air_c,
         times_s: traj.times_s,
@@ -402,8 +447,9 @@ pub fn heat_up(scn: &Scenario, set: &HeatUpSettings) -> Result<HeatUp, Error> {
 mod tests {
     use super::*;
     use crate::model::{Device, Enclosure, Params};
+    use crate::shell::{LayerMaterial, Provenance, Window};
     use novo_layout::Rect;
-    use novo_layout::sizing::{Installation, effective_surface};
+    use novo_layout::sizing::{Installation, Material};
 
     fn scenario(loss_w: f64, wall_mm: f64) -> Scenario {
         Scenario {
@@ -450,8 +496,13 @@ mod tests {
         let s = scenario(150.0, 1.5);
         let h = heat_up(&s, &HeatUpSettings::default()).unwrap();
         let e = &s.enclosure;
-        let want =
-            e.material.k() * effective_surface(e.width_mm, e.height_mm, e.depth_mm, e.installation);
+        let want = e.material.k()
+            * novo_layout::sizing::effective_surface(
+                e.width_mm,
+                e.height_mm,
+                e.depth_mm,
+                e.installation,
+            );
         assert!(
             (h.budget.wall_ua_w_per_k - want).abs() < 1e-9 * want,
             "{} vs {want}",
@@ -473,16 +524,12 @@ mod tests {
             },
         )
         .unwrap();
-        let e = &s.enclosure;
-        let b = surface_factors(e.installation);
-        let (wo, ho, d) = (0.8, 1.2, 0.4);
-        let areas = [wo * ho, wo * ho, d * ho, d * ho, wo * d, wo * d];
+        let shell = s.shell();
+        let b = shell.b_factors(&s.enclosure);
+        let areas = crate::shell::FaceAreas::of(&s.enclosure).outer;
         let mut out = 0.0;
         for f in 0..6 {
-            let u = e.material.k() * b[f];
-            // outer film h_out = 1/(1/u - 1/(1.5u) - t/lambda)
-            let h_out = 1.0 / (1.0 / u - 1.0 / (1.5 * u) - 0.0015 / 50.0);
-            out += h_out * areas[f] * (h.faces_end[f].outer_c - 25.0);
+            out += shell.films.h_out * b[f] * areas[f] * (h.faces_end[f].outer_c - 25.0);
         }
         assert!((out - 150.0).abs() < 0.5, "{out}");
         assert!((h.air_c.last().unwrap() - h.steady_air_c).abs() < 0.05);
@@ -519,8 +566,8 @@ mod tests {
         let thin = heat_up(&scenario(150.0, 1.0), &HeatUpSettings::default()).unwrap();
         let thick = heat_up(&scenario(150.0, 2.0), &HeatUpSettings::default()).unwrap();
         assert!(thick.rise.t90_s > thin.rise.t90_s);
-        // The steady value is the same: mass does not change the total.
-        assert!((thick.steady_air_c - thin.steady_air_c).abs() < 1e-4);
+        // The IEC total is the same; only the film split moves the plate path.
+        assert!((thick.steady_air_c - thin.steady_air_c).abs() < 0.02 * (thin.steady_air_c - 25.0));
     }
 
     #[test]
@@ -639,6 +686,108 @@ mod tests {
         )
         .unwrap();
         assert_eq!(none.time_to_limit_s, None);
+    }
+
+    #[test]
+    fn the_wall_mass_is_the_shell_capacity() {
+        let s = scenario(100.0, 1.5);
+        let h = run_default(&s);
+        let cap = s.shell().capacity_j_per_k(&s.enclosure);
+        assert!((h.budget.walls_j_per_k - cap).abs() < 1e-9 * cap);
+    }
+
+    fn run_default(s: &Scenario) -> HeatUp {
+        heat_up(s, &HeatUpSettings::default()).unwrap()
+    }
+
+    #[test]
+    fn insulation_lowers_the_wall_conductance_and_slows_the_heat_up() {
+        let plain = scenario(100.0, 1.5);
+        let mut ins = plain.clone();
+        let mut shell = ins.shell();
+        shell.add_insulation(LayerMaterial::MineralWool, 20.0, true);
+        ins.params.shell = Some(shell.clone());
+        let (a, b) = (run_default(&plain), run_default(&ins));
+        let want = shell
+            .conductances_w_per_k(&ins.enclosure, 1.0)
+            .iter()
+            .sum::<f64>();
+        assert!((b.budget.wall_ua_w_per_k - want).abs() < 1e-9 * want);
+        assert!(b.budget.wall_ua_w_per_k < 0.5 * a.budget.wall_ua_w_per_k);
+        assert!(b.steady_air_c > a.steady_air_c + 5.0);
+        // Hotter inside, same mass, less conductance: longer time constant.
+        assert!(b.time_constants_s[0] > a.time_constants_s[0]);
+        assert!(b.budget.walls_j_per_k > a.budget.walls_j_per_k);
+    }
+
+    #[test]
+    fn a_door_window_and_frame_bridge_add_conductance_and_the_pane_has_mass() {
+        let plain = scenario(100.0, 1.5);
+        let mut win = plain.clone();
+        let mut shell = win.shell();
+        shell.window = Some(Window::single_glazed(0.3));
+        shell.door_edge = Some(crate::shell::DoorEdge { psi_w_per_mk: 0.1 });
+        win.params.shell = Some(shell.clone());
+        let (a, b) = (run_default(&plain), run_default(&win));
+        let want = shell
+            .conductances_w_per_k(&win.enclosure, 1.0)
+            .iter()
+            .sum::<f64>();
+        assert!((b.budget.wall_ua_w_per_k - want).abs() < 1e-9 * want);
+        assert!(b.budget.wall_ua_w_per_k > a.budget.wall_ua_w_per_k);
+        // The wall mass is the shell's own capacity (glass 4 mm holds more per
+        // m2 than 1.5 mm sheet steel).
+        let cap = shell.capacity_j_per_k(&win.enclosure);
+        assert!((b.budget.walls_j_per_k - cap).abs() < 1e-9 * cap);
+        assert!(b.budget.walls_j_per_k > a.budget.walls_j_per_k);
+    }
+
+    #[test]
+    fn a_plate_setback_changes_the_plate_path_not_the_mass() {
+        let plain = scenario(150.0, 1.5);
+        let mut gap = plain.clone();
+        let mut shell = gap.shell();
+        shell.plate_setback_mm = Some(15.0);
+        gap.params.shell = Some(shell);
+        let (a, b) = (run_default(&plain), run_default(&gap));
+        assert_eq!(a.budget.plate_j_per_k, b.budget.plate_j_per_k);
+        // The gap is a resistance between plate and wall: the plate runs hotter.
+        assert!(
+            b.plate_c.last().unwrap() > a.plate_c.last().unwrap(),
+            "{} {}",
+            b.plate_c.last().unwrap(),
+            a.plate_c.last().unwrap()
+        );
+    }
+
+    #[test]
+    fn the_catalogue_weight_cross_check_and_provenance_are_reported() {
+        let mut s = scenario(100.0, 1.5);
+        assert_eq!(run_default(&s).mass_check, None);
+        assert_eq!(run_default(&s).provenance.walls, Provenance::Assumed);
+        let mut shell = s.shell();
+        shell.mass_kg = Some(60.0);
+        shell.provenance.walls = Provenance::Catalogue;
+        s.params.shell = Some(shell);
+        let h = run_default(&s);
+        assert_eq!(h.provenance.walls, Provenance::Catalogue);
+        // Modelled sheet: 0.0015 m over about 5.6 m2 of steel is about 66 kg
+        // of faces; the ratio is the catalogue weight over that.
+        let r = h.mass_check.unwrap();
+        assert!(r > 0.5 && r < 1.5, "{r}");
+    }
+
+    #[test]
+    fn the_physical_outer_film_changes_the_run_and_keeps_the_mass() {
+        let plain = scenario(150.0, 1.5);
+        let mut phys = plain.clone();
+        let mut shell = phys.shell();
+        shell.outside.film = crate::shell::OutsideFilm::Physical;
+        phys.params.shell = Some(shell);
+        let (a, b) = (run_default(&plain), run_default(&phys));
+        assert_eq!(a.budget.walls_j_per_k, b.budget.walls_j_per_k);
+        assert!(b.steady_air_c.is_finite());
+        assert!((a.budget.wall_ua_w_per_k - b.budget.wall_ua_w_per_k).abs() > 1e-6);
     }
 
     #[test]

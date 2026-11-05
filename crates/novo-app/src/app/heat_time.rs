@@ -62,8 +62,8 @@ pub(super) fn mass_hover(m: &HeatUp) -> String {
          the wall and plate mass the same model reads {} and {} ({:.0} % too short; \
          this compares the model with itself with and without the mass, it is not a measurement). \
          Steady temperature is unchanged. The frames and curve above come from the \
-         2D run, which has no wall mass. Not counted: rails, ducts, wires, door \
-         gasket, sun. Time constants: {}.",
+         2D run, which has no wall mass. Not counted: rails, ducts, wires, air \
+         leaks, sun. Time constants: {}. {}",
         TimeLine::time_label(r.t63_s),
         TimeLine::time_label(r.t90_s),
         TimeLine::time_label(r.t63_no_wall_mass_s),
@@ -75,7 +75,27 @@ pub(super) fn mass_hover(m: &HeatUp) -> String {
             .map(|t| TimeLine::time_label(*t))
             .collect::<Vec<_>>()
             .join(", "),
+        shell_note(m),
     )
+}
+
+/// Where the wall and plate values come from, and the weight cross-check.
+pub(super) fn shell_note(m: &HeatUp) -> String {
+    use novo_thermal::shell::Provenance;
+    let walls = match m.provenance.walls {
+        Provenance::Assumed => {
+            "Wall sheet and plate: assumed values, not from the chosen enclosure."
+        }
+        Provenance::Catalogue => "Wall sheet and plate: from the enclosure catalogue.",
+        Provenance::Measured => "Wall sheet and plate: measured.",
+    };
+    match m.mass_check {
+        Some(r) => format!(
+            "{walls} Catalogue weight is {r:.1} times the weight of the modelled wall sheet \
+             (about 1 when the layers match the real enclosure)."
+        ),
+        None => walls.to_string(),
+    }
 }
 
 pub(super) enum Event {
