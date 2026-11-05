@@ -310,5 +310,17 @@ fn too_deep_is_an_error_for_maker_numbers_and_a_warning_for_a_default() {
         let deep = of_kind(&found, ProblemKind::DeviceTooDeep);
         assert_eq!(deep.len(), 1, "{source:?}");
         assert_eq!(deep[0].severity, severity, "{source:?}");
+        // The notice names where the numbers come from.
+        let msg = &deep[0].message;
+        assert_eq!(
+            msg.contains("Estimate from program defaults"),
+            source == Source::Default,
+            "{msg}"
+        );
+        assert_eq!(
+            msg.contains("Estimate from catalogue data"),
+            source == Source::Catalogue,
+            "{msg}"
+        );
     }
 }
