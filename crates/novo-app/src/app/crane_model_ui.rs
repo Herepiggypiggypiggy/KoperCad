@@ -83,9 +83,9 @@ impl NovoApp {
         let mut hover: Option<usize> = None;
         let mut open = true;
         // Floats beside the picture: a pane docked in the right strip would fold the list away.
-        super::panel::dialog(ctx, "Crane model parts", [560.0, 440.0])
+        super::panel::dialog(ctx, "Crane model parts", [510.0, 440.0])
             .floating()
-            .default_pos([ctx.content_rect().min.x + 70.0, 110.0])
+            .default_pos([ctx.content_rect().min.x + 60.0, 110.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.horizontal_wrapped(|ui| {
