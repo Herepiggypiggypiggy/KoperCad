@@ -34,5 +34,5 @@ wait 5
 key ctrl+n
 wait 20
 # The window stays docked across a new project and now reads the empty one; opening it again from the palette would close it.
-expect "no motor"
+expect "No motor"
 shot no-motor

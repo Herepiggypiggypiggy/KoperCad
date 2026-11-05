@@ -23,6 +23,11 @@ pub(super) fn hint(ui: &mut egui::Ui, text: &str) {
     );
 }
 
+/// Explanation of a form: it lives behind the "?" of the window, never in the body.
+pub(super) fn note(ui: &mut egui::Ui, text: &str) {
+    super::window_help::note(ui, text);
+}
+
 /// A "?" that opens the explanation in a popup: long help stays out of the window body.
 pub(super) fn help(ui: &mut egui::Ui, text: &str) {
     widgets::help_mark(ui, text);
