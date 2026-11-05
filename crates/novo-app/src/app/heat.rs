@@ -1187,11 +1187,19 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
     }
     super::heat_live::controls(ui, state, chip);
     if let Some(n) = &state.notice {
-        ui.label(
-            egui::RichText::new(n)
-                .small()
-                .color(crate::theme::ui_palette().warning),
-        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                egui::RichText::new(n)
+                    .small()
+                    .color(crate::theme::ui_palette().warning),
+            );
+            if n.starts_with("Cannot simulate: a side is over") {
+                super::window_help::mark(
+                    ui,
+                    "Change the enclosure size in Cabinet > Size enclosure.",
+                );
+            }
+        });
     }
 }
 
@@ -1256,7 +1264,7 @@ pub(super) fn items_of(
 /// limit, checked here because the 3D solver path does not call it.
 const MAX_SIDE_MM: f64 = 20_000.0;
 
-fn too_big(e: &novo_thermal::Enclosure) -> bool {
+pub(super) fn too_big(e: &novo_thermal::Enclosure) -> bool {
     [e.width_mm, e.height_mm, e.depth_mm]
         .iter()
         .any(|v| !(v.is_finite() && *v <= MAX_SIDE_MM))
@@ -1279,7 +1287,7 @@ pub(super) fn start_run(
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
         Ok(bridge) if too_big(&bridge.scenario.enclosure) => {
             state.fail(format!(
-                "Cannot simulate: the enclosure is over {} m on one side; check its size in Cabinet > Size enclosure",
+                "Cannot simulate: a side is over {} m",
                 MAX_SIDE_MM / 1000.0
             ));
         }
@@ -2823,6 +2831,27 @@ mod tests {
         let c = build(&i);
         assert!(!state.no_data(&c, &i));
         assert!(hottest(&c) > unknown_peak + 1.0);
+    }
+
+    #[test]
+    fn an_enclosure_over_the_limit_is_too_big_and_a_normal_one_is_not() {
+        let mut e = novo_thermal::Enclosure {
+            width_mm: 800.0,
+            height_mm: 2000.0,
+            depth_mm: 400.0,
+            wall_mm: 2.0,
+            material: novo_layout::sizing::Material::Steel,
+            installation: novo_layout::sizing::Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 700.0,
+                h: 1900.0,
+            },
+        };
+        assert!(!too_big(&e));
+        e.height_mm = 25_000.0;
+        assert!(too_big(&e));
     }
 
     #[test]
