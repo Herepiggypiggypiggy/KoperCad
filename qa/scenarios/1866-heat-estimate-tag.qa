@@ -1,0 +1,34 @@
+@title 3D Heat strip and line plot show the short (estimate) tag for a catalogue enclosure
+@area 3D
+@sizes 1366x768
+# PR #1866. Fixture cabinet-cooling-spec-catalogue.novo has a catalogue enclosure record, so the run carries the estimate notice: the Heat strip shows "(estimate)" next to Heat and the plot along a line shows it too; the sentence itself is behind the "?".
+open qa/fixtures/cabinet-cooling-spec-catalogue.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+try click_text Cancel
+wait_s 5
+try click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait_s 3
+click_text Simulate #2
+wait_s 120
+expect "(estimate)"
+click_text Probe
+wait 10
+click_text Line
+wait 20
+expect "Pick two points"
+expect "(estimate)"
+shot estimate-tag
+check_layout

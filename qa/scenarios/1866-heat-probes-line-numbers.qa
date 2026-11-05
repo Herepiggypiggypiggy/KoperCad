@@ -9,7 +9,7 @@ wait 30
 click_text Heat #1
 wait 20
 click_text Cancel
-wait 10
+wait_s 5
 click_text Auto #1
 wait 10
 wait 30
@@ -20,7 +20,7 @@ wait 20
 click_text "Settings for the next run"
 wait 10
 click_text Quick
-wait 10
+wait_s 3
 click_text Simulate #2
 wait_s 200
 click_text Probe
