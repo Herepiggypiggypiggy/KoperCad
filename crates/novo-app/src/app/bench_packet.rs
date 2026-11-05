@@ -102,7 +102,9 @@ impl NovoApp {
     fn bench_packet_bytes(&mut self, separate: &[CoverLine]) -> Option<(Vec<u8>, String)> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.bench_packet",
+                "Ferrule standard invalid",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -183,7 +185,9 @@ impl NovoApp {
             });
         }
         if parts.is_empty() {
-            self.message(
+            self.job_fail(
+                "export.bench_packet",
+                "Nothing for the bench packet",
                 Level::Warning,
                 "Nothing to put in a bench packet yet: connect some wires or set a mounting plate in the Cabinet",
             );

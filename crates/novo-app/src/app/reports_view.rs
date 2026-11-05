@@ -975,7 +975,9 @@ impl NovoApp {
             .find(|t| t.name == chosen)
         else {
             self.reports_view.template = None;
-            self.message(
+            self.job_fail(
+                "report.template",
+                "Report template missing",
                 Level::Warning,
                 format!("Template {chosen} no longer exists, using the plain layout"),
             );
@@ -983,12 +985,15 @@ impl NovoApp {
         };
         let Some(template) = super::designer::retarget(&template, &output.report, &output.title)
         else {
-            self.message(
+            self.job_fail(
+                "report.template",
+                "Template has no table",
                 Level::Warning,
                 format!("Template {chosen} has no table to put the report in"),
             );
             return None;
         };
+        self.job_ok("report.template");
         let rendered = self.render_with_project(&template);
         Some(novo_pdf::export_layouts_pdf(
             &rendered.pages,

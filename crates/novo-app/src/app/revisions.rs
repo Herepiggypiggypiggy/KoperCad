@@ -206,6 +206,7 @@ impl NovoApp {
         );
         match result {
             Ok(issued) => {
+                self.job_ok("revision.issue");
                 self.settings.initials = author;
                 self.changed_outside_canvas(&issued.changes);
                 let note = match &issued.unchanged_since {
