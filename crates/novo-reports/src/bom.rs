@@ -189,6 +189,7 @@ impl Report for BillOfMaterials {
         }
 
         let mut sections = vec![parts];
+        sections.extend(enclosure_sections(project));
         if !missing.rows.is_empty() {
             sections.push(missing);
         }
@@ -226,4 +227,74 @@ pub(crate) fn kind_name(kind: DeviceKind) -> &'static str {
         DeviceKind::Connector => "Connector",
         DeviceKind::Plc => "PLC",
     }
+}
+
+/// The chosen enclosures as parts (`enclosure` section) and the cabinet
+/// sheet with the source of every number (`cabinet` section). Both are
+/// absent for a project without a chosen enclosure.
+fn enclosure_sections(project: &Project) -> Vec<Section> {
+    use novo_layout::spec::{EnclosureSpec, Source};
+    use novo_layout::spec_output::{PlateSize, bom_lines, cabinet_sheet};
+    let words = |s: Option<Source>| s.map(|s| s.words()).unwrap_or("").to_owned();
+    let mut lines = Section::new(
+        "enclosure",
+        "Enclosure",
+        vec![
+            Column::new("tag", "Cabinet", 14.0),
+            Column::new("quantity", "Qty", 6.0).right(),
+            Column::new("order_number", "Article", 20.0),
+            Column::new("description", "Description", 80.0),
+            Column::new("source", "Source", 18.0),
+        ],
+    );
+    let mut sheet = Section::new(
+        "cabinet",
+        "Cabinet sheet",
+        vec![
+            Column::new("tag", "Cabinet", 14.0),
+            Column::new("field", "Field", 22.0),
+            Column::new("value", "Value", 70.0),
+            Column::new("source", "Source", 20.0),
+        ],
+    );
+    let mut cabinets: Vec<_> = project.structures().filter(|s| s.enclosure).collect();
+    cabinets.sort_by(|a, b| natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
+    for st in cabinets {
+        let spec = EnclosureSpec::read(&st.properties);
+        let plate = st.plate.map(|p| PlateSize {
+            width: p.width,
+            height: p.height,
+        });
+        for l in bom_lines(&spec, plate) {
+            lines.push(
+                vec![
+                    Cell::text(st.tag.to_string()),
+                    if l.quantity == 0 {
+                        Cell::Empty
+                    } else {
+                        Cell::Int(i64::from(l.quantity))
+                    },
+                    Cell::text(l.article),
+                    Cell::text(l.description),
+                    Cell::text(words(l.source)),
+                ],
+                vec![st.id.into()],
+            );
+        }
+        for r in cabinet_sheet(&spec, plate) {
+            sheet.push(
+                vec![
+                    Cell::text(st.tag.to_string()),
+                    Cell::text(r.label),
+                    Cell::text(r.value),
+                    Cell::text(words(r.source)),
+                ],
+                vec![st.id.into()],
+            );
+        }
+    }
+    [lines, sheet]
+        .into_iter()
+        .filter(|s| !s.rows.is_empty())
+        .collect()
 }

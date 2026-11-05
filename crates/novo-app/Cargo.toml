@@ -59,13 +59,14 @@ serde.workspace = true
 serde_json.workspace = true
 dirs.workspace = true
 ureq.workspace = true
+sha2.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 novo-cfd = { workspace = true, features = ["demo"] }
 ron = "0.12"
 tempfile.workspace = true
 lopdf.workspace = true
-zip.workspace = true
 flate2.workspace = true
 
 [build-dependencies]

@@ -1,0 +1,19 @@
+@title Help icons: a short "?" popup keeps its natural size, no gap and no scrollbar at 1366x768
+@area 3D
+@sizes 1366x768
+# The Heat strip "?" (top left of the 3D workspace) has a three-line text: it must fill its popup, with no empty strip below and no scrollbar (look at the picture).
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+try click_text Cancel
+wait 10
+click 110 73
+wait 8
+expect "fills this strip"
+shot short-popup
+click 700 690
+wait 6
+expect_not "fills this strip"

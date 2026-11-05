@@ -285,3 +285,45 @@ fn step_health_reports_a_folder_and_exits_one_when_a_file_is_unreadable() {
     ]);
     assert_eq!(code, 3);
 }
+
+#[test]
+fn step_parts_lists_the_parts_of_a_model_and_exits_three_when_it_cannot_be_read() {
+    let pack = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../novo-interop/tests/data/step-pack"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    // The block named like a wheel gets the wheel role.
+    let named = std::fs::read_to_string(format!("{pack}/block-plain.stp"))
+        .unwrap()
+        .replace("MANIFOLD_SOLID_BREP('',", "MANIFOLD_SOLID_BREP('Wheel A',");
+    let file = dir.path().join("crane.stp");
+    std::fs::write(&file, named).unwrap();
+    let report = dir.path().join("parts.md");
+    let (code, out) = novo(&[
+        "parts",
+        "step-parts",
+        file.to_str().unwrap(),
+        "--report",
+        report.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("| Wheel A | wheel |"), "{out}");
+    assert!(out.contains("- wheel: 1"), "{out}");
+    assert_eq!(
+        std::fs::read_to_string(&report).unwrap().trim_end(),
+        out.trim_end()
+    );
+    let (code, _) = novo(&[
+        "parts",
+        "step-parts",
+        &format!("{pack}/not-a-step-file.stp"),
+    ]);
+    assert_eq!(code, 3, "a file that is not a STEP model exits 3");
+    let (code, _) = novo(&[
+        "parts",
+        "step-parts",
+        dir.path().join("missing.stp").to_str().unwrap(),
+    ]);
+    assert_eq!(code, 3);
+}

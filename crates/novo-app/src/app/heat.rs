@@ -1005,6 +1005,13 @@ fn totals(input: &Input) -> (f64, usize, usize) {
 /// Tells a first-time user that some loss figures are planning estimates, so
 /// the temperatures follow from them and are not maker-verified. `None` when
 /// every known loss is a maker or typed value.
+/// The enclosure source line and the estimate sentence of the bridge
+/// (`BridgeReport::messages_with_enclosure`): caveats, so they sit behind
+/// the panel's "?" and not as orange lines.
+pub(super) fn is_enclosure_line(m: &str) -> bool {
+    m.starts_with("Enclosure ") || m == novo_layout::spec::ESTIMATE_NOTICE
+}
+
 fn estimate_note(input: &Input) -> Option<String> {
     let known = input.items.iter().filter(|i| i.loss_known).count();
     let estimated = input
@@ -1180,11 +1187,19 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
     }
     super::heat_live::controls(ui, state, chip);
     if let Some(n) = &state.notice {
-        ui.label(
-            egui::RichText::new(n)
-                .small()
-                .color(crate::theme::ui_palette().warning),
-        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                egui::RichText::new(n)
+                    .small()
+                    .color(crate::theme::ui_palette().warning),
+            );
+            if n.starts_with("Cannot simulate: a side is over") {
+                super::window_help::mark(
+                    ui,
+                    "Change the enclosure size in Cabinet > Size enclosure.",
+                );
+            }
+        });
     }
 }
 
@@ -1249,7 +1264,7 @@ pub(super) fn items_of(
 /// limit, checked here because the 3D solver path does not call it.
 const MAX_SIDE_MM: f64 = 20_000.0;
 
-fn too_big(e: &novo_thermal::Enclosure) -> bool {
+pub(super) fn too_big(e: &novo_thermal::Enclosure) -> bool {
     [e.width_mm, e.height_mm, e.depth_mm]
         .iter()
         .any(|v| !(v.is_finite() && *v <= MAX_SIDE_MM))
@@ -1272,7 +1287,7 @@ pub(super) fn start_run(
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
         Ok(bridge) if too_big(&bridge.scenario.enclosure) => {
             state.fail(format!(
-                "Cannot simulate: the enclosure is over {} m on one side; check its size in Cabinet > Size enclosure",
+                "Cannot simulate: a side is over {} m",
                 MAX_SIDE_MM / 1000.0
             ));
         }
@@ -2140,6 +2155,10 @@ fn thin_ticks(ticks: Vec<f64>, range: range::Range, height: f32, gap: f32) -> Ve
 }
 
 /// The one line the legend starts with while the map is a preview.
+/// Short tag that stays on screen while a result rests on an estimate; the
+/// sentences behind it sit under the panel's "?".
+pub(super) const ESTIMATE_TAG: &str = "(estimate)";
+
 const PREVIEW_NOTE: &str = "Preview, not a solver result";
 
 fn legend(
@@ -2305,8 +2324,17 @@ fn legend(
                 crate::theme::ui_palette().text_primary,
             ));
         }
-        if let Some(note) = estimate_note(input) {
-            ui.label(small(&note, crate::theme::ui_palette().warning));
+        // Sentences that explain a caveat sit behind the panel's "?"; a short
+        // visible tag stays next to the results while any number rests on an
+        // estimate (planning loss figures or catalogue enclosure numbers).
+        let note = estimate_note(input);
+        let enclosure_estimate = matches!(&cache.source, Source::Solved(sol)
+            if sol.messages.iter().any(|m| m == novo_layout::spec::ESTIMATE_NOTICE));
+        if note.is_some() || enclosure_estimate {
+            ui.label(small(ESTIMATE_TAG, crate::theme::ui_palette().warning));
+        }
+        if let Some(note) = note {
+            super::window_help::add(ctx, note);
         }
         if unknown > 0 {
             let (noun, verb) = if unknown == 1 {
@@ -2340,12 +2368,12 @@ fn legend(
                     .default_open(false)
                     .show(ui, |ui| {
                         ui.label(small(r, crate::theme::ui_palette().text_secondary));
-                        ui.label(small(
+                        super::window_help::add(
+                            ctx,
                             "Cold devices are lumped into row blocks and thin ducts and \
-                                     rails are widened to porous strips so a big cabinet fits \
-                                     the cell budget. More under Notes on this run.",
-                            crate::theme::ui_palette().text_secondary,
-                        ));
+                             rails are widened to porous strips so a big cabinet fits \
+                             the cell budget. More under Notes on this run.",
+                        );
                     });
                 }
                 if stale {
@@ -2364,12 +2392,16 @@ fn legend(
                 // The status line above already names the level.
                 let headline = without_level_name(&a.headline, p.fidelity.label());
                 if !headline.is_empty() {
-                    ui.label(small(&headline, crate::theme::ui_palette().text_secondary));
+                    super::window_help::add(ctx, headline);
                 }
                 // Warnings stay in view; the run's detailed notes fold away
                 // so a short window is not cut off mid-sentence.
                 for m in &sol.messages {
-                    ui.label(small(m, crate::theme::ui_palette().warning));
+                    if is_enclosure_line(m) {
+                        super::window_help::add(ctx, m.clone());
+                    } else {
+                        ui.label(small(m, crate::theme::ui_palette().warning));
+                    }
                 }
                 super::heat_cooling::show(ui, sol, cooling, stale, false);
                 // The headline fits the narrow panel; what it rests on is
@@ -2799,6 +2831,27 @@ mod tests {
         let c = build(&i);
         assert!(!state.no_data(&c, &i));
         assert!(hottest(&c) > unknown_peak + 1.0);
+    }
+
+    #[test]
+    fn an_enclosure_over_the_limit_is_too_big_and_a_normal_one_is_not() {
+        let mut e = novo_thermal::Enclosure {
+            width_mm: 800.0,
+            height_mm: 2000.0,
+            depth_mm: 400.0,
+            wall_mm: 2.0,
+            material: novo_layout::sizing::Material::Steel,
+            installation: novo_layout::sizing::Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 700.0,
+                h: 1900.0,
+            },
+        };
+        assert!(!too_big(&e));
+        e.height_mm = 25_000.0;
+        assert!(too_big(&e));
     }
 
     #[test]

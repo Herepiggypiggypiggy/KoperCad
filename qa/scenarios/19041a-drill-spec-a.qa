@@ -1,0 +1,29 @@
+@title PR1904: drill plan export, spec A
+@area Cabinet
+@sizes 1366x768
+# A path allows one * (the harness folder), so the file name is spelled out. A second size reuses the folder and the toast says Replaced, so the check is the file name, not the verb. Synthetic enclosure SYN-a: Place all, accept, Export > Drill plan. The PDF is named with the article, so every enclosure keeps its own file.
+open qa/fixtures/cabinet-spec-a.novo
+wait 20
+key ctrl+k
+wait 4
+text Cabinet
+wait 6
+key Enter
+wait 30
+shot a-cabinet
+click_text "Place all"
+wait 40
+shot b-placed
+key Enter
+wait 20
+shot b2-accepted
+click 1221 86
+wait 6
+click_text "Drill plan (hand, PDF)"
+wait 3
+shot c-exported
+expect "SYN-a drill plan.pdf"
+wait 10
+expect_file "/tmp/kopercad-qa-open-*/heat-place-all-synthetic +CAB1 SYN-a drill plan.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/heat-place-all-synthetic +CAB1 SYN-a drill plan.pdf"
+check_layout

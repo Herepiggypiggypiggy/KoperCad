@@ -79,6 +79,7 @@ pub(crate) struct PartsWindow {
     quality: super::parts_quality::QualityTab,
     /// The Connection points block of the part detail.
     pins: super::parts_pins::PinsState,
+    health: super::parts_health::HealthState,
     /// The New part form, while open.
     new_part: Option<NewPartForm>,
     /// The maker guide (what to download, where to save), while open.
@@ -199,6 +200,7 @@ impl PartsWindow {
             geometry: None,
             quality: Default::default(),
             pins: Default::default(),
+            health: Default::default(),
             new_part: None,
             guide: false,
             etim_line: None,
@@ -1019,6 +1021,8 @@ enum PartsAction {
     ChooseModel,
     /// Scan the part's STEP model for connection points.
     DetectPins(PartKey),
+    /// Check how well the part's STEP model reads.
+    CheckModel(PartKey),
     /// Save the detected positions into the user's catalog.
     SavePins(PartKey),
     /// Save positions typed by hand into the user's catalog.
@@ -1384,6 +1388,16 @@ impl NovoApp {
                     {
                         let path = lib.path_of(&step);
                         win.pins.start(ctx, &part, path);
+                    }
+                }
+                PartsAction::CheckModel(key) => {
+                    let step = win
+                        .records(&key)
+                        .into_iter()
+                        .find(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step);
+                    if let (Some(step), Some(lib)) = (step, win.library.as_ref()) {
+                        let path = lib.path_of(&step);
+                        win.health.start(ctx, key, path);
                     }
                 }
                 PartsAction::SavePins(key) => win.save_pins(&key),
@@ -2144,6 +2158,7 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
     let key = part.key();
     let records = win.records(&key);
     let mut pins = std::mem::take(&mut win.pins);
+    let mut health = std::mem::take(&mut win.health);
     ui.add_space(4.0);
     egui::ScrollArea::vertical()
         .id_salt("parts_detail_scroll")
@@ -2233,6 +2248,9 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             let has_step = records
                 .iter()
                 .any(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step);
+            if super::parts_health::block(ui, &mut health, &key, has_step) {
+                actions.push(PartsAction::CheckModel(key.clone()));
+            }
             match super::parts_pins::block(ui, &mut pins, part, has_step) {
                 Some(super::parts_pins::PinsAction::Detect) => {
                     actions.push(PartsAction::DetectPins(key.clone()));
@@ -2263,6 +2281,7 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             }
         });
     win.pins = pins;
+    win.health = health;
 }
 
 /// One data row of the detail pane: the name on the left, the value after

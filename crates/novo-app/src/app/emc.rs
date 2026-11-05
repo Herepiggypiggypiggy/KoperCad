@@ -308,7 +308,6 @@ pub(super) fn preview_card(
                 ui.colored_label(p.error, format!("Cannot preview: {e}"));
             }
             Ok(v) => {
-                ui.label(&v.said);
                 ui.label(findings_line(v));
                 for (rule, msg) in &v.cleared {
                     ui.colored_label(p.success, format!("Clears {rule}: {msg}"));
@@ -334,7 +333,14 @@ pub(super) fn preview_card(
                 for (_, name, before, after) in &v.scores {
                     ui.weak(format!("Risk of {name}: {before} of 100 to {after} of 100"));
                 }
-                super::dialog_ui::explained(ui, "Model run, never compliance", "A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.");
+                super::dialog_ui::explained(
+                    ui,
+                    "Model run, never compliance",
+                    &format!(
+                        "{} A model run on the rules and estimates above. It records what the build must do; the cabinet has to be built that way. Never compliance.",
+                        v.said
+                    ),
+                );
             }
         }
     });
@@ -391,12 +397,10 @@ impl NovoApp {
         }
     }
 
-    pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
-        if !self.emc.open {
-            return;
-        }
+    /// The EMC report of the current project revision, worked out once and
+    /// shared by the EMC window and the triangle popovers.
+    pub(super) fn emc_cache(&mut self) {
         let Some(doc) = self.backend.document() else {
-            self.emc.open = false;
             return;
         };
         let project = doc.project();
@@ -414,6 +418,23 @@ impl NovoApp {
             };
             self.emc.cache = Some((revision, cached));
         }
+    }
+
+    pub(super) fn emc_window(&mut self, ctx: &egui::Context) {
+        if !self.emc.open {
+            return;
+        }
+        let Some(doc) = self.backend.document() else {
+            self.emc.open = false;
+            return;
+        };
+        let project = doc.project();
+        let revision = project.revision();
+        self.emc_cache();
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let project = doc.project();
         let enabled = emc::is_enabled(project);
         let Some((_, cached)) = self.emc.cache.as_ref() else {
             return;
@@ -458,10 +479,11 @@ impl NovoApp {
                 if !enabled {
                     ui.weak("Off: the findings below are a preview and do not appear in the Issues list.");
                 }
-                ui.weak(format!(
-                    "{} Findings are rules on what is drawn, geometric indices and closed-form estimates with planning distances from common practice; clause numbers are unverified.",
-                    novo_emc::DESIGN_AID
-                ));
+                super::dialog_ui::explained(
+                    ui,
+                    novo_emc::DESIGN_AID,
+                    "Findings are rules on what is drawn, geometric indices and closed-form estimates with planning distances from common practice; clause numbers are unverified.",
+                );
                 if let Some(done) = &self.emc.done {
                     ui.colored_label(p.success, done);
                 }
@@ -697,6 +719,51 @@ impl NovoApp {
         self.emc.preview = Some((revision, fix.clone(), result));
         self.emc.done = None;
         self.emc.preview_fresh = true;
+    }
+
+    /// The first suggestion of the finding an EMC triangle stands for that
+    /// the program can apply, for the "Preview the fix" button (the preview
+    /// shows in the EMC check window; nothing changes until Apply there).
+    /// `None` when the finding only has advice to follow by hand.
+    pub(super) fn emc_fix_of(
+        &mut self,
+        flag: &novo_flags::Flag,
+        rule: Option<&'static str>,
+    ) -> Option<Fix> {
+        self.emc_cache();
+        let (_, cached) = self.emc.cache.as_ref()?;
+        let report = &cached.report;
+        let wanted: std::collections::BTreeSet<String> =
+            flag.anchors.iter().map(novo_flags::Anchor::key).collect();
+        report
+            .findings
+            .iter()
+            .filter(|f| Some(f.rule) == rule)
+            .filter(|f| {
+                let keys: std::collections::BTreeSet<String> = f
+                    .subjects
+                    .iter()
+                    .map(|s| match s {
+                        Subject::Run(id) => format!("wire:{id}"),
+                        Subject::Device(id) => format!("device:{id}"),
+                        Subject::Cable(id) => format!("cable:{id}"),
+                        Subject::Plate(_) => String::new(),
+                    })
+                    .filter(|k| !k.is_empty())
+                    .collect();
+                if keys.is_empty() {
+                    // A plate-only finding has no drawn anchor: its own sentence is the key.
+                    flag.detail
+                        .0
+                        .first()
+                        .is_some_and(|m| m.starts_with(&f.message))
+                } else {
+                    keys == wanted
+                }
+            })
+            .flat_map(|f| f.fixes.iter())
+            .find(|x| x.applicable())
+            .cloned()
     }
 
     /// Opens a view that can draw the previewed fix, EMC layer on.

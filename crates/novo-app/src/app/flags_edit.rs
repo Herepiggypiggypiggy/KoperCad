@@ -88,6 +88,13 @@ pub(super) fn mark_targets(project: &Project, flag: &Flag, page: PageId) -> Vec<
     let mut out: Vec<MarkTarget> = Vec::new();
     for anchor in &flag.anchors {
         let target = match anchor {
+            Anchor::Pin(raw, pin)
+                if super::flags_wiring::pin_area(project, raw, *pin)
+                    .is_some_and(|(at, _)| at == page) =>
+            {
+                super::flags_wiring::pin_area(project, raw, *pin)
+                    .map(|(_, area)| MarkTarget::Area(area))
+            }
             Anchor::Symbol(raw) | Anchor::Pin(raw, _) => raw
                 .parse()
                 .ok()

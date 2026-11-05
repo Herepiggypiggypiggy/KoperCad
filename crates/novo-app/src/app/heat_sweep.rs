@@ -41,6 +41,8 @@ pub(super) const WINDOW_WIDTH: f32 = WIDTH + 24.0;
 /// Tallest the list of options gets before it scrolls, points: the window
 /// stays small enough to leave the drawing visible.
 const MAX_BODY: f32 = 440.0;
+/// Height kept under the list for the footer line and the Close button.
+const FOOTER_ROOM: f32 = 130.0;
 
 /// What a finished sweep found and what it needs to be applied.
 pub(super) struct Found {
@@ -441,9 +443,12 @@ impl CoolingAdvice {
             )
         };
         super::panel::dialog(ctx, "Cooling advice", [WINDOW_WIDTH, 0.0])
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
-            // The list scrolls inside; the buttons below it stay in view.
-            .scroll([false, false])
+            // The list scrolls inside; the buttons below it stay in view. A
+            // dock slot shorter than that scrolls the whole window rather than
+            // cutting the buttons off.
+            .scroll([false, true])
             .default_pos(at)
             .show(ctx, |ui| {
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
@@ -489,6 +494,11 @@ impl CoolingAdvice {
                 // after Add, so the window does not grow past the screen.
                 let spare = if pinned { 290.0 } else { 130.0 };
                 let room = (ctx.content_rect().bottom() - at.y - spare).clamp(120.0, MAX_BODY);
+                // Docked, the window is as tall as its dock slot, whatever `at`
+                // says: leave the footer and Close their room inside it.
+                let docked = super::panel_dock::slot_of(ctx, "window:Cooling advice").is_some();
+                let slot = (ui.available_height() - FOOTER_ROOM).max(80.0);
+                let room = if docked { slot } else { room.min(slot) };
                 egui::ScrollArea::vertical()
                     .max_height(room)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
@@ -500,15 +510,17 @@ impl CoolingAdvice {
                         body(ui, found, stale, &mut ask);
                     });
                 ui.add_space(6.0);
-                ui.label(
-                    egui::RichText::new(FOOTER)
-                    .small()
-                    .color(pal.text_secondary),
-                );
-                ui.add_space(4.0);
-                if ui.button("Close").clicked() {
-                    close = true;
-                }
+                ui.horizontal(|ui| {
+                    if ui.button("Close").clicked() {
+                        close = true;
+                    }
+                    ui.label(
+                        egui::RichText::new("Model estimate, not validated")
+                            .small()
+                            .color(pal.text_secondary),
+                    );
+                });
+                super::window_help::add(ctx, FOOTER);
             });
         if !open || close {
             self.close();
@@ -525,24 +537,26 @@ fn show_comparison(ui: &mut egui::Ui, compare: &[String]) {
     ui.add_space(2.0);
     for (i, line) in compare.iter().enumerate() {
         let text = egui::RichText::new(line).small();
-        ui.label(if i == 0 {
+        let text = if i == 0 {
             text.strong()
         } else {
             text.color(pal.text_secondary)
-        });
+        };
+        ui.label(text);
     }
+    super::window_help::add(ui.ctx(), COMPARE_WHY);
 }
+
+/// What the comparison is and is not, behind its "?".
+const COMPARE_WHY: &str = "The 2D model does not see the depth of the cabinet; the 3D run does. Both are models and neither is validated; where they differ by more than a few kelvin, trust neither without a measurement.";
 
 fn body(ui: &mut egui::Ui, found: &Found, stale: bool, ask: &mut Option<Ask>) {
     let pal = crate::theme::ui_palette();
     let s = &found.sweep;
     ui.label(egui::RichText::new(headline(s)).strong());
-    ui.label(
-        egui::RichText::new(
-            "A try is one run of the 2D model with a pair of openings added to the cabinet.",
-        )
-        .small()
-        .color(pal.text_secondary),
+    super::window_help::add(
+        ui.ctx(),
+        "A try is one run of the 2D model with a pair of openings added to the cabinet.",
     );
     ui.add_space(2.0);
     ui.label(format!(
@@ -823,7 +837,7 @@ fn comparison_lines(check: &Check, three_d: &[(u64, f64)]) -> Vec<String> {
         let gap = now - d.surface_after_c;
         worst_gap = worst_gap.max(gap.abs());
         lines.push(format!(
-            "{tag}: the 2D model predicted {:.0} °C (from {:.0}); the 3D run gives {now:.0} °C, {}.",
+            "{tag}: 2D {:.0} °C (from {:.0}), 3D {now:.0} °C, {}.",
             d.surface_after_c,
             d.surface_before_c,
             gap_text(gap)
@@ -834,11 +848,9 @@ fn comparison_lines(check: &Check, three_d: &[(u64, f64)]) -> Vec<String> {
     }
     lines.insert(
         0,
-        "Model comparison for the pair you added: 2D prediction against this 3D run (two models, not a measurement).".into(),
+        "Model comparison for the pair you added (two models, not a measurement)".into(),
     );
-    lines.push(format!(
-        "Largest gap {worst_gap:.0} K. The 2D model does not see the depth of the cabinet; the 3D run does. Both are models and neither is validated; where they differ by more than a few kelvin, trust neither without a measurement."
-    ));
+    lines.push(format!("Largest gap {worst_gap:.0} K"));
     lines
 }
 

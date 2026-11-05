@@ -14,3 +14,5 @@ Traps
 - Unplaced devices are Info in novo-checks, so they have no triangle (the "N unplaced" pill stays).
 - The old hover line "Size is a guess" and the "No problems" line are gone on purpose (all-clear sentence); the dashed `~` size on the box stays.
 - Ceiling file: `app/census/cabinet.ceiling`, test `problem_census_cabinet`.
+
+Follow-up #1954: Layout flags are counted and listed. Open gap: a QA fixture that shows a rule flag row in the Issues list.

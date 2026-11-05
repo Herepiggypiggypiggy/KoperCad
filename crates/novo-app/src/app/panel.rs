@@ -210,11 +210,15 @@ impl Panel {
 
     /// The corner the panel hangs from and where that corner starts: against
     /// its side of the canvas, so the panel's own size never matters.
-    fn start(&self, flyout: f32) -> (egui::Align2, egui::Pos2) {
+    fn start(&self, ctx: &egui::Context, flyout: f32) -> (egui::Align2, egui::Pos2) {
         let top = self.canvas.top() + self.top;
         let bottom = self.canvas.bottom() - BOTTOM - MARGIN;
         let left = self.canvas.left() + MARGIN + flyout;
-        let right = self.canvas.right() - MARGIN;
+        let right = self
+            .canvas
+            .right()
+            .min(super::panel_dock::right_strip_left(ctx).unwrap_or(f32::MAX))
+            - MARGIN;
         match self.side {
             Side::Left => (egui::Align2::LEFT_TOP, egui::pos2(left, top)),
             Side::Right => (egui::Align2::RIGHT_TOP, egui::pos2(right, top)),
@@ -286,7 +290,7 @@ impl Panel {
         } else {
             reserved_left(ctx)
         };
-        let (pivot, start) = self.start(flyout);
+        let (pivot, start) = self.start(ctx, flyout);
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
         let corner = if self.above_card && self.side == Side::Right && !moved {
@@ -300,7 +304,13 @@ impl Panel {
         } else {
             (self.canvas.height() - self.top - below - self.bottom - corner).max(MIN_HEIGHT)
         };
-        let mut window = egui::Window::new(&self.title)
+        // The "?" of a window sits at the right of the title bar, over the
+        // centred title: trailing em spaces move the text clear of it.
+        let title = title_clear_of_help(
+            &self.title,
+            super::window_help::text(ctx, self.id).is_some(),
+        );
+        let mut window = egui::Window::new(&title)
             .id(id)
             .order(egui::Order::Middle)
             .resizable(!self.fit)
@@ -452,6 +462,16 @@ impl Panel {
             }
         }
         shown
+    }
+}
+
+/// `title` with room for the "?" icon at the right of the title bar when the
+/// window has help (the title is centred, so the pad shifts it left).
+fn title_clear_of_help(title: &str, has_help: bool) -> String {
+    if has_help {
+        format!("{title}\u{2003}\u{2003}\u{2003}\u{2003}")
+    } else {
+        title.to_owned()
     }
 }
 
@@ -663,6 +683,14 @@ pub(super) struct Dialog<'a> {
 }
 
 impl<'a> Dialog<'a> {
+    /// Docked, this window opens as tall as its slot (a window whose buttons sit
+    /// below a list: at the default pane height they were cut off and unreachable).
+    /// Floating, it keeps the size it was asked for.
+    pub(super) fn tall(mut self) -> Self {
+        self.tall = true;
+        self
+    }
+
     pub(super) fn id(mut self, id: egui::Id) -> Self {
         self.id = id;
         // A window with an id of its own keeps its dock place when its title
@@ -1539,6 +1567,14 @@ pub(super) fn is_moved(ctx: &egui::Context, id: egui::Id) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_title_with_help_leaves_room_for_the_question_mark() {
+        assert_eq!(title_clear_of_help("Temperature", false), "Temperature");
+        let padded = title_clear_of_help("Temperature", true);
+        assert!(padded.starts_with("Temperature") && padded.len() > "Temperature".len());
+        assert_eq!(padded.trim(), "Temperature");
+    }
+
     use super::*;
 
     #[test]

@@ -268,3 +268,59 @@ fn a_measured_record_carries_no_estimate_notice() {
     assert!(gap[0].message.contains("enclosure data: measured by you"));
     assert!(!gap[0].message.contains("Estimate from catalogue data"));
 }
+
+/// Rewrites the source of every number of the stored record.
+fn resource(p: &mut Project, source: novo_layout::spec::Source) {
+    use novo_layout::spec::Field;
+    let cab = p.structures().find(|s| s.enclosure).unwrap().id;
+    let mut spec = EnclosureSpec::read(&p.get::<Structure>(cab).unwrap().properties);
+    for f in [
+        &mut spec.width,
+        &mut spec.height,
+        &mut spec.depth,
+        &mut spec.wall,
+        &mut spec.plate_setback,
+    ] {
+        *f = f.map(|f| Field::new(f.value, source));
+    }
+    let mut props = p.get::<Structure>(cab).unwrap().properties.clone();
+    spec.write(&mut props);
+    p.transact("source", |tx| {
+        for (k, v) in props {
+            tx.set_property(cab, k, Some(v))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn too_deep_is_an_error_for_maker_numbers_and_a_warning_for_a_default() {
+    use novo_layout::spec::Source;
+    // -K2 stands 250 mm deep; the enclosure is 200 mm deep.
+    for (source, severity) in [
+        (Source::Catalogue, Severity::Error),
+        (Source::Measured, Severity::Error),
+        (Source::Default, Severity::Warning),
+    ] {
+        let mut p = cabinet(None, 300.0);
+        with_spec(&mut p, 200.0, Some(0.0));
+        resource(&mut p, source);
+        let found = check(&p);
+        let deep = of_kind(&found, ProblemKind::DeviceTooDeep);
+        assert_eq!(deep.len(), 1, "{source:?}");
+        assert_eq!(deep[0].severity, severity, "{source:?}");
+        // The notice names where the numbers come from.
+        let msg = &deep[0].message;
+        assert_eq!(
+            msg.contains("Estimate from program defaults"),
+            source == Source::Default,
+            "{msg}"
+        );
+        assert_eq!(
+            msg.contains("Estimate from catalogue data"),
+            source == Source::Catalogue,
+            "{msg}"
+        );
+    }
+}

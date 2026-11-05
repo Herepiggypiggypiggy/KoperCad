@@ -1,0 +1,27 @@
+@title New cabinet: a STEP file alone makes the enclosure, and a file that is not a STEP is refused in words
+@area Cabinet
+# Where the user finds it: Outline > New cabinet > Choose file... with no card picked.
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..." Button
+wait 10
+answer_dialog qa/fixtures/enclosure-parts.json
+click_text "Choose file…" Button
+wait 10
+expect "not a STEP file"
+shot a-refused
+answer_dialog qa/fixtures/enclosure-step/TS-600x1800x500.stp
+click_text "Choose file…" Button
+wait 30
+expect "600 x 1800 x 500 mm"
+expect "(estimate)"
+shot b-alone
+check_layout
+key Enter
+wait 20
+click_text Cabinet #1
+wait 20
+shot c-cabinet-view

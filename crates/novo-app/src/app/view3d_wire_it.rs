@@ -62,6 +62,8 @@ pub(super) struct Asked {
     pub ticks: Vec<Tick>,
     pub print: bool,
     pub leave: bool,
+    /// The triangle on the Print button was clicked.
+    pub flag: Option<(novo_flags::FlagId, egui::Pos2)>,
 }
 
 /// The plan, kept across the ticks of its own edits: a tick changes the
@@ -407,6 +409,7 @@ pub(super) fn strip(
     project: &Project,
     plan: &WireItPlan,
     drawn_here: bool,
+    print_flag: Option<&novo_flags::Flag>,
 ) -> Asked {
     let mut asked = Asked::default();
     let p = crate::theme::ui_palette();
@@ -480,6 +483,11 @@ pub(super) fn strip(
                 super::cabinet_bar::note_ctx(ctx, "wire_it.print", "Print list (PDF)", &print);
                 if print.clicked() {
                     asked.print = true;
+                }
+                // A failed or empty print is a triangle on the button.
+                if let Some(flag) = print_flag {
+                    let r = super::flags_wiring::triangle_button(ui, flag);
+                    super::flags_wiring::ask_popover(&mut asked.flag, flag.id, &r);
                 }
             });
             let name = if step.wire_number.is_empty() {

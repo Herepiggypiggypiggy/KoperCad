@@ -650,14 +650,21 @@ impl ShellModel {
             .unwrap_or_else(|| 1.0 / (1.0 / kb - 1.0 / h_air))
     }
 
-    /// The setback path of [`ShellModel::plate_to_outside_or`]; `None` when
-    /// the plate lies on the wall.
-    pub fn plate_to_outside(&self, kb: f64) -> Option<f64> {
+    /// Conductance of the air gap between the plate and the rear wall per m2
+    /// (conduction plus linearised radiation), W/m2K; `None` when the plate
+    /// lies on the wall.
+    pub fn plate_gap_h_w_m2k(&self) -> Option<f64> {
         let s = self.plate_setback_mm.filter(|s| *s >= 1.0)? / 1000.0;
         let rear = &self.faces[REAR];
         let eps = 1.0
             / (1.0 / self.plate_emissivity.max(0.02) + 1.0 / rear.emissivity_in.max(0.02) - 1.0);
-        let h_gap = K_AIR / s + 4.0 * SIGMA * 293.15_f64.powi(3) * eps;
+        Some(K_AIR / s + 4.0 * SIGMA * 293.15_f64.powi(3) * eps)
+    }
+
+    /// The setback path of [`ShellModel::plate_to_outside_or`]; `None` when
+    /// the plate lies on the wall.
+    pub fn plate_to_outside(&self, kb: f64) -> Option<f64> {
+        let h_gap = self.plate_gap_h_w_m2k()?;
         // Resistance from the wall's inner surface to the outside air.
         let r_total = 1.0 / kb.max(1e-9);
         let share_in = (1.0 / self.films.h_in) / (1.0 / self.u_panel(REAR));

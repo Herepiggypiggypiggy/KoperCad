@@ -361,3 +361,82 @@ fn integer_edges_do_not_panic() {
         );
     }
 }
+
+/// Edit one entity of each kind the report says it reads: the live cache
+/// must mark "My reports" stale, and its regenerated output must differ.
+#[test]
+fn an_edit_of_each_kind_it_reads_regenerates_my_reports() {
+    use novo_core::{Cable, Device, Page, Part, Terminal, Wire};
+    let mut doc = Document::default();
+    let h = novo_tests::motor_starter(&mut doc).expect("fixture");
+    let mut presets = Presets::default();
+    for (name, sql) in [
+        ("pages", "SELECT title FROM pages ORDER BY no"),
+        ("devices", "SELECT description FROM devices ORDER BY tag"),
+        ("wires", "SELECT number FROM wires"),
+        (
+            "terminals",
+            "SELECT name FROM terminals ORDER BY order_number",
+        ),
+        ("cables", "SELECT description FROM cables"),
+        (
+            "parts",
+            "SELECT description FROM parts ORDER BY order_number",
+        ),
+    ] {
+        presets.upsert(name, sql).unwrap();
+    }
+    doc.transact("Save", |tx| presets.save(tx)).unwrap();
+    let mut live = LiveReports::standard();
+    let snapshot = |live: &mut LiveReports, d: &Document| {
+        live.get(d.project(), "queries").unwrap().sections.clone()
+    };
+    let mut seen = snapshot(&mut live, &doc);
+
+    let wire = doc.project().wires().next().unwrap().id;
+    let terminal = doc.project().terminals().next().unwrap().id;
+    let cable = doc.project().cables().next().unwrap().id;
+    let part = doc.project().parts().next().unwrap().id;
+    type Edit = Box<dyn Fn(&mut novo_core::Tx<'_>) -> novo_core::Result<()>>;
+    let steps: Vec<(&str, Edit)> = vec![
+        (
+            "page",
+            Box::new(move |tx| tx.update::<Page>(h.main_page, |p| p.title = "Edited page".into())),
+        ),
+        (
+            "device",
+            Box::new(move |tx| {
+                tx.update::<Device>(h.f1, |d| d.description = "Edited device".into())
+            }),
+        ),
+        (
+            "wire",
+            Box::new(move |tx| tx.update::<Wire>(wire, |w| w.number = Some("W-EDIT".into()))),
+        ),
+        (
+            "terminal",
+            Box::new(move |tx| tx.update::<Terminal>(terminal, |t| t.name = "T-EDIT".into())),
+        ),
+        (
+            "cable",
+            Box::new(move |tx| {
+                tx.update::<Cable>(cable, |c| c.description = "Edited cable".into())
+            }),
+        ),
+        (
+            "part",
+            Box::new(move |tx| tx.update::<Part>(part, |p| p.description = "Edited part".into())),
+        ),
+    ];
+    for (kind, edit) in steps {
+        let (_, changes) = doc.transact(kind, |tx| edit(tx)).unwrap();
+        let stale = live.notify(doc.project(), &changes);
+        assert!(
+            stale.contains(&"queries"),
+            "{kind} edit left My reports stale-free"
+        );
+        let now = snapshot(&mut live, &doc);
+        assert_ne!(now, seen, "{kind} edit did not change My reports");
+        seen = now;
+    }
+}

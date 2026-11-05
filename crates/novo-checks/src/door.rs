@@ -4,11 +4,14 @@
 
 use novo_core::{AnyId, DeviceId};
 use novo_layout::model::load;
-use novo_layout::spec::EnclosureSpec;
+use novo_layout::spec::{EnclosureSpec, Source};
 use novo_layout::spec_fit;
 use novo_layout::swing::Obstacle;
 
-use crate::{Context, Problem, ProblemKind};
+use crate::{Context, Problem, ProblemKind, Severity};
+
+/// Ends a door or depth message whose weakest number is a program default.
+const DEFAULTS_NOTICE: &str = "Estimate from program defaults, not a measurement of your cabinet.";
 
 pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
@@ -27,28 +30,20 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
         // it lacks is reported, never replaced by a default.
         let spec = EnclosureSpec::read(&structure.properties);
         let mut origin = String::new();
+        // A depth taken from a program default is a guess, not a maker's number.
+        let mut guessed = false;
         // Shown while any number is a catalogue or default value.
         let notice = spec.notice().map_or_else(String::new, |n| format!(" {n}"));
         if !spec.is_empty() {
             let at = vec![AnyId::Structure(structure.id)];
             match spec_fit::fit(&spec, layout.enclosure.as_ref()) {
                 Ok(fit) => {
-                    if let Some((w, h, d)) = fit.differs {
-                        let e = fit.enclosure;
-                        out.push(Problem::new(
-                            ProblemKind::EnclosureSizeDiffers,
-                            at,
-                            format!(
-                                "The inside of {name} is typed as {w:.0} x {h:.0} x {d:.0} mm but the enclosure {} gives {:.0} x {:.0} x {:.0} mm ({}); the checks use the enclosure{}",
-                                spec.article,
-                                e.width,
-                                e.height,
-                                e.depth,
-                                fit.weakest.words(),
-                                notice
-                            ),
-                        ));
-                    }
+                    guessed = fit.weakest == Source::Default;
+                    // The shared notice names the catalogue; a guessed number is a program default.
+                    let notice = match (guessed, notice.is_empty()) {
+                        (true, false) => format!(" {DEFAULTS_NOTICE}"),
+                        _ => notice,
+                    };
                     origin = format!(" (enclosure data: {}){notice}", fit.weakest.words());
                     layout.enclosure = Some(fit.enclosure);
                 }
@@ -65,7 +60,7 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
             continue;
         };
         for &(id, excess) in &report.too_deep {
-            out.push(Problem::new(
+            let mut problem = Problem::new(
                 ProblemKind::DeviceTooDeep,
                 device(id),
                 format!(
@@ -73,7 +68,11 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
                     tag(id),
                     excess.round()
                 ),
-            ));
+            );
+            if guessed {
+                problem.severity = Severity::Warning;
+            }
+            out.push(problem);
         }
         for &(id, gap) in &report.tight {
             out.push(Problem::new(

@@ -245,7 +245,15 @@ pub(super) fn draw(
                     continue;
                 };
                 let f = p.footprint();
-                to_screen(f.x + f.w, f.y) + egui::vec2(-GLYPH * 0.7, GLYPH * 0.7)
+                let left = to_screen(f.x, f.y);
+                let right = to_screen(f.x + f.w, f.y);
+                // A box narrower than a triangle and its badge takes the
+                // triangle over its middle, so neighbours' badges do not touch.
+                if right.x - left.x < GLYPH * 3.0 {
+                    egui::pos2((left.x + right.x) / 2.0, right.y + GLYPH * 0.7)
+                } else {
+                    right + egui::vec2(-GLYPH * 0.7, GLYPH * 0.7)
+                }
             }
             Spot::Frame => to_screen(0.0, 0.0) + egui::vec2(-GLYPH * 0.9, -GLYPH * 0.9),
         };
@@ -305,7 +313,7 @@ pub(super) fn draw(
 
 /// A device is kept off the plate's flag list by its tag only in words, never
 /// in the flag's identity: ids hash the anchors and this key.
-fn draft(
+pub(super) fn draft(
     structure: StructureId,
     rule: String,
     anchors: Vec<Anchor>,

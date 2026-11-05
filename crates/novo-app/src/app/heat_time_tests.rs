@@ -10,7 +10,7 @@ use super::heat::{HeatState, Meta};
 use super::heat_run::Solution;
 use super::heat_run_tests::scenario;
 use super::heat_time::{
-    Event, TimeLine, default_solver, mass_hover, mass_line, plot, spec_for_minutes,
+    Event, TimeLine, default_solver, mass_hover, mass_line, plot, shell_note, spec_for_minutes,
 };
 
 fn meta() -> Meta {
@@ -244,4 +244,23 @@ fn a_run_computes_the_shell_mass_line_and_clear_forgets_it() {
     assert!(mass_line(m).contains("model, not measurement"));
     t.clear();
     assert!(t.mass.is_none());
+}
+
+#[test]
+fn the_hover_says_where_the_wall_values_come_from() {
+    let mut t = TimeLine::new();
+    t.start(
+        Arc::new(novo_cfd::StubSolver),
+        scenario(),
+        spec_for_minutes(60.0),
+        meta(),
+    );
+    let m = t.mass.as_ref().unwrap();
+    assert!(mass_hover(m).contains("assumed values, not from the chosen enclosure"));
+    let mut m2 = m.clone();
+    m2.provenance.walls = novo_thermal::shell::Provenance::Catalogue;
+    m2.mass_check = Some(1.2);
+    let note = shell_note(&m2);
+    assert!(note.contains("from the enclosure catalogue"));
+    assert!(note.contains("1.2 times"));
 }

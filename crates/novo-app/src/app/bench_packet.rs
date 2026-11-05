@@ -10,7 +10,9 @@
 
 use std::path::{Path, PathBuf};
 
-use novo_reports::packet::{CoverLine, circuit_sheets, cover, cover_notes};
+use novo_reports::packet::{
+    CoverLine, SIGNOFF_SIGN_KEY, circuit_sheets, cover, cover_notes, signoff_sheet,
+};
 use novo_reports::{
     AssemblyChecklist, BenchCut, FerruleTable, Report, ReportOutput, TerminalDiagram,
     wire_cut_jobs_with,
@@ -29,6 +31,8 @@ const TABLE: &str = "Planning values you can edit";
 
 /// Row height of the tick tables, mm.
 const ROW_MM: f64 = 8.0;
+/// Row height of the signature lines, in mm: room to sign.
+const SIGN_ROW_MM: f64 = 14.0;
 /// Row height of the cover facts, in mm.
 const COVER_FACT_ROW_MM: f64 = 4.5;
 
@@ -98,7 +102,9 @@ impl NovoApp {
     fn bench_packet_bytes(&mut self, separate: &[CoverLine]) -> Option<(Vec<u8>, String)> {
         let inputs = self.bench_inputs()?;
         if !inputs.standard.is_valid() {
-            self.message(
+            self.job_fail(
+                "export.bench_packet",
+                "Ferrule standard invalid",
                 Level::Warning,
                 "The ferrule standard has a size twice or a value that is not a number above zero",
             );
@@ -154,7 +160,7 @@ impl NovoApp {
             let circuits = circuit_sheets(&project, &jobs);
             if !circuits.sections.is_empty() {
                 parts.push(Part {
-                    what: "Circuit sheets: devices, wires and tests per schematic page",
+                    what: "Circuit sheets; sign-off on the last page",
                     print: "A4, any printer",
                     basis: ROUTED,
                     report: circuits,
@@ -170,8 +176,18 @@ impl NovoApp {
                 report: strips,
             });
         }
+        if let Some(signoff) = signoff_sheet(&project, &jobs) {
+            parts.push(Part {
+                what: "",
+                print: "A4, any printer",
+                basis: "Workshop record, not a certificate",
+                report: signoff,
+            });
+        }
         if parts.is_empty() {
-            self.message(
+            self.job_fail(
+                "export.bench_packet",
+                "Nothing for the bench packet",
                 Level::Warning,
                 "Nothing to put in a bench packet yet: connect some wires or set a mounting plate in the Cabinet",
             );
@@ -179,9 +195,12 @@ impl NovoApp {
         }
 
         let make_cover = |pages: &[Option<usize>]| {
+            // A part without a name has no contents line of its own (the sign-off sheet is named
+            // on the circuit sheets' line: the cover has room for one line fewer).
             let mut lines: Vec<CoverLine> = parts
                 .iter()
                 .zip(pages)
+                .filter(|(p, _)| !p.what.is_empty())
                 .map(|(p, page)| {
                     CoverLine::new(
                         p.what,
@@ -213,7 +232,10 @@ impl NovoApp {
             row_mm: keys(cover)
                 .into_iter()
                 .map(|k| (k, ROW_MM))
-                .chain([("facts".to_owned(), COVER_FACT_ROW_MM)])
+                .chain([
+                    ("facts".to_owned(), COVER_FACT_ROW_MM),
+                    (SIGNOFF_SIGN_KEY.to_owned(), SIGN_ROW_MM),
+                ])
                 .collect(),
             language: language.clone(),
             ..novo_pdf::ReportPdfOptions::default()

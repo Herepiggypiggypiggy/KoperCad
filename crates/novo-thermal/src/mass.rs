@@ -489,6 +489,13 @@ impl Network {
     /// Join its two faces with [`Slab::connect_inner`] and
     /// [`Slab::connect_outer`].
     pub fn add_slab(&mut self, layers: &[Layer], area_m2: f64) -> Slab {
+        self.add_slab_with(layers, area_m2, area_m2)
+    }
+
+    /// Like [`Network::add_slab`] with the heat capacity over `cap_area_m2`
+    /// and the conduction and films over `area_m2`: a face of which only a
+    /// share gives off heat (the IEC surface factor) keeps its full mass.
+    pub fn add_slab_with(&mut self, layers: &[Layer], cap_area_m2: f64, area_m2: f64) -> Slab {
         let mut nodes = Vec::new();
         // (node, half-cell resistance parameter dx/(2k A))
         let mut half_r: Vec<f64> = Vec::new();
@@ -496,7 +503,7 @@ impl Network {
             let cells = l.cells.max(1);
             let dx = l.thickness_m / cells as f64;
             for _ in 0..cells {
-                nodes.push(self.add_node(l.rho_cp * dx * area_m2));
+                nodes.push(self.add_node(l.rho_cp * dx * cap_area_m2));
                 half_r.push(dx / (2.0 * l.k * area_m2));
             }
         }

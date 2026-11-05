@@ -3,11 +3,10 @@
 //!
 //! Pure. The door hinge, angle and free room are not part of the record
 //! yet: they come from the typed door form when there is one. The numbers
-//! of the record win over typed inside sizes; a disagreement is reported
-//! ([`Fit::differs`]) instead of being averaged away.
+//! of the record win over typed inside sizes.
 
 use crate::enclosure::{Door, Enclosure};
-use crate::spec::{EnclosureSpec, Missing, Source, disagree};
+use crate::spec::{EnclosureSpec, Missing, Source};
 
 /// The record read as an [`Enclosure`], with how far to trust it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -15,9 +14,6 @@ pub struct Fit {
     pub enclosure: Enclosure,
     /// The weakest source among the numbers used.
     pub weakest: Source,
-    /// The typed inside size, when it disagrees with the record beyond the
-    /// tolerance of [`disagree`]: width, height, depth.
-    pub differs: Option<(f64, f64, f64)>,
 }
 
 /// Reads the record as the room for devices. `typed` is the door form's
@@ -39,13 +35,6 @@ pub fn fit(spec: &EnclosureSpec, typed: Option<&Enclosure>) -> Result<Fit, Missi
     if let Some(f) = spec.door_inner_depth {
         weakest = weakest.max(f.source);
     }
-    let differs = typed
-        .filter(|t| {
-            disagree(t.width, inside.width)
-                || disagree(t.height, inside.height)
-                || disagree(t.depth, inside.depth)
-        })
-        .map(|t| (t.width, t.height, t.depth));
     Ok(Fit {
         enclosure: Enclosure {
             width: inside.width,
@@ -60,7 +49,6 @@ pub fn fit(spec: &EnclosureSpec, typed: Option<&Enclosure>) -> Result<Fit, Missi
             hinge_side_clearance: typed.and_then(|e| e.hinge_side_clearance),
         },
         weakest,
-        differs,
     })
 }
 
@@ -111,7 +99,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_size_only_compared_and_door_kept() {
+    fn typed_door_is_kept_and_size_comes_from_the_record() {
         let typed = Enclosure {
             width: 500.0,
             height: 800.0,
@@ -127,7 +115,6 @@ mod tests {
         };
         let f = fit(&spec(300.0), Some(&typed)).unwrap();
         assert_eq!(f.enclosure.width, 596.0);
-        assert_eq!(f.differs, Some((500.0, 800.0, 250.0)));
         let door = f.enclosure.door.unwrap();
         assert_eq!(
             (door.hinge, door.max_angle, door.inner_depth),
