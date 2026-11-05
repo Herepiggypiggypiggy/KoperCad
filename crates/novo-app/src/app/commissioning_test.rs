@@ -257,7 +257,6 @@ fn test_tab_body(
         ));
     }
     notes.push("Zero the test leads first. For OL or over range press Open circuit.".to_owned());
-    notes.push("Disconnect electronics and surge arresters before an insulation test.".to_owned());
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!(
@@ -394,6 +393,8 @@ fn test_tab_body(
                     record = true;
                 }
             });
+            // A safety line: stays on screen, not behind a "?".
+            ui.weak("Disconnect electronics and surge arresters before an insulation test");
         }
         let b = ui.button("Record");
         note_ctx(ui.ctx(), "commissioning.test_record", "Record reading", &b);

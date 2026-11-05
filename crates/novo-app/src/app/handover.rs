@@ -193,13 +193,12 @@ impl NovoApp {
                 } else {
                     "remain"
                 };
-                ui.horizontal(|ui| {
-                    ui.label(format!("{} {verb}", ask.summary.pill_text()));
-                    super::window_help::mark(
-                        ui,
-                        "Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
-                    );
-                });
+                // The consequence of handing over stays on screen: it is what the
+                // person decides on.
+                ui.label(format!(
+                    "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
+                    ask.summary.pill_text()
+                ));
                 ui.add_space(4.0);
             }
             egui::ScrollArea::vertical()
