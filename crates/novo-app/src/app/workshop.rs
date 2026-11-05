@@ -268,7 +268,7 @@ impl NovoApp {
             None => skipped.push("bench packet".to_owned()),
         }
         if done.is_empty() {
-            self.job_flag(
+            self.wiring_job_flag(
                 job::WORKSHOP,
                 false,
                 "Nothing for a workshop pack",
@@ -329,7 +329,7 @@ impl NovoApp {
         match super::pdf::write_replacing(path, bytes) {
             Ok(()) => true,
             Err(e) => {
-                self.job_flag(
+                self.wiring_job_flag(
                     job::WORKSHOP,
                     true,
                     "Workshop file not written",

@@ -1,0 +1,18 @@
+@title Crane in 3D: the yellow floor line is explained as a drawn marking
+@area Simulate
+@sizes 1920x1080
+# The "?" of the Hoist in 3D window says the yellow floor line is a drawn marking, not a computed clearance.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 120
+click 1820 103
+wait 20
+expect "drawn marking, not a computed safety clearance"
+shot floor-line-help
+key Escape
+check_layout

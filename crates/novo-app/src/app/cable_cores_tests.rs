@@ -246,3 +246,50 @@ fn the_wire_panel_types_and_unlocks_a_number() {
     assert!(!novo_numbering::is_locked(f.d.doc().project(), wire));
     assert_eq!(f.d.doc().undo_depth(), depth + 2);
 }
+
+#[test]
+fn a_cable_finding_is_a_flag_of_the_cable_and_the_drawer_draws_its_triangle() {
+    use novo_flags::{Anchor, Severity};
+    let (mut f, _dir) = fixture();
+    let c = f.first_cable;
+    // A spare core that carries a wire is a finding on the cable.
+    let doc = f.d.app.backend.document_mut().unwrap();
+    doc.transact("Spare in use", |tx| novo_cables::set_spare(tx, c, 0, true))
+        .unwrap();
+    f.d.app.wb.drawer = Some(Drawer::Cables);
+    f.d.app.wb.drawer_cable = Some(c);
+    for _ in 0..4 {
+        f.d.frame();
+    }
+    let flags =
+        f.d.app
+            .wb
+            .flags
+            .store
+            .at(&Anchor::Cable(c.raw().to_string()), false);
+    assert!(!flags.is_empty(), "the finding is a flag on the cable");
+    assert_eq!(flags[0].severity, Severity::Yellow);
+    assert!(!flags[0].detail.0.is_empty(), "the sentence is the detail");
+}
+
+#[test]
+fn a_refused_cable_rename_is_a_chip_not_a_toast() {
+    let (mut f, _dir) = fixture();
+    let ctx = f.ctx.clone();
+    let toasts = f.d.app.messages().iter().filter(|m| !m.dismissed).count();
+    f.d.app.run_command(&ctx, "cable.rename", Some("=="));
+    assert_eq!(
+        f.d.app.refusal_flag().map(|r| r.title.as_str()),
+        Some("Not a cable tag")
+    );
+    assert_eq!(
+        f.d.app.messages().iter().filter(|m| !m.dismissed).count(),
+        toasts,
+        "no toast was raised"
+    );
+    f.d.frame();
+    assert!(
+        f.d.app.refusal_flag().is_some(),
+        "the triangle stays a frame"
+    );
+}

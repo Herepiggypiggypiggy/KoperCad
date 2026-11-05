@@ -11,6 +11,7 @@
 - `novo-theme`: `widgets::flag_triangle` (painted glyph), Issues pill draws triangles.
 - `novo-app` `app/flags.rs`: `draft(&Problem)` -> `FlagDraft` for all 76 kinds (Info is no flag; DepthUnknown, GuessedWire, UnsizedDuct dashed), `FlagUi` in `wb.flags` filled from `wb.problems` by revision, `flag_marks` (replaces the old marks), `flag_popover` (title, badge, detail, Locate / Fix / Waive / Explain / Copy; Esc or click away closes), Issues list rows lead with the triangle. Qa scenario 9400.
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
+2026-11-04 T14 Shell flags: job chip, control flags, inline flags; shell sites migrated (see t14/HANDOFF.md); scenarios 9540/9541; census ceiling 2
 
 ## 2026-11-04 Lane T5 (wiring flags)
 - `app/flags_wiring.rs` (new): wire-end checks (WireRange, PointOccupied, FerruleUse) are anchored `Anchor::Pin(symbol, pin)` (found from the wire ends in `sync_flags`) and drawn as a mark on the pin point (`MarkTarget::Area`). Waiver keys unchanged. Terminals drawer: the same triangle leads the Accepts cell of the row.
@@ -18,6 +19,13 @@
 - Wire panel: a refused edit (`WireEdit::field()`) is a flag `Anchor::Control("wire_panel.<field>")` with a triangle beside the field; cleared when the field takes an edit, the wire changes, or none is selected.
 - Census: `problem_census_wiring` (own file `app/problem_census_wiring_tests.rs`), ceiling 15 → 5. The 5 left are the Wire-it strip's coloured text (length basis, over-full fill, picture note), owned by T4 (`view3d_wire_it.rs`, `view3d_wires.rs` rows stay with T4).
 - Not done: `view3d_wires.rs` rows (T4); Info refusals stay as status toasts (class N); terminals.rs other toasts (T8). QA 9450-9452; the wire panel field is covered by a unit test only (needs a wire click coordinate per size).
+## 2026-11-04 Lane T8 (terminals, cables, PLC, numbering, xref)
+- `app/flags_inline.rs`: `triangle` (20 pt slot, accessible name "Warning: title", click opens the detail), `note_row`/`flag_row` (triangle + plain title), `severity_of` (numbering words go through `novo_flags::map_word`, so its Info<Warning<Error order cannot flip), and the transient refusal: `NovoApp::refuse` / `refuse_red` show a chip in the status bar (not floating, not a toast, not in the count); the next key press or click elsewhere, or 12 s, clears it.
+- Cable drawer: the findings are the store's flags at `Anchor::Cable` (same flags as Check > Issues), one triangle row each, sentence in the detail. Terminals drawer: a triangle after the tick box on rows whose terminals or drawing symbols carry a `TerminalUse` flag. Rename terminals: taken/empty rows are red triangles. PLC overview, card dialog and PLC program window: triangles instead of coloured sentences. Wire numbering Conflicts tab: triangle per row (glyph characters gone).
+- Toasts to refusal chips: terminal edit (6), cable tag/type (5), card layout (1). 14 P-class toasts converted; 13 coloured sentences (8 sites) gone.
+- Census: `app/problem_census_terminals.rs`, ceiling 33 toasts (was 46) and 0 coloured sentences (was 8), own file.
+- Left on purpose: Job toasts ("Could not ...: {e}", 22 in this area) wait for the job chip (T12/T15). The wire-number refusals in `numbering.rs` stay toasts because the wire-numbers lesson quotes them. Xref has no problem sentence of its own: its four index issues already reach the symbol as flags through `ProblemKind`.
+- QA: 9480 (numbering conflicts), 9481 (refusal chip).
 ## 2026-11-04 Lane T7 (schematic edit refusals)
 - `app/flags_edit.rs`: `refuse` / `refuse_titled` / `refuse_tool` replace the warning and error toasts of refused edits. One transient flag (`Source::Edit`, badge "Edit", `Life::Until`) on the selected symbols and wires (at most 3), else on the tool in hand (`Anchor::Control("tool")`, drawn at the top left of the canvas). It goes with the next key or click (counted on release, so a click on its triangle opens the popover first). The text stays in the message log, no toast. Transient flags are not Issues: the pill and F8 do not count them.
 - The long-refusal card of the status bar is gone: the tool's own refusal (editor notice) is the same corner triangle and goes with the notice. The bar still shows the short hint.

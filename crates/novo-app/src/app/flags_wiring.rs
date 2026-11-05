@@ -142,7 +142,7 @@ pub(super) type FieldFlags = HashMap<&'static str, FlagId>;
 impl NovoApp {
     /// Raises (or renews) the flag of a job: red for a failure, yellow for
     /// "nothing to do". It stays until the same job succeeds or is dismissed.
-    pub(super) fn job_flag(
+    pub(super) fn wiring_job_flag(
         &mut self,
         job: &'static str,
         red: bool,

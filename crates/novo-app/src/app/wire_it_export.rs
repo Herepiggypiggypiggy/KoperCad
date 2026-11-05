@@ -25,7 +25,7 @@ impl NovoApp {
             novo_pdf::wireit::export_wireit_pdf(&plan, &done, &name)
         };
         if bytes.is_none() {
-            self.job_flag(
+            self.wiring_job_flag(
                 job::WIRE_IT,
                 false,
                 "No wires to run yet",
@@ -74,7 +74,7 @@ impl NovoApp {
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.job_flag(
+                self.wiring_job_flag(
                     job::WIRE_IT,
                     true,
                     "Wire-it list not exported",

@@ -226,10 +226,9 @@ pub(super) fn strip_table(
     project: &novo_core::Project,
     view: &novo_terminals::StripView,
     screen: &novo_terminals::Screen,
-    selected: &[AnyId],
+    (selected, flags): (&[AnyId], &novo_flags::FlagStore),
     ticked: &mut Vec<novo_core::TerminalId>,
     out: &mut Vec<ToolbarAction>,
-    flags: &novo_flags::FlagStore,
     flag_open: &mut Option<(novo_flags::FlagId, egui::Pos2)>,
 ) -> Option<Occurrence> {
     let mut go = None;
@@ -258,16 +257,20 @@ pub(super) fn strip_table(
                     };
                     let mut on = !row.terminals.is_empty()
                         && row.terminals.iter().all(|t| ticked.contains(t));
-                    if ui
-                        .checkbox(&mut on, "")
-                        .on_hover_text("Tick rows to edit them (kind, move up or down)")
-                        .changed()
-                    {
-                        ticked.retain(|t| !row.terminals.contains(t));
-                        if on {
-                            ticked.extend(row.terminals.iter().copied());
+                    ui.horizontal(|ui| {
+                        if ui
+                            .checkbox(&mut on, "")
+                            .on_hover_text("Tick rows to edit them (kind, move up or down)")
+                            .changed()
+                        {
+                            ticked.retain(|t| !row.terminals.contains(t));
+                            if on {
+                                ticked.extend(row.terminals.iter().copied());
+                            }
                         }
-                    }
+                        // The row's problems are flags of the one store.
+                        row_flag(ui, flags, row);
+                    });
                     match row.occurrences.first() {
                         Some(first) => {
                             let on = row
@@ -348,6 +351,47 @@ fn row_wire_flag<'a>(
         }
     }
     found
+}
+
+/// The flags of a strip row: the terminal-use checks on its terminals and
+/// on the symbols that draw them, as one triangle (the worst colour, the
+/// first title, every detail line). Check > Issues lists the same flags.
+fn row_flag(ui: &mut egui::Ui, flags: &novo_flags::FlagStore, row: &novo_terminals::Row) {
+    use novo_flags::{Anchor, Severity, Source};
+    let key = novo_checks::ProblemKind::TerminalUse.key();
+    let anchors = row
+        .terminals
+        .iter()
+        .map(|t| Anchor::Terminal(t.raw().to_string()))
+        .chain(
+            row.occurrences
+                .iter()
+                .map(|o| Anchor::Symbol(o.symbol.raw().to_string())),
+        );
+    let mut found: Vec<&novo_flags::Flag> = Vec::new();
+    for anchor in anchors {
+        for flag in flags.at(&anchor, false) {
+            if matches!(&flag.source, Source::Issues(k) if k == key)
+                && !found.iter().any(|f| f.id == flag.id)
+            {
+                found.push(flag);
+            }
+        }
+    }
+    let Some(first) = found.first() else {
+        return;
+    };
+    let severity = if found.iter().any(|f| f.severity == Severity::Red) {
+        Severity::Red
+    } else {
+        Severity::Yellow
+    };
+    let detail: Vec<String> = found
+        .iter()
+        .flat_map(|f| f.detail.0.iter().cloned())
+        .collect();
+    let tri = super::flags_inline::triangle(ui, severity, false, &first.title);
+    super::flags_inline::detail_popup(&tri, &detail);
 }
 
 /// The Accepts cell of a strip row: the conductor range and tightening

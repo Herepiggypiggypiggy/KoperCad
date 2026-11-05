@@ -88,7 +88,7 @@ impl NovoApp {
                 (job::WIRE_PRODUCTION, JobRetry::WireProduction),
             ),
             Err(e) => {
-                self.job_flag(
+                self.wiring_job_flag(
                     job::WIRE_PRODUCTION,
                     true,
                     "Wire production not exported",
@@ -171,7 +171,7 @@ impl NovoApp {
                     format!("Added page {} {}", spec.name, spec.title),
                 );
             }
-            Err(e) => self.job_flag(
+            Err(e) => self.wiring_job_flag(
                 job::PRODUCTION_PAGE,
                 true,
                 "Wire production page not added",
@@ -199,7 +199,7 @@ impl NovoApp {
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.job_flag(
+                self.wiring_job_flag(
                     job.0,
                     true,
                     "File not written",

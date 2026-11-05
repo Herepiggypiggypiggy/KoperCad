@@ -31,6 +31,7 @@ mod cabinet;
 mod cabinet_arrange;
 mod cabinet_bar;
 mod cabinet_door;
+mod cabinet_flags;
 mod cabinet_group;
 mod cabinet_inspector;
 mod cabinet_maker_plate;
@@ -136,7 +137,9 @@ mod example_pump;
 mod faults;
 mod flags;
 mod flags_edit;
+mod flags_inline;
 mod flags_jobs;
+mod flags_shell;
 mod flags_wiring;
 mod handover;
 mod heat;
@@ -282,6 +285,8 @@ mod potentials;
 mod preferences;
 mod print_preview;
 mod probe;
+#[cfg(test)]
+mod problem_census_terminals;
 mod project_rules;
 mod project_settings;
 mod protection;
@@ -419,6 +424,8 @@ mod bench_tests;
 #[cfg(test)]
 mod cabinet_arrange_tests;
 #[cfg(test)]
+mod cabinet_flags_tests;
+#[cfg(test)]
 mod cabinet_group_tests;
 #[cfg(test)]
 mod cabinet_rails_tests;
@@ -476,6 +483,8 @@ mod first_view_tests;
 mod flags_edit_tests;
 #[cfg(test)]
 mod flags_jobs_tests;
+#[cfg(test)]
+mod flags_shell_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]

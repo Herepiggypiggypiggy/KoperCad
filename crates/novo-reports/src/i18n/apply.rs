@@ -91,6 +91,7 @@ pub const FIXED_CELL_TEXTS: &[&str] = &[
     "(no part)",
     "door, no gap",
     "door + depth (spec)",
+    "~ routed (catalogue)",
     "~ door + depth (catalogue)",
     "~ door, spec has no depth",
     "estimate",

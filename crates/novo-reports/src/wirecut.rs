@@ -561,10 +561,43 @@ pub fn duct_names(project: &Project) -> BTreeMap<u64, String> {
         .map(|r| r.id.raw())
         .collect();
     ids.sort_unstable();
-    ids.into_iter()
+    let mut names: BTreeMap<u64, String> = ids
+        .into_iter()
         .enumerate()
         .map(|(i, id)| (id, format!("D{}", i + 1)))
-        .collect()
+        .collect();
+    // Ducts fitted at delivery (the enclosure's spec): `F1`, `F2`, ... in
+    // enclosure order, then the order of the spec's parts.
+    let mut n = 0;
+    for (structure, count) in spec_ducts(project) {
+        for i in 0..count.len() {
+            n += 1;
+            names.insert(
+                novo_routing::model::spec_duct_id(structure, i),
+                format!("F{n}"),
+            );
+        }
+    }
+    names
+}
+
+/// The factory ducts of every enclosure with a spec, by enclosure id.
+fn spec_ducts(
+    project: &Project,
+) -> Vec<(novo_core::StructureId, Vec<novo_layout::spec::FactoryPart>)> {
+    let mut out: Vec<_> = project
+        .structures()
+        .filter_map(|s| {
+            let ducts: Vec<_> = novo_layout::spec::EnclosureSpec::read(&s.properties)
+                .parts
+                .into_iter()
+                .filter(|p| p.kind == novo_layout::spec::PartKind::Duct)
+                .collect();
+            (!ducts.is_empty()).then_some((s.id, ducts))
+        })
+        .collect();
+    out.sort_by_key(|(id, _)| id.raw());
+    out
 }
 
 /// Every duct of the plans with its short name ([`duct_names`]) and where it is
@@ -578,12 +611,23 @@ fn duct_legend(project: &Project, plans: &Plans) -> BTreeMap<u64, (String, Strin
             .map(|s| s.tag.to_string())
             .unwrap_or_default();
         for fill in &plan.fill {
-            let place = project
-                .all::<Rail>()
-                .find(|r| r.id.raw() == fill.duct)
-                .map_or(format!("{tag} duct"), |r| {
-                    format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
+            let factory = spec_ducts(project)
+                .into_iter()
+                .find(|(s, _)| s == structure)
+                .and_then(|(s, parts)| {
+                    parts.iter().enumerate().find_map(|(i, p)| {
+                        (novo_routing::model::spec_duct_id(s, i) == fill.duct)
+                            .then(|| format!("{tag} factory duct at {:.0}, {:.0}", p.x, p.y))
+                    })
                 });
+            let place = factory.unwrap_or_else(|| {
+                project
+                    .all::<Rail>()
+                    .find(|r| r.id.raw() == fill.duct)
+                    .map_or(format!("{tag} duct"), |r| {
+                        format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
+                    })
+            });
             let name = names
                 .get(&fill.duct)
                 .cloned()
