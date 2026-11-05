@@ -75,6 +75,10 @@ pub struct DeviceCells {
     pub rect: Rect,
     pub height_mm: f64,
     pub exposed_m2: f64,
+    /// Radiation exchange per m2 of exposed surface (emissivity and view to
+    /// the walls folded in), from `radiation::device_radiation`; `None` =
+    /// the plain `emissivity x view factor` of the parameters.
+    pub rad_exchange: Option<f64>,
     /// Vertical extent of the footprint, m (for natural convection).
     pub length_m: f64,
     /// Share of the footprint on the plate, 0 to 1.
@@ -445,6 +449,10 @@ impl Setup {
             }
         }
 
+        // Radiation of every device to the walls from the computed view
+        // factors (see `radiation::device_exchanges`).
+        let rad = crate::radiation::device_exchanges(s);
+
         // Devices.
         let mut devices = Vec::new();
         for d in &s.devices {
@@ -483,6 +491,7 @@ impl Setup {
                 rect: d.footprint,
                 height_mm: d.height(),
                 exposed_m2,
+                rad_exchange: rad[devices.len()],
                 length_m: (d.footprint.h / 1000.0).max(0.02),
                 plate_overlap,
                 capacity,

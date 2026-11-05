@@ -507,24 +507,14 @@ pub(super) fn legend(ctx: &egui::Context, view: egui::Rect, state: &EmcState, da
                 .color(pal.warning),
             );
         }
-        if layers.halos {
-            ui.label(
-                egui::RichText::new("Soft band round a run: keep sensitive wires out")
-                    .small()
-                    .color(pal.text_secondary),
-            );
-        }
         if layers.risk {
             match pic.field.as_ref().and_then(|f| f.ends.as_ref()) {
                 Some((lo, mid, hi)) => {
                     heading(ui, "Exposure map (model)");
                     ramp_bar(ui, &st, lo, Some(mid), hi);
-                    ui.label(
-                        egui::RichText::new(
-                            "Magnetic field of the drawn currents: a model, order of magnitude. The planning value is at the tick.",
-                        )
-                        .small()
-                        .color(pal.text_secondary),
+                    super::window_help::mark(
+                        ui,
+                        "Magnetic field of the drawn currents: a model, order of magnitude. The planning value is at the tick.",
                     );
                 }
                 None => {
@@ -668,29 +658,28 @@ pub(super) fn panel(
                 .auto_shrink([true, true])
                 .show(ui, |ui| {
                     ui.set_width(WIDTH - 24.0);
-            ui.label(
-                egui::RichText::new("Indicative model, not a field solver. It never shows compliance.")
-                    .small()
-                    .strong()
-                    .color(pal.warning),
-            );
-            let note = match pic.provenance {
-                Provenance::Engine => None,
-                p => Some(p),
-            };
-            if let Some(p) = note {
-                ui.label(egui::RichText::new(p.about()).small().color(pal.text_secondary));
-            }
-            if pic.provenance == Provenance::Stub {
+            ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new(
-                        "If this view and Check > EMC check differ, the check governs; this plate has nothing for the rule engine yet.",
-                    )
-                    .small()
-                    .strong()
-                    .color(pal.text_secondary),
+                    egui::RichText::new("Indicative model")
+                        .small()
+                        .strong()
+                        .color(pal.warning),
                 );
-            }
+                let mut notes = vec!["Indicative model, not a field solver. It never shows compliance.".to_owned()];
+                if let Some(p) = match pic.provenance {
+                    Provenance::Engine => None,
+                    p => Some(p),
+                } {
+                    notes.push(p.about().to_owned());
+                }
+                if pic.provenance == Provenance::Stub {
+                    notes.push("If this view and Check > EMC check differ, the check governs; this plate has nothing for the rule engine yet.".to_owned());
+                }
+                if layers_halos_on(&state.layers) {
+                    notes.push("Keep-clear: a soft band round a run; keep sensitive wires out.".to_owned());
+                }
+                super::window_help::mark(ui, &notes.join("\n\n"));
+            });
             whatif_banner(ui, state);
             ui.add_space(4.0);
             layer_chips(ui, &mut state.layers, &pic, &mut state.marks, state.reveal);
@@ -965,14 +954,13 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
         ui.add_space(2.0);
         ui.label(egui::RichText::new("What would help").strong());
         if h.fixes.iter().any(|f| !f.applicable) {
-            ui.label(
-                egui::RichText::new(if pic.provenance == Provenance::Engine {
+            super::window_help::mark(
+                ui,
+                if pic.provenance == Provenance::Engine {
                     "These buttons do not change the project. Apply a fix from Check > EMC check."
                 } else {
                     "Advice only for now: the buttons do not change the project yet."
-                })
-                .small()
-                .color(pal.text_secondary),
+                },
             );
         }
         for f in &h.fixes {
@@ -982,4 +970,8 @@ fn card(ui: &mut egui::Ui, h: &Hotspot, pic: &Picture, tag_of: &dyn Fn(u64) -> S
             });
         }
     }
+}
+
+fn layers_halos_on(l: &EmcLayers) -> bool {
+    l.halos
 }

@@ -537,6 +537,7 @@ impl FlowSetup {
                 .collect();
             cfg.device_emissivity = scn.params.emissivity;
             cfg.device_view = scn.params.radiation_view_factor;
+            cfg.device_rad_exchange = novo_thermal::radiation::device_exchanges(scn);
             cfg.device_exposed_m2 = exposed;
             cfg.device_contact_m2 = contact;
         }

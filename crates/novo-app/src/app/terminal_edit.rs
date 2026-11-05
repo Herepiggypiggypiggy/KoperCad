@@ -523,7 +523,10 @@ impl NovoApp {
                         }
                     }
                     EditWindow::Kind => {
-                        ui.weak("Applies to the ticked rows and the selected terminals");
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Applies to the ticked rows and the selected terminals",
+                        );
                         ui.horizontal(|ui| {
                             for kind in KINDS {
                                 if ui.button(novo_terminals::kind_label(kind)).clicked() {
@@ -533,8 +536,14 @@ impl NovoApp {
                         });
                     }
                     EditWindow::Level(level) => {
-                        ui.weak("Applies to the ticked rows and the selected terminals");
-                        ui.weak("Level 1 is the lowest level of a multi-level terminal");
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Applies to the ticked rows and the selected terminals",
+                        );
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Level 1 is the lowest level of a multi-level terminal",
+                        );
                         ui.horizontal(|ui| {
                             ui.label("Level");
                             ui.add(egui::DragValue::new(level).range(1..=8));
@@ -544,8 +553,14 @@ impl NovoApp {
                         });
                     }
                     EditWindow::Jumper(number) => {
-                        ui.weak("Applies to the ticked rows and the selected terminals");
-                        ui.weak("Terminals with the same jumper number are bridged");
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Applies to the ticked rows and the selected terminals",
+                        );
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Terminals with the same jumper number are bridged",
+                        );
                         let groups = jumper_groups(project, strip);
                         for (n, names) in &groups {
                             ui.horizontal(|ui| {
@@ -577,7 +592,10 @@ impl NovoApp {
                         });
                     }
                     EditWindow::Style => {
-                        ui.weak("One symbol per kind for the whole strip");
+                        super::window_help::add(
+                            ui.ctx(),
+                            "One symbol per kind for the whole strip",
+                        );
                         for kind in KINDS {
                             let style = novo_terminals::strip_style(project, strip, kind);
                             ui.horizontal(|ui| {

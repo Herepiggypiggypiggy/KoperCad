@@ -763,14 +763,17 @@ impl NovoApp {
             .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.label(
-                    egui::RichText::new(format!(
-                        "{n} {} in no group or cabinet. Their devices say where they belong.",
-                        if n == 1 { "page is" } else { "pages are" }
-                    ))
-                    .size(tokens::FONT_SMALL + 1.0)
-                    .color(crate::theme::ui_palette().text_secondary),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{n} {} in no group or cabinet",
+                            if n == 1 { "page is" } else { "pages are" }
+                        ))
+                        .size(tokens::FONT_SMALL + 1.0)
+                        .color(crate::theme::ui_palette().text_secondary),
+                    );
+                    super::window_help::mark(ui, "Their devices say where they belong.");
+                });
                 ui.horizontal(|ui| {
                     file = novo_theme::widgets::primary_button(ui, "File them").clicked();
                     dismiss = ui.small_button("Not now").clicked();
