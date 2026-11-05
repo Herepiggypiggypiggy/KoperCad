@@ -203,7 +203,8 @@ fn card(ui: &mut egui::Ui, index: usize, count: usize, rule: &mut KindRule) -> E
                 edit = Edit::Move(index, -1);
             }
         });
-        super::window_help::add(ui.ctx(), rule_sentence(rule));
+        // The card in words is the setting itself: it stays on the card.
+        dialog_ui::hint(ui, &rule_sentence(rule));
         ui.add_space(4.0);
 
         // The letter codes, as a short text field.
@@ -592,7 +593,8 @@ pub(super) fn show_surfaces(ui: &mut egui::Ui, rules: &SurfaceRules) -> Option<O
     for (i, rule) in edited.rules.iter_mut().enumerate() {
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            super::window_help::add(ui.ctx(), surface_sentence(rule));
+            // The card in words is the setting itself: it stays on the card.
+            dialog_ui::hint(ui, &surface_sentence(rule));
             ui.horizontal(|ui| {
                 ui.label("Goes to");
                 let id = ui.id().with(("surface", i));
