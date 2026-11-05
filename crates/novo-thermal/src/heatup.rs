@@ -696,6 +696,25 @@ mod tests {
         assert!((h.budget.walls_j_per_k - cap).abs() < 1e-9 * cap);
     }
 
+    #[test]
+    fn mass_does_not_change_the_final_temperature() {
+        // The steady state does not contain the heat capacities: the same
+        // network with and without wall and plate mass has identical steady
+        // temperatures.
+        let s = scenario(150.0, 1.5);
+        let with = build(&s, 1.0).unwrap();
+        let bare = build(&s, NO_MASS).unwrap();
+        let a = with.net.solve().unwrap().steady(&with.power, 25.0);
+        let b = bare.net.solve().unwrap().steady(&bare.power, 25.0);
+        assert!(
+            (a[with.air] - b[bare.air]).abs() < 1e-6,
+            "{} {}",
+            a[with.air],
+            b[bare.air]
+        );
+        assert!((a[with.devices] - b[bare.devices]).abs() < 1e-6);
+    }
+
     fn run_default(s: &Scenario) -> HeatUp {
         heat_up(s, &HeatUpSettings::default()).unwrap()
     }

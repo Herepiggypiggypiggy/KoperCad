@@ -56,16 +56,15 @@ pub(super) fn mass_line(m: &HeatUp) -> String {
 pub(super) fn mass_hover(m: &HeatUp) -> String {
     let r = &m.rise;
     format!(
-        "How long the air takes to reach 90 % of its final rise when the walls and \
-         the mounting plate store heat too. A lumped model with one air temperature \
-         and the devices as one lump; not validated, not a measurement. 63 % of the rise in {}, 90 % in {}. Without \
-         the wall and plate mass the same model reads {} and {} ({:.0} % too short; \
-         this compares the model with itself with and without the mass, it is not a measurement). \
-         Steady temperature is unchanged. The frames and curve above come from the \
-         2D run, which has no wall mass. Not counted: rails, ducts, wires, air \
-         leaks, sun. Time constants: {}. {}",
-        TimeLine::time_label(r.t63_s),
+        "Time for the air to reach 90 % of its final rise with the walls and plate storing \
+         heat: {} (63 % in {}). The same model without wall and plate mass reads {} and {} \
+         ({:.0} % too short); that compares the model with itself, it is not a measurement. \
+         Mass changes how fast the final temperature is reached, not the final temperature. \
+         One air temperature, devices as one lump, not validated. Frames and curve above are \
+         the 2D run without wall mass. Not counted: rails, ducts, wires, air leaks, sun. \
+         Time constants: {}. {}",
         TimeLine::time_label(r.t90_s),
+        TimeLine::time_label(r.t63_s),
         TimeLine::time_label(r.t63_no_wall_mass_s),
         TimeLine::time_label(r.t90_no_wall_mass_s),
         r.first_order_error() * 100.0,
