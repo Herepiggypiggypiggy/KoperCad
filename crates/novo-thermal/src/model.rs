@@ -251,6 +251,12 @@ pub struct Params {
     /// surface at about the surroundings' temperature.
     pub emissivity: f64,
     pub radiation_view_factor: f64,
+    /// Take each device's radiation to the walls from the computed view
+    /// factors (`radiation::device_radiation`, walls' inner emissivity from
+    /// the shell) instead of `emissivity x radiation_view_factor`. The
+    /// favourable/unfavourable bands then scale it by
+    /// `radiation_view_factor / 0.5`.
+    pub radiation_geometry: bool,
     /// Discharge coefficient of vents and fan openings.
     pub discharge_coefficient: f64,
     /// Multiplier on the wall heat transfer coefficient (IEC 60890 k).
@@ -357,6 +363,7 @@ impl Default for Params {
             plate_contact_h: 15.0,
             emissivity: 0.85,
             radiation_view_factor: 0.5,
+            radiation_geometry: false,
             discharge_coefficient: 0.6,
             wall_k_scale: 1.0,
             shell: None,

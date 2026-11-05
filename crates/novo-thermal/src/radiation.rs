@@ -239,10 +239,25 @@ fn segment_hits_box(a: V3, b: V3, min: V3, max: V3) -> bool {
 /// sight lines to a 4 x 4 grid on `b` that no box cuts. A model, accurate
 /// to a few percent for shadows larger than the grid pitch.
 pub fn view_factor_blocked(a: &Polygon, b: &Polygon, div: usize, blockers: &[(V3, V3)]) -> f64 {
+    view_factor_blocked_res(a, b, div, blockers, 2)
+}
+
+/// As [`view_factor_blocked`] with `tdiv x tdiv` cells of 16 sight-line
+/// targets on `b` (1 is the cheap setting used per device).
+pub fn view_factor_blocked_res(
+    a: &Polygon,
+    b: &Polygon,
+    div: usize,
+    blockers: &[(V3, V3)],
+    tdiv: usize,
+) -> f64 {
     if blockers.is_empty() {
         return view_factor(a, b, div);
     }
-    let targets: Vec<V3> = sample_points(b, 2).into_iter().map(|(p, _)| p).collect();
+    let targets: Vec<V3> = sample_points(b, tdiv.max(1))
+        .into_iter()
+        .map(|(p, _)| p)
+        .collect();
     let n = a.normal();
     sample_points(a, div.max(1))
         .into_iter()
@@ -558,6 +573,126 @@ pub fn two_surface_power(a1: f64, e1: f64, t1: f64, a2: f64, e2: f64, t2: f64) -
     SIGMA * (t1.powi(4) - t2.powi(4)) * a1 / (1.0 / e1 + a1 / a2 * (1.0 / e2 - 1.0))
 }
 
+/// The inside of a cabinet as a box, for the 2D model. Axes: x along the
+/// width, y down the height (0 = top), z out of the plate (0 = rear wall).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CabinetBox {
+    /// Interior size, mm (width, height, depth).
+    pub size_mm: [f64; 3],
+    /// Inner emissivity of the walls: x-, x+, y- (top), y+ (bottom), z-
+    /// (rear, plate side), z+ (door).
+    pub wall_emissivity: [f64; 6],
+}
+
+/// Radiation of one device to the cabinet, from geometry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DeviceRadiation {
+    /// Share of the device's exposed surface that sees a wall (the rest sees
+    /// neighbouring devices, taken at the device's own temperature).
+    pub view_to_walls: f64,
+    /// Mean inner emissivity of the walls it sees.
+    pub wall_emissivity: f64,
+    /// Net exchange per m2 of exposed surface and per `sigma (Td^4 - Tw^4)`:
+    /// the number that replaces `emissivity x view factor 0.5`.
+    pub exchange: f64,
+}
+
+/// Radiation from device `index` (boxes in mm, same frame as `cab`) to the
+/// cabinet walls. Its exposed faces are the five that do not sit on the
+/// plate; the other boxes hide walls from it but do not exchange net heat
+/// (neighbours are taken at about the same temperature). Walls are
+/// isothermal and re-reflect through the two-surface formula; a model, exact
+/// only for the limits in the tests.
+pub fn device_radiation(
+    index: usize,
+    boxes_mm: &[(V3, V3)],
+    cab: &CabinetBox,
+    emissivity_device: f64,
+) -> DeviceRadiation {
+    let m = |v: V3| scale(v, 1e-3);
+    let walls = box_inside([0.0; 3], m(cab.size_mm));
+    let (lo, hi) = (m(boxes_mm[index].0), m(boxes_mm[index].1));
+    let others: Vec<(V3, V3)> = boxes_mm
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| i != index)
+        .map(|(_, b)| (m(b.0), m(b.1)))
+        .collect();
+    let faces = box_outside(lo, hi);
+    let (mut a_d, mut seen, mut e_sum) = (0.0, 0.0, 0.0);
+    for (fi, face) in faces.iter().enumerate() {
+        if fi == 4 {
+            continue; // on the plate
+        }
+        let a = face.area();
+        a_d += a;
+        for (k, wall) in walls.iter().enumerate() {
+            let f = view_factor_blocked_res(face, wall, 1, &others, 1);
+            seen += a * f;
+            e_sum += a * f * cab.wall_emissivity[k];
+        }
+    }
+    let a_w: f64 = walls.iter().map(Polygon::area).sum();
+    if a_d <= 0.0 || seen <= 0.0 {
+        return DeviceRadiation {
+            view_to_walls: 0.0,
+            wall_emissivity: 0.0,
+            exchange: 0.0,
+        };
+    }
+    let e_w = e_sum / seen;
+    let e_d = emissivity_device.clamp(0.02, 1.0);
+    let a1 = seen.min(a_d);
+    let q = a1 / (1.0 / e_d + a1 / a_w * (1.0 / e_w - 1.0));
+    DeviceRadiation {
+        view_to_walls: a1 / a_d,
+        wall_emissivity: e_w,
+        exchange: q / a_d,
+    }
+}
+
+/// Radiation exchange per device of a scenario (see [`device_radiation`]),
+/// `None` per device when `Params::radiation_geometry` is off or the device
+/// sees no wall. Walls' inner emissivity comes from the shell; the rear
+/// counts the plate where it covers it.
+pub fn device_exchanges(scn: &crate::model::Scenario) -> Vec<Option<f64>> {
+    let (e, p) = (&scn.enclosure, &scn.params);
+    if !p.radiation_geometry || scn.devices.is_empty() {
+        return vec![None; scn.devices.len()];
+    }
+    use crate::setup::{BOTTOM, FRONT, LEFT, REAR, RIGHT, TOP};
+    let shell = scn.shell();
+    let (w_mm, h_mm) = (e.interior_width_mm(), e.interior_height_mm());
+    let plate_share = (e.plate.area() / (w_mm * h_mm).max(1.0)).clamp(0.0, 1.0);
+    let f = &shell.faces;
+    let rear = plate_share * shell.plate_emissivity + (1.0 - plate_share) * f[REAR].emissivity_in;
+    let cab = CabinetBox {
+        size_mm: [w_mm, h_mm, e.interior_depth_mm()],
+        wall_emissivity: [
+            f[LEFT].emissivity_in,
+            f[RIGHT].emissivity_in,
+            f[TOP].emissivity_in,
+            f[BOTTOM].emissivity_in,
+            rear,
+            f[FRONT].emissivity_in,
+        ],
+    };
+    let boxes: Vec<(V3, V3)> = scn
+        .devices
+        .iter()
+        .map(|d| {
+            let r = &d.footprint;
+            ([r.x, r.y, 0.0], [r.x + r.w, r.y + r.h, d.height()])
+        })
+        .collect();
+    (0..boxes.len())
+        .map(|i| {
+            let r = device_radiation(i, &boxes, &cab, p.emissivity);
+            (r.exchange > 0.0).then_some(r.exchange)
+        })
+        .collect()
+}
+
 /// `Rect` helper for callers that hold 2D footprints: a footprint rectangle
 /// of the cabinet plate as a box from the plate up to `height_mm`, in metres.
 pub fn footprint_box(r: &Rect, plate_z_mm: f64, height_mm: f64) -> (V3, V3) {
@@ -776,6 +911,34 @@ mod tests {
             hidden < 0.8 * free && hidden > 0.1 * free,
             "{hidden} {free}"
         );
+    }
+
+    #[test]
+    fn a_lone_device_exchanges_like_its_emissivity_and_a_crowded_one_less() {
+        let cab = CabinetBox {
+            size_mm: [800.0, 1200.0, 300.0],
+            wall_emissivity: [0.9; 6],
+        };
+        let dev = ([300.0, 500.0, 0.0], [400.0, 600.0, 100.0]);
+        let alone = device_radiation(0, &[dev], &cab, 0.9);
+        assert!(alone.view_to_walls > 0.95, "{alone:?}");
+        assert!((alone.exchange / 0.9 - 1.0).abs() < 0.05, "{alone:?}");
+        let crowd = [
+            dev,
+            ([200.0, 500.0, 0.0], [290.0, 600.0, 200.0]),
+            ([410.0, 500.0, 0.0], [500.0, 600.0, 200.0]),
+            ([300.0, 440.0, 0.0], [400.0, 490.0, 200.0]),
+            ([300.0, 610.0, 0.0], [400.0, 660.0, 200.0]),
+        ];
+        let c = device_radiation(0, &crowd, &cab, 0.9);
+        assert!(c.view_to_walls < 0.6 * alone.view_to_walls, "{c:?}");
+        assert!(c.exchange < alone.exchange);
+        let bright = CabinetBox {
+            wall_emissivity: [0.2; 6],
+            ..cab.clone()
+        };
+        let b = device_radiation(0, &[dev], &bright, 0.9);
+        assert!(b.exchange < alone.exchange);
     }
 
     #[test]

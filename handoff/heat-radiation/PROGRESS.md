@@ -1,2 +1,3 @@
 2026-11-04 07:30 UTC step 1 radiation.rs written, 9 tests pass, PR opened (draft, engine only)
 2026-11-04 08:00 UTC occlusion added (11 tests); wiring waits for #1865 on main
+2026-11-05 15:50 UTC device_radiation/device_exchanges (computed device-to-wall exchange with occlusion, shell wall emissivity), wired into 2D films and CFD update_device_films behind Params::radiation_geometry (default OFF). tests/radiation_geometry.rs (5). Turning it on moves a lone device's film from about 10 to 13 W/m2K and breaks the frozen fan_gain 3D comparison (its jet speed was fitted with the old 0.425 constant): flipping the default needs a 3D re-sweep and refit (H6).
