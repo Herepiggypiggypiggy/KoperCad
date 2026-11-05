@@ -28,6 +28,9 @@ text Hoist in 3D
 wait 4
 key Enter
 wait 60
+# The Drive run window opened first and covers the picture: drag the Drive run window left so the picture shows.
+drag 975 101 445 101
+wait 60
 shot slack-heap-in-the-picture
 expect "slack rope"
 expect "Picture, not measurement"
