@@ -15,7 +15,17 @@ wait 20
 expect "Simulation of wiring and logic"
 expect "Generic controller, not a specific product"
 expect "Signals (1 of 15 high)"
+# The checks are triangles at the foot of the card; the sentence is in the popover.
+scroll 1160 500 -2000
+wait 6
+expect "Controller check"
+click_text "Warning: Controller check" Button
+wait 6
 expect "9 signals drive nothing"
+key Escape
+wait 4
+scroll 1160 500 2000
+wait 6
 shot panel-at-rest
 check_layout
 # Main latch on: the receiver's main contact closes, so the circuit is fed but nothing is selected.

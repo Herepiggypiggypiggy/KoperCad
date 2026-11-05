@@ -11,10 +11,8 @@ use std::path::{Path, PathBuf};
 use eframe::egui;
 use novo_thermal::cooling::{self, Basis, Product, Selection, Source};
 
+use super::heat::ESTIMATE_TAG;
 use super::heat_run::Solution;
-
-/// Short tag shown where the long estimate sentence moved behind the "?".
-const ESTIMATE_TAG: &str = "(estimate)";
 
 /// File name inside the KoperCAD folder under `%APPDATA%`.
 pub const LIST_FILE: &str = "cooling.csv";

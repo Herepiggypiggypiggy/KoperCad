@@ -20,7 +20,9 @@ use novo_sim::program::{
 use novo_sim::{Clock, PoleState, Settled};
 use novo_theme::widgets;
 
+use super::flags_inline::note_row;
 use super::{Level, NovoApp};
+use novo_flags::Severity;
 
 const EXAMPLE: &str = "\
 (* Motor with a seal-in. Addresses are the ones in the I/O list. *)
@@ -296,7 +298,13 @@ impl NovoApp {
                     }
                 });
                 if let Some(e) = &plc.error {
-                    ui.colored_label(crate::theme::ui_palette().error, e);
+                    note_row(
+                        ui,
+                        Severity::Red,
+                        false,
+                        "Program not read",
+                        std::slice::from_ref(e),
+                    );
                 }
                 if let Some(f) = plc
                     .looped
@@ -304,13 +312,22 @@ impl NovoApp {
                     .filter(|_| plc.running)
                     .and_then(|l| l.bench.fault())
                 {
-                    ui.colored_label(
-                        crate::theme::ui_palette().error,
-                        format!("Program fault, outputs held: {f}"),
+                    note_row(
+                        ui,
+                        Severity::Red,
+                        false,
+                        "Program fault",
+                        &[format!("Program fault, outputs held: {f}")],
                     );
                 }
                 for n in &plc.notes {
-                    ui.colored_label(crate::theme::ui_palette().warning, n);
+                    note_row(
+                        ui,
+                        Severity::Yellow,
+                        false,
+                        "I/O not matched",
+                        std::slice::from_ref(n),
+                    );
                 }
                 if let Some(looped) = plc.looped.as_mut().filter(|_| plc.running) {
                     monitor(ui, looped);

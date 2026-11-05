@@ -68,8 +68,7 @@ fn cabinet(d: &mut Drive, with_enclosure: bool) -> (StructureId, u64) {
 fn facts_of(d: &Drive, cab: StructureId, k1: u64) -> Facts {
     let p = project(d);
     let layout = novo_layout::model::load(p, cab).unwrap();
-    let tag_of = |_: u64| "-K1".to_owned();
-    let mut facts = gather(p, cab, &layout, &layout, &[k1], &tag_of);
+    let mut facts = gather(p, cab, &layout, &layout, &[k1], &|_| Vec::new());
     annotate(&mut facts, summarize(p, cab).as_ref());
     facts
 }

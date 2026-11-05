@@ -154,9 +154,7 @@ fn the_inspector_names_the_rule_and_the_rule_a_hand_edit_breaks() {
         surface: None,
         site: novo_layout::site::Site::Plate,
     }]);
-    cabinet_rules::annotate(&mut facts, &d.app.cabinet.rules, &judged, &|id| {
-        format!("-D{id}")
-    });
+    cabinet_rules::annotate(&mut facts, &d.app.cabinet.rules, &judged);
     let Facts::Devices(devices) = facts else {
         unreachable!()
     };
@@ -167,12 +165,14 @@ fn the_inspector_names_the_rule_and_the_rule_a_hand_edit_breaks() {
             .unwrap()
             .starts_with("rule Q F G zone=top")
     );
-    assert_eq!(devices[0].problems.len(), 1);
-    assert!(
-        devices[0].problems[0].contains("zone"),
-        "{:?}",
-        devices[0].problems
-    );
+    // The broken rule is a flag of the store, drawn on the plate.
+    let _ = d.app.shown_problems();
+    d.app.sync_flags();
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    let on_q = super::cabinet_flags::device_flags(&d.app.wb.flags.store, &layout, cab, q);
+    assert_eq!(on_q.len(), 1, "{on_q:?}");
+    assert!(on_q[0].title.contains("zone"), "{on_q:?}");
+    assert!(on_q[0].detail.contains("zone"), "{on_q:?}");
 }
 
 #[test]
@@ -307,10 +307,12 @@ fn place_all_keeps_clear_of_a_duct_already_on_the_plate_and_a_hand_edit_onto_it_
     d.frame();
     let layout = novo_layout::model::load(project(&d), cab).unwrap();
     assert!(!layout.report().duct_overlaps.is_empty());
-    let lines = super::cabinet::problem_lines(&layout, k1, &|_| "-K1".into());
+    let _ = d.app.shown_problems();
+    d.app.sync_flags();
+    let flags = super::cabinet_flags::device_flags(&d.app.wb.flags.store, &layout, cab, k1);
     assert!(
-        lines.iter().any(|l| l.contains("under a duct")),
-        "{lines:?}"
+        flags.iter().any(|f| f.detail.contains("under a duct")),
+        "{flags:?}"
     );
 }
 

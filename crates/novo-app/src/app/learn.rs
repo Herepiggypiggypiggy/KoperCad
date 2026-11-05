@@ -218,6 +218,8 @@ pub(crate) const ANCHORS: &[&str] = &[
     "calc.tab.starters",
     "calc.tab.sccr",
     "calc.tab.busbar_impedance",
+    "calc.tab.mechanical",
+    "calc.tab.busbar_heat",
     "autopilot.window",
     "autopilot.accept_all",
 ];

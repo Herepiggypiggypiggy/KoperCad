@@ -32,6 +32,7 @@ use super::cabinet_bar::{note_ctx, note_rect_in};
 use super::commissioning_viewer::{self as viewer, PhotoViewer};
 
 use super::changes::shown_on;
+use super::commissioning_flags::{self as cflags, check_anchor, item_anchor, job};
 use super::commissioning_redlines::{RedlineAction, redlines_tab};
 use super::commissioning_signature::{self as signature, SignDraft};
 use super::commissioning_test::{TestAction, test_tab};
@@ -39,6 +40,9 @@ use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
 use super::workspace::Workspace;
 use super::{Level, NovoApp, OutlineMode, projects_dir};
+
+/// What the folder-less export says (the triangle's popover).
+pub(super) const NO_DOCUMENTS: &str = "The Documents folder was not found.";
 
 /// How long the first touch of "Pass all open" waits for the second.
 const ARM_SECONDS: f64 = 5.0;
@@ -107,7 +111,7 @@ pub(crate) struct CommissioningMode {
     /// Which machine copy the project given to the mode is
     /// (`NovoApp::machine_generation`, 0 for the working project): a copy has
     /// revision numbers of its own, so every cache below mixes it into its key.
-    generation: u64,
+    pub(super) generation: u64,
     /// The targets with a page index, kept until the project changes: the
     /// list asks for the progress of every page on every frame.
     index: Option<(u64, Rc<TargetIndex>)>,
@@ -137,6 +141,8 @@ pub(crate) struct CommissioningMode {
     walked: Vec<(Target, Vec<CheckKind>)>,
     /// The Wire test tab.
     pub(super) test: super::commissioning_test::TestState,
+    /// The triangles of the panel (punch items, failed checks, redlines, jobs).
+    pub(super) panel_flags: super::commissioning_flags::PanelFlags,
 }
 
 impl CommissioningMode {
@@ -179,6 +185,7 @@ impl CommissioningMode {
             finished: false,
             walked: Vec::new(),
             test: Default::default(),
+            panel_flags: Default::default(),
         }
     }
 
@@ -408,7 +415,7 @@ fn state_icon(p: &Palette, state: CheckState) -> (&'static str, egui::Color32) {
     match state {
         CheckState::Pending => (icons::CIRCLE, p.text_tertiary),
         CheckState::Passed => (icons::CHECK_CIRCLE, p.success),
-        CheckState::Failed => (icons::WARNING_OCTAGON, p.error),
+        CheckState::Failed => (icons::WARNING, p.error),
         CheckState::NotApplicable => (icons::MINUS_CIRCLE, p.text_tertiary),
     }
 }
@@ -555,6 +562,7 @@ impl NovoApp {
 
     /// The Commissioning workspace is left: the mode is off.
     pub(super) fn leave_commissioning(&mut self) {
+        self.drop_commissioning_flags();
         self.wb.commissioning = None;
         if self.outline_mode == OutlineMode::Commissioning {
             self.outline_mode = OutlineMode::Pages;
@@ -595,9 +603,13 @@ impl NovoApp {
             Some(json) => match CommissioningStore::from_json(&json) {
                 Ok(store) => store,
                 Err(e) => {
-                    self.message(
-                        Level::Warning,
-                        format!("Commissioning data not read, starting empty: {e}"),
+                    self.job_doubtful(
+                        job::LOAD,
+                        "Commissioning data not read",
+                        vec![
+                            "Starting empty. The stored text is kept in the project.".into(),
+                            e.to_string(),
+                        ],
                     );
                     CommissioningStore::new()
                 }
@@ -628,6 +640,7 @@ impl NovoApp {
         if self.outline_mode != OutlineMode::Commissioning {
             return Vec::new();
         }
+        self.sync_commissioning_flags();
         // What the machine's option choice leaves out is not walked.
         let choice = self.machine_variant();
         let generation = self.machine_generation();
@@ -640,8 +653,8 @@ impl NovoApp {
         let mut marks = Vec::new();
         let index = mode.index(project);
         for info in index.on_page(page) {
+            // Failed checks and open punch items draw as flag triangles below.
             let (kind, what) = match target_state(&mode.store, info.target) {
-                CheckState::Failed => (MarkKind::Error, "✖ Failed"),
                 CheckState::Passed => (MarkKind::Added, "✔ Passed"),
                 _ => continue,
             };
@@ -666,12 +679,41 @@ impl NovoApp {
                 );
             }
         }
+        // The triangles: punch items, failed checks and redlines, on the object they are about.
+        for flag in &mode.panel_flags.flags {
+            if flag.source != novo_flags::Source::Commissioning {
+                continue;
+            }
+            let hover = std::iter::once(flag.title.clone())
+                .chain(flag.detail.0.iter().cloned())
+                .collect::<Vec<_>>()
+                .join(": ");
+            // Wires are drawn by the general flag marks (`flag_marks`); a second mark would stack.
+            for target in flag
+                .anchors
+                .iter()
+                .filter_map(cflags::anchor_target)
+                .filter(|t| !matches!(t, Target::Wire(_)))
+            {
+                if !index.on_page(page).any(|i| i.target == target) {
+                    continue;
+                }
+                for id in shown_on(project, target.any_id(), page) {
+                    marks.push(
+                        Mark::on(super::flags::mark_kind(flag), item_id(id))
+                            .with_text(hover.clone())
+                            .with_key(flag.id.0),
+                    );
+                }
+            }
+        }
         marks
     }
 
     /// The Commissioning tab of the outline. Returns whether it should close.
     pub(super) fn commissioning_outline(&mut self, ui: &mut egui::Ui) -> bool {
         self.load_commissioning();
+        self.sync_commissioning_flags();
         let current = self.current_page;
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
@@ -799,6 +841,7 @@ impl NovoApp {
         if let Some(mode) = self.wb.commissioning.as_mut() {
             viewer::window(ui.ctx(), &mut mode.viewer);
         }
+        self.open_clicked_commissioning_flag();
         if let Some(place) = go {
             self.jump(place, true);
         }
@@ -861,8 +904,11 @@ impl NovoApp {
             String::new()
         };
         match write_replacing(&path, json.as_bytes()) {
-            Ok(()) => self.message(Level::Info, format!("Exported {}{size}", path.display())),
-            Err(e) => self.message(Level::Error, format!("Could not export field results: {e}")),
+            Ok(()) => {
+                self.job_ok(job::FIELD_EXPORT);
+                self.message(Level::Info, format!("Exported {}{size}", path.display()));
+            }
+            Err(e) => self.job_error(job::FIELD_EXPORT, "Field results not exported", &e, true),
         }
     }
 
@@ -884,9 +930,11 @@ impl NovoApp {
         let text = match std::fs::read_to_string(path) {
             Ok(text) => text,
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not read {}: {e}", path.display()),
+                self.job_error(
+                    job::FIELD_IMPORT,
+                    "Field results not read",
+                    &format!("{}: {e}", path.display()),
+                    true,
                 );
                 return;
             }
@@ -894,7 +942,12 @@ impl NovoApp {
         let package = match FieldPackage::from_json(&text) {
             Ok(package) => package,
             Err(e) => {
-                self.message(Level::Error, e.to_string());
+                self.job_error(
+                    job::FIELD_IMPORT,
+                    "Not a field results file",
+                    &format!("{}: {e}", path.display()),
+                    true,
+                );
                 return;
             }
         };
@@ -907,6 +960,7 @@ impl NovoApp {
             mode.dirty = true;
         }
         self.unpack_field_photos(&package);
+        self.job_ok(job::FIELD_IMPORT);
         let text = format!(
             "Imported field results from {}: {}",
             package.exported_by,
@@ -1037,7 +1091,12 @@ impl NovoApp {
             &name,
             "pdf",
         ) else {
-            self.message(Level::Error, "Could not find the Documents folder");
+            self.job_error(
+                job::PUNCH_PDF,
+                "Punch list not exported",
+                NO_DOCUMENTS,
+                false,
+            );
             return;
         };
         let Some(mode) = self.wb.commissioning.as_ref() else {
@@ -1068,13 +1127,11 @@ impl NovoApp {
             .and_then(|bytes| write_replacing(&path, &bytes).map_err(|e| e.to_string()));
         match result {
             Ok(()) => {
+                self.job_ok(job::PUNCH_PDF);
                 self.message_file(format!("Exported {}", path.display()), &path);
                 self.wb.last_export = Some(path);
             }
-            Err(e) => self.message(
-                Level::Error,
-                format!("Could not export the punch list: {e}"),
-            ),
+            Err(e) => self.job_error(job::PUNCH_PDF, "Punch list not exported", &e, true),
         }
     }
 
@@ -1097,7 +1154,7 @@ impl NovoApp {
         };
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         let Some(path) = report_path(file.as_deref(), projects_dir().as_deref(), &name, ext) else {
-            self.message(Level::Error, "Could not find the Documents folder");
+            self.job_error(job::REPORT, "Report not exported", NO_DOCUMENTS, false);
             return None;
         };
         self.write_commissioning_report(format, &path)
@@ -1137,12 +1194,13 @@ impl NovoApp {
             .and_then(|bytes| write_replacing(path, &bytes).map_err(|e| e.to_string()));
         match result {
             Ok(()) => {
+                self.job_ok(job::REPORT);
                 self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(Level::Error, format!("Could not export the report: {e}"));
+                self.job_error(job::REPORT, "Report not exported", &e, true);
                 None
             }
         }
@@ -1450,8 +1508,13 @@ fn checks_tab(
                     let state = mode.store.state(info.target, check);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = space::S;
-                        let (icon, color) = state_icon(p, state);
-                        ui.label(egui::RichText::new(icon).color(color));
+                        if state == CheckState::Failed
+                            && mode.panel_flags.slot(ui, &check_anchor(info.target, check))
+                        {
+                        } else {
+                            let (icon, color) = state_icon(p, state);
+                            ui.label(egui::RichText::new(icon).color(color));
+                        }
                         ui.label(check.label());
                         let pass = ui.button("Pass");
                         let fail = ui.button("Fail");
@@ -1635,8 +1698,18 @@ fn checks_tab(
                         height,
                         |ui| {
                             ui.add_space(space::XL);
-                            let (icon, color) = state_icon(p, state);
-                            ui.label(egui::RichText::new(icon).color(color));
+                            let first_failed =
+                                info.target.checks().iter().find(|&&c| {
+                                    mode.store.state(info.target, c) == CheckState::Failed
+                                });
+                            let drawn = state == CheckState::Failed
+                                && first_failed.is_some_and(|&c| {
+                                    mode.panel_flags.slot(ui, &check_anchor(info.target, c))
+                                });
+                            if !drawn {
+                                let (icon, color) = state_icon(p, state);
+                                ui.label(egui::RichText::new(icon).color(color));
+                            }
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
@@ -2045,13 +2118,12 @@ fn punch_tab(
             let p = Palette::of(ui);
             for item in &items {
                 let info = item.target.and_then(|t| all.iter().find(|i| i.target == t));
-                let (icon, color) = match item.severity {
-                    Severity::Blocking => (icons::WARNING_OCTAGON, p.error),
-                    Severity::Major => (icons::WARNING, p.warning),
-                    Severity::Minor => (icons::CIRCLE, p.text_tertiary),
-                };
+                let anchor = item_anchor(item.id);
                 let row = widgets::row(ui, false, |ui| {
-                    ui.label(egui::RichText::new(icon).color(color));
+                    // Blocking is red and Major yellow; a Minor item has no triangle.
+                    if !mode.panel_flags.slot(ui, &anchor) {
+                        ui.label(egui::RichText::new(icons::CIRCLE).color(p.text_tertiary));
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             egui::RichText::new(format!("{:?}", item.state))
