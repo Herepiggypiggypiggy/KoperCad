@@ -135,7 +135,11 @@ pub(super) fn strip(
         .foreground()
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_max_width(TEXT_WIDTH.min(view.width() - 2.0 * MARGIN));
+                ui.set_max_width(
+                    TEXT_WIDTH
+                        .min(view.width() - 2.0 * MARGIN)
+                        .min(ui.available_width()),
+                );
                 let (title, text) = match at.checked_sub(1).and_then(|i| steps.get(i)) {
                     Some(step) => (
                         format!("Step {at} of {}: {}", steps.len(), step.mark),
@@ -146,7 +150,9 @@ pub(super) fn strip(
                         "The enclosure and the mounting plate (the plate is blue). Next puts on the first part.",
                     ),
                 };
-                ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(title).strong().color(p.text_strong));
+                ui.horizontal_wrapped(|ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                     ui.add_enabled_ui(at > 0, |ui| {
                         let back = ui.button("Previous");
                         super::cabinet_bar::note_ctx(
@@ -159,7 +165,6 @@ pub(super) fn strip(
                             at -= 1;
                         }
                     });
-                    ui.label(egui::RichText::new(title).strong().color(p.text_strong));
                     ui.add_enabled_ui(at < steps.len(), |ui| {
                         let next = ui.button("Next");
                         super::cabinet_bar::note_ctx(ctx, "build_order.next", "Next", &next);
@@ -208,7 +213,8 @@ pub(super) fn strip(
                 if let Some(note) = stale {
                     ui.label(egui::RichText::new(note).strong().color(p.warning));
                 }
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                     let mut pos = at;
                     ui.spacing_mut().slider_width = 220.0;
                     if ui

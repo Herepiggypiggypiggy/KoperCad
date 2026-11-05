@@ -1,6 +1,7 @@
 @title Challenge lesson repaired by hand ends on Solved (1366x768)
 @area Learn
 @sizes 1366x768
+# The Learn card is a pane of the right strip, so the sheet is centred 160 points further left than when the card floated; the Live window is moved aside first.
 # Pin positions are for 1366x768 (at 1920x1080 the page panel moves the sheet), so this one runs at that size only.
 # The lesson page opens on the whole sheet (a fit shows the sheet unless the drawing is twice as large close up, #1208), so the points are the pins at that zoom: the -K1 contact's top pin, a corner, the -S2 top pin.
 key ctrl+k
@@ -13,11 +14,13 @@ key shift+l
 wait 40
 click_text Connect
 wait 6
-click 462 306
+drag 150 90 760 90
+wait 10
+click 302 306
 wait 4
-move 445 306
+move 285 306
 wait 4
-click 427 306
+click 267 306
 wait 10
 shot repaired
 click_text "Hold to press" #2

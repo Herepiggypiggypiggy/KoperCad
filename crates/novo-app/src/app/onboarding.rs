@@ -256,6 +256,7 @@ impl NovoApp {
         let on_example = self.project_name().as_deref() == Some(super::example::EXAMPLE_NAME);
         let mut example = false;
         let mut close = false;
+        super::panel_dock::open_at(ctx, "walkthrough", 420.0);
         let panel = super::panel::Panel::new(
             "walkthrough",
             format!("Fast keys · {done} of {}", STEPS.len()),
@@ -264,7 +265,9 @@ impl NovoApp {
             300.0,
         )
         .fixed_open()
-        .fit();
+        .fit()
+        .dockable()
+        .dock_by_default();
         panel.show(ctx, |ui| {
             ui.set_max_width(300.0);
             ui.horizontal(|ui| {

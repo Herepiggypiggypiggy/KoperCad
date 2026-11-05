@@ -148,6 +148,9 @@ impl NovoApp {
         } else {
             super::panel::Side::BottomRight
         };
+        // Docked, the card opens tall enough for its text and the Next, Skip
+        // and Show me buttons (a person's own height stays).
+        super::panel_dock::open_at(ctx, "lesson_card", 520.0);
         let card_rect = super::panel::Panel::new(
             "lesson_card",
             self.learn.say("learn"),
@@ -157,7 +160,8 @@ impl NovoApp {
         )
         .fixed_open()
         .fit()
-        .bare()
+        .dockable()
+        .dock_by_default()
         .show(ctx, |ui| {
             action = self.draw_card(ui, &card, confirm);
         })
@@ -165,7 +169,10 @@ impl NovoApp {
         self.learn.card_pos = Some(card_rect.center());
         // The inspector and the other right-hand panels keep above the card
         // while it sits in its corner.
+        // Docked, the card is a pane of the right strip and reserves nothing.
+        let docked = super::panel_dock::slot_of(ctx, "lesson_card").is_some();
         let parked = card_rect.is_finite()
+            && !docked
             && side == super::panel::Side::BottomRight
             && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
         super::panel::reserve_bottom_right(
@@ -178,6 +185,7 @@ impl NovoApp {
         );
         // Dialogs open right of a card parked at the left, not over it.
         let parked_left = card_rect.is_finite()
+            && !docked
             && side == super::panel::Side::BottomLeft
             && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
         super::panel::reserve_bottom_left(
@@ -405,6 +413,52 @@ impl NovoApp {
                 }
             });
         } else {
+            // The way on sits under the header, so a pane squeezed by the others
+            // never hides Back, Show me how and Next below the text.
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        !card.first,
+                        egui::Button::new(format!("{} {}", icons::ARROW_LEFT, card.words.back)),
+                    )
+                    .clicked()
+                {
+                    action = Some(CardAction::Move(Move::Back));
+                }
+                if card.show_me {
+                    let label = if card.demo_on {
+                        &card.words.replay
+                    } else {
+                        &card.words.show_me
+                    };
+                    if ui.button(format!("{} {label}", icons::EYE)).clicked() {
+                        action = Some(CardAction::ShowMe);
+                    }
+                }
+                if card.demo_on
+                    && ui
+                        .button(format!("{} {}", icons::STOP, card.words.stop))
+                        .clicked()
+                {
+                    action = Some(CardAction::StopDemo);
+                }
+                if card.can_next {
+                    let next = format!("{} {}", card.words.next, icons::ARROW_RIGHT);
+                    if novo_theme::widgets::primary_button(ui, &next).clicked() {
+                        action = Some(CardAction::Move(Move::Next));
+                    }
+                } else if ui
+                    .button(if card.skip_does_it {
+                        format!("{} {}", icons::MAGIC_WAND, card.words.do_it)
+                    } else {
+                        format!("{} {}", icons::SKIP_FORWARD, card.words.skip)
+                    })
+                    .clicked()
+                {
+                    action = Some(CardAction::Move(Move::Skip));
+                }
+            });
+            ui.add_space(2.0);
             let mark = if card.ticked { "✓" } else { "●" };
             let title = egui::RichText::new(format!("{mark} {}", card.step_title)).strong();
             ui.label(if card.ticked {
@@ -487,50 +541,6 @@ impl NovoApp {
             if card.greyed {
                 super::window_help::mark(ui, &card.words.greyed_note);
             }
-            ui.add_space(4.0);
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(
-                        !card.first,
-                        egui::Button::new(format!("{} {}", icons::ARROW_LEFT, card.words.back)),
-                    )
-                    .clicked()
-                {
-                    action = Some(CardAction::Move(Move::Back));
-                }
-                if card.show_me {
-                    let label = if card.demo_on {
-                        &card.words.replay
-                    } else {
-                        &card.words.show_me
-                    };
-                    if ui.button(format!("{} {label}", icons::EYE)).clicked() {
-                        action = Some(CardAction::ShowMe);
-                    }
-                }
-                if card.demo_on
-                    && ui
-                        .button(format!("{} {}", icons::STOP, card.words.stop))
-                        .clicked()
-                {
-                    action = Some(CardAction::StopDemo);
-                }
-                if card.can_next {
-                    let next = format!("{} {}", card.words.next, icons::ARROW_RIGHT);
-                    if novo_theme::widgets::primary_button(ui, &next).clicked() {
-                        action = Some(CardAction::Move(Move::Next));
-                    }
-                } else if ui
-                    .button(if card.skip_does_it {
-                        format!("{} {}", icons::MAGIC_WAND, card.words.do_it)
-                    } else {
-                        format!("{} {}", icons::SKIP_FORWARD, card.words.skip)
-                    })
-                    .clicked()
-                {
-                    action = Some(CardAction::Move(Move::Skip));
-                }
-            });
             ui.add_space(2.0);
             if confirm {
                 ui.label(&card.words.restart_confirm);
