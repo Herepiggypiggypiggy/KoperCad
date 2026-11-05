@@ -1,0 +1,49 @@
+@title Crane model in motion at 1920: the bridge of your own crane travels along its rails with a travel drive
+@area Simulate
+@sizes 1920x1080
+# Drive run on the travel fixture, then Hoist in 3D with the synthetic STEP crane and the bridge
+# driven by the first travel axis. Holding the high speed moves the girder, the end trucks, their
+# wheels and everything on them along the rails; the rails and the supports stay. The Bridge field
+# is in metres along the model's own rails.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+answer_dialog qa/fixtures/crane-model/workshop-crane.stp
+click_text "Crane model…"
+wait 120
+expect "workshop-crane.stp"
+click_text "none"
+wait 10
+click_text "=A1+FLD-M1"
+wait 10
+shot before-travel
+mouse_down 371 359
+wait 200
+shot bridge-moving
+mouse_up 371 359
+wait 150
+shot after-stop
+expect "Bridge start"
+expect "last stop"
+check_layout

@@ -1,5 +1,6 @@
 @title Crane model in motion: the hook block and hook of your own crane rise with a hoist run, the ropes follow
 @area Simulate
+@sizes 1366x768
 # Hoist in 3D with the synthetic STEP crane (23 solids, roles guessed from names). A Hoist run is
 # started and the up button held: the solids that hold the hook (block, hook, whatever touches them)
 # rise with the hook height, the two falls of rope shorten between the drum and the block, and the
@@ -51,6 +52,8 @@ wait 200
 shot hook-rising
 wait 500
 shot hook-risen
+expect "from its start"
+expect_not "hook +0.00 m"
 mouse_up 123 359
 wait 20
 click_text "Hook"

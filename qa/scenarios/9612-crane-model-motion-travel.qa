@@ -45,4 +45,5 @@ mouse_up 123 359
 wait 150
 shot after-stop
 expect "Bridge start"
+expect "last stop"
 check_layout
