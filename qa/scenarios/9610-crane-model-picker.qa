@@ -1,0 +1,67 @@
+@title Crane model: pick a STEP crane of your own, see it in place of the generic crane, change a role, undo
+@area Simulate
+# Hoist in 3D shows a generic crane. "Crane model..." asks for a STEP file (the synthetic workshop crane
+# here); the picture then shows the file's solids, coloured by role. Parts lists the solids with the role
+# guessed from each name; changing one is kept in the project. Edit > Undo takes the pick back.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+shot generic-crane
+expect "Crane model…"
+expect_not "Parts"
+answer_dialog qa/fixtures/crane-model/workshop-crane.stp
+click_text "Crane model…"
+wait 120
+expect_dialog "crane model"
+expect "workshop-crane.stp"
+expect "Generic crane"
+expect_not "Runway"
+shot own-crane
+check_layout
+click_text "Parts"
+wait 30
+expect "Crane model parts"
+expect "23 parts"
+expect "Runway support A"
+shot parts-window
+check_layout
+check_text 20
+# Pointing at a row paints that solid in the picture.
+move 130 250
+wait 20
+shot pointing-at-a-row
+move 700 700
+wait 10
+# The first solid is a runway support (role other, yellow). Make it a girder: it turns blue in the picture.
+click_text "other"
+wait 10
+shot role-menu
+click_text "girder" #2
+wait 30
+expect "Guess from names"
+expect_enabled "Guess from names"
+shot role-changed
+click_text "Guess from names"
+wait 30
+expect_disabled "Guess from names"
+shot roles-guessed
+# Y up lays the model on its side.
+click_text "Z"
+wait 10
+click_text "Y"
+wait 30
+shot y-up
+click_text "Y"
+wait 10
+click_text "Z"
+wait 30
+click_text "Generic crane"
+wait 40
+expect "Runway"
+expect_not "workshop-crane.stp"
+shot back-to-generic

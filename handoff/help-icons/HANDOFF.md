@@ -22,3 +22,5 @@ Parts and Macros (second PR, 2026-11-03)
 - `panel::modal` floating windows are now wrapped in `window_help::scope` (name = dock name), so any dockable form shows a "?" in its title bar. Questions in `MODAL_QUESTIONS` keep their text (no header "?").
 - Left: hover texts (hidden), error toasts, result sentences over 20 words (import summaries, Takes -F1... tag lists), maker_guide lines (data), pin_offer question.
 - Scenarios changed: 702, 706, 1583, 17100, 17100b, 21 (strings). New: 7432.
+
+Slice 2 (this PR): `window_help::add` where the surface is a panel or dialog, `window_help::mark` for headerless rows. Still long: report documents themselves (EMC record, Contents.pdf are files, not screens), Commissioning hint sentences from `step.same_number_hint()` (now behind "?"), hover tooltips, `emc_stub.rs` finding details (result text), Reports preview pages, Bench "Not set:" banner (result sentence, 29 words).

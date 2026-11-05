@@ -8,7 +8,13 @@ wait 20
 click_text Test
 wait 10
 expect "wires in the drawing"
+click_text Help #2
+wait 8
 expect "count connections"
+shot help-count
+check_layout
+click 700 690
+wait 6
 expect "Write test sheet PDF"
 shot wire-test-whole-rows
 check_layout
