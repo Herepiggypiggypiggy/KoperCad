@@ -8,3 +8,5 @@
 2026-11-05 S3 lamps merged (#1952); S3b slack rope heap beside the block for a closed-loop winch.
 
 2026-11-05 R3 part 1: `kopercad-cli parts step-parts <file>` splits a STEP model into parts and guesses roles from names (novo-interop part3d::build::placed_parts, part3d::crane_roles).
+
+2026-11-05 R3 part 2 (PR 1971): Hoist in 3D 'Use my crane model...' picker; hook and hoist pieces swapped into the picture (novo-interop part3d::crane_model, novo-view3d crane_user, novo-app crane_user_model). Next part 3: roles drive wheels/drum/sheave motion, remember the choice.
