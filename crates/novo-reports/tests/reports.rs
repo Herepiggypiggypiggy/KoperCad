@@ -1441,6 +1441,11 @@ fn wire_list_print_widths_are_not_the_screen_widths() {
             "{key} keeps room to print =A1+CAB-KM1:A1"
         );
         assert!(col(key).screen_width.unwrap() < col(key).width);
+        // About 110 px at 5.5 px per unit: the whole `=A1+CAB-F1:2` shows at 1366.
+        assert!(
+            col(key).screen_width.unwrap() >= 20.0,
+            "{key} readable on screen"
+        );
     }
     assert!(col("length_basis").width >= 22.0, "basis prints whole");
 }
