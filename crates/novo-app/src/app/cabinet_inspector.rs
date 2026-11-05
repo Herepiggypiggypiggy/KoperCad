@@ -9,8 +9,9 @@ use novo_layout::state::CabinetLayout;
 
 use novo_theme::widgets;
 
-use super::cabinet::{Ask, problem_lines};
+use super::cabinet::Ask;
 use super::cabinet_door::DoorState;
+use super::cabinet_flags::DeviceFlag;
 /// The inspector's width, the same as the schematic's.
 /// Roomier than the schematic inspector: it holds the plate and door forms.
 const WIDTH: f32 = 320.0;
@@ -31,7 +32,7 @@ pub(super) struct DeviceFacts {
     pub position: String,
     pub rotated: bool,
     pub rail: Option<String>,
-    pub problems: Vec<String>,
+    pub problems: Vec<DeviceFlag>,
     /// The place rule that applies to the device, as written in the rule file.
     pub rule: Option<String>,
     /// Why the last `Place all` put the device where it is.
@@ -62,7 +63,7 @@ pub(super) fn gather(
     stored: &CabinetLayout,
     shown: &CabinetLayout,
     selected: &[u64],
-    tag_of: &impl Fn(u64) -> String,
+    flags: &dyn Fn(u64) -> Vec<DeviceFlag>,
 ) -> Facts {
     let name = |id: u64| {
         project
@@ -90,7 +91,7 @@ pub(super) fn gather(
                 })
             });
             let f = p.footprint();
-            let problems = problem_lines(shown, p.id, tag_of);
+            let problems = flags(p.id);
             DeviceFacts {
                 id: p.id,
                 tag: name(p.id),
@@ -306,7 +307,24 @@ fn show(
                         true,
                         |ui| {
                             for p in &d.problems {
-                                ui.label(format!("\u{2022} {p}"));
+                                ui.horizontal_top(|ui| {
+                                    let (slot, _) = ui.allocate_exact_size(
+                                        egui::vec2(20.0, 20.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    widgets::flag_triangle(
+                                        ui.painter(),
+                                        slot.center(),
+                                        14.0,
+                                        p.red,
+                                        p.unchecked,
+                                        novo_theme::Palette::of(ui),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(format!("{}: {}", p.title, p.detail))
+                                            .wrap(),
+                                    );
+                                });
                             }
                         },
                     );

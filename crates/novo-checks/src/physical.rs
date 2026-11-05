@@ -90,6 +90,8 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
                         continue;
                     }
                     at.sort();
+                    // The plate it lies on, so the Cabinet can draw it there.
+                    at.push(AnyId::Structure(*structure));
                     out.push(Problem::new(
                         ProblemKind::OverfullDuct,
                         at,

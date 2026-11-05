@@ -37,6 +37,8 @@ pub(super) struct FlagUi {
     pub(super) job_order: Vec<FlagId>,
     /// The drafts each simulation window raised (lane T10), by window.
     pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
+    /// The project revision and Place rules the Cabinet's own flags were built from.
+    layout_synced: Option<(u64, novo_layout::rules::RuleSet)>,
 }
 
 impl Default for FlagUi {
@@ -50,6 +52,7 @@ impl Default for FlagUi {
             jobs: HashMap::new(),
             job_order: Vec::new(),
             sim: std::collections::BTreeMap::new(),
+            layout_synced: None,
         }
     }
 }
@@ -85,6 +88,8 @@ fn anchors(p: &Problem) -> Vec<Anchor> {
                     AnyId::Terminal(_) => Anchor::Terminal(raw),
                     AnyId::Cable(_) => Anchor::Cable(raw),
                     AnyId::Rail(_) => Anchor::Rail(raw),
+                    // A plate (its enclosure): the frame of the plate.
+                    AnyId::Structure(_) => Anchor::Plate(raw, [0, 0]),
                     _ => return None,
                 })
             })
@@ -152,6 +157,11 @@ impl NovoApp {
     /// Brings the flag store up to the shown problems. Cheap when nothing
     /// changed: one revision compare.
     pub(super) fn sync_flags(&mut self) {
+        self.sync_issue_flags();
+        self.sync_layout_flags();
+    }
+
+    fn sync_issue_flags(&mut self) {
         let source = Source::Issues(String::new());
         if self.learn.quiet_checks() {
             if self.wb.flags.synced.take().is_some() {
@@ -178,6 +188,40 @@ impl NovoApp {
             .store
             .replace_source(&source, built.into_iter().map(|(_, d)| d).collect());
         flags.synced = Some(revision);
+    }
+
+    /// The Cabinet's own flags (broken Place rules, covered wiring openings):
+    /// rebuilt when the project or the rules change.
+    fn sync_layout_flags(&mut self) {
+        if self.learn.quiet_checks() {
+            if self.wb.flags.layout_synced.take().is_some() {
+                self.wb
+                    .flags
+                    .store
+                    .replace_source(&Source::Layout, Vec::new());
+            }
+            return;
+        }
+        let Some(revision) = self.backend.document().map(|d| d.project().revision()) else {
+            return;
+        };
+        self.cabinet.rules.ensure_loaded();
+        let rules = self.cabinet.rules.rules.clone();
+        if self
+            .wb
+            .flags
+            .layout_synced
+            .as_ref()
+            .is_some_and(|(r, set)| *r == revision && *set == rules)
+        {
+            return;
+        }
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let built = super::cabinet_flags::layout_drafts(doc.project(), &rules);
+        self.wb.flags.store.replace_source(&Source::Layout, built);
+        self.wb.flags.layout_synced = Some((revision, rules));
     }
 
     /// The marks of the flags anchored on drawn objects of `page`.
@@ -334,6 +378,9 @@ impl NovoApp {
             return;
         }
         match action {
+            Action::Locate if super::cabinet_flags::is_plate_flag(flag) => {
+                self.locate_on_plate(flag);
+            }
             Action::Locate => match index {
                 Some(i) => self.go_problem(i),
                 // In 3D the parts are selected there; elsewhere the device is
@@ -366,6 +413,51 @@ impl NovoApp {
                     self.wb.queued.push(command);
                 }
             }
+        }
+    }
+
+    /// Shows a plate flag where it is: the Cabinet on the right plate, its
+    /// devices selected and in view.
+    pub(super) fn locate_on_plate(&mut self, flag: &novo_flags::Flag) {
+        let (plate, devices) = super::cabinet_flags::targets(flag);
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let project = doc.project();
+        let structure = plate
+            .map(novo_core::StructureId::from)
+            .or_else(|| {
+                devices
+                    .first()
+                    .and_then(|d| super::cabinet_flags::plate_of(project, *d))
+            })
+            .and_then(|id| {
+                project
+                    .structures()
+                    .find(|s| s.id == id)
+                    .map(|s| s.tag.clone())
+            });
+        let items: Vec<_> = devices
+            .iter()
+            .map(|d| novo_canvas::cabinet::box_item(*d))
+            .collect();
+        if let Some(tag) = structure
+            && self.cabinet.location.as_ref() != Some(&tag)
+        {
+            self.cabinet.location = Some(tag);
+            self.cabinet.preview = None;
+            self.cabinet.surface_preview.clear();
+            self.cabinet.result = None;
+        }
+        self.cabinet.table = false;
+        self.cabinet.surface = None;
+        self.cabinet.view.selection.apply(
+            items.iter().copied(),
+            novo_canvas::selection::SelectOp::Replace,
+        );
+        self.switch_workspace(super::workspace::Workspace::Cabinet);
+        if !items.is_empty() {
+            self.cabinet.view.reveal(items);
         }
     }
 }
