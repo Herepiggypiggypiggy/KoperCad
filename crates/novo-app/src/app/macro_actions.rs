@@ -1063,7 +1063,8 @@ impl NovoApp {
                     text
                 };
                 if off_sheet > 0 {
-                    self.refuse(Level::Warning,
+                    self.refuse(
+                        Level::Warning,
                         format!(
                             "{name}: {off_sheet} {} outside the page edge",
                             if off_sheet == 1 {
