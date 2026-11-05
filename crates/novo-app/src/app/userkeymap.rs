@@ -113,30 +113,42 @@ impl NovoApp {
     /// commented template when it is missing, and opens it.
     pub(super) fn open_keymap_file(&mut self) {
         let Some(path) = keymap_path() else {
-            self.message(
-                Level::Warning,
-                "No place for a keymap file on this computer",
+            self.job_flag(
+                "keymap.file",
+                false,
+                "No keymap file",
+                "There is no place for a keymap file on this computer.",
+                None,
             );
             return;
         };
         if let Err(e) = ensure_file(&path) {
-            self.message(
-                Level::Error,
+            self.job_flag(
+                "keymap.file",
+                true,
+                "Keymap file not made",
                 format!("Could not create {}: {e}", path.display()),
+                Some("help.keymap_file"),
             );
             return;
         }
         match open_in_editor(&path) {
-            Ok(()) => self.message(
-                Level::Info,
-                format!(
-                    "Keymap file: {} · save it and restart KoperCAD to use the new keys",
-                    path.display()
-                ),
-            ),
-            Err(e) => self.message(
-                Level::Warning,
+            Ok(()) => {
+                self.job_ok("keymap.file");
+                self.message(
+                    Level::Info,
+                    format!(
+                        "Keymap file: {} · save it and restart KoperCAD to use the new keys",
+                        path.display()
+                    ),
+                );
+            }
+            Err(e) => self.job_flag(
+                "keymap.file",
+                false,
+                "Keymap file did not open",
                 format!("Open {} in a text editor ({e})", path.display()),
+                Some("help.keymap_file"),
             ),
         }
     }
@@ -155,10 +167,15 @@ impl NovoApp {
             } else {
                 String::new()
             };
-            self.message(
-                Level::Warning,
+            self.job_flag(
+                "keymap.lines",
+                false,
+                "Keymap lines skipped",
                 format!("{KEYMAP_FILE} {first}{tail}; those lines were skipped"),
+                Some("help.keymap_file"),
             );
+        } else {
+            self.job_ok("keymap.lines");
         }
     }
 }

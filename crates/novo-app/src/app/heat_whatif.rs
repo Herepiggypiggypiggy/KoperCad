@@ -566,10 +566,9 @@ fn model_badge(ui: &mut egui::Ui) {
             .show(ui, |ui| {
                 ui.label(RichText::new("MODEL, NOT MEASURED").small().strong());
             });
-        ui.label(
-            RichText::new("Ranked by the 2D heat model. Nothing changes until you apply.")
-                .small()
-                .color(pal.text_secondary),
+        super::window_help::add(
+            ui.ctx(),
+            "Model, not measured: ranked by the 2D heat model. Nothing changes until you apply.",
         );
     });
 }

@@ -16,6 +16,7 @@ use crate::lengths::{self, Connection as Measured};
 use crate::order::join_distinct;
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Section};
+use crate::termination::{Termination, TerminationKind, stated_sleeve, stated_termination};
 use crate::wires::items;
 
 /// Part property that gives the length a clamp or connector needs stripped.
@@ -85,6 +86,10 @@ pub struct WireEnd {
     /// Where the processing came from: `stated`, `part`, `typical` or
     /// `unknown` (no cross-section, so nothing is proposed).
     pub processing_basis: StripBasis,
+    /// How the end is finished: the termination the designer stated for this
+    /// end, else what the bench proposes (a ferrule, a stated free-text
+    /// processing, or a bare end).
+    pub termination: Termination,
     /// Label text for the flag at this end: the wire number and where the
     /// other end goes.
     pub label: String,
@@ -113,6 +118,9 @@ pub struct WireCutJob {
     /// The drawn wires that make this connection.
     pub wires: Vec<WireId>,
     pub number: String,
+    /// The text printed on the sleeve or flag: the stated sleeve text, else
+    /// the wire number. The schedules keep the number.
+    pub sleeve: String,
     pub cross_section_mm2: Option<f64>,
     pub colour: String,
     /// The wire's routed length with the service loops, in whole millimetres
@@ -277,7 +285,11 @@ fn end(
     pin: PinRef,
     other: PinRef,
     section: Option<f64>,
-    (ferrule_override, processing_override): (Option<&str>, Option<&str>),
+    (ferrule_override, processing_override, stated): (
+        Option<&str>,
+        Option<&str>,
+        Option<Termination>,
+    ),
     number: &str,
     standard: &FerruleStandard,
 ) -> WireEnd {
@@ -318,6 +330,51 @@ fn end(
         (None, None, Some(l)) => (format!("Strip {}", number_text(l)), strip_basis),
         (None, None, None) => ("Size unknown".to_owned(), StripBasis::Unknown),
     };
+    // A termination stated for this end decides what the bench shows.
+    let (ferrule, processing, processing_basis, termination) = match stated {
+        Some(t) => match t.kind {
+            TerminationKind::Ferrule => {
+                let ferrule = (!t.size.is_empty()).then(|| t.size.clone()).or_else(|| {
+                    section
+                        .zip(strip_mm)
+                        .map(|(s, l)| format!("A{}-{}", number_text(s), number_text(l)))
+                });
+                match ferrule {
+                    Some(f) => (
+                        Some(f.clone()),
+                        format!("Ferrule {f}"),
+                        StripBasis::Stated,
+                        Termination::new(TerminationKind::Ferrule, &f),
+                    ),
+                    None => (
+                        None,
+                        "Ferrule, size unknown".to_owned(),
+                        StripBasis::Unknown,
+                        t,
+                    ),
+                }
+            }
+            TerminationKind::Bare => (
+                None,
+                strip_mm.map_or_else(
+                    || "Bare, size unknown".to_owned(),
+                    |l| format!("Strip {}", number_text(l)),
+                ),
+                strip_basis,
+                t,
+            ),
+            _ => (None, t.text(), StripBasis::Stated, t),
+        },
+        None => {
+            let termination = match (&ferrule, processing_basis) {
+                (Some(f), _) => Termination::new(TerminationKind::Ferrule, f),
+                (None, StripBasis::Stated) => Termination::parse(&processing)
+                    .unwrap_or_else(|| Termination::new(TerminationKind::Bare, "")),
+                _ => Termination::new(TerminationKind::Bare, ""),
+            };
+            (ferrule, processing, processing_basis, termination)
+        }
+    };
     let to = end_designation(project, other);
     let label = match (number.is_empty(), to.is_empty()) {
         (false, false) => format!("{number} > {to}"),
@@ -332,6 +389,7 @@ fn end(
         ferrule,
         processing,
         processing_basis,
+        termination,
         label,
     }
 }
@@ -413,6 +471,8 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                 .collect();
             numbers.sort_by(|a, b| natural_cmp(a, b));
             let number = join_distinct(numbers);
+            let wire_ids: Vec<WireId> = item.wires.iter().map(|w| w.id).collect();
+            let sleeve = stated_sleeve(project, &wire_ids).unwrap_or_else(|| number.clone());
             let ferrule = item
                 .wires
                 .iter()
@@ -444,8 +504,12 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                     item.from,
                     item.to,
                     section,
-                    (ferrule, processing),
-                    &number,
+                    (
+                        ferrule,
+                        processing,
+                        stated_termination(project, &wire_ids, false),
+                    ),
+                    &sleeve,
                     standard,
                 ),
                 end_b: end(
@@ -453,8 +517,12 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                     item.to,
                     item.from,
                     section,
-                    (ferrule, processing),
-                    &number,
+                    (
+                        ferrule,
+                        processing,
+                        stated_termination(project, &wire_ids, true),
+                    ),
+                    &sleeve,
                     standard,
                 ),
                 ducts: length.ducts,
@@ -465,6 +533,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                 sequence: None,
                 direction: String::new(),
                 cable: cable_of(project, &item.wires),
+                sleeve,
                 number,
             }
         })
@@ -492,10 +561,43 @@ pub fn duct_names(project: &Project) -> BTreeMap<u64, String> {
         .map(|r| r.id.raw())
         .collect();
     ids.sort_unstable();
-    ids.into_iter()
+    let mut names: BTreeMap<u64, String> = ids
+        .into_iter()
         .enumerate()
         .map(|(i, id)| (id, format!("D{}", i + 1)))
-        .collect()
+        .collect();
+    // Ducts fitted at delivery (the enclosure's spec): `F1`, `F2`, ... in
+    // enclosure order, then the order of the spec's parts.
+    let mut n = 0;
+    for (structure, count) in spec_ducts(project) {
+        for i in 0..count.len() {
+            n += 1;
+            names.insert(
+                novo_routing::model::spec_duct_id(structure, i),
+                format!("F{n}"),
+            );
+        }
+    }
+    names
+}
+
+/// The factory ducts of every enclosure with a spec, by enclosure id.
+fn spec_ducts(
+    project: &Project,
+) -> Vec<(novo_core::StructureId, Vec<novo_layout::spec::FactoryPart>)> {
+    let mut out: Vec<_> = project
+        .structures()
+        .filter_map(|s| {
+            let ducts: Vec<_> = novo_layout::spec::EnclosureSpec::read(&s.properties)
+                .parts
+                .into_iter()
+                .filter(|p| p.kind == novo_layout::spec::PartKind::Duct)
+                .collect();
+            (!ducts.is_empty()).then_some((s.id, ducts))
+        })
+        .collect();
+    out.sort_by_key(|(id, _)| id.raw());
+    out
 }
 
 /// Every duct of the plans with its short name ([`duct_names`]) and where it is
@@ -509,12 +611,23 @@ fn duct_legend(project: &Project, plans: &Plans) -> BTreeMap<u64, (String, Strin
             .map(|s| s.tag.to_string())
             .unwrap_or_default();
         for fill in &plan.fill {
-            let place = project
-                .all::<Rail>()
-                .find(|r| r.id.raw() == fill.duct)
-                .map_or(format!("{tag} duct"), |r| {
-                    format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
+            let factory = spec_ducts(project)
+                .into_iter()
+                .find(|(s, _)| s == structure)
+                .and_then(|(s, parts)| {
+                    parts.iter().enumerate().find_map(|(i, p)| {
+                        (novo_routing::model::spec_duct_id(s, i) == fill.duct)
+                            .then(|| format!("{tag} factory duct at {:.0}, {:.0}", p.x, p.y))
+                    })
                 });
+            let place = factory.unwrap_or_else(|| {
+                project
+                    .all::<Rail>()
+                    .find(|r| r.id.raw() == fill.duct)
+                    .map_or(format!("{tag} duct"), |r| {
+                        format!("{tag} duct at {:.0}, {:.0}", r.x, r.y)
+                    })
+            });
             let name = names
                 .get(&fill.duct)
                 .cloned()
@@ -627,7 +740,7 @@ pub(crate) fn sections(project: &Project, wires: &[&novo_core::Wire]) -> Vec<f64
 /// Columns of the machine job file, in order. One row per wire; the
 /// machine-specific formats (named when the workshop's machine is known) are
 /// column maps over this same data.
-pub const JOB_COLUMNS: [&str; 23] = [
+pub const JOB_COLUMNS: [&str; 26] = [
     "No",
     "Wire no.",
     "Qty",
@@ -651,6 +764,9 @@ pub const JOB_COLUMNS: [&str; 23] = [
     "Seq",
     "Track",
     "End basis",
+    "Termination A",
+    "Termination B",
+    "Sleeve text",
 ];
 
 /// Title of the table of wires to cut, with its count: every connection of
@@ -683,6 +799,9 @@ fn job_cells(n: usize, j: &WireCutJob) -> Vec<Cell> {
         j.sequence.map(i64::from).into(),
         Cell::text(j.track.clone()),
         Cell::text(end_basis_text(j)),
+        Cell::text(j.end_a.termination.text()),
+        Cell::text(j.end_b.termination.text()),
+        Cell::text(j.sleeve.clone()),
     ]
 }
 
@@ -792,7 +911,10 @@ impl Report for WireCut {
             Column::new("to", "To", 25.0),
             Column::new("basis", "Length basis", 14.0),
         ];
-        let title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
+        let mut title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
+        if jobs.iter().any(|j| j.basis.starts_with('~')) {
+            title = format!("{title}. {}", novo_layout::spec::ESTIMATE_NOTICE);
+        }
         let mut cuts = Section::new("cuts", &title, columns);
         // The production data sits in a table of its own: the cut list is already as wide as
         // a page takes, and the job CSV carries every column in one row.
@@ -809,6 +931,9 @@ impl Report for WireCut {
                 Column::new("seq", "Seq", 6.0).right(),
                 Column::new("track", "Track", 16.0),
                 Column::new("end_basis", "End basis", 14.0),
+                Column::new("termination_a", "Termination A", 16.0),
+                Column::new("termination_b", "Termination B", 16.0),
+                Column::new("sleeve", "Sleeve text", 18.0),
             ],
         );
         for (i, j) in jobs.iter().enumerate() {
@@ -819,7 +944,7 @@ impl Report for WireCut {
                 pick(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
                 wires.clone(),
             );
-            production.push(pick(&[0, 1, 16, 17, 18, 19, 20, 21, 22]), wires);
+            production.push(pick(&[0, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]), wires);
         }
 
         // Stock per cross-section and colour: pieces and metres, as cut.
@@ -885,6 +1010,33 @@ impl Report for WireCut {
             ferrule_section.push(vec![Cell::text(f), Cell::Int(n)], Vec::new());
         }
 
+        let standard = FerruleStandard::of(project);
+        let mut crimp_section = Section::new(
+            "crimps",
+            "Crimp list",
+            vec![
+                Column::new("kind", "Type", 12.0),
+                Column::new("size", "Size", 12.0),
+                Column::new("mm2", "mm²", 8.0).right(),
+                Column::new("ends", "Ends", 8.0).right(),
+                Column::new("crimp", "Crimp", 8.0).right(),
+                Column::new("prepare", "Prepare", 8.0).right(),
+            ],
+        );
+        for c in crate::termination::crimp_list(&jobs, &standard) {
+            crimp_section.push(
+                vec![
+                    Cell::text(c.kind.label()),
+                    Cell::text(c.size),
+                    c.mm2.into(),
+                    Cell::Int(c.ends as i64),
+                    Cell::Int(c.pieces as i64),
+                    Cell::Int(c.to_prepare as i64),
+                ],
+                Vec::new(),
+            );
+        }
+
         // Duct fill after routing, with the wires that lie in each duct.
         let mut ducts = Section::new(
             "ducts",
@@ -948,7 +1100,11 @@ impl Report for WireCut {
             title: self.title(),
             revision: project.revision(),
             sections: {
-                let mut sections = vec![cuts, production, stock_section, ferrule_section, ducts];
+                let mut sections = vec![cuts, production, stock_section, ferrule_section];
+                if !crimp_section.rows.is_empty() {
+                    sections.push(crimp_section);
+                }
+                sections.push(ducts);
                 let runs = cable_runs(project, &jobs);
                 if !runs.is_empty() {
                     let mut cables = Section::new(

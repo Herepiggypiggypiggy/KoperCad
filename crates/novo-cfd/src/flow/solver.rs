@@ -129,6 +129,8 @@ pub struct FlowConfig {
     /// to 0) and the solver refreshes the radiative heat every
     /// [`RAD_EVERY`] steps or iterations.
     pub radiation: Option<std::sync::Arc<crate::rad::RadPlan>>,
+    /// Fans inside the domain (see [`super::InteriorFan`]). Empty = none.
+    pub interior_fans: Vec<super::InteriorFan>,
 }
 
 /// Steps (or steady iterations) between refreshes of the device films.
@@ -162,6 +164,7 @@ impl FlowConfig {
             device_emissivity: 0.85,
             device_view: 0.5,
             radiation: None,
+            interior_fans: Vec::new(),
         }
     }
 }
@@ -235,6 +238,10 @@ pub struct FlowSolver {
     /// Factor on each device's film coefficient (true area over grid area).
     film_scale: Vec<f64>,
     film_clock: usize,
+    /// Heat moved from the device to the air by the film reference, K/s per
+    /// cell: the film reads the air at a fixed distance, the face reads the
+    /// first cell, and this is the difference (zero where they coincide).
+    q_film: Vec<f64>,
     /// Radiation part of each device's film, W/m2K: it does not warm the air,
     /// so only the rest of the film is a boundary layer (see
     /// [`film_conductance`]).
@@ -271,6 +278,55 @@ struct FilmFace {
     air: usize,
     /// Distance from the device surface to the centre of the air cell, m.
     y_air: f64,
+    /// Air temperature the convective film is measured against: the two
+    /// cells that enclose the fixed distance [`FILM_REF_M`] from the surface,
+    /// and the weight of the second. `None` when the first air cell already
+    /// sits at or beyond that distance (the film then reads that cell).
+    air_ref: Option<([usize; 2], f64)>,
+}
+
+/// Distance from a device surface at which the air temperature is read for
+/// the convective film, m. The film correlation is defined against the air
+/// outside the boundary layer; reading it at a fixed distance, not at the
+/// first cell, keeps the housing temperature from drifting with the mesh
+/// (lane H6, `docs/thermal-validation.md`).
+pub const FILM_REF_M: f64 = 0.03;
+
+/// The cells that enclose the distance `FILM_REF_M` from a device surface,
+/// walking away from it along `axis` in direction `dir` from the air cell
+/// `ix`; the weight is that of the second cell. `None` when the air cell is
+/// already at or beyond it.
+fn film_reference(
+    mesh: &Mesh,
+    md: &crate::solids::Medium,
+    ix: [usize; 3],
+    axis: usize,
+    dir: isize,
+    y_air: f64,
+    d_ref: f64,
+) -> Option<([usize; 2], f64)> {
+    if y_air >= d_ref {
+        return None;
+    }
+    let mut prev = (mesh.cell(ix), y_air);
+    let mut pos = ix[axis] as isize;
+    loop {
+        pos += dir;
+        if pos < 0 || pos as usize >= mesh.n[axis] {
+            return Some(([prev.0, prev.0], 0.0));
+        }
+        let cur = mesh.cell(with(ix, axis, pos as usize));
+        if md.fluid_frac[cur] < 0.5 {
+            return Some(([prev.0, prev.0], 0.0));
+        }
+        let y = prev.1
+            + (mesh.centre[axis][pos as usize] - mesh.centre[axis][(pos - dir) as usize]).abs();
+        if y >= d_ref {
+            let w = (d_ref - prev.1) / (y - prev.1);
+            return Some(([prev.0, cur], w));
+        }
+        prev = (cur, y);
+    }
 }
 
 /// Conductance per area from a device surface to the centre of an air cell
@@ -373,7 +429,22 @@ impl FlowSolver {
                             if slot >= cfg.device_film_h.len() {
                                 continue;
                             }
+                            let air_ix = if dev_is_lo {
+                                hi_ix
+                            } else {
+                                with(hi_ix, a, hi_ix[a] - 1)
+                            };
+                            let y_air_f = 0.5 * mesh.dx[a][air_ix[a]];
                             film_faces.push(FilmFace {
+                                air_ref: film_reference(
+                                    &mesh,
+                                    md,
+                                    air_ix,
+                                    a,
+                                    if dev_is_lo { 1 } else { -1 },
+                                    y_air_f,
+                                    FILM_REF_M,
+                                ),
                                 axis: a,
                                 hi,
                                 dist: mesh.centre[a][hi_ix[a]] - mesh.centre[a][hi_ix[a] - 1],
@@ -401,7 +472,11 @@ impl FlowSolver {
                 .collect();
             for f in &film_faces {
                 let h = cfg.device_film_h[f.slot];
-                let g = film_conductance(h, 0.0, f.y_air, cfg.conductivity);
+                let g = if f.air_ref.is_some() {
+                    h
+                } else {
+                    film_conductance(h, 0.0, f.y_air, cfg.conductivity)
+                };
                 k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / (g * film_scale[f.slot]));
             }
         }
@@ -456,8 +531,8 @@ impl FlowSolver {
             .as_ref()
             .filter(|md| md.has_drag())
             .map(|md| md.drag.clone());
-        let drag_rate =
-            std::array::from_fn(|c| vec![0.0; if drag_cell.is_some() { mesh.len(c) } else { 0 }]);
+        let has_drag = drag_cell.is_some() || !cfg.interior_fans.is_empty();
+        let drag_rate = std::array::from_fn(|c| vec![0.0; if has_drag { mesh.len(c) } else { 0 }]);
         let pressure = PressureSolver::with_openness(&mesh, Some(&open.afrac));
         let t_in = cfg
             .openings
@@ -475,6 +550,7 @@ impl FlowSolver {
             k_face,
             conv_scale,
             q_cell,
+            q_film: vec![0.0; cells],
             drag_cell,
             drag_rate,
             sheet,
@@ -517,6 +593,40 @@ impl FlowSolver {
         self.film_clock += 1;
         if self.film_clock.is_multiple_of(FILM_EVERY) {
             self.update_device_films();
+        }
+        self.update_film_reference();
+    }
+
+    /// Refreshes the heat the film reference moves from the devices to the
+    /// first air cells: the film conducts `h_conv (T_surface - T_ref)`, the
+    /// face already carries `h_conv (T_surface - T_air)`, so the cell gets
+    /// `h_conv (T_air - T_ref)` more and the device gives the same.
+    /// Relaxed halfway between calls; heat is conserved by construction.
+    fn update_film_reference(&mut self) {
+        if self.film_faces.iter().all(|f| f.air_ref.is_none()) {
+            return;
+        }
+        let m = &self.mesh;
+        let mut q = vec![0.0; self.q_film.len()];
+        for f in self.film_faces.iter().filter(|f| f.air_ref.is_some()) {
+            let Some(([a, b], w)) = f.air_ref else {
+                continue;
+            };
+            let t_ref = (1.0 - w) * self.t[a] + w * self.t[b];
+            let h = self.cfg.device_film_h[f.slot];
+            let h_c = (h - self.film_rad[f.slot]).max(0.0) * self.film_scale[f.slot];
+            let hi_ix = m.unindex(f.hi);
+            let dev = if f.air == f.hi {
+                m.cell(with(hi_ix, f.axis, hi_ix[f.axis] - 1))
+            } else {
+                f.hi
+            };
+            let w_k = h_c * m.area(f.axis, hi_ix) * (self.t[f.air] - t_ref);
+            q[f.air] += w_k / (self.c_cell[f.air] * m.volume(m.unindex(f.air)));
+            q[dev] -= w_k / (self.c_cell[dev] * m.volume(m.unindex(dev)));
+        }
+        for (old, new) in self.q_film.iter_mut().zip(q) {
+            *old = 0.5 * *old + 0.5 * new;
         }
     }
 
@@ -592,8 +702,11 @@ impl FlowSolver {
         }
         let h_rad = self.film_rad.get(slot).copied().unwrap_or(0.0);
         for f in self.film_faces.iter().filter(|f| f.slot == slot) {
-            let g = film_conductance(h.max(1e-3), h_rad, f.y_air, self.cfg.conductivity)
-                * self.film_scale[slot];
+            let g = if f.air_ref.is_some() {
+                h.max(1e-3)
+            } else {
+                film_conductance(h.max(1e-3), h_rad, f.y_air, self.cfg.conductivity)
+            } * self.film_scale[slot];
             self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / g);
         }
     }
@@ -641,7 +754,12 @@ impl FlowSolver {
         let mut seen = std::collections::HashSet::new();
         for f in self.film_faces.iter().filter(|f| f.slot == slot) {
             if seen.insert(f.air) {
-                t_air += self.t[f.air];
+                // the film correlation is defined against the air outside the
+                // boundary layer: read it at the reference distance
+                t_air += match f.air_ref {
+                    Some(([a, b], w)) => (1.0 - w) * self.t[a] + w * self.t[b],
+                    None => self.t[f.air],
+                };
                 speed += self.cell_speed(f.air);
                 w_air += 1.0;
             }
@@ -810,7 +928,7 @@ impl FlowSolver {
         // In a closed box a uniform temperature offset is a pure pressure
         // gradient, so the Boussinesq term uses the volume mean as reference.
         self.t_buoyancy_ref = self.cfg.t_ref.unwrap_or_else(|| self.mean_temperature());
-        let rhs: [Vec<f64>; 3] = std::array::from_fn(|c| self.momentum_rhs(c));
+        let rhs: [Vec<f64>; 3] = std::array::from_fn(|c| self.momentum_rhs(c, dt));
         for (c, r) in rhs.iter().enumerate() {
             self.diffuse_velocity(c, r, dt);
         }
@@ -843,7 +961,7 @@ impl FlowSolver {
 
     /// Convection (negative) plus buoyancy of velocity component `c`, at the
     /// interior faces. Zero on the faces of the walls.
-    fn momentum_rhs(&self, c: usize) -> Vec<f64> {
+    fn momentum_rhs(&self, c: usize, dt: f64) -> Vec<f64> {
         let m = &self.mesh;
         let mut out = vec![0.0; m.len(c)];
         let d = m.dims(c);
@@ -938,7 +1056,45 @@ impl FlowSolver {
                 }
             }
         });
+        self.add_interior_fans(c, dt, &mut out);
         out
+    }
+
+    /// The pressure jump of the fans inside the domain as a momentum source
+    /// on velocity component `c`: the intercept `sign p_max / (rho width)` of
+    /// the curve. Its slope is the implicit drag of [`Self::add_fan_drag_rate`].
+    fn add_interior_fans(&self, c: usize, _dt: f64, out: &mut [f64]) {
+        for fan in self.cfg.interior_fans.iter().filter(|f| f.axis == c) {
+            let Some(ff) = fan.resolve(&self.mesh) else {
+                continue;
+            };
+            if fan.free_flow_m3s <= 0.0 || fan.max_pressure_pa <= 0.0 {
+                continue;
+            }
+            let a0 = fan.sign * fan.max_pressure_pa / self.cfg.rho / ff.width;
+            for &(id, _) in &ff.faces {
+                if self.open.afrac[c][id] != 0.0 {
+                    out[id] += a0;
+                }
+            }
+        }
+    }
+
+    /// Flow through fan `i` of [`FlowConfig::interior_fans`] along its
+    /// blowing direction, m3/s (negative = backwards), and the pressure the
+    /// curve gives at that flow, Pa. `None` for a fan that does not fit the
+    /// grid.
+    pub fn interior_fan_state(&self, i: usize) -> Option<(f64, f64)> {
+        let fan = self.cfg.interior_fans.get(i)?;
+        let ff = fan.resolve(&self.mesh)?;
+        let q: f64 = ff
+            .faces
+            .iter()
+            .map(|&(id, a)| self.vel[fan.axis][id] * a)
+            .sum::<f64>()
+            * fan.sign;
+        let p = fan.max_pressure_pa * (1.0 - q / fan.free_flow_m3s);
+        Some((q, p))
     }
 
     /// Solves `u/dt - nu L u = u_old/dt + rhs` by Gauss-Seidel.
@@ -1040,7 +1196,7 @@ impl FlowSolver {
         // Porous drag acts inside the projection: the velocity correction of
         // a face is dt / (1 + dt d) times the pressure gradient, so a steady
         // state balances the drag exactly, however large dt d is.
-        let porous = self.drag_cell.is_some();
+        let porous = self.drag_cell.is_some() || !self.cfg.interior_fans.is_empty();
         if porous {
             let m = &self.mesh;
             let coupling: [Vec<f64>; 3] = std::array::from_fn(|a| {
@@ -1107,6 +1263,35 @@ impl FlowSolver {
 
     /// `F |u|` on every interior face from the cells either side.
     fn update_drag_rate(&mut self) {
+        if self.drag_cell.is_none() && !self.cfg.interior_fans.is_empty() {
+            for r in &mut self.drag_rate {
+                r.fill(0.0);
+            }
+        }
+        self.update_cell_drag_rate();
+        self.add_fan_drag_rate();
+    }
+
+    /// The linear drag of the fans inside the domain: the slope of the maker
+    /// curve on the faces of the disk, taken implicitly (diffusion and
+    /// projection) so the steady state meets the curve at any step size.
+    fn add_fan_drag_rate(&mut self) {
+        for fan in &self.cfg.interior_fans {
+            let Some(ff) = fan.resolve(&self.mesh) else {
+                continue;
+            };
+            if fan.free_flow_m3s <= 0.0 || fan.max_pressure_pa <= 0.0 {
+                continue;
+            }
+            let pk = fan.max_pressure_pa / self.cfg.rho;
+            let k = pk / ((fan.free_flow_m3s / ff.area) * ff.width);
+            for &(id, _) in &ff.faces {
+                self.drag_rate[fan.axis][id] += k;
+            }
+        }
+    }
+
+    fn update_cell_drag_rate(&mut self) {
         let Some(f) = &self.drag_cell else {
             return;
         };
@@ -1398,7 +1583,9 @@ impl FlowSolver {
                         conv += (face(ix[a] + 1) - face(ix[a])) / m.dx[a][ix[a]];
                     }
                     let id = m.cell(ix);
-                    rhs[id] = -conv * self.conv_scale[id] + self.heat_scale * self.q_cell[id];
+                    rhs[id] = -conv * self.conv_scale[id]
+                        + self.heat_scale * self.q_cell[id]
+                        + self.q_film[id];
                 }
             }
         }

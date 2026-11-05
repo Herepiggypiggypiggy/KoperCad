@@ -90,6 +90,8 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// Mounting plate parts of the user's catalog, for the plate card.
+    pub(super) maker_plates: super::cabinet_maker_plate::MakerPlates,
     /// The surface picked in the header (`None` is the mounting plate) and
     /// the picker asked to open by `cabinet.surface`.
     pub(super) surface: Option<String>,
@@ -158,6 +160,7 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            maker_plates: Default::default(),
             surface: None,
             surface_open: false,
             surface_popup: None,
@@ -204,6 +207,8 @@ pub(super) enum Ask {
     SetPlate(StructureId),
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
+    /// Use a maker's mounting plate part: its size and its factory holes.
+    UsePlatePart(StructureId, super::cabinet_maker_plate::PlateChoice),
     PlaceAll,
     /// An arrange tool (`cabinet.arrange_*`) on these devices (none: all).
     AutoArrange(&'static str, Vec<u64>),
@@ -234,6 +239,8 @@ pub(super) enum Ask {
     SetEntryWall(StructureId, Option<novo_routing::entry::Wall>),
     ExportWireProduction,
     OpenBench,
+    /// Open the Parts window (a chip's fix for parts without terminal data).
+    OpenParts,
     ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
     Select(u64),
@@ -342,172 +349,6 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
     }
 }
 
-/// "TAG: problem", the problem's first letter lower case after the colon.
-fn after_tag(tag: &str, line: &str) -> String {
-    let mut chars = line.chars();
-    let first = chars.next().map(|c| c.to_lowercase().to_string());
-    format!("{tag}: {}{}", first.unwrap_or_default(), chars.as_str())
-}
-
-/// What is wrong with a placed device, in words: the hover text of its mark
-/// and the table's Problems column.
-pub(super) fn problem_lines(
-    layout: &CabinetLayout,
-    id: u64,
-    tag_of: &impl Fn(u64) -> String,
-) -> Vec<String> {
-    let report = layout.report();
-    let mut lines = Vec::new();
-    for &(a, b) in &report.collisions {
-        if a == id || b == id {
-            lines.push(format!("Overlaps {}", tag_of(if a == id { b } else { a })));
-        }
-    }
-    if report.outside.contains(&id) {
-        lines.push("Reaches past the usable plate".to_owned());
-    }
-    for &(a, b, gap) in &report.too_close {
-        if a == id || b == id {
-            lines.push(format!(
-                "Only {gap:.0} mm from {}",
-                tag_of(if a == id { b } else { a })
-            ));
-        }
-    }
-    for c in &report.opening_conflicts {
-        if c.device == id {
-            lines.push(format!(
-                "Covers the wiring opening '{}' [{}]",
-                c.opening,
-                novo_layout::openings::RULE_OPENING_KEEPOUT
-            ));
-        }
-    }
-    if let Some(door) = layout.door_report() {
-        for &(d, over) in &door.too_deep {
-            if d == id {
-                lines.push(format!("{over:.0} mm too deep: the door cannot close"));
-            }
-        }
-    }
-    for o in &report.duct_overlaps {
-        if let novo_layout::DuctHit::Device {
-            id: device,
-            across,
-            along,
-        } = o.hit
-            && device == id
-        {
-            lines.push(format!(
-                "Lies under a duct ({across:.0} x {along:.0} mm): move it clear"
-            ));
-        }
-    }
-    for &(device, _, off) in &report.off_centre {
-        if device == id {
-            lines.push(format!(
-                "Sits {:.0} mm off the middle of its rail: drag it onto the rail, or use Centre rails on devices in Rails and ducts",
-                off.abs()
-            ));
-        }
-    }
-    if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
-        for &(rail, over) in &report.rail_overflows {
-            if p.rail == Some(rail) {
-                lines.push(format!("Its rail is {over:.0} mm too short"));
-            }
-        }
-        if p.size.guessed {
-            lines.push("Size is a guess: the part has none".to_owned());
-        }
-    }
-    lines
-}
-
-/// Every problem of the layout, one per line, for the hover text of the problems pill.
-pub(super) fn problem_summary(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> String) -> String {
-    let mut lines: Vec<String> = layout
-        .placements
-        .iter()
-        .flat_map(|p| {
-            problem_lines(layout, p.id, tag_of)
-                .into_iter()
-                .map(move |l| (p.id, l))
-        })
-        .map(|(id, l)| after_tag(&tag_of(id), &l))
-        .collect();
-    // A device problem can be selected from the list; a panel-level one cannot.
-    let hint = if lines.is_empty() {
-        "Click to list the problems."
-    } else {
-        "Click to list them and select the device."
-    };
-    lines.extend(rail_duct_lines(layout));
-    lines.extend(panel_problem_lines(layout, tag_of));
-    lines.push(hint.to_owned());
-    lines.join("\n")
-}
-
-/// What is wrong with the panel as a whole, in words: the problems the count
-/// in the status bar includes that belong to no single device (the wiring
-/// openings, the room for the door, the door's sweep, tight depth). Without
-/// these the problems pill opened an empty list.
-pub(super) fn panel_problem_lines(
-    layout: &CabinetLayout,
-    tag_of: &impl Fn(u64) -> String,
-) -> Vec<String> {
-    let mut lines: Vec<String> = layout.opening_problems.clone();
-    if let Some(door) = layout.door_report() {
-        for &(id, gap) in &door.tight {
-            lines.push(format!(
-                "{} leaves only {gap:.0} mm in front of it: the door nearly touches",
-                tag_of(id)
-            ));
-        }
-        if door.plate_too_big {
-            lines.push("The mounting plate is bigger than the inside of the enclosure".to_owned());
-        }
-        if let Some(short) = door.front_short {
-            lines.push(format!(
-                "The open door needs {short:.0} mm more free room in front of the enclosure"
-            ));
-        }
-        if let Some(short) = door.hinge_side_short {
-            lines.push(format!(
-                "The open door needs {short:.0} mm more free room beside the hinge side"
-            ));
-        }
-    }
-    if let Some(swing) = layout.swing_report() {
-        lines.extend(swing.hits.iter().map(|h| h.message(tag_of)));
-    }
-    lines
-}
-
-/// One line for every rail that runs under a duct (a rail has no tag, so
-/// it is named by where it lies).
-pub(super) fn rail_duct_lines(layout: &CabinetLayout) -> Vec<String> {
-    layout
-        .report()
-        .duct_overlaps
-        .iter()
-        .filter_map(|o| {
-            let novo_layout::DuctHit::Rail { id, by } = o.hit else {
-                return None;
-            };
-            let rail = layout.rails.iter().find(|r| r.id == id)?;
-            let (axis, at) = if rail.vertical {
-                ("x", rail.x)
-            } else {
-                ("y", rail.y)
-            };
-            Some(format!(
-                "The rail at {axis} {at:.0} mm runs under a duct for {by:.0} mm: move the rail or the duct"
-            ))
-        })
-        .collect()
-}
-
 /// The table face (Ctrl+T): every device of the panel with where it is and
 /// what is wrong.
 /// A sort key in which numbers count by value: -K2 comes before -K10.
@@ -538,8 +379,10 @@ pub(super) fn cabinet_table(
     cands: &[novo_layout::plan::Candidate],
     tag_of: &impl Fn(u64) -> String,
     selected: &[u64],
-) -> Option<u64> {
+    flags: &dyn Fn(u64) -> Vec<super::cabinet_flags::DeviceFlag>,
+) -> (Option<u64>, Option<(novo_flags::FlagId, egui::Pos2)>) {
     let mut clicked = None;
+    let mut flag_clicked = None;
     let mut rows: Vec<_> = cands.iter().collect();
     rows.sort_by_key(|c| natural_key(&tag_of(c.id)));
     // Numbers read best flush right.
@@ -581,7 +424,41 @@ pub(super) fn cabinet_table(
                             num(ui, format!("{}", p.y));
                             ui.label(if p.rotated { "yes" } else { "" });
                             ui.label(p.rail.map(|r| format!("#{r}")).unwrap_or_default());
-                            ui.label(problem_lines(layout, c.id, tag_of).join("; "));
+                            // A triangle in the row; the numbers are in its popover.
+                            let here = flags(c.id);
+                            if here.is_empty() {
+                                ui.label("");
+                            } else {
+                                let red = here.iter().any(|f| f.red);
+                                let dashed = !red && here.iter().all(|f| f.unchecked);
+                                let (slot, r) = ui.allocate_exact_size(
+                                    egui::vec2(20.0, 20.0),
+                                    egui::Sense::click(),
+                                );
+                                novo_theme::widgets::flag_triangle(
+                                    ui.painter(),
+                                    slot.center(),
+                                    14.0,
+                                    red,
+                                    dashed,
+                                    novo_theme::Palette::of(ui),
+                                );
+                                r.widget_info(|| {
+                                    egui::WidgetInfo::labeled(
+                                        egui::WidgetType::Button,
+                                        true,
+                                        format!("{} for {}", here[0].title, tag_of(c.id)),
+                                    )
+                                });
+                                let text = here
+                                    .iter()
+                                    .map(|f| format!("{}: {}", f.title, f.detail))
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                if r.on_hover_text(text).clicked() {
+                                    flag_clicked = Some((here[0].id, slot.center()));
+                                }
+                            }
                         }
                         None => {
                             num(ui, size);
@@ -599,7 +476,7 @@ pub(super) fn cabinet_table(
                 }
             });
     });
-    clicked
+    (clicked, flag_clicked)
 }
 
 impl NovoApp {
@@ -619,6 +496,10 @@ impl NovoApp {
         // The open redlines are outlined on the plate, so their store has to
         // be there even when Commissioning has not been visited.
         self.load_commissioning();
+        // The triangles on the plate come from the one flag store: bring it up
+        // to the current checks first.
+        let _ = self.shown_problems();
+        self.sync_flags();
         // The plate is the full working project, so the spot of equipment an
         // option leaves out stays reserved (veiled below). Heat, the part
         // that counts what is in the machine, follows the choice.
@@ -659,6 +540,11 @@ impl NovoApp {
                 .map(|s| s.id)
         });
         let layout = structure.and_then(|s| load(project, s));
+        // The same flags the top bar counts, the ones that lie on this plate.
+        let plate_roll = match (&layout, structure) {
+            (Some(l), Some(st)) => super::cabinet_flags::roll_up(&self.wb.flags.store, l, st),
+            _ => novo_flags::RollUp::default(),
+        };
         let surfaces = structure.and_then(|s| super::cabinet_surfaces::summarize(project, s));
         // Said once the frame is done with the project borrow.
         let mut notices: Vec<String> = Vec::new();
@@ -779,23 +665,11 @@ impl NovoApp {
             }
             s
         });
-        let (placed, unplaced, problems) = match (&layout, &shown) {
-            (Some(l), Some(s)) => {
-                let r = s.report();
-                let problems = r.collisions.len()
-                    + r.outside.len()
-                    + r.too_close.len()
-                    + r.rail_overflows.len()
-                    + r.opening_conflicts.len()
-                    + s.opening_problems.len()
-                    + r.duct_overlaps.len()
-                    + r.off_centre.len()
-                    + s.door_report().map_or(0, |d| d.problems())
-                    + s.swing_report().map_or(0, |d| d.problems());
-                (l.placements.len(), l.unplaced(&cands).len(), problems)
-            }
-            _ => (0, cands.len(), 0),
+        let (placed, unplaced) = match (&layout, &shown) {
+            (Some(l), Some(_)) => (l.placements.len(), l.unplaced(&cands).len()),
+            _ => (0, cands.len()),
         };
+        let mut open_issues = false;
         let has_plan = self.cabinet.preview.is_some();
         let current_plate = layout.as_ref().map(|l| MountingPlate {
             width: l.plate.width,
@@ -1545,59 +1419,14 @@ impl NovoApp {
                 } else {
                     ui.weak("Every device of this panel is placed");
                 }
-                let label = format!(
-                    "{problems} {}",
-                    if problems == 1 { "problem" } else { "problems" }
-                );
-                if problems == 0 {
-                    let pill = cabinet_bar::pill(ui, &label, None);
-                    cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
-                } else if let Some(shown) = &shown {
-                    // The count opens the list; a row selects its device. It is
-                    // a pill like the counts beside it, in the error colour.
-                    let pill =
-                        cabinet_bar::pill(ui, &label, Some(novo_theme::widgets::Level::Error))
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    // Hovering names the problems too, so a user need not click to learn them.
-                    let pill = pill.on_hover_text(problem_summary(shown, &tag_of));
-                    egui::Popup::menu(&pill).show(|ui| {
-                        for p in &shown.placements {
-                            let lines = problem_lines(shown, p.id, &tag_of);
-                            if lines.is_empty() {
-                                continue;
-                            }
-                            if ui
-                                .button(after_tag(&tag_of(p.id), &lines.join("; ")))
-                                .clicked()
-                            {
-                                ask = Some(Ask::Select(p.id));
-                                ui.close();
-                            }
-                        }
-                        for line in rail_duct_lines(shown)
-                            .into_iter()
-                            .chain(panel_problem_lines(shown, &tag_of))
-                        {
-                            ui.label(line);
-                        }
-                    });
-                    cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
-                }
-                if let Some(j) = judged.as_ref().filter(|j| !j.violations.is_empty()) {
-                    let n = j.violations.len();
-                    let pill = cabinet_bar::pill(
-                        ui,
-                        &format!("{n} rule {}", if n == 1 { "problem" } else { "problems" }),
-                        Some(novo_theme::widgets::Level::Warning),
-                    )
+                // One triangle pill, like the top bar's: the flags of this
+                // plate. A click opens the same list.
+                let pill = novo_theme::widgets::issue_pill(ui, plate_roll.red, plate_roll.yellow)
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    // A click opens the list, like the problems pill.
-                    egui::Popup::menu(&pill).show(|ui| {
-                        for v in j.violations.iter().take(12) {
-                            ui.label(v.describe(&self.cabinet.rules.rules, &|id| tag_of(id)));
-                        }
-                    });
+                if pill.clicked() {
+                    open_issues = true;
                 }
+                cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
             });
         }
         // The picked surface and what is wrong with surface names, in full
@@ -1646,9 +1475,18 @@ impl NovoApp {
                     ask = Some(Ask::ToggleTable);
                 }
                 let selected = self.cabinet_selected();
-                if let Some(id) = cabinet_table(ui, &shown, &cands, &tag_of, &selected) {
+                let store = &self.wb.flags.store;
+                let flags_of = |id: u64| match structure {
+                    Some(st) => super::cabinet_flags::device_flags(store, &shown, st, id),
+                    None => Vec::new(),
+                };
+                let (row, flag) = cabinet_table(ui, &shown, &cands, &tag_of, &selected, &flags_of);
+                if let Some(id) = row {
                     // A row is its device: select it and show it on the plate.
                     ask = Some(Ask::Select(id));
+                }
+                if let Some((id, at)) = flag {
+                    self.wb.flags.open = Some((id, at));
                 }
             }
             Some(shown) => {
@@ -1748,11 +1586,14 @@ impl NovoApp {
                         })
                         .map(|card| (cabinet_inspector::Facts::Surface(card), false)),
                     (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
+                        let store = &self.wb.flags.store;
+                        let flags_of =
+                            |id: u64| super::cabinet_flags::device_flags(store, &shown, s, id);
                         let mut facts = cabinet_inspector::gather(
-                            project, s, stored, &shown, &selected, &tag_of,
+                            project, s, stored, &shown, &selected, &flags_of,
                         );
                         if let Some(j) = &judged {
-                            cabinet_rules::annotate(&mut facts, &self.cabinet.rules, j, &tag_of);
+                            cabinet_rules::annotate(&mut facts, &self.cabinet.rules, j);
                         }
                         super::cabinet_surface_move::annotate(&mut facts, surfaces.as_ref());
                         // On the side away from the selection.
@@ -2175,6 +2016,7 @@ impl NovoApp {
                             state: &mut self.cabinet.door,
                             layout: &shown,
                             tag_of: &tag_of,
+                            plates: &mut self.cabinet.maker_plates,
                         },
                     )
                 {
@@ -2230,19 +2072,45 @@ impl NovoApp {
                 if let Some(command) = super::cabinet_menu::show(ui.ctx(), &mut self.cabinet.menu) {
                     self.wb.queued.push(command);
                 }
-                if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
-                    let lines = problem_lines(&shown, id, &tag_of);
+                // The problem triangles of this plate, over everything else.
+                let drawn = match structure {
+                    Some(st) if !on_surface => {
+                        let clusters =
+                            super::cabinet_flags::clusters(&self.wb.flags.store, &shown, st);
+                        let open = self.wb.flags.open.map(|(id, _)| id);
+                        super::cabinet_flags::draw(
+                            ui,
+                            out.response.rect,
+                            &self.cabinet.view.viewport,
+                            &shown,
+                            &clusters,
+                            open,
+                        )
+                    }
+                    _ => Default::default(),
+                };
+                if let Some(opened) = drawn.clicked {
+                    self.wb.flags.open = Some(opened);
+                }
+                if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of)
+                    && !drawn.hovered
+                {
+                    let flags = match structure {
+                        Some(st) if !on_surface => {
+                            super::cabinet_flags::device_flags(&self.wb.flags.store, &shown, st, id)
+                        }
+                        _ => Vec::new(),
+                    };
                     out.response.clone().on_hover_ui_at_pointer(|ui| {
                         ui.strong(tag_of(id));
                         if let Some(note) = &left_out_note {
                             ui.label(note);
                             return;
                         }
-                        if lines.is_empty() {
-                            ui.weak("No problems");
-                        }
-                        for line in &lines {
-                            ui.label(line);
+                        // The triangle on the device has the numbers; the
+                        // tooltip repeats them for a pointer on the box.
+                        for f in &flags {
+                            ui.label(format!("{}: {}", f.title, f.detail));
                         }
                     });
                 }
@@ -2891,6 +2759,9 @@ impl NovoApp {
         for text in notices {
             self.message(Level::Warning, text);
         }
+        if open_issues {
+            self.show_issues(true);
+        }
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
         }
@@ -3082,6 +2953,7 @@ impl NovoApp {
                         | Ask::CoolerLayout(..)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
+                        | Ask::UsePlatePart(..)
                         | Ask::SetEnclosure(_)
                 ))
         {
@@ -3123,9 +2995,13 @@ impl NovoApp {
                 self.message(Level::Info, TABLE_NEEDS_PLATE);
             }
             Ask::ToggleTable => self.cabinet.table ^= true,
-            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::TogglePlateCard => {
+                self.cabinet.plate_card ^= true;
+                self.cabinet.maker_plates.reset();
+            }
             Ask::CloseInspector => {
                 self.cabinet.plate_card = false;
+                self.cabinet.maker_plates.reset();
                 self.cabinet.view.selection.clear();
             }
             Ask::ExportPlate => {
@@ -3172,6 +3048,7 @@ impl NovoApp {
                 self.export_wire_production();
             }
             Ask::OpenBench => self.open_bench(),
+            Ask::OpenParts => self.open_parts_browser(),
             Ask::ExportWiringDxf(s) => {
                 self.export_wiring_dxf(s);
             }
@@ -3441,6 +3318,21 @@ impl NovoApp {
                         ),
                     );
                 }
+            }
+            Ask::UsePlatePart(s, choice) => {
+                self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
+                self.cabinet_edit("Use maker plate", move |tx| {
+                    novo_layout::model::set_plate_part(
+                        tx,
+                        s,
+                        &choice.label,
+                        choice.width,
+                        choice.height,
+                        choice.holes.as_deref(),
+                    )
+                    .map(|_| ())
+                });
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

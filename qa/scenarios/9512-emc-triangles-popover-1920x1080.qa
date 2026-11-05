@@ -1,0 +1,34 @@
+@title EMC findings are triangles on the drawing, with a popover and a fix preview (1920x1080)
+@area Check
+@sizes 1920x1080
+# T11: with the EMC check on, each finding is a triangle on its wire or device; the popover names the source, has the design-aid caveat behind a ?, Preview the fix and Open EMC check.
+open qa/fixtures/emc-cabinet.novo
+wait 20
+key ctrl+k
+text EMC check
+key enter
+wait 10
+click_text "Run the EMC rules with the design checks"
+wait 10
+key Escape
+wait 10
+shot emc-triangles
+check_layout
+click 546 256
+wait 6
+expect "Open EMC check"
+expect "Sensitive device near drive"
+expect "Preview the fix"
+shot emc-popover
+check_layout
+# Preview the fix shows what it would change in the EMC window; nothing changes until Apply.
+click_text "Preview the fix" Button
+wait 12
+expect "EMC check"
+expect "Preview"
+shot emc-fix-preview
+check_layout
+key Escape
+wait 6
+# The flag is still there until the fix is applied: the pill still counts it.
+expect "warnings"

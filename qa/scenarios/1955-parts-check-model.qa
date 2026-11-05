@@ -1,0 +1,27 @@
+@title Parts: Check model button shows the STEP health summary and notes
+@area Parts
+# `library` puts a hand-made STEP model with gaps on the 3RT2016 part. The block is shown before a click and after the report.
+library qa/fixtures/library-health
+fresh
+key ctrl+k
+text "parts"
+wait 10
+key Return
+wait 20
+text 3RT2016
+wait 12
+key Down
+key Down
+wait 8
+scroll 800 450 -400
+wait 8
+expect "Check model"
+shot before-click
+check_layout
+click_text "Check model"
+wait 60
+expect "Reads with gaps"
+scroll 800 450 -400
+wait 8
+shot report
+check_layout

@@ -13,9 +13,9 @@ key shift+l
 wait 20
 try click_text "Go to page 2 Control circuit"
 wait 20
-move 75 397
+move 123 413
 wait 3
-mouse_down 75 397
+mouse_down 123 413
 wait 2
 shot held-early
 expect "push button · pressed"
@@ -23,7 +23,7 @@ expect "pulled in"
 wait 40
 shot held-later
 expect "push button · pressed"
-mouse_up 75 397
+mouse_up 123 413
 wait 5
 expect_not "push button · pressed"
 shot released

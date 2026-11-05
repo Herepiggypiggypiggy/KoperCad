@@ -110,17 +110,23 @@ impl WireList {
             "wires",
             "",
             vec![
-                Column::new("number", "Wire no.", 15.0),
-                Column::new("from", "From", 35.0),
-                Column::new("to", "To", 35.0),
-                Column::new("potential", "Potential", 15.0),
-                Column::new("color", "Colour", 12.0),
+                // Print weights first; `on_screen` is the split that fits a
+                // 1366 px window with Length basis in view.
+                Column::new("number", "Wire no.", 15.0).on_screen(13.0),
+                Column::new("from", "From", 28.0).on_screen(20.0),
+                Column::new("to", "To", 28.0).on_screen(20.0),
+                Column::new("potential", "Potential", 15.0).on_screen(10.0),
+                Column::new("color", "Colour", 12.0)
+                    .on_screen(8.0)
+                    .optional(),
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
-                Column::new("cable", "Cable", 25.0),
-                Column::new("location", "Location", 15.0),
-                Column::new("length_mm", "Route length mm", 14.0).right(),
-                Column::new("length_basis", "Length basis", 12.0),
-                Column::new("torque", "Torque", 20.0),
+                Column::new("cable", "Cable", 20.0).on_screen(16.0),
+                Column::new("location", "Location", 15.0).on_screen(8.0),
+                Column::new("length_mm", "Route length mm", 14.0)
+                    .right()
+                    .on_screen(11.0),
+                Column::new("length_basis", "Length basis", 22.0).on_screen(18.0),
+                Column::new("torque", "Torque", 14.0).optional(),
             ],
         );
         // The wire's own cross-section, else its cable core's.
@@ -152,6 +158,7 @@ impl WireList {
             })
             .collect();
         let lengths = lengths::cut_lengths(project, &measured);
+        let estimate_note = lengths.iter().any(|l| l.basis.is_spec_estimate());
         for (connection, length) in connections.into_iter().zip(lengths) {
             let members: Vec<&Wire> = connection.wires.clone();
             let mut numbers: Vec<&str> =
@@ -217,6 +224,9 @@ impl WireList {
         // other workshop reports (see [`WIRE_LIST_COUNT_TITLE`]).
         if !with_feeds {
             section.title = WIRE_LIST_COUNT_TITLE.replace("{n}", &section.rows.len().to_string());
+        }
+        if estimate_note {
+            section.title = format!("{}. {}", section.title, novo_layout::spec::ESTIMATE_NOTICE);
         }
         ReportOutput {
             report: Self::ID.into(),

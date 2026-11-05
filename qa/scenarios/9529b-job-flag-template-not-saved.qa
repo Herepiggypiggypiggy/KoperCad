@@ -1,0 +1,20 @@
+@title Project templates that cannot be saved are a job flag with a popover
+@area Files
+@env KOPERCAD_QA_FAIL=designer.save
+open_starter_example
+wait 20
+key ctrl+k
+text report designer
+wait 4
+key Enter
+wait 15
+shot designer-open
+click_text "Save in project" Button
+wait 15
+click_text "Template not saved" Button
+wait 8
+expect "Forced for the QA picture"
+shot template-flag-popover
+check_layout
+key Escape
+wait 6

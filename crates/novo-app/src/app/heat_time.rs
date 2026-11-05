@@ -13,6 +13,7 @@ use novo_cfd::{
     TransientSummary,
 };
 use novo_thermal::Scenario;
+use novo_thermal::heatup::{HeatUp, HeatUpSettings, heat_up};
 
 use super::heat::Meta;
 use super::heat_run::Solution;
@@ -39,6 +40,60 @@ pub(super) fn spec_for_minutes(minutes: f64) -> TransientSpec {
         duration_s,
         frame_interval_s: duration_s / FRAMES,
         ..TransientSpec::default()
+    }
+}
+
+/// The shell-mass line next to the heat-up curve: the time to 90 % of the
+/// final air rise with the mass of walls and plate, and how much shorter the
+/// run above reads without it.
+pub(super) fn mass_line(m: &HeatUp) -> String {
+    format!(
+        "Wall and plate mass: 90 % after {} (model, not measurement)",
+        TimeLine::time_label(m.rise.t90_s)
+    )
+}
+
+pub(super) fn mass_hover(m: &HeatUp) -> String {
+    let r = &m.rise;
+    format!(
+        "Time for the air to reach 90 % of its final rise with the walls and plate storing \
+         heat: {} (63 % in {}). The same model without wall and plate mass reads {} and {} \
+         ({:.0} % too short); that compares the model with itself, it is not a measurement. \
+         Mass changes how fast the final temperature is reached, not the final temperature. \
+         One air temperature, devices as one lump, not validated. Frames and curve above are \
+         the 2D run without wall mass. Not counted: rails, ducts, wires, air leaks, sun. \
+         Time constants: {}. {}",
+        TimeLine::time_label(r.t90_s),
+        TimeLine::time_label(r.t63_s),
+        TimeLine::time_label(r.t63_no_wall_mass_s),
+        TimeLine::time_label(r.t90_no_wall_mass_s),
+        r.first_order_error() * 100.0,
+        m.time_constants_s
+            .iter()
+            .take(3)
+            .map(|t| TimeLine::time_label(*t))
+            .collect::<Vec<_>>()
+            .join(", "),
+        shell_note(m),
+    )
+}
+
+/// Where the wall and plate values come from, and the weight cross-check.
+pub(super) fn shell_note(m: &HeatUp) -> String {
+    use novo_thermal::shell::Provenance;
+    let walls = match m.provenance.walls {
+        Provenance::Assumed => {
+            "Wall sheet and plate: assumed values, not from the chosen enclosure."
+        }
+        Provenance::Catalogue => "Wall sheet and plate: from the enclosure catalogue.",
+        Provenance::Measured => "Wall sheet and plate: measured.",
+    };
+    match m.mass_check {
+        Some(r) => format!(
+            "{walls} Catalogue weight is {r:.1} times the weight of the modelled wall sheet \
+             (about 1 when the layers match the real enclosure)."
+        ),
+        None => walls.to_string(),
     }
 }
 
@@ -88,6 +143,8 @@ pub(super) struct Frame {
 pub(super) struct TimeLine {
     pub frames: Vec<Frame>,
     pub summary: Option<TransientSummary>,
+    /// The same cabinet with the heat capacity of walls and plate.
+    pub mass: Option<HeatUp>,
     /// The frame shown.
     pub at: usize,
     pub playing: bool,
@@ -108,6 +165,7 @@ impl TimeLine {
         TimeLine {
             frames: Vec::new(),
             summary: None,
+            mass: None,
             at: 0,
             playing: false,
             minutes: 60.0,
@@ -153,6 +211,15 @@ impl TimeLine {
     ) {
         self.clear();
         self.expected = spec.frame_count();
+        self.mass = heat_up(
+            &scenario,
+            &HeatUpSettings {
+                duration_s: spec.duration_s,
+                sample_s: (spec.duration_s / 120.0).max(1.0),
+                ..HeatUpSettings::default()
+            },
+        )
+        .ok();
         self.pending = Some(meta);
         self.run = Some(Run::start(solver, scenario, spec));
     }
@@ -170,6 +237,7 @@ impl TimeLine {
         self.pending = None;
         self.frames.clear();
         self.summary = None;
+        self.mass = None;
         self.at = 0;
         self.playing = false;
         self.follow = true;
@@ -366,6 +434,16 @@ pub(super) fn strip(ui: &mut egui::Ui, tl: &mut TimeLine) {
     );
     ui.label(egui::RichText::new(ESTIMATE_LABEL).small().color(t.warning))
         .on_hover_text(ESTIMATE_HOVER);
+    if let Some(m) = &tl.mass {
+        // Own row: beside the other labels it pushed the curve over the buttons.
+        ui.end_row();
+        ui.label(
+            egui::RichText::new(mass_line(m))
+                .small()
+                .color(t.text_secondary),
+        )
+        .on_hover_text(mass_hover(m));
+    }
     if let Some(s) = &tl.summary {
         let size = egui::vec2(110.0, 18.0);
         let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::hover());

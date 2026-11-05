@@ -138,17 +138,8 @@ pub(super) fn show(
                 t::TEXT_MUTED
             },
         ));
-        let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
-        // Beside a lesson card the panel is short: the sentence that only
-        // repeats "not simulated" gives its two lines to the Quality row.
-        let cramped = super::panel::reserved_bottom_right(ctx) > 0.0;
-        if !(cramped && !state.running() && state.solution().is_none()) {
-            ui.label(egui::RichText::new(text).small().color(if warn {
-                t::WARNING
-            } else {
-                t::TEXT_MUTED
-            }));
-        }
+        let (text, _) = phase_line(state.running(), state.solution().is_some(), stale);
+        super::window_help::add(ui.ctx(), text);
         if let Some(sol) = state.solution() {
             jump = verdict_line(ui, &sol.snapshot, tag_of, stale, state.running());
             let running = state.running();
@@ -183,6 +174,17 @@ pub(super) fn show(
                     super::heat_modes::paths_table(ui, &rows, tag_of);
                 });
         }
+        if let Some((sol, scn)) = state
+            .solution()
+            .and_then(|s| state.live.scenario_for(s.scenario_key).map(|c| (s, c)))
+        {
+            egui::CollapsingHeader::new("Cabinet shell")
+                .id_salt("view3d_heat_shell")
+                .show(ui, |ui| {
+                    let report = novo_cfd::shell_view::shell_report(&scn, &sol.snapshot);
+                    super::heat_shell::result_block(ui, &report);
+                });
+        }
         // Closed while a run goes: the form below the fold only hid the Cancel
         // row and could not be used anyway.
         let mut settings_header = egui::CollapsingHeader::new("Settings for the next run")
@@ -193,9 +195,7 @@ pub(super) fn show(
         settings_header.show(ui, |ui| {
             ui.add_enabled_ui(!running, |ui| settings(ui, state));
         });
-        egui::CollapsingHeader::new("What is this?")
-            .id_salt("view3d_heat_about")
-            .show(ui, |ui| about(ui, state));
+        super::window_help::add(ui.ctx(), about(state));
     });
     jump
 }
@@ -275,16 +275,25 @@ fn verdict_line(
     .on_hover_text(
         "From the solver's per-device margins. A model estimate, not a measurement: limits come from the parts data.",
     );
+    // The short qualifier stays on screen; the wording is behind the "?".
     ui.label(
-        egui::RichText::new(if running {
-            "Still running: this reading can change until the run finishes."
-        } else if stale {
-            "Out of date: this result was made for another layout."
+        egui::RichText::new(if stale {
+            "Out of date · model estimate"
         } else {
-            "Model estimate, not a measurement."
+            "Model estimate"
         })
         .small()
         .color(pal.text_secondary),
+    );
+    super::window_help::add(
+        ui.ctx(),
+        if running {
+            "Still running: this reading can change until the run finishes. Model estimate, not a measurement."
+        } else if stale {
+            "Out of date: this result was made for another layout. Model estimate, not a measurement."
+        } else {
+            "Model estimate, not a measurement: limits come from the parts data."
+        },
     );
     if !dim
         && super::assistant::claude_is_on(ui.ctx())
@@ -358,54 +367,42 @@ fn settings(ui: &mut egui::Ui, state: &mut HeatState) {
     );
 }
 
-fn about(ui: &mut egui::Ui, state: &HeatState) {
-    ui.label(
+/// What the Heat panel's "?" says: the old "What is this?" fold, as text.
+fn about(state: &HeatState) -> String {
+    let mut out = String::from(
         "Simulate solves the air flow and temperatures inside the cabinet from the \
          power loss of the placed devices. The quality levels run one after the other, so \
-         a rough picture appears first and sharpens; Cancel keeps the latest one.",
+         a rough picture appears first and sharpens; Cancel keeps the latest one.\n\n\
+         Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.",
     );
-    ui.add_space(4.0);
-    super::dialog_ui::explained(
-        ui,
-        "Quick estimate, not a simulation",
-        "Before any run, the Cabinet's Heat view shows a quick estimate, not a simulation.",
-    );
-    ui.add_space(4.0);
     match state.solution() {
         Some(sol) => {
             let acc = &sol.snapshot.accuracy;
-            let tag = if acc.validated {
-                "Checked against benchmarks."
+            out.push_str(if acc.validated {
+                "\n\nChecked against benchmarks."
             } else {
-                "Not validated: treat it as a model, not a measurement."
-            };
-            ui.label(egui::RichText::new(tag).strong());
-            ui.label(&acc.headline);
+                "\n\nNot validated: treat it as a model, not a measurement."
+            });
+            out.push_str(&format!("\n{}", acc.headline));
             for l in &acc.limits {
-                ui.label(egui::RichText::new(format!("• {l}")).small());
+                out.push_str(&format!("\n• {l}"));
             }
-            // The run's own notes: heat balance, a fan case, a preview.
             for n in &sol.snapshot.notes {
-                ui.label(egui::RichText::new(format!("• {n}")).small());
+                out.push_str(&format!("\n• {n}"));
             }
             if !sol.messages.is_empty() {
-                ui.add_space(4.0);
-                ui.label("Missing or assumed:");
+                out.push_str("\n\nMissing or assumed:");
                 for m in &sol.messages {
-                    ui.label(egui::RichText::new(format!("• {m}")).small());
+                    out.push_str(&format!("\n• {m}"));
                 }
             }
         }
-        None => {
-            ui.label(
-                egui::RichText::new(
-                    "Not validated: results are a model, not a measurement. The accuracy \
-                     statement and its limits appear here after a run.",
-                )
-                .strong(),
-            );
-        }
+        None => out.push_str(
+            "\n\nNot validated: results are a model, not a measurement. The accuracy \
+             statement and its limits appear here after a run.",
+        ),
     }
+    out
 }
 
 #[cfg(test)]

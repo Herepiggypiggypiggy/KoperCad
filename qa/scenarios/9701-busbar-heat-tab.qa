@@ -1,0 +1,34 @@
+@title Calculations: Busbar heat tab (default bar, a 600 A bar, a bar that runs away)
+@area Calculations
+open_starter_example
+wait 20
+click_text Check
+wait 5
+click_text Calculations
+wait 20
+click_text "Busbar heat"
+wait 20
+shot busbar-default
+expect "Hottest point"
+expect "model, not validated"
+expect "At most"
+expect "From cold"
+check_layout
+click_text "400 A"
+key ctrl+a
+text 600
+key Enter
+wait 20
+expect "600"
+shot busbar-600A
+check_layout
+click_text "600 A"
+key ctrl+a
+text 20000
+key Enter
+wait 20
+shot busbar-too-much
+expect "no steady state"
+expect_not "stays under"
+expect "model, not validated"
+check_layout

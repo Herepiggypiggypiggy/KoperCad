@@ -247,3 +247,83 @@ fn etim_release_install_then_a_bmecat_1_2_file_with_codes_imports_with_price_and
     assert!(saved.contains("\"per\": 100"), "{saved}");
     assert!(saved.contains("\"width_mm\""), "{saved}");
 }
+
+#[test]
+fn step_health_reports_a_folder_and_exits_one_when_a_file_is_unreadable() {
+    let pack = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../novo-interop/tests/data/step-pack"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let report = dir.path().join("health.md");
+    let (code, out) = novo(&[
+        "parts",
+        "step-health",
+        pack,
+        "--report",
+        report.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains("5 files: 2 read cleanly, 1 with gaps, 2 cannot be read."),
+        "{out}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&report).unwrap(),
+        format!("{out}\n").trim_end_matches('\n').to_owned() + "\n"
+    );
+    // A folder with only a good file exits 0.
+    let good = dir.path().join("good");
+    std::fs::create_dir(&good).unwrap();
+    std::fs::copy(format!("{pack}/block-plain.stp"), good.join("a.stp")).unwrap();
+    let (code, out) = novo(&["parts", "step-health", good.to_str().unwrap()]);
+    assert_eq!(code, 0, "{out}");
+    let (code, _) = novo(&[
+        "parts",
+        "step-health",
+        dir.path().join("none").to_str().unwrap(),
+    ]);
+    assert_eq!(code, 3);
+}
+
+#[test]
+fn step_parts_lists_the_parts_of_a_model_and_exits_three_when_it_cannot_be_read() {
+    let pack = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../novo-interop/tests/data/step-pack"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    // The block named like a wheel gets the wheel role.
+    let named = std::fs::read_to_string(format!("{pack}/block-plain.stp"))
+        .unwrap()
+        .replace("MANIFOLD_SOLID_BREP('',", "MANIFOLD_SOLID_BREP('Wheel A',");
+    let file = dir.path().join("crane.stp");
+    std::fs::write(&file, named).unwrap();
+    let report = dir.path().join("parts.md");
+    let (code, out) = novo(&[
+        "parts",
+        "step-parts",
+        file.to_str().unwrap(),
+        "--report",
+        report.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("| Wheel A | wheel |"), "{out}");
+    assert!(out.contains("- wheel: 1"), "{out}");
+    assert_eq!(
+        std::fs::read_to_string(&report).unwrap().trim_end(),
+        out.trim_end()
+    );
+    let (code, _) = novo(&[
+        "parts",
+        "step-parts",
+        &format!("{pack}/not-a-step-file.stp"),
+    ]);
+    assert_eq!(code, 3, "a file that is not a STEP model exits 3");
+    let (code, _) = novo(&[
+        "parts",
+        "step-parts",
+        dir.path().join("missing.stp").to_str().unwrap(),
+    ]);
+    assert_eq!(code, 3);
+}

@@ -1,0 +1,17 @@
+@title Calculations > Mechanical with no supply current stated
+@area Calculations
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+key ctrl+k
+wait 6
+text calculations
+wait 8
+key Enter
+wait 15
+click_text "Mechanical"
+wait 10
+shot supply-button-disabled
+expect_disabled "Use the current at the supply"
+expect "Supply current not stated"
+expect "Check > Calculations > Panel SCCR"
+check_layout

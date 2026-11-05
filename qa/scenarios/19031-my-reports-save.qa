@@ -1,0 +1,43 @@
+@title PR1903: Reports menu More reports lists My reports; Write query then Save does not overwrite
+@area Reports
+@sizes 1366x768 1920x1080
+# From QA4's run on 139dcd3a. Written without a GUI box: adjust coordinates if a click misses.
+open qa/fixtures/door-wire-spec-a.novo
+wait 20
+click_text Reports #1
+wait 5
+click_text "More reports"
+wait 5
+shot more-reports-submenu
+key Escape
+wait 3
+key Escape
+wait 3
+key ctrl+k
+text my reports
+wait 3
+key Enter
+wait 10
+click_text "Build by choosing"
+wait 5
+click_text "Write query"
+wait 5
+click 475 161
+text Mine one
+wait 3
+click_text "Save report"
+wait 8
+shot saved-one
+check_layout
+click_text "+ New report"
+wait 5
+click_text "Write query"
+wait 5
+shot new-after-write-query
+click 475 161
+text Mine two
+wait 3
+click_text "Save report"
+wait 8
+shot saved-two
+check_layout

@@ -21,7 +21,13 @@ expect_not "Preliminary"
 move 700 650
 wait 10
 shot slice-solids
+# The key text is behind the "?" next to "Heat" in the strip (#1846): open it, check, close it.
+click 109 73
+wait 8
 expect "Slice: darker squares"
+shot slice-key-help
+click 109 73
+wait 8
 click_text Cloud
 wait 20
 shot cloud-on

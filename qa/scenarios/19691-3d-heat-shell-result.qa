@@ -1,0 +1,33 @@
+@title 3D Heat: Cabinet shell block after a run shows the heat split and face temperatures as model
+@area 3D
+@sizes 1366x768 1920x1080
+# Lane H7. After a Quick run the Heat panel has a "Cabinet shell" fold: how the heat leaves (convection, radiation, other) as a bar with watts, and the temperature of each face inside and outside, labelled model.
+open_starter_example
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+try click_text Cancel
+wait 30
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 120
+scroll 1150 600 -400
+wait 20
+click_text "Cabinet shell"
+wait 20
+scroll 1150 600 -600
+wait 20
+expect "Through the shell"
+expect "model"
+shot shell-result
+check_layout
+check_blank shell-result

@@ -1,0 +1,30 @@
+@title Protection plot: cable damage and motor start curves with the verdict list
+@area Schematic
+# A distribution board with motor feeders: the Curves tab shows the device bands, the cable curves and the motor starts, and the verdicts with their words.
+open qa/fixtures/distribution-board.novo
+wait 20
+key ctrl+k
+wait 4
+text "Protection: curves"
+wait 6
+key Enter
+wait 20
+shot protection-curves
+expect "AGAINST CABLE AND MOTOR"
+expect "Estimate from typical values"
+expect "Cable damage curves"
+expect "Motor starts"
+check_layout
+click_text "Cable damage curves"
+wait 6
+shot protection-cable-off
+click_text "Cable damage curves"
+wait 6
+click_text "Motor starts"
+wait 6
+shot protection-motor-off
+click_text "Motor starts"
+wait 6
+shot protection-both-on
+check_blank protection-both-on
+check_layout

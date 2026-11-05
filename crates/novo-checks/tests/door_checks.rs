@@ -4,6 +4,7 @@ use novo_checks::{Problem, ProblemKind, Severity, check};
 use novo_core::*;
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::{device_depth, set_enclosure};
+use novo_layout::spec::EnclosureSpec;
 
 fn tag(text: &str) -> DeviceTag {
     DeviceTag::parse(text).unwrap()
@@ -164,4 +165,162 @@ fn the_device_property_overrides_the_part_depth() {
 fn keys_and_labels_are_unique() {
     let keys: std::collections::HashSet<_> = ProblemKind::ALL.iter().map(|k| k.key()).collect();
     assert_eq!(keys.len(), ProblemKind::ALL.len());
+}
+
+fn with_spec(project: &mut Project, depth: f64, setback: Option<f64>) {
+    use novo_layout::spec::{CatalogueRow, Field, Source};
+    let mut spec = CatalogueRow {
+        article: "T-1".into(),
+        series: "T".into(),
+        width: 404.0,
+        height: 404.0,
+        depth,
+        wall: 2.0,
+        plate_article: String::new(),
+        source: "test".into(),
+        terms: "test".into(),
+    }
+    .spec();
+    spec.plate_setback = setback.map(|v| Field::new(v, Source::Catalogue));
+    let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+    let mut props = project.get::<Structure>(cab).unwrap().properties.clone();
+    spec.write(&mut props);
+    project
+        .transact("spec", |tx| {
+            for (k, v) in props {
+                tx.set_property(cab, k, Some(v))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn the_chosen_enclosure_decides_the_depth_check() {
+    // -K2 stands 250 mm deep.
+    let mut shallow = cabinet(None, 300.0);
+    with_spec(&mut shallow, 254.0, Some(0.0));
+    let found = check(&shallow);
+    assert_eq!(of_kind(&found, ProblemKind::DeviceTooDeep).len(), 0);
+    assert_eq!(of_kind(&found, ProblemKind::DoorGapTight).len(), 1);
+    assert!(
+        of_kind(&found, ProblemKind::DoorGapTight)[0]
+            .message
+            .contains("enclosure data: catalogue")
+    );
+
+    let mut small = cabinet(None, 300.0);
+    with_spec(&mut small, 200.0, Some(0.0));
+    let found = check(&small);
+    let deep = of_kind(&found, ProblemKind::DeviceTooDeep);
+    assert_eq!(deep.len(), 1);
+    assert!(deep[0].message.contains("54 mm too deep"));
+}
+
+#[test]
+fn a_chosen_enclosure_without_setback_fails_loudly() {
+    let mut p = cabinet(None, 300.0);
+    with_spec(&mut p, 300.0, None);
+    let found = check(&p);
+    let missing = of_kind(&found, ProblemKind::EnclosureDataMissing);
+    assert_eq!(missing.len(), 1);
+    assert!(missing[0].message.contains("plate setback"));
+}
+
+#[test]
+fn a_typed_size_that_disagrees_loses_to_the_record() {
+    let mut p = cabinet(Some(enclosure(300.0)), 300.0);
+    with_spec(&mut p, 204.0, Some(0.0));
+    let found = check(&p);
+    // Since #1901 the layout already reads the record's room, so the typed
+    // 300 mm depth is gone and the record's 200 mm decides.
+    assert_eq!(of_kind(&found, ProblemKind::DeviceTooDeep).len(), 1);
+}
+
+#[test]
+fn a_measured_record_carries_no_estimate_notice() {
+    use novo_layout::spec::{Field, Source};
+    let mut p = cabinet(None, 300.0);
+    with_spec(&mut p, 254.0, Some(0.0));
+    let cab = p.structures().find(|s| s.enclosure).unwrap().id;
+    let mut spec = EnclosureSpec::read(&p.get::<Structure>(cab).unwrap().properties);
+    for f in [
+        &mut spec.width,
+        &mut spec.height,
+        &mut spec.depth,
+        &mut spec.wall,
+        &mut spec.plate_setback,
+    ] {
+        *f = f.map(|f| Field::new(f.value, Source::Measured));
+    }
+    let mut props = p.get::<Structure>(cab).unwrap().properties.clone();
+    spec.write(&mut props);
+    p.transact("measured", |tx| {
+        for (k, v) in props {
+            tx.set_property(cab, k, Some(v))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let found = check(&p);
+    let gap = of_kind(&found, ProblemKind::DoorGapTight);
+    assert_eq!(gap.len(), 1);
+    assert!(gap[0].message.contains("enclosure data: measured by you"));
+    assert!(!gap[0].message.contains("Estimate from catalogue data"));
+}
+
+/// Rewrites the source of every number of the stored record.
+fn resource(p: &mut Project, source: novo_layout::spec::Source) {
+    use novo_layout::spec::Field;
+    let cab = p.structures().find(|s| s.enclosure).unwrap().id;
+    let mut spec = EnclosureSpec::read(&p.get::<Structure>(cab).unwrap().properties);
+    for f in [
+        &mut spec.width,
+        &mut spec.height,
+        &mut spec.depth,
+        &mut spec.wall,
+        &mut spec.plate_setback,
+    ] {
+        *f = f.map(|f| Field::new(f.value, source));
+    }
+    let mut props = p.get::<Structure>(cab).unwrap().properties.clone();
+    spec.write(&mut props);
+    p.transact("source", |tx| {
+        for (k, v) in props {
+            tx.set_property(cab, k, Some(v))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn too_deep_is_an_error_for_maker_numbers_and_a_warning_for_a_default() {
+    use novo_layout::spec::Source;
+    // -K2 stands 250 mm deep; the enclosure is 200 mm deep.
+    for (source, severity) in [
+        (Source::Catalogue, Severity::Error),
+        (Source::Measured, Severity::Error),
+        (Source::Default, Severity::Warning),
+    ] {
+        let mut p = cabinet(None, 300.0);
+        with_spec(&mut p, 200.0, Some(0.0));
+        resource(&mut p, source);
+        let found = check(&p);
+        let deep = of_kind(&found, ProblemKind::DeviceTooDeep);
+        assert_eq!(deep.len(), 1, "{source:?}");
+        assert_eq!(deep[0].severity, severity, "{source:?}");
+        // The notice names where the numbers come from.
+        let msg = &deep[0].message;
+        assert_eq!(
+            msg.contains("Estimate from program defaults"),
+            source == Source::Default,
+            "{msg}"
+        );
+        assert_eq!(
+            msg.contains("Estimate from catalogue data"),
+            source == Source::Catalogue,
+            "{msg}"
+        );
+    }
 }

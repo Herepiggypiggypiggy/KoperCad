@@ -115,17 +115,72 @@ fn the_cabinet_says_what_it_estimated_and_what_leaves_the_cabinet() {
     let o = super::cabinet_routes::overlay(p, cab);
     assert!(o.routes.iter().all(|r| !r.free_air));
     assert!(
-        o.notes
+        o.chips
             .iter()
-            .any(|n| n.contains("estimated terminal position")),
+            .any(|c| c.sentence.contains("estimated terminal position")),
         "{:?}",
-        o.notes
+        o.chips
     );
     assert!(
-        o.notes.iter().any(|n| n.contains("no entry point")),
+        o.chips
+            .iter()
+            .any(|c| c.sentence.contains("no entry point")),
         "{:?}",
-        o.notes
+        o.chips
     );
+}
+
+#[test]
+fn the_routes_chips_are_counts_with_a_fix_where_there_is_one() {
+    use super::cabinet_routes::FixKind;
+    let (_dir, d) = placed_example();
+    let p = d.doc().project();
+    let cab = p.structures().find(|s| s.enclosure).unwrap().id;
+    let o = super::cabinet_routes::overlay(p, cab);
+    let fix = |label: &str| {
+        o.chips
+            .iter()
+            .find(|c| c.label == label)
+            .and_then(|c| c.fix)
+    };
+    assert!(o.chips.iter().all(|c| c.count > 0));
+    assert_eq!(fix("no entry").map(|f| f.1), Some(FixKind::Entry));
+    assert_eq!(
+        fix("estimated terminals").map(|f| f.1),
+        Some(FixKind::DetectPins)
+    );
+}
+
+#[test]
+fn set_entry_from_the_chip_is_the_bottom_middle_and_one_undo_step() {
+    use super::cabinet::Ask;
+    let (_dir, mut d) = placed_example();
+    let cab = d
+        .doc()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .unwrap()
+        .id;
+    let before = super::cabinet_routes::overlay(d.doc().project(), cab);
+    let (w, h) = before.plate.unwrap();
+    assert!(before.entry.is_none());
+    d.app.cabinet_ask(
+        Ask::SetEntryPoint(cab, Some((w / 2.0, h))),
+        Some(cab),
+        None,
+        &[],
+    );
+    let after = super::cabinet_routes::overlay(d.doc().project(), cab);
+    assert_eq!(
+        after.entry,
+        Some((w / 2.0, h)),
+        "bottom middle, y grows down"
+    );
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    let undone = super::cabinet_routes::overlay(d.doc().project(), cab);
+    assert!(undone.entry.is_none(), "one undo step");
 }
 
 /// Rewrites the QA fixture: the example cabinet after Place all with the
@@ -239,4 +294,51 @@ fn write_slotted_ducts_fixture() {
         .join("../../qa/fixtures/route-slotted-ducts.novo");
     let _ = std::fs::remove_file(&path);
     d.app.backend.save(&path).unwrap();
+}
+
+/// Duct categories are optional: typed words read back, a duct that states
+/// none routes as before, and one that states a kind steers wires without
+/// ever leaving one unrouted.
+#[test]
+fn duct_categories_are_off_by_default_and_never_refuse_a_wire() {
+    use super::cabinet_rails::parse_carries;
+    use novo_routing::model::RouteClass;
+    assert_eq!(parse_carries(""), Some(vec![]));
+    assert_eq!(parse_carries("any"), Some(vec![]));
+    assert_eq!(
+        parse_carries("signal, power"),
+        Some(vec![RouteClass::Power, RouteClass::Signal])
+    );
+    assert_eq!(parse_carries("heavy"), None);
+
+    let (_dir, mut d) = placed_example();
+    let before = route_project(d.doc().project());
+    let ducts: Vec<_> = d
+        .doc()
+        .project()
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .map(|r| r.id)
+        .collect();
+    // Every duct states "earth only": every other wire prefers to stay out of
+    // all of them, which cannot be done, so they still go through.
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Categories", |tx| {
+            for id in &ducts {
+                tx.set_property(
+                    *id,
+                    novo_routing::model::DUCT_CARRIES,
+                    Some(novo_core::Value::Text("earth".into())),
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let after = route_project(d.doc().project());
+    assert_eq!(before.routes.len(), after.routes.len());
+    assert_eq!(before.unrouted, after.unrouted);
+    assert!(after.routes.values().all(|r| !r.blocked));
 }

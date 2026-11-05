@@ -166,6 +166,9 @@ pub struct SchematicView {
     shortcuts: HashMap<&'static str, String>,
     /// Items a release would select while a selection box is dragged.
     band_count: Option<usize>,
+    /// The keys of the marks under a primary click on a mark glyph, and where
+    /// the pointer was, for the shell to open a popover.
+    mark_click: Option<(Vec<u64>, egui::Pos2)>,
     /// The Preferences default for moving a symbol: its wires go along
     /// (Shift then leaves them) or stay (Shift then takes them).
     pub move_carries: bool,
@@ -364,6 +367,7 @@ impl SchematicView {
             menu_world: None,
             shortcuts: HashMap::new(),
             band_count: None,
+            mark_click: None,
             move_carries: true,
             yield_escape: false,
             swallow: false,
@@ -561,6 +565,11 @@ impl SchematicView {
 
     /// How many items releasing the selection box being dragged would
     /// select; `None` when no box is being dragged.
+    /// The marks (their keys) a primary click landed on, once.
+    pub fn take_mark_click(&mut self) -> Option<(Vec<u64>, egui::Pos2)> {
+        self.mark_click.take()
+    }
+
     pub fn band_count(&self) -> Option<usize> {
         self.band_count
     }
@@ -1204,6 +1213,23 @@ impl SchematicView {
         };
         let out = self.canvas.show(ui, scene.scene());
         self.band_count = out.band_count;
+        let mut on_flag = false;
+        if out.response.clicked()
+            && !out.hovered_marks.is_empty()
+            && let Some(pos) = ui.input(|i| i.pointer.interact_pos())
+        {
+            let keys: Vec<u64> = out
+                .hovered_marks
+                .iter()
+                .filter_map(|&i| self.canvas.marks.list.get(i))
+                .map(|m| m.key)
+                .filter(|&k| k != 0)
+                .collect();
+            if !keys.is_empty() {
+                self.mark_click = Some((keys, pos));
+                on_flag = true;
+            }
+        }
         let response = out.response.clone();
         let rect = response.rect;
         self.rect = rect;
@@ -1427,6 +1453,7 @@ impl SchematicView {
             }
         } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
+            && !on_flag
             && !on_text
             && let Some(w) = out.cursor_raw
         {
