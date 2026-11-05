@@ -53,6 +53,9 @@ pub(super) enum RailAsk {
     /// The slots of a duct, as typed: empty for anywhere along it, a pitch
     /// in mm, or `closed` for a duct a wire enters only at its ends.
     Slots(u64, String),
+    /// The kinds of wire a duct is meant to carry, as typed (`power, supply`);
+    /// empty for any. Only a preference of the router.
+    Carries(u64, String),
     /// Put every DIN rail's line on the middle of its devices, which stay put.
     CentreRails,
     /// The lesson chip: start or continue this lesson.
@@ -81,6 +84,7 @@ pub(super) struct RailsState {
     pending: HashMap<(u64, Field), f64>,
     /// Slot texts being typed, not yet committed.
     slots_pending: HashMap<u64, String>,
+    carries_pending: HashMap<u64, String>,
     /// A rail or duct being dragged across the plate.
     pub(super) drag: Option<RailDrag>,
     /// The rail or duct under the pointer, set by the canvas each frame.
@@ -362,6 +366,32 @@ fn slots_text(r: &Rail) -> String {
     }
 }
 
+/// How a duct's carried kinds read in the list: empty for any wire.
+fn carries_text(r: &Rail) -> String {
+    novo_routing::model::duct_carries(&r.properties)
+        .iter()
+        .map(|c| c.word())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What typed carries text means: the kinds named, or `None` when a word is
+/// not a kind. Empty and `any` mean any wire (no category).
+pub(super) fn parse_carries(text: &str) -> Option<Vec<novo_routing::model::RouteClass>> {
+    use novo_routing::model::RouteClass;
+    let t = text.trim();
+    if t.is_empty() || t.eq_ignore_ascii_case("any") {
+        return Some(Vec::new());
+    }
+    let mut out = Vec::new();
+    for w in t.split([',', ' ', ';']).filter(|w| !w.is_empty()) {
+        out.push(RouteClass::parse(w)?);
+    }
+    out.sort();
+    out.dedup();
+    Some(out)
+}
+
 /// What typed slots text means: `(closed, pitch)`. `None` when it is
 /// neither empty, `any`, `closed` nor a positive number of mm.
 pub(super) fn parse_slots(text: &str) -> Option<(bool, Option<f64>)> {
@@ -494,10 +524,10 @@ pub(super) fn show_window(
             }
             egui::Grid::new("cabinet_rails_grid")
                 .striped(true)
-                .num_columns(9)
+                .num_columns(10)
                 .show(ui, |ui| {
                     for h in [
-                        "", "Left", "Top", "Length", "Across", "Stands", "Slots", "", "",
+                        "", "Left", "Top", "Length", "Across", "Stands", "Slots", "Carries", "", "",
                     ] {
                         ui.weak(h);
                     }
@@ -577,8 +607,34 @@ pub(super) fn show_window(
                             } else if !edit_box.has_focus() {
                                 state.slots_pending.remove(&id);
                             }
+                            let shown = state
+                                .carries_pending
+                                .entry(id)
+                                .or_insert_with(|| carries_text(r));
+                            let carries_box = ui
+                                .add(
+                                    egui::TextEdit::singleline(shown)
+                                        .desired_width(90.0)
+                                        .hint_text("any"),
+                                )
+                                .on_hover_text(
+                                    "Optional. Which wires this duct is meant for: power, \
+                                     supply, signal, earth, or several separated by commas. \
+                                     Empty means any wire. The router prefers a duct that \
+                                     suits the wire and still uses any duct when there is \
+                                     no other way; nothing is ever refused.",
+                                );
+                            if carries_box.lost_focus() {
+                                let typed = state.carries_pending.remove(&id).unwrap_or_default();
+                                if typed.trim() != carries_text(r) && ask.is_none() {
+                                    ask = Some(RailAsk::Carries(id, typed));
+                                }
+                            } else if !carries_box.has_focus() {
+                                state.carries_pending.remove(&id);
+                            }
                         } else {
                             ui.weak("35 mm");
+                            ui.label("");
                             ui.label("");
                             ui.label("");
                         }
@@ -812,6 +868,23 @@ impl super::NovoApp {
                         rail,
                         novo_routing::model::SLOT_PITCH,
                         pitch.map(Value::Float),
+                    )
+                });
+            }
+            RailAsk::Carries(id, text) => {
+                let Some(kinds) = parse_carries(&text) else {
+                    return;
+                };
+                let rail = RailId::from(id);
+                self.cabinet_edit("Set what a duct carries", move |tx| {
+                    tx.set_property(
+                        rail,
+                        novo_routing::model::DUCT_CARRIES,
+                        (!kinds.is_empty()).then(|| {
+                            novo_core::Value::Text(
+                                kinds.iter().map(|c| c.word()).collect::<Vec<_>>().join(","),
+                            )
+                        }),
                     )
                 });
             }

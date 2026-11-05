@@ -1,7 +1,7 @@
 //! Bench packet: circuit sheets and the cover.
 
 use novo_core::{DeviceTag, Document, MountingPlate, Point, RailKind, Wire};
-use novo_reports::packet::{CoverLine, circuit_sheets, cover, cover_notes};
+use novo_reports::packet::{CoverLine, circuit_sheets, cover, cover_notes, signoff_sheet};
 use novo_reports::{TICK_BOX, bench_jobs};
 use novo_tests::motor_starter;
 
@@ -278,4 +278,38 @@ fn the_cover_names_what_each_wire_count_counts() {
         facts.iter().all(|f| !f.contains("1 supply and PE leads")),
         "{facts:?}"
     );
+}
+
+#[test]
+fn the_signoff_sheet_has_a_tick_row_per_circuit_sheet_and_signature_lines() {
+    let doc = cabinet();
+    let project = doc.project();
+    let jobs = bench_jobs(project);
+    let circuits = circuit_sheets(project, &jobs);
+    let sheet = signoff_sheet(project, &jobs).expect("there are circuit sheets");
+    let pages = sheet.section("signoff:pages").expect("page list");
+    assert_eq!(pages.rows.len(), circuits.sections.len());
+    let wires: i64 = pages
+        .rows
+        .iter()
+        .map(|r| match r.cells[3] {
+            novo_reports::Cell::Int(n) => n,
+            _ => panic!("wire count"),
+        })
+        .sum();
+    assert_eq!(wires as usize, jobs.len());
+    for row in &pages.rows {
+        assert_eq!(row.cells[0], novo_reports::Cell::text(TICK_BOX));
+        assert_eq!(row.cells[1], novo_reports::Cell::text(TICK_BOX));
+    }
+    let sign = sheet.section("signoff:sign").expect("signature lines");
+    assert_eq!(sign.rows.len(), 3);
+    assert_eq!(sign.rows[0].cells[0], novo_reports::Cell::text("Wired by"));
+    assert!(sign.rows[0].cells[1..].iter().all(|c| c.is_empty()));
+}
+
+#[test]
+fn nothing_to_wire_gives_no_signoff_sheet() {
+    let doc = Document::default();
+    assert!(signoff_sheet(doc.project(), &[]).is_none());
 }

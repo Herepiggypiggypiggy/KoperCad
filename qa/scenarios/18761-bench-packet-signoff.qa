@@ -1,0 +1,19 @@
+@title Bench packet: the wiring sign-off sheet is written with the packet
+@area Reports
+# Reports > Bench output > Bench packet (PDF) now ends with the wiring sign-off sheet (tick boxes per circuit
+# sheet, Wired by / Tested by / Accepted by lines). The PDF is checked by the unit test
+# bench_packet_tests; this scenario checks the button still writes a file at the usual size.
+open_starter_example
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "Bench packet (PDF)"
+shot window
+click_text "Bench packet (PDF)"
+wait 30
+expect_file "~/Documents/KoperCAD/*bench packet.pdf" 1500
+keep_file "~/Documents/KoperCAD/*bench packet.pdf"
+shot written
+check_layout
