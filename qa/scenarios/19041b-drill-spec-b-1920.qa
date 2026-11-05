@@ -1,0 +1,29 @@
+@title PR1904: drill plan export, spec B (1920)
+@area Cabinet
+@sizes 1920x1080
+# Synthetic enclosure SYN-b: Place all, accept, Export > Drill plan. The PDF is named with the article, so every enclosure keeps its own file.
+open qa/fixtures/cabinet-spec-b.novo
+wait 20
+key ctrl+k
+wait 4
+text Cabinet
+wait 6
+key Enter
+wait 30
+shot a-cabinet
+click_text "Place all"
+wait 40
+shot b-placed
+key Enter
+wait 20
+shot b2-accepted
+click_text "Export"
+wait 6
+click_text "Drill plan (hand, PDF)"
+wait 3
+shot c-exported
+expect "Exported"
+wait 10
+expect_file "/tmp/kopercad-qa-open-*/*SYN-b*drill plan.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/*SYN-b*drill plan.pdf"
+check_layout

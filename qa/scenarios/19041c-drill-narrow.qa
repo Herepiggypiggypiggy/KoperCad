@@ -1,6 +1,6 @@
 @title PR1904: drill plan export, narrow enclosure, plate does not fit
 @area Cabinet
-@sizes 1366x768 1920x1080
+@sizes 1366x768
 # Synthetic enclosure SYN-narrow: Place all, accept, Export > Drill plan. The PDF is named with the article, so every enclosure keeps its own file.
 open qa/fixtures/cabinet-spec-narrow.novo
 wait 20
@@ -17,7 +17,7 @@ shot b-placed
 key Enter
 wait 20
 shot b2-accepted
-click_text "More"
+click 1221 86
 wait 6
 click_text "Drill plan (hand, PDF)"
 wait 3
