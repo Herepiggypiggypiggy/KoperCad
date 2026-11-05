@@ -179,7 +179,7 @@ pub(crate) fn plot_window(
             ui.label(
                 egui::RichText::new(super::heat::ESTIMATE_TAG)
                     .small()
-                    .color(crate::theme::ui_palette().warning),
+                    .color(crate::theme::ui_palette().info),
             );
             super::window_help::add(ui.ctx(), novo_layout::spec::ESTIMATE_NOTICE);
         }
