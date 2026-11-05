@@ -108,6 +108,7 @@ pub(super) fn cable_controls(
     cable: CableId,
     edit: &mut CableEdit,
     candidates: &[Candidate],
+    flags: &novo_flags::FlagStore,
     actions: &mut Vec<CableAction>,
 ) {
     let Some(record) = project.cable(cable) else {
@@ -215,13 +216,10 @@ pub(super) fn cable_controls(
         shield_row(ui, project, record, core, actions);
     }
 
-    let findings: Vec<String> = novo_cables::check(project)
-        .into_iter()
-        .filter(|f| f.cable() == cable)
-        .map(|f| f.message(project))
-        .collect();
-    for text in findings {
-        ui.colored_label(crate::theme::ui_palette().warning, text);
+    // The cable's findings are flags of the one store (Check > Issues lists
+    // the same ones): a triangle row each, the sentence in its detail.
+    for flag in flags.at(&novo_flags::Anchor::Cable(cable.raw().to_string()), false) {
+        super::flags_inline::flag_row(ui, flag);
     }
     ui.add_space(4.0);
 }

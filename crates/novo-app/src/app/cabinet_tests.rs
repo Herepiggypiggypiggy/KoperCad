@@ -165,10 +165,7 @@ fn a_ghost_is_drawn_but_never_stored() {
 }
 
 #[test]
-fn the_table_face_toggles_and_problems_are_in_words() {
-    use novo_layout::state::CabinetLayout;
-    use novo_layout::{Plate, Size};
-
+fn the_table_face_toggles_and_keys_go_to_the_cabinet() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
@@ -184,48 +181,10 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     // Rotate and delete from the palette go to the Cabinet, not the page.
     d.app.run_command(&ctx, "edit.delete", None);
     assert_eq!(d.app.cabinet.keys, vec!["edit.delete".to_owned()]);
-
-    let mut l = CabinetLayout::new(Plate {
-        width: 200.0,
-        height: 200.0,
-        margin: 10.0,
-    });
-    let size = Size::from_part(Some(45.0), Some(90.0));
-    l.drop_device(1, size, 50.0, 50.0);
-    l.drop_device(2, size, 60.0, 50.0);
-    l.drop_device(3, Size::from_part(None, None), 0.0, 0.0);
-    let name = |id: u64| format!("-K{id}");
-    let a = super::cabinet::problem_lines(&l, 1, &name);
-    assert_eq!(a[0], "Overlaps -K2");
-    assert_eq!(a[1], "Only 5 mm from -K3");
-    let c = super::cabinet::problem_lines(&l, 3, &name);
-    assert!(c.iter().any(|t| t.contains("past the usable plate")));
-    assert!(c.iter().any(|t| t.contains("guess")));
-    // The pill's hover text names every problem, with the device tag.
-    let hover = super::cabinet::problem_summary(&l, &name);
-    assert!(hover.contains("-K1: overlaps -K2"), "{hover}");
-    assert!(
-        hover.contains("-K3: reaches past the usable plate"),
-        "{hover}"
-    );
-    assert!(
-        hover.ends_with("Click to list them and select the device."),
-        "{hover}"
-    );
-    // With no device problem the hint does not promise a device to select.
-    let empty = CabinetLayout::new(Plate {
-        width: 200.0,
-        height: 200.0,
-        margin: 10.0,
-    });
-    assert_eq!(
-        super::cabinet::problem_summary(&empty, &name),
-        "Click to list the problems."
-    );
 }
 
 #[test]
-fn a_device_off_the_middle_of_its_rail_says_so_and_counts_as_a_problem() {
+fn a_device_off_the_middle_of_its_rail_is_reported() {
     use novo_layout::state::CabinetLayout;
     use novo_layout::{Placement, Plate, Rail, Size};
     let mut l = CabinetLayout::new(Plate {
@@ -252,22 +211,13 @@ fn a_device_off_the_middle_of_its_rail_says_so_and_counts_as_a_problem() {
     };
     // -K1 is centred on the rail line (y 100), -K2 has it on its top edge.
     l.placements = vec![on(1, 55.0), on(2, 100.0)];
-    let name = |id: u64| format!("-K{id}");
-    assert!(super::cabinet::problem_lines(&l, 1, &name).is_empty());
-    let lines = super::cabinet::problem_lines(&l, 2, &name);
-    assert_eq!(
-        lines,
-        vec![
-            "Sits 45 mm off the middle of its rail: drag it onto the rail, or use Centre rails on devices in Rails and ducts"
-        ]
-    );
+    let off: Vec<u64> = l.report().off_centre.iter().map(|o| o.0).collect();
+    assert_eq!(off, vec![2], "only -K2 has the rail on its top edge");
     assert!(!l.report().is_clean());
-    let hover = super::cabinet::problem_summary(&l, &name);
-    assert!(hover.contains("-K2: sits 45 mm off the middle"), "{hover}");
 }
 
 #[test]
-fn a_device_too_deep_for_the_door_gets_its_own_mark_and_sentence() {
+fn a_device_too_deep_for_the_door_gets_its_own_mark() {
     use novo_canvas::cabinet::BoxState;
     use novo_layout::enclosure::Enclosure;
     use novo_layout::state::CabinetLayout;
@@ -296,9 +246,8 @@ fn a_device_too_deep_for_the_door_gets_its_own_mark_and_sentence() {
     let state = |id| view.boxes.iter().find(|b| b.id == id).unwrap().state;
     assert_eq!(state(1), BoxState::TooDeep);
     assert_eq!(state(2), BoxState::Ok);
-    let lines = super::cabinet::problem_lines(&l, 1, &name);
-    assert!(lines.iter().any(|t| t.contains("40 mm too deep")));
-    assert!(super::cabinet::problem_lines(&l, 2, &name).is_empty());
+    let deep: Vec<(u64, f64)> = l.door_report().unwrap().too_deep.clone();
+    assert_eq!(deep, vec![(1, 40.0)]);
 }
 
 #[test]
@@ -352,7 +301,7 @@ fn the_table_lists_every_device_and_reports_no_click_when_none_is_made() {
     let ctx = egui::Context::default();
     let mut clicked = Some(0);
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        clicked = super::cabinet::cabinet_table(ui, &l, &cands, &name, &[1]);
+        clicked = super::cabinet::cabinet_table(ui, &l, &cands, &name, &[1], &|_| Vec::new()).0;
     });
     out.textures_delta.clear();
     assert_eq!(clicked, None);
@@ -404,17 +353,26 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
             .cabinet_ask(Ask::Drop(*id, 100.0, 100.0), Some(cab), l, &[]);
     }
     let stored = layout_of(&d, cab).unwrap();
-    let Facts::Devices(facts) = gather(project(&d), cab, &stored, &stored, &ids[..1], &|id| {
-        id.to_string()
-    }) else {
+    let _ = d.app.shown_problems();
+    d.app.sync_flags();
+    let store = &d.app.wb.flags.store;
+    let flags_of = |id: u64| super::cabinet_flags::device_flags(store, &stored, cab, id);
+    let Facts::Devices(facts) = gather(project(&d), cab, &stored, &stored, &ids[..1], &flags_of)
+    else {
         panic!("a device is selected");
     };
     assert_eq!(facts.len(), 1);
-    assert!(facts[0].problems.iter().any(|p| p.starts_with("Overlaps")));
+    assert!(
+        facts[0]
+            .problems
+            .iter()
+            .any(|p| p.title == "Devices overlap"),
+        "{:?}",
+        facts[0].problems
+    );
     assert!(facts[0].part.as_deref().unwrap().starts_with("ACME"));
     assert!(matches!(
-        gather(project(&d), cab, &stored, &stored, &[], &|id| id
-            .to_string()),
+        gather(project(&d), cab, &stored, &stored, &[], &flags_of),
         Facts::Plate { placed: 2, .. }
     ));
 }

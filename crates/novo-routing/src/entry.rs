@@ -94,6 +94,10 @@ pub fn nearest_wall(plate: &novo_core::MountingPlate, at: Point) -> Wall {
 /// without a valid entry point.
 pub fn entry_wall(project: &Project, structure: StructureId) -> Option<EntryWall> {
     let at = entry_point(project, structure)?;
+    if entry_from_spec(project, structure) {
+        let (_, wall, _) = spec_entry(project, structure)?;
+        return Some(EntryWall { wall, stated: true });
+    }
     let s = project.get::<novo_core::Structure>(structure)?;
     let plate = s.plate?;
     let stated = match s.properties.get(ENTRY_WALL) {
@@ -143,10 +147,43 @@ fn number(value: &Value) -> Option<f64> {
 pub fn entry_point(project: &Project, structure: StructureId) -> Option<Point> {
     let s = project.get::<novo_core::Structure>(structure)?;
     let plate = s.plate?;
+    // Nothing stored by the designer: the enclosure's own cable entry.
+    if !has_stored_point(project, structure) {
+        return spec_entry(project, structure).map(|e| e.0);
+    }
     let x = number(s.properties.get(ENTRY_X)?)?;
     let y = number(s.properties.get(ENTRY_Y)?)?;
     ((0.0..=plate.width).contains(&x) && (0.0..=plate.height).contains(&y))
         .then(|| Point::new(x, y))
+}
+
+/// The cable entry of the enclosure's spec: the first one whose point lies
+/// on the plate, with its wall and source. Used while the designer has set
+/// no entry point of their own.
+pub fn spec_entry(
+    project: &Project,
+    structure: StructureId,
+) -> Option<(Point, Wall, novo_layout::spec::Source)> {
+    let s = project.get::<novo_core::Structure>(structure)?;
+    let plate = s.plate?;
+    let spec = novo_layout::spec::EnclosureSpec::read(&s.properties);
+    spec.entries.iter().find_map(|e| {
+        let inside = (0.0..=plate.width).contains(&e.x) && (0.0..=plate.height).contains(&e.y);
+        let at = Point::new(e.x, e.y);
+        inside.then(|| {
+            (
+                at,
+                Wall::from_key(e.wall.trim()).unwrap_or_else(|| nearest_wall(&plate, at)),
+                e.source,
+            )
+        })
+    })
+}
+
+/// Whether the entry point in use comes from the enclosure's spec (the
+/// designer has set none).
+pub fn entry_from_spec(project: &Project, structure: StructureId) -> bool {
+    !has_stored_point(project, structure) && spec_entry(project, structure).is_some()
 }
 
 /// The stated length of wire outside the entry (see [`ENTRY_OUTSIDE`]):

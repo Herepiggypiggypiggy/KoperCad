@@ -72,7 +72,7 @@ impl NovoApp {
         level: Level,
         text: impl Into<String>,
     ) {
-        self.job_fail_in(job, title, level, text, None);
+        self.job_fail_in(job, title, level, text, None, None);
     }
 
     /// [`job_fail`](Self::job_fail) for a job that writes `path`: the popover
@@ -90,16 +90,17 @@ impl NovoApp {
         } else {
             Some(path.to_owned())
         };
-        self.job_fail_in(job, title, level, text, folder);
+        self.job_fail_in(job, title, level, text, folder, None);
     }
 
-    fn job_fail_in(
+    pub(super) fn job_fail_in(
         &mut self,
-        job: &'static str,
-        title: &'static str,
+        job: &str,
+        title: &str,
         level: Level,
         text: impl Into<String>,
         folder: Option<PathBuf>,
+        fix: Option<&str>,
     ) {
         let text = text.into();
         let severity = match level {
@@ -117,6 +118,9 @@ impl NovoApp {
         let mut actions = Vec::new();
         if retry.is_some() {
             actions.push(Action::Retry);
+        }
+        if let Some(cmd) = fix {
+            actions.push(Action::Fix(cmd.to_owned()));
         }
         if folder.is_some() {
             actions.push(Action::Open(OPEN_FOLDER.into()));
@@ -156,7 +160,7 @@ impl NovoApp {
     }
 
     /// The job worked: its flag goes.
-    pub(super) fn job_ok(&mut self, job: &'static str) {
+    pub(super) fn job_ok(&mut self, job: &str) {
         let id = job_flag_id(job);
         let flags = &mut self.wb.flags;
         if flags.store.clear(id) {

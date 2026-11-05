@@ -29,6 +29,10 @@ pub(crate) enum Basis {
     /// As `Door`, but the enclosure's spec lacks a number for the
     /// plate-to-door distance: the length is too short by it.
     DoorSpecGap,
+    /// Routed through a duct or to the cabinet entry that comes from the
+    /// enclosure's spec while a number of that spec is a catalogue or
+    /// default value: an estimate, not a measurement of the cabinet.
+    RoutedSpecEstimate,
     /// At least one device is not placed on a plate: see [`estimate`].
     Estimate,
     /// The cable's stated length: its cores run the whole cable, stripped ends
@@ -45,6 +49,7 @@ impl Basis {
             Basis::RoutedFlat => "routed, no depth",
             Basis::FreeAir => "free air",
             Basis::Door => "door, no gap",
+            Basis::RoutedSpecEstimate => "~ routed (catalogue)",
             Basis::DoorDepth => "door + depth (spec)",
             Basis::DoorDepthEstimate => "~ door + depth (catalogue)",
             Basis::DoorSpecGap => "~ door, spec has no depth",
@@ -246,8 +251,18 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                     ducts: Vec::new(),
                 }),
             };
+            let spec_estimate = routed.spec_estimate.contains(&(i as u64))
+                && matches!(
+                    found.basis,
+                    Basis::Routed | Basis::RoutedFlat | Basis::ToEntryStated
+                );
             CutLength {
                 mm: found.mm.ceil().max(1.0),
+                basis: if spec_estimate {
+                    Basis::RoutedSpecEstimate
+                } else {
+                    found.basis
+                },
                 ..found
             }
         })
@@ -278,6 +293,9 @@ impl Basis {
     /// Whether a length of this basis is an estimate from the enclosure
     /// spec: the report then prints [`novo_layout::spec::ESTIMATE_NOTICE`].
     pub(crate) fn is_spec_estimate(self) -> bool {
-        matches!(self, Basis::DoorDepthEstimate | Basis::DoorSpecGap)
+        matches!(
+            self,
+            Basis::DoorDepthEstimate | Basis::DoorSpecGap | Basis::RoutedSpecEstimate
+        )
     }
 }

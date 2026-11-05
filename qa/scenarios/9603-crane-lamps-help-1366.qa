@@ -1,0 +1,19 @@
+@title Crane in 3D: the state lamps are explained behind the "?"
+@area Simulate
+@sizes 1366x768
+# The "?" of the Hoist in 3D window says what the two lamps on the control box show and when they light.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 120
+click 1266 103
+wait 20
+expect "The two lamps on the crane's control box"
+expect "dark otherwise"
+shot lamps-help
+key Escape
+check_layout

@@ -701,10 +701,14 @@ impl GridIndex {
         Some((f(b.min.x), f(b.min.y), f(b.max.x), f(b.max.y)))
     }
 
-    fn is_large(x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
-        // Each side can span the whole i32 range, so the product needs 128 bits.
+    /// Cells covered by the range. 128-bit: a range spanning the whole `i32`
+    /// axis on both axes is about 2^64 cells and overflows `i64`.
+    fn cell_count(x0: i32, y0: i32, x1: i32, y1: i32) -> i128 {
         (x1 as i128 - x0 as i128 + 1) * (y1 as i128 - y0 as i128 + 1)
-            > Self::MAX_CELLS_PER_ITEM as i128
+    }
+
+    fn is_large(x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
+        Self::cell_count(x0, y0, x1, y1) > Self::MAX_CELLS_PER_ITEM as i128
     }
 
     fn insert(&mut self, slot: u32, b: &Aabb) {
@@ -744,8 +748,8 @@ impl GridIndex {
     fn query(&self, rect: &Aabb, out: &mut Vec<u32>) {
         out.extend_from_slice(&self.large);
         if let Some((x0, y0, x1, y1)) = self.range(rect) {
-            let cells = (x1 as i64 - x0 as i64 + 1) * (y1 as i64 - y0 as i64 + 1);
-            if cells as usize > self.cells.len() {
+            let cells = Self::cell_count(x0, y0, x1, y1);
+            if cells > self.cells.len() as i128 {
                 // Query bigger than the populated area: walk the map instead.
                 for (&(x, y), v) in &self.cells {
                     if x >= x0 && x <= x1 && y >= y0 && y <= y1 {
@@ -772,12 +776,6 @@ mod tests {
     use super::*;
     use crate::shape::Shape;
     use crate::style::{Color, Stroke};
-
-    #[test]
-    fn an_item_spanning_the_whole_cell_range_is_large_and_does_not_overflow() {
-        assert!(GridIndex::is_large(i32::MIN, i32::MIN, i32::MAX, i32::MAX));
-        assert!(!GridIndex::is_large(0, 0, 3, 3));
-    }
 
     fn line_item(a: Vec2, b: Vec2) -> Item {
         Item::new(LayerId(0)).with(Primitive::stroked(
@@ -944,6 +942,30 @@ mod tests {
             )
             .is_empty()
         );
+    }
+    #[test]
+    fn grid_cell_count_does_not_overflow_on_full_i32_range() {
+        // 2^32 x 2^32 cells overflows i64.
+        let n = GridIndex::cell_count(i32::MIN, i32::MIN, i32::MAX, i32::MAX);
+        assert_eq!(n, 1i128 << 64);
+        assert!(GridIndex::is_large(i32::MIN, i32::MIN, i32::MAX, i32::MAX));
+        assert!(!GridIndex::is_large(0, 0, 1, 1));
+    }
+
+    #[test]
+    fn hostile_inputs_do_not_overflow_the_grid() {
+        let mut s = Scene::new();
+        let huge = 1.0e30_f32;
+        s.insert(
+            ItemId(1),
+            line_item(Vec2::new(-huge, -huge), Vec2::new(huge, huge)),
+        );
+        s.insert(ItemId(2), line_item(Vec2::ZERO, Vec2::new(10.0, 0.0)));
+        let q = Aabb::new(Vec2::splat(-huge), Vec2::splat(huge));
+        assert_eq!(s.query(&q).len(), 2);
+        s.insert(ItemId(1), line_item(Vec2::ZERO, Vec2::new(1.0, 1.0)));
+        s.remove(ItemId(1));
+        assert_eq!(s.len(), 1);
     }
 }
 

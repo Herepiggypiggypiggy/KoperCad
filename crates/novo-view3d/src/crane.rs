@@ -77,6 +77,8 @@ pub struct TravelMark {
 /// The moving numbers of one frame.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CraneState {
+    /// The two state lamps on the control box: brake and drive. `Off` when nothing reports.
+    pub lamps: [Lamp; 2],
     /// Bridge position along the runway, m.
     pub bridge_m: f32,
     /// Trolley position across the span, m.
@@ -93,6 +95,31 @@ pub struct CraneState {
     pub bridge_limits: Vec<TravelMark>,
     /// End limits of the trolley's travel axis, across the span. A limit outside the span is not drawn.
     pub trolley_limits: Vec<TravelMark>,
+}
+
+/// A state lamp on the crane's control box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lamp {
+    /// Nothing reports: the lamp is dark.
+    #[default]
+    Off,
+    /// All well: brake released, drive running.
+    Green,
+    /// Held or waiting: brake applied while the drive is ready.
+    Amber,
+    /// Fault.
+    Red,
+}
+
+impl Lamp {
+    fn tint(self) -> [u8; 3] {
+        match self {
+            Lamp::Off => [48, 50, 56],
+            Lamp::Green => [60, 200, 90],
+            Lamp::Amber => [240, 170, 40],
+            Lamp::Red => [230, 60, 50],
+        }
+    }
 }
 
 /// Sizes of the generic crane parts, mm. One place so the tests and the builder agree.
@@ -166,6 +193,8 @@ const RAW_TROLLEY_DRIVE: u64 = 80;
 const RAW_PANEL: u64 = 90;
 const RAW_PLATE: u64 = 100;
 const RAW_BUFFER: u64 = 110;
+const RAW_MARK: u64 = 120;
+const RAW_LAMP: u64 = 130;
 const RAW_BRIDGE_FLAG: u64 = 1000;
 const RAW_TROLLEY_FLAG: u64 = 2000;
 const RAW_COLUMN: u64 = 3000;
@@ -248,6 +277,7 @@ const WHEEL: [u8; 3] = [104, 110, 120];
 const ROPE_STEEL: [u8; 3] = [78, 80, 86];
 const MOTOR: [u8; 3] = [48, 62, 92];
 const GEARBOX: [u8; 3] = [92, 98, 108];
+const MARKING: [u8; 3] = [226, 190, 40];
 const CONCRETE: [u8; 3] = [150, 150, 146];
 const PANEL: [u8; 3] = [196, 200, 204];
 
@@ -280,6 +310,28 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         Vec3::new(runway + 6000.0, 60.0, span + 6000.0),
         FLOOR,
     ));
+    // Safety markings on the floor: a yellow line along the outside of each runway and across both
+    // ends, 4 mm proud of the floor so they never z-fight with it.
+    {
+        let (w, t) = (150.0, 4.0);
+        let (x_lo, x_hi) = (-2000.0, runway + 2000.0);
+        let (z_lo, z_hi) = (-1500.0, span + 1500.0);
+        let bars = [
+            (Vec3::new(x_lo, 0.0, z_lo), Vec3::new(x_hi - x_lo, t, w)),
+            (Vec3::new(x_lo, 0.0, z_hi - w), Vec3::new(x_hi - x_lo, t, w)),
+            (Vec3::new(x_lo, 0.0, z_lo), Vec3::new(w, t, z_hi - z_lo)),
+            (Vec3::new(x_hi - w, 0.0, z_lo), Vec3::new(w, t, z_hi - z_lo)),
+        ];
+        for (k, (min, ext)) in bars.into_iter().enumerate() {
+            push(boxed(
+                RAW_MARK + k as u64,
+                ItemKind::Plate,
+                min,
+                ext,
+                MARKING,
+            ));
+        }
+    }
     // Runway beams along x at both ends of the span, with a crane rail on top and columns under
     // them. They run past the bridge's travel so an end truck at the end still has beam under it.
     let beam_len = runway + 2.0 * size::RUNWAY_OVERHANG;
@@ -414,6 +466,20 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         Quat::from_rotation_y(std::f32::consts::PI),
         PANEL,
     ));
+    // Two state lamps on top of the control box: brake (left) and drive (right).
+    for (k, lamp) in state.lamps.iter().enumerate() {
+        push(boxed(
+            RAW_LAMP + k as u64,
+            other,
+            Vec3::new(
+                bridge - 350.0 + (k as f32 - 0.5) * 160.0 - 45.0,
+                contact + wheel_r + 90.0 + 520.0,
+                -130.0 - 110.0 - 45.0,
+            ),
+            Vec3::new(90.0, 90.0, 90.0),
+            lamp.tint(),
+        ));
+    }
     push(part_item(
         RAW_GIRDER,
         other,
@@ -1179,5 +1245,24 @@ mod tests {
         ids.sort();
         ids.dedup();
         assert_eq!(ids.len(), n);
+    }
+
+    #[test]
+    fn state_lamps_take_their_colour_from_the_state() {
+        let tint = |lamps: [Lamp; 2], k: u64| {
+            let st = CraneState {
+                lamps,
+                ..Default::default()
+            };
+            let s = build(&CraneLayout::default(), &st);
+            s.items
+                .iter()
+                .find(|i| i.id.raw == RAW_LAMP + k)
+                .and_then(|i| i.tint)
+        };
+        assert_eq!(tint([Lamp::Off; 2], 0), Some(Lamp::Off.tint()));
+        assert_eq!(tint([Lamp::Green, Lamp::Red], 0), Some(Lamp::Green.tint()));
+        assert_eq!(tint([Lamp::Green, Lamp::Red], 1), Some(Lamp::Red.tint()));
+        assert_ne!(Lamp::Amber.tint(), Lamp::Green.tint());
     }
 }

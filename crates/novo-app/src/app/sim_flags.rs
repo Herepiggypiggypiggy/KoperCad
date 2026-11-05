@@ -20,6 +20,8 @@ pub(super) const HOIST: &str = "hoist_run";
 pub(super) const WINCH: &str = "winch";
 pub(super) const MOTOR_START: &str = "motor_start";
 pub(super) const CONTROLLER: &str = "controller";
+pub(super) const LIVE: &str = "live";
+pub(super) const MOTOR_FREQ: &str = "motor_freq";
 
 /// How many triangles a strip shows before it folds the rest into "N more".
 const STRIP_ROWS: usize = 5;
@@ -237,6 +239,70 @@ pub(super) fn broken_binding_draft(
     }
 }
 
+/// A flag of the controller card or one of its panels: on the instance
+/// (`controller` given) or on the card as a whole.
+pub(super) fn card_draft(
+    rule: &str,
+    red: bool,
+    title: &str,
+    lines: Vec<String>,
+    controller: Option<&str>,
+) -> FlagDraft {
+    let text = lines.join("\n");
+    FlagDraft {
+        severity: if red { Severity::Red } else { Severity::Yellow },
+        unchecked: false,
+        source: Source::Sim,
+        rule: format!("{CONTROLLER}.{rule}.{}", tag_of(&text)),
+        anchors: vec![match controller {
+            Some(c) => Anchor::Control(format!("controller:{c}")),
+            None => Anchor::Job(CONTROLLER.to_owned()),
+        }],
+        title: title.to_owned(),
+        detail: Detail::new(lines),
+        actions: vec![Action::Copy],
+        waiver_key: None,
+        life: Life::Run(CONTROLLER.to_owned()),
+    }
+}
+
+/// A flag of the Live card (no supply, short circuit).
+pub(super) fn live_draft(rule: &str, red: bool, title: &str, lines: Vec<String>) -> FlagDraft {
+    FlagDraft {
+        severity: if red { Severity::Red } else { Severity::Yellow },
+        unchecked: false,
+        source: Source::Sim,
+        rule: format!("{LIVE}.{rule}"),
+        anchors: vec![Anchor::Job(LIVE.to_owned())],
+        title: title.to_owned(),
+        detail: Detail::new(lines),
+        actions: vec![Action::Copy],
+        waiver_key: None,
+        life: Life::Run(LIVE.to_owned()),
+    }
+}
+
+/// The flags of the controller card that are not a signal row's own triangle.
+pub(super) fn card_level(flags: &[Flag]) -> Vec<Flag> {
+    flags
+        .iter()
+        .filter(
+            |f| !matches!(f.anchors.first(), Some(Anchor::Control(k)) if k.starts_with("signal:")),
+        )
+        .cloned()
+        .collect()
+}
+
+/// The flags of one controller's own panel.
+pub(super) fn instance_level(flags: &[Flag], controller: &str) -> Vec<Flag> {
+    let key = format!("controller:{controller}");
+    flags
+        .iter()
+        .filter(|f| f.anchors.first() == Some(&Anchor::Control(key.clone())))
+        .cloned()
+        .collect()
+}
+
 /// The control key of a signal row.
 pub(super) fn signal_key(controller: &str, signal: &str) -> String {
     format!("signal:{controller}:{signal}")
@@ -306,6 +372,30 @@ pub(super) fn motor_unmodelled_draft(
         "Give the motor a power in kW on its device.".to_owned(),
     ]);
     d
+}
+
+/// The flag of a motor whose frequency table cannot be computed.
+pub(super) fn motor_freq_draft(tag: &str, device: Option<String>, why: &str) -> FlagDraft {
+    let mut actions = vec![Action::Copy];
+    let anchor = match device {
+        Some(d) => {
+            actions.insert(0, Action::Locate);
+            Anchor::Device(d)
+        }
+        None => Anchor::Job(MOTOR_FREQ.to_owned()),
+    };
+    FlagDraft {
+        severity: Severity::Yellow,
+        unchecked: true,
+        source: Source::Sim,
+        rule: format!("{MOTOR_FREQ}.cannot_compute.{}", tag_of(tag)),
+        anchors: vec![anchor],
+        title: "Motor cannot be computed".to_owned(),
+        detail: Detail::new([format!("{tag}: {why}")]),
+        actions,
+        waiver_key: None,
+        life: Life::Run(MOTOR_FREQ.to_owned()),
+    }
 }
 
 /// Draws `flags` as rows of a triangle and a short title. A click on a row
@@ -396,6 +486,18 @@ pub(super) fn set_notes(
     notes
 }
 
+/// The flags of one window in `store`, worst first.
+pub(super) fn flags_in(store: &novo_flags::FlagStore, area: &str) -> Vec<Flag> {
+    let mut out: Vec<Flag> = store
+        .list(false)
+        .into_iter()
+        .filter(|f| f.source == Source::Sim && f.life == Life::Run(area.to_owned()))
+        .cloned()
+        .collect();
+    out.sort_by_key(|f| f.severity.rank());
+    out
+}
+
 impl NovoApp {
     /// A window's notes as flags, for a place that holds no project borrow.
     pub(super) fn set_sim_notes(
@@ -411,17 +513,7 @@ impl NovoApp {
 
     /// The flags of one window, worst first.
     pub(super) fn sim_flags_of(&self, area: &str) -> Vec<Flag> {
-        let mut out: Vec<Flag> = self
-            .wb
-            .flags
-            .store
-            .list(false)
-            .into_iter()
-            .filter(|f| f.source == Source::Sim && f.life == Life::Run(area.to_owned()))
-            .cloned()
-            .collect();
-        out.sort_by_key(|f| f.severity.rank());
-        out
+        flags_in(&self.wb.flags.store, area)
     }
 
     /// Locate for a flag that is not a design check: the first device anchor,
