@@ -172,7 +172,9 @@ impl Panel {
         self
     }
 
-    /// No title bar: the panel has its own header and is dragged by its body.
+    /// No title bar (a card without one cannot be docked). No card in the app
+    /// uses it any more: every chip and card has a title bar and docks.
+    #[cfg(test)]
     pub(super) fn bare(mut self) -> Self {
         self.title_bar = false;
         self

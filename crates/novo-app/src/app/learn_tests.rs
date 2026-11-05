@@ -1666,3 +1666,25 @@ fn a_rail_click_on_plate_setup_ticks_the_click_step() {
     let phase = d.app.learn.run.as_ref().map(|r| r.phase());
     assert_eq!(phase, Some(novo_learn::Phase::Ticked));
 }
+
+/// With default docking on, the lesson card is a pane of the right strip and
+/// reserves no corner for the other panels.
+#[test]
+fn the_lesson_card_opens_docked_and_reserves_no_corner() {
+    let (_dir, mut d) = drive();
+    super::panel_dock::set_dialogs_dock_by_default(&d.ctx, true);
+    d.app.start_lesson("tiny");
+    let size = eframe::egui::vec2(1366.0, 768.0);
+    for _ in 0..8 {
+        d.frame_sized(size, Vec::new());
+    }
+    assert!(
+        super::panel_dock::slot_of(&d.ctx, "lesson_card").is_some(),
+        "the lesson card is a docked pane"
+    );
+    assert_eq!(super::panel::reserved_bottom_right(&d.ctx), 0.0);
+    assert!(
+        d.app.learn.card_pos.is_some(),
+        "the pointer still has a card to start from"
+    );
+}

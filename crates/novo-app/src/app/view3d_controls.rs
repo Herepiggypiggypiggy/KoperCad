@@ -184,6 +184,9 @@ pub(super) fn toolbar(
     bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
 ) -> Changed {
     let mut changed = Changed::default();
+    // A short pane: it opens at the height of its rows, so a lesson or the
+    // Fast keys card above it keeps the room (the default is 340).
+    super::panel_dock::open_at(ctx, "view3d_toolbar", 150.0);
     let panel = super::panel::Panel::new(
         "view3d_toolbar",
         "3D view",

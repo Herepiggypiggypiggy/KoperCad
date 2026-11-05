@@ -148,6 +148,9 @@ impl NovoApp {
         } else {
             super::panel::Side::BottomRight
         };
+        // Docked, the card opens tall enough for its text and the Next, Skip
+        // and Show me buttons (a person's own height stays).
+        super::panel_dock::open_at(ctx, "lesson_card", 520.0);
         let card_rect = super::panel::Panel::new(
             "lesson_card",
             self.learn.say("learn"),
@@ -157,7 +160,8 @@ impl NovoApp {
         )
         .fixed_open()
         .fit()
-        .bare()
+        .dockable()
+        .dock_by_default()
         .show(ctx, |ui| {
             action = self.draw_card(ui, &card, confirm);
         })
@@ -165,7 +169,10 @@ impl NovoApp {
         self.learn.card_pos = Some(card_rect.center());
         // The inspector and the other right-hand panels keep above the card
         // while it sits in its corner.
+        // Docked, the card is a pane of the right strip and reserves nothing.
+        let docked = super::panel_dock::slot_of(ctx, "lesson_card").is_some();
         let parked = card_rect.is_finite()
+            && !docked
             && side == super::panel::Side::BottomRight
             && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
         super::panel::reserve_bottom_right(
@@ -178,6 +185,7 @@ impl NovoApp {
         );
         // Dialogs open right of a card parked at the left, not over it.
         let parked_left = card_rect.is_finite()
+            && !docked
             && side == super::panel::Side::BottomLeft
             && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
         super::panel::reserve_bottom_left(

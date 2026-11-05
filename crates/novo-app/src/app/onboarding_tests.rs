@@ -154,3 +154,20 @@ fn under_live_the_walkthrough_is_a_status_bar_slot() {
         "no floating pill"
     );
 }
+
+/// With default docking on (the running app, 1100 wide or more) the Fast keys
+/// card opens as a pane of the right strip, not as a floating card.
+#[test]
+fn the_walkthrough_card_opens_docked() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    super::panel_dock::set_dialogs_dock_by_default(&ctx, true);
+    d.app.run(&ctx, Action::TryFastKeys);
+    for _ in 0..8 {
+        d.frame_sized(eframe::egui::vec2(1366.0, 768.0), Vec::new());
+    }
+    assert!(
+        super::panel_dock::slot_of(&ctx, "walkthrough").is_some(),
+        "the Fast keys card is a docked pane"
+    );
+}
