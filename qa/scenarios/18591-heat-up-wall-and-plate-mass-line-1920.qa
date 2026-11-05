@@ -1,0 +1,19 @@
+@title Heat-up: the wall and plate mass line fits the Heat strip
+@area Cabinet
+@sizes 1920x1080
+# PR 1859. A Heat-up run in the Cabinet view adds one line to the strip: how long the air takes to reach 90 % of its final rise when walls and plate store heat, marked "model, not measurement". The line must fit at 1366 uncut. The pictures are the evidence.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text Cabinet #1
+wait 30
+key shift+h
+wait 60
+click_text Heat-up
+wait_s 90
+expect "Wall and plate mass"
+shot heat-up-strip
+move 475 136
+wait 30
+shot hover-text
+check_layout
+check_blank hover-text

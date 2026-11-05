@@ -133,7 +133,7 @@ impl NovoApp {
         self.wb.macros.show();
         let b = &self.wb.macros;
         let Some(lib) = b.library.clone() else {
-            self.message(Level::Warning, "No macro library on this machine");
+            self.refuse_tool(Level::Warning, "No macro library on this machine");
             return;
         };
         let entries = lib.search("");

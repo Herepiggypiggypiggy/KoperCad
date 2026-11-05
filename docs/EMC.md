@@ -159,6 +159,7 @@ practice it comes from (the Source column; a named clause is always marked verif
 | EMC-16 | Surge protection at the entry with short leads | 1 | Layout | IEC 61000-4-5 surge path; arrester maker data (verify) |
 | EMC-17 | Sensitive part (PLC, analog module, encoder interface) distance to aggressor | 1/2 | Layout | Practice, device maker guides; no clause |
 | EMC-18 | Ferrite suggested on cables leaving the cabinet where a drive or switching supply shares the cabinet (advice, not a finding) | 0 | Cable, parts | Practice; advice only; no clause |
+| EMC-22 | Enclosure shell: with a chosen enclosure (`encl.` record of the structure, `novo_layout::spec`) and a drive or noisy device in it, the empty box's lowest cavity resonance, TM110 over the two longest inside sides, `f = c/2 * sqrt(1/a^2 + 1/b^2)`, is at least 300 MHz (house value). Below it: a note with the frequency and where the size came from. A chosen enclosure with no inside size is a warning, never a default size. Devices and wiring lower the real resonance; wall material, seams and gaskets are not in the record yet, so shielding effectiveness is not estimated | 2 | Enclosure record, devices | Closed form for a rectangular cavity; the limit is a house value, not verified |
 
 Findings use the existing problem model (`novo-checks`, severity and location) so they appear in the Checks
 panel, in the standards report and in the handover package without new plumbing.

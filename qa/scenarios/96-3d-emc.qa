@@ -9,7 +9,8 @@ key Enter
 wait 30
 click_text 3D #1
 wait 30
-click_text EMC #1
+# The EMC switch is the rail icon.
+click 24 464
 wait 30
 shot emc-overview
 check_layout

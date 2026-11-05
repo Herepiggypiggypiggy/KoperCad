@@ -183,7 +183,7 @@ fn a_key_nobody_here_knows_shows_unknown_key_with_the_tick_not_unsigned() {
         "{text}"
     );
     assert!(text.contains("I trust this file"), "{text}");
-    assert!(text.contains("could be anyone"), "{text}");
+    assert!(text.contains("Signer not known"), "{text}");
     assert!(!text.contains("Unsigned, from file"), "{text}");
 }
 
@@ -206,7 +206,7 @@ fn a_revoked_key_is_refused_with_its_reason_and_no_tick_to_press() {
         "{why}"
     );
     let text = painted_text(&mut d);
-    assert!(text.contains("revoked"), "{text}");
+    assert!(text.contains("Add-on action failed"), "{text}");
     assert!(!text.contains("I trust this file"), "{text}");
 }
 
@@ -273,6 +273,6 @@ fn an_installed_add_on_whose_key_is_revoked_later_shows_revoked_in_its_details()
         text.contains("Signed with a revoked key (test-key), stolen"),
         "{text}"
     );
-    assert!(text.contains("It did not load"), "{text}");
+    assert!(text.contains("Did not load"), "{text}");
     assert!(!text.contains("Signed by Test Publisher"), "{text}");
 }

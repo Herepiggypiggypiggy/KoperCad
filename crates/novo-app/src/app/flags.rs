@@ -29,6 +29,12 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// The transient flags of refused edits (lane T7).
+    pub(super) edit: super::flags_edit::EditFlags,
+    /// Failed jobs: what Retry and Open folder need (lane T12).
+    pub(super) jobs: HashMap<FlagId, super::flags_jobs::JobInfo>,
+    /// The failed jobs, oldest first.
+    pub(super) job_order: Vec<FlagId>,
     /// The drafts each simulation window raised (lane T10), by window.
     pub(super) sim: std::collections::BTreeMap<&'static str, Vec<FlagDraft>>,
 }
@@ -40,6 +46,9 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            edit: Default::default(),
+            jobs: HashMap::new(),
+            job_order: Vec::new(),
             sim: std::collections::BTreeMap::new(),
         }
     }
@@ -173,7 +182,7 @@ impl NovoApp {
 
     /// The marks of the flags anchored on drawn objects of `page`.
     pub(super) fn flag_marks(&mut self, page: PageId) -> Vec<novo_canvas::Mark> {
-        use novo_canvas::{Mark, model::item_id};
+        use novo_canvas::Mark;
         self.sync_flags();
         let Some(doc) = self.backend.document() else {
             return Vec::new();
@@ -181,33 +190,19 @@ impl NovoApp {
         let project = doc.project();
         let mut marks = Vec::new();
         for flag in self.wb.flags.store.list(false) {
+            // A refusal says its reason in the popover only: no second line on the canvas.
+            let quiet = flag.source == Source::Edit;
             let hover = std::iter::once(flag.title.clone())
                 .chain(flag.detail.0.iter().cloned())
                 .collect::<Vec<_>>()
                 .join(": ");
-            for anchor in &flag.anchors {
-                let id = match anchor {
-                    Anchor::Symbol(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(novo_core::SymbolId)
-                        .filter(|s| project.symbol(*s).is_some_and(|s| s.page == page))
-                        .map(AnyId::Symbol),
-                    Anchor::Wire(raw) => raw
-                        .parse()
-                        .ok()
-                        .map(novo_core::WireId)
-                        .filter(|w| project.wire(*w).is_some_and(|w| w.page == page))
-                        .map(AnyId::Wire),
-                    _ => None,
-                };
-                if let Some(id) = id {
-                    marks.push(
-                        Mark::on(mark_kind(flag), item_id(id))
-                            .with_text(hover.clone())
-                            .with_key(flag.id.0),
-                    );
-                }
+            for target in super::flags_edit::mark_targets(project, flag, page) {
+                marks.push(Mark {
+                    kind: mark_kind(flag),
+                    target,
+                    text: if quiet { String::new() } else { hover.clone() },
+                    key: flag.id.0,
+                });
             }
         }
         marks
@@ -245,6 +240,7 @@ impl NovoApp {
         };
         let index = self.wb.flags.index.get(&id).copied();
         let mut chosen: Option<Action> = None;
+        let mut dismiss = false;
         let mut close = ctx.input(|i| i.key_pressed(egui::Key::Escape));
         let area = egui::Area::new(egui::Id::new("flag_popover"))
             .order(egui::Order::Foreground)
@@ -272,8 +268,17 @@ impl NovoApp {
                                 Action::Locate => "Locate",
                                 Action::Fix(c) if c == FIX_ASSIGN_PARTS => "Assign parts",
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
+                                a if super::flags_shell::shell_command(a).is_some() => {
+                                    super::flags_shell::shell_command(a).map_or("Fix", |c| c.1)
+                                }
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
+                                Action::Retry => "Retry",
+                                Action::Open(k) if k == super::flags_jobs::OPEN_FOLDER => {
+                                    "Open folder"
+                                }
+                                Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
+                                Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
                                     "Explain with Claude"
@@ -283,6 +288,12 @@ impl NovoApp {
                             if ui.button(label).clicked() {
                                 chosen = Some(action.clone());
                             }
+                        }
+                        if flag.life == Life::Until
+                            && flag.source == Source::Shell
+                            && ui.button("Dismiss").clicked()
+                        {
+                            dismiss = true;
                         }
                     });
                 });
@@ -303,6 +314,10 @@ impl NovoApp {
             close = true;
             self.run_flag_action(&flag, index, action, ctx);
         }
+        if dismiss {
+            close = true;
+            self.wb.flags.store.clear(id);
+        }
         if close {
             self.wb.flags.open = None;
         }
@@ -315,9 +330,17 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        if self.run_job_action(flag.id, &action) {
+            return;
+        }
         match action {
             Action::Locate => match index {
                 Some(i) => self.go_problem(i),
+                // In 3D the parts are selected there; elsewhere the device is
+                // shown on its page.
+                None if self.workspace() == super::workspace::Workspace::View3d => {
+                    self.locate_flag_in_3d(flag)
+                }
                 None => self.locate_flag(flag),
             },
             Action::Fix(cmd) if cmd == FIX_ASSIGN_PARTS => self.wb.queued.push("parts.auto_assign"),
@@ -338,7 +361,11 @@ impl NovoApp {
                 }
             }
             Action::Copy => ctx.copy_text(flag.detail.0.join("\n")),
-            _ => {}
+            other => {
+                if let Some((command, _)) = super::flags_shell::shell_command(&other) {
+                    self.wb.queued.push(command);
+                }
+            }
         }
     }
 }

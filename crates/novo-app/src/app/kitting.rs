@@ -436,6 +436,6 @@ impl NovoApp {
     /// Writes the kitting PDF to `path`.
     pub fn export_kitting_to(&mut self, path: &Path) -> Option<PathBuf> {
         let (bytes, what) = self.kitting_pdf(false)?;
-        self.bench_write(path, &bytes, &what)
+        self.bench_write("export.kitting", path, &bytes, &what)
     }
 }

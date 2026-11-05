@@ -75,6 +75,8 @@ pub(super) struct RailsState {
     pub(super) open: bool,
     /// The rail or duct outlined on the plate; Delete removes it.
     pub(super) selected: Option<u64>,
+    /// What the typed values of the 3D rail card would break, as the card last saw it.
+    pub(super) typed_problems: Vec<String>,
     /// Values being dragged or typed, not yet committed.
     pending: HashMap<(u64, Field), f64>,
     /// Slot texts being typed, not yet committed.

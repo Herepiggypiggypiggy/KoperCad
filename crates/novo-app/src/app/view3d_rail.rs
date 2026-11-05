@@ -251,8 +251,21 @@ pub(super) fn card(
         .iter()
         .any(|f| state.typed(id, *f).is_some());
         if any_typed {
-            for line in problems(layout, &typed, kind, vertical, tag_of) {
-                ui.colored_label(crate::theme::ui_palette().error, line);
+            // No sentence in the card: the problem is a triangle on the rail in
+            // the 3D view (and here, with the lines on hover).
+            state.typed_problems = problems(layout, &typed, kind, vertical, tag_of);
+            if !state.typed_problems.is_empty() {
+                let (slot, response) =
+                    ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+                novo_theme::widgets::flag_triangle(
+                    ui.painter(),
+                    slot.center(),
+                    super::view3d_flags::SIZE,
+                    false,
+                    false,
+                    crate::theme::ui_palette(),
+                );
+                response.on_hover_text(state.typed_problems.join("\n"));
             }
         }
         if changed {
