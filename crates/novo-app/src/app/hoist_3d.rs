@@ -3,6 +3,7 @@
 //! the Hoist run window (hook height, the conditions it reports, the heights of the bound limit
 //! switches); the crane around them is a generic picture, see `CRANE_PICTURE_LEAVES_OUT`.
 
+use super::crane_model_state::{ModelSlot, Status};
 use super::crane_setup::CraneSetup;
 use super::hoist_run::conditions;
 use super::{Level, NovoApp};
@@ -15,6 +16,7 @@ use novo_view3d::crane::{
     CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, Lamp, LimitFlag, LimitMark, TravelMark,
     build, hook_bounds, machine_bounds, rope_length_mm,
 };
+use novo_view3d::crane_model::MODEL_PICTURE_LEAVES_OUT;
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
 use novo_view3d::{Look, MeshLibrary, Scene};
@@ -49,6 +51,10 @@ pub(crate) struct Hoist3d {
     pending_preset: Option<ViewPreset>,
     /// Frame the hook on the next frame.
     frame_hook: bool,
+    /// The crane model of the user's own that replaces the generic crane, when one is asked for.
+    pub(super) model: ModelSlot,
+    /// The model scene the renderer has, and the plan it came from.
+    model_scene: Option<(u64, Arc<Scene>)>,
 }
 
 impl Default for Hoist3d {
@@ -73,6 +79,8 @@ impl Default for Hoist3d {
             needs_fit: true,
             pending_preset: None,
             frame_hook: false,
+            model: ModelSlot::default(),
+            model_scene: None,
         }
     }
 }
@@ -102,6 +110,7 @@ impl Hoist3d {
             trolley_m: self.trolley_m,
             bridge_axis: self.bridge_axis.clone(),
             trolley_axis: self.trolley_axis.clone(),
+            model: self.model.want().cloned(),
         }
     }
 
@@ -112,6 +121,7 @@ impl Hoist3d {
         self.trolley_m = s.trolley_m;
         self.bridge_axis = s.bridge_axis.clone();
         self.trolley_axis = s.trolley_axis.clone();
+        self.model.set_want(s.model.clone());
         self.needs_fit = true;
     }
 
@@ -409,6 +419,16 @@ impl NovoApp {
             .map(|d| super::drive_run::travel_ids(d.project()))
             .unwrap_or_default();
         self.sync_crane_setup(ctx, &axes);
+        {
+            let wake = ctx.clone();
+            let g = &mut self.wb.hoist.three_d;
+            if g.model.update(move || wake.request_repaint()) {
+                g.needs_fit = true;
+            }
+            if matches!(g.model.status(), Status::Reading(_)) {
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+        }
         let dt = f64::from(ctx.input(|i| i.stable_dt).clamp(0.0, 0.1));
         let hook_m = match follow.checked_sub(hoist_count) {
             None => self
@@ -487,64 +507,67 @@ impl NovoApp {
                             });
                     }
                     let mut refit = false;
-                    ui.label(if g.bridge_axis.is_some() {
-                        "Bridge start"
-                    } else {
-                        "Bridge"
-                    });
-                    ui.add(
-                        egui::DragValue::new(&mut g.bridge_m)
-                            .range(0.0..=g.layout.runway_m)
-                            .speed(0.05)
-                            .suffix(" m"),
-                    );
-                    ui.label(if g.trolley_axis.is_some() {
-                        "Trolley start"
-                    } else {
-                        "Trolley"
-                    });
-                    ui.add(
-                        egui::DragValue::new(&mut g.trolley_m)
-                            .range(0.0..=g.layout.span_m)
-                            .speed(0.05)
-                            .suffix(" m"),
-                    );
-                    ui.label("Runway");
-                    refit |= ui
-                        .add(
-                            egui::DragValue::new(&mut g.layout.runway_m)
-                                .range(4.0..=80.0)
+                    let model_on = g.model.shown();
+                    if !model_on {
+                        ui.label(if g.bridge_axis.is_some() {
+                            "Bridge start"
+                        } else {
+                            "Bridge"
+                        });
+                        ui.add(
+                            egui::DragValue::new(&mut g.bridge_m)
+                                .range(0.0..=g.layout.runway_m)
+                                .speed(0.05)
+                                .suffix(" m"),
+                        );
+                        ui.label(if g.trolley_axis.is_some() {
+                            "Trolley start"
+                        } else {
+                            "Trolley"
+                        });
+                        ui.add(
+                            egui::DragValue::new(&mut g.trolley_m)
+                                .range(0.0..=g.layout.span_m)
+                                .speed(0.05)
+                                .suffix(" m"),
+                        );
+                        ui.label("Runway");
+                        refit |= ui
+                            .add(
+                                egui::DragValue::new(&mut g.layout.runway_m)
+                                    .range(4.0..=80.0)
+                                    .suffix(" m"),
+                            )
+                            .changed();
+                        ui.label("Span");
+                        refit |= ui
+                            .add(
+                                egui::DragValue::new(&mut g.layout.span_m)
+                                    .range(2.0..=40.0)
+                                    .suffix(" m"),
+                            )
+                            .changed();
+                        ui.label("Rail height");
+                        refit |= ui
+                            .add(
+                                egui::DragValue::new(&mut g.layout.rail_m)
+                                    .range(3.0..=30.0)
+                                    .suffix(" m"),
+                            )
+                            .changed();
+                        ui.label("Hook start");
+                        ui.add(
+                            egui::DragValue::new(&mut g.layout.hook_start_m)
+                                .range(0.5..=25.0)
                                 .suffix(" m"),
                         )
-                        .changed();
-                    ui.label("Span");
-                    refit |= ui
-                        .add(
-                            egui::DragValue::new(&mut g.layout.span_m)
-                                .range(2.0..=40.0)
-                                .suffix(" m"),
-                        )
-                        .changed();
-                    ui.label("Rail height");
-                    refit |= ui
-                        .add(
-                            egui::DragValue::new(&mut g.layout.rail_m)
-                                .range(3.0..=30.0)
-                                .suffix(" m"),
-                        )
-                        .changed();
-                    ui.label("Hook start");
-                    ui.add(
-                        egui::DragValue::new(&mut g.layout.hook_start_m)
-                            .range(0.5..=25.0)
-                            .suffix(" m"),
-                    )
-                    .on_hover_text(
-                        "Height of the top of the hook block above the floor at hook height 0",
-                    );
-                    let mut with_load = g.layout.load_m.is_some();
-                    if ui.checkbox(&mut with_load, "Load").changed() {
-                        g.layout.load_m = with_load.then_some([1.2, 0.8, 0.8]);
+                        .on_hover_text(
+                            "Height of the top of the hook block above the floor at hook height 0",
+                        );
+                        let mut with_load = g.layout.load_m.is_some();
+                        if ui.checkbox(&mut with_load, "Load").changed() {
+                            g.layout.load_m = with_load.then_some([1.2, 0.8, 0.8]);
+                        }
                     }
                     if ui.button("Fit").clicked() || refit {
                         g.needs_fit = true;
@@ -565,9 +588,12 @@ impl NovoApp {
                             g.pending_preset = Some(preset);
                         }
                     }
+                    super::crane_model_ui::bar(ui, &mut g.model);
                 });
                 g.bridge_m = g.bridge_m.clamp(0.0, g.layout.runway_m);
                 g.trolley_m = g.trolley_m.clamp(0.0, g.layout.span_m);
+                let model_on = g.model.shown();
+                if !model_on {
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Bridge driven by");
                     axis_picker(ui, "hoist3d_bridge_axis", &axes, &mut g.bridge_axis);
@@ -627,6 +653,7 @@ impl NovoApp {
                         format!("{outside} end limit(s) lie outside the picture and are not drawn."),
                     );
                 }
+                }
                 match &line {
                     Some(text) => {
                         ui.label(text);
@@ -655,7 +682,7 @@ impl NovoApp {
                         .clone()
                         .unwrap_or_else(|| state_of(None, travel.bridge_m, travel.trolley_m))
                 };
-                let scene = g.scene_for(&state);
+                let (scene, library) = g.picture(&state);
                 let theme = if dark {
                     View3dTheme::Dark
                 } else {
@@ -671,7 +698,10 @@ impl NovoApp {
                         .go_to_bounds(p, &machine_bounds(&scene), now, reduced);
                 }
                 if std::mem::take(&mut g.frame_hook) {
-                    let b = hook_bounds(&g.layout, &state);
+                    let b = g
+                        .model
+                        .hook_bounds()
+                        .unwrap_or_else(|| hook_bounds(&g.layout, &state));
                     g.view.frame_bounds(&b, now, reduced);
                 }
                 let height = (ui.available_height() - 36.0).max(200.0);
@@ -679,7 +709,7 @@ impl NovoApp {
                     g.view.show(
                         ui,
                         &scene,
-                        &g.library,
+                        &library,
                         &Look::for_theme(theme),
                         ViewOptions {
                             reduced_motion: reduced,
@@ -693,11 +723,12 @@ impl NovoApp {
                     &[]
                 };
                 let mut notes = String::from("Picture, not measurement:");
-                for line in CRANE_PICTURE_LEAVES_OUT
-                    .iter()
-                    .chain(SWING_MODEL_LEAVES_OUT)
-                    .chain(winch_notes)
-                {
+                let own: &[&str] = if model_on {
+                    MODEL_PICTURE_LEAVES_OUT
+                } else {
+                    CRANE_PICTURE_LEAVES_OUT
+                };
+                for line in own.iter().chain(SWING_MODEL_LEAVES_OUT).chain(winch_notes) {
                     notes.push_str(&format!("\n\u{2022} {line}"));
                 }
                 super::window_help::add(ui.ctx(), notes);
@@ -738,6 +769,30 @@ fn axis_picker(ui: &mut egui::Ui, id: &str, axes: &[String], choice: &mut Option
 }
 
 impl Hoist3d {
+    /// The scene to draw and the meshes it needs: the crane model of the user's own when one is
+    /// shown, else the generic crane for `state`.
+    fn picture(&mut self, state: &CraneState) -> (Arc<Scene>, Arc<MeshLibrary>) {
+        if let Some((generation, scene, library)) = self.model.scene() {
+            let stale = self
+                .model_scene
+                .as_ref()
+                .is_none_or(|(g, _)| *g != generation);
+            if stale {
+                self.revision += 1;
+                let mut s = (*scene).clone();
+                s.revision = self.revision;
+                self.model_scene = Some((generation, Arc::new(s)));
+                // The generic crane is built again with a newer revision when it comes back.
+                self.built = None;
+            }
+            if let Some((_, s)) = &self.model_scene {
+                return (s.clone(), library);
+            }
+        }
+        self.model_scene = None;
+        (self.scene_for(state), self.library.clone())
+    }
+
     /// The scene for `state`, rebuilt only when the layout or the numbers changed.
     fn scene_for(&mut self, state: &CraneState) -> Arc<Scene> {
         if let Some((l, s, scene)) = &self.built

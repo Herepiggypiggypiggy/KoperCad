@@ -5,6 +5,28 @@
 
 use novo_core::{Properties, Value};
 use novo_view3d::crane::CraneLayout;
+use novo_view3d::crane_model::{Orientation, PartRole, UpAxis};
+
+/// The crane model of the user's own that the picture shows instead of the generic crane: the path
+/// of the STEP file (the project keeps no copy), how it lies, and the roles the user changed.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct ModelRef {
+    pub path: String,
+    pub orientation: Orientation,
+    /// One role per solid in file order when the user changed any; empty keeps the guess from the
+    /// names.
+    pub roles: Vec<PartRole>,
+}
+
+impl ModelRef {
+    pub(super) fn new(path: String) -> Self {
+        Self {
+            path,
+            orientation: Orientation::default(),
+            roles: Vec::new(),
+        }
+    }
+}
 
 /// Everything about the picture that the project remembers.
 #[derive(Debug, Clone, PartialEq)]
@@ -14,6 +36,7 @@ pub(super) struct CraneSetup {
     pub trolley_m: f32,
     pub bridge_axis: Option<String>,
     pub trolley_axis: Option<String>,
+    pub model: Option<ModelRef>,
 }
 
 impl Default for CraneSetup {
@@ -26,6 +49,7 @@ impl Default for CraneSetup {
             layout,
             bridge_axis: None,
             trolley_axis: None,
+            model: None,
         }
     }
 }
@@ -60,6 +84,32 @@ fn text(props: &Properties, name: &str) -> Option<String> {
     }
 }
 
+/// The model the properties name, with how it lies and the roles the user set.
+fn model_of(props: &Properties) -> Option<ModelRef> {
+    let path = text(props, "model")?;
+    let up = match text(props, "model_up").as_deref() {
+        Some("y") => UpAxis::Y,
+        _ => UpAxis::Z,
+    };
+    let turns = match props.get(&key("model_turns")) {
+        Some(Value::Int(t)) => (*t).rem_euclid(4) as u8,
+        _ => 0,
+    };
+    // A word that is not a role spoils the whole list: the guess from the names stands instead.
+    let roles = text(props, "model_roles")
+        .and_then(|t| {
+            t.split(',')
+                .map(PartRole::from_code)
+                .collect::<Option<Vec<_>>>()
+        })
+        .unwrap_or_default();
+    Some(ModelRef {
+        path,
+        orientation: Orientation { up, turns },
+        roles,
+    })
+}
+
 impl CraneSetup {
     /// The setup the properties describe. A number that is missing, not a number or outside what
     /// the window allows falls back to the default, so a hand-edited file cannot break the picture.
@@ -85,6 +135,7 @@ impl CraneSetup {
             layout,
             bridge_axis: text(props, "bridge_axis"),
             trolley_axis: text(props, "trolley_axis"),
+            model: model_of(props),
         }
     }
 
@@ -110,6 +161,22 @@ impl CraneSetup {
         ] {
             if let Some(a) = axis {
                 props.insert(key(name), Value::Text(a.clone()));
+            }
+        }
+        if let Some(m) = &self.model {
+            props.insert(key("model"), Value::Text(m.path.clone()));
+            let up = match m.orientation.up {
+                UpAxis::Y => "y",
+                UpAxis::Z => "z",
+            };
+            props.insert(key("model_up"), Value::Text(up.into()));
+            props.insert(
+                key("model_turns"),
+                Value::Int(i64::from(m.orientation.turns)),
+            );
+            if !m.roles.is_empty() {
+                let codes: Vec<&str> = m.roles.iter().map(|r| r.code()).collect();
+                props.insert(key("model_roles"), Value::Text(codes.join(",")));
             }
         }
     }
@@ -191,6 +258,40 @@ mod tests {
         plain.write_properties(&mut props);
         assert!(!props.contains_key(&key("bridge_axis")));
         assert!(props.contains_key("tag.rule"));
+    }
+
+    #[test]
+    fn a_crane_model_and_its_changes_travel_with_the_project() {
+        let mut s = sample();
+        s.model = Some(ModelRef {
+            path: "C:\\Cranes\\mine.stp".into(),
+            orientation: Orientation {
+                up: UpAxis::Y,
+                turns: 3,
+            },
+            roles: vec![PartRole::Wheel, PartRole::HookBlock, PartRole::Other],
+        });
+        let mut props = Properties::new();
+        s.write_properties(&mut props);
+        assert_eq!(CraneSetup::from_properties(&props), s);
+        // Without a model the keys are gone again.
+        let mut plain = s.clone();
+        plain.model = None;
+        plain.write_properties(&mut props);
+        assert!(!props.contains_key(&key("model")) && !props.contains_key(&key("model_roles")));
+        assert_eq!(CraneSetup::from_properties(&props).model, None);
+    }
+
+    #[test]
+    fn a_hand_edited_model_entry_falls_back_to_the_guess() {
+        let mut props = Properties::new();
+        props.insert(key("model"), Value::Text("a.stp".into()));
+        props.insert(key("model_roles"), Value::Text("wheel,banana".into()));
+        props.insert(key("model_turns"), Value::Int(-1));
+        let m = CraneSetup::from_properties(&props).model.unwrap();
+        assert!(m.roles.is_empty());
+        assert_eq!(m.orientation.turns, 3);
+        assert_eq!(m.orientation.up, UpAxis::Z);
     }
 
     #[test]
