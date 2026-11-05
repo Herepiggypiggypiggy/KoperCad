@@ -1,0 +1,53 @@
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    location "system";
+    object fvOptions;
+}
+
+vent0
+{
+    type explicitPorositySource;
+    active yes;
+    explicitPorositySourceCoeffs
+    {
+        selectionMode cellSet;
+        cellSet vent0;
+        type DarcyForchheimer;
+        DarcyForchheimerCoeffs
+        {
+            d (0 0 0);
+            f (0 308.642 0);
+            coordinateSystem
+            {
+                type cartesian;
+                origin (0 0 0);
+                coordinateRotation { type axesRotation; e1 (1 0 0); e2 (0 1 0); }
+            }
+        }
+    }
+}
+vent1
+{
+    type explicitPorositySource;
+    active yes;
+    explicitPorositySourceCoeffs
+    {
+        selectionMode cellSet;
+        cellSet vent1;
+        type DarcyForchheimer;
+        DarcyForchheimerCoeffs
+        {
+            d (0 0 0);
+            f (0 308.642 0);
+            coordinateSystem
+            {
+                type cartesian;
+                origin (0 0 0);
+                coordinateRotation { type axesRotation; e1 (1 0 0); e2 (0 1 0); }
+            }
+        }
+    }
+}

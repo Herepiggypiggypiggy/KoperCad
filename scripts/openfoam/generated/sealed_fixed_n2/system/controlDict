@@ -1,0 +1,30 @@
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    location "system";
+    object controlDict;
+}
+
+application buoyantBoussinesqSimpleFoam;
+startFrom startTime;
+startTime 0;
+stopAt endTime;
+endTime 4000;
+deltaT 1;
+writeControl timeStep;
+writeInterval 4000;
+purgeWrite 2;
+writeFormat ascii;
+writeCompression off;
+timeFormat general;
+timePrecision 6;
+runTimeModifiable true;
+
+functions
+{
+    meanT { type volFieldValue; libs (fieldFunctionObjects); operation volAverage; regionType all; fields (T); writeFields no; writeControl timeStep; writeInterval 50; }
+    maxT { type volFieldValue; libs (fieldFunctionObjects); operation max; regionType all; fields (T); writeFields no; writeControl timeStep; writeInterval 50; }
+    probes { type probes; libs (sampling); fields (T); probeLocations ((0.45 0.775 0.15) (0.45 0.725 0.15) (0.45 0.675 0.15) (0.45 0.625 0.15) (0.45 0.575 0.15) (0.45 0.525 0.15) (0.45 0.475 0.15) (0.45 0.425 0.15) (0.45 0.375 0.15) (0.45 0.325 0.15) (0.45 0.275 0.15) (0.45 0.225 0.15) (0.45 0.175 0.15) (0.45 0.125 0.15) (0.45 0.075 0.15) (0.45 0.025 0.15)); writeControl timeStep; writeInterval 50; }
+}

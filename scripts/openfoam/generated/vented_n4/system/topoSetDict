@@ -1,0 +1,25 @@
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object topoSetDict;
+}
+
+actions
+(
+    {
+        name vent0;
+        type cellSet;
+        action new;
+        source boxToCell;
+        box (0.2 0 0.1) (0.4 0.0125 0.2);
+    }
+    {
+        name vent1;
+        type cellSet;
+        action new;
+        source boxToCell;
+        box (0.2 0.7875 0.1) (0.4 0.8 0.2);
+    }
+);

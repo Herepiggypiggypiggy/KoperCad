@@ -1,0 +1,12 @@
+{
+ "case": "sealed_fixed",
+ "n_per_50mm": 2,
+ "cell_mm": 25.0,
+ "solver": "buoyantBoussinesqSimpleFoam",
+ "blocks": 1134,
+ "dev_area_m2": [
+  0.10500000000000002
+ ],
+ "vents": 0,
+ "devices": 1
+}

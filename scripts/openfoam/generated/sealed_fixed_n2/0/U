@@ -1,0 +1,21 @@
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class volVectorField;
+    location "0";
+    object U;
+}
+
+dimensions [0 1 -1 0 0 0 0];
+internalField uniform (0 0 0);
+boundaryField
+{
+    xmin { type noSlip; }
+    xmax { type noSlip; }
+    ymin { type noSlip; }
+    ymax { type noSlip; }
+    zmin { type noSlip; }
+    zmax { type noSlip; }
+    dev0 { type noSlip; }
+}

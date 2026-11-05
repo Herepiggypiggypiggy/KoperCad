@@ -1,0 +1,25 @@
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class volScalarField;
+    location "0";
+    object p_rgh;
+}
+
+dimensions [0 2 -2 0 0 0 0];
+internalField uniform 0;
+boundaryField
+{
+    xmin { type fixedFluxPressure; value uniform 0; }
+    xmax { type fixedFluxPressure; value uniform 0; }
+    ymin { type fixedFluxPressure; value uniform 0; }
+    ymax { type fixedFluxPressure; value uniform 0; }
+    zmin { type fixedFluxPressure; value uniform 0; }
+    zmax { type fixedFluxPressure; value uniform 0; }
+    vent0 { type fixedValue; value uniform 0; }
+    vent1 { type fixedValue; value uniform 0; }
+    dev0 { type fixedFluxPressure; value uniform 0; }
+    dev1 { type fixedFluxPressure; value uniform 0; }
+    dev2 { type fixedFluxPressure; value uniform 0; }
+}

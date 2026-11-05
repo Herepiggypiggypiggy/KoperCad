@@ -1,0 +1,25 @@
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class volScalarField;
+    location "0";
+    object T;
+}
+
+dimensions [0 0 0 1 0 0 0];
+internalField uniform 298.15;
+boundaryField
+{
+    xmin { type mixed; refValue uniform 298.15; refGradient uniform 0; valueFraction uniform 0.719424; value uniform 298.15; }
+    xmax { type mixed; refValue uniform 298.15; refGradient uniform 0; valueFraction uniform 0.719424; value uniform 298.15; }
+    ymin { type mixed; refValue uniform 298.15; refGradient uniform 0; valueFraction uniform 0.719424; value uniform 298.15; }
+    ymax { type mixed; refValue uniform 298.15; refGradient uniform 0; valueFraction uniform 0.719424; value uniform 298.15; }
+    zmin { type mixed; refValue uniform 298.15; refGradient uniform 0; valueFraction uniform 0.719424; value uniform 298.15; }
+    zmax { type mixed; refValue uniform 298.15; refGradient uniform 0; valueFraction uniform 0.719424; value uniform 298.15; }
+    vent0 { type inletOutlet; inletValue uniform 298.15; value uniform 298.15; }
+    vent1 { type inletOutlet; inletValue uniform 298.15; value uniform 298.15; }
+    dev0 { type fixedGradient; gradient uniform 14652; }
+    dev1 { type fixedGradient; gradient uniform 21978; }
+    dev2 { type fixedGradient; gradient uniform 9615.38; }
+}
