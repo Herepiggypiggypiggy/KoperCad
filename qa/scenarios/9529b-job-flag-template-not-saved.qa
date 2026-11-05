@@ -11,7 +11,7 @@ wait 15
 shot designer-open
 click_text "Save in project" Button
 wait 15
-click_text "Templates not saved" Button
+click_text "Template not saved" Button
 wait 8
 expect "Forced for the QA picture"
 shot template-flag-popover
