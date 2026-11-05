@@ -8,6 +8,8 @@ text "Motor starter DOL"
 wait 5
 key Enter
 wait 10
+click_text Options
+wait 10
 expect "Keep the macro's wire numbers"
 click_text Place Button
 wait 20

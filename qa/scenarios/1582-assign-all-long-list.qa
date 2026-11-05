@@ -10,6 +10,8 @@ text "Motor starter DOL"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 click_text Place #1
 wait 20
 key Escape
@@ -18,6 +20,8 @@ text "Frequency converter drive"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 click_text Place #1
 wait 20
 key Escape
@@ -26,6 +30,8 @@ text "Power supply 24 V"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 click_text Place #1
 wait 20
 key Escape
@@ -34,6 +40,8 @@ text "PLC network with switch"
 wait 10
 key Return
 wait 20
+click_text Options
+wait 10
 click_text Place #1
 wait 20
 key Escape

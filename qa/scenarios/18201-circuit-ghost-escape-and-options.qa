@@ -1,0 +1,39 @@
+@title Esc drops the circuit ghost; Options opens the form
+@area Schematic
+@sizes 1366x768 1920x1080
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter"
+wait 5
+key Enter
+wait 10
+move 400 200
+wait 5
+key Escape
+wait 5
+shot ghost-cancelled
+key ctrl+k
+text "motor starter"
+wait 5
+key Enter
+wait 10
+move 400 200
+wait 5
+click_text Options
+wait 10
+expect "Place macro"
+shot options-form
+key Escape
+wait 5
+key ctrl+k
+text "motor starter"
+wait 5
+key Enter
+wait 10
+move 400 200
+wait 5
+key o
+wait 10
+expect "Place macro"
+shot options-by-key
