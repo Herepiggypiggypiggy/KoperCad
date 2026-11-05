@@ -94,6 +94,12 @@ pub(super) fn source_of(kind: ProblemKind, key: &str) -> Source {
     }
 }
 
+/// The label of a flag's generic Open button: its home window's label, else plain "Open"
+/// (a commissioning punch flag opens the punch list).
+pub(super) fn open_label(flag: &novo_flags::Flag) -> &'static str {
+    home_of(flag).map_or("Open", |(_, label)| label)
+}
+
 /// The window that holds the whole picture behind a finding: its command id
 /// and the button label.
 pub(super) fn home_of(flag: &novo_flags::Flag) -> Option<(&'static str, &'static str)> {
@@ -456,10 +462,7 @@ impl NovoApp {
                                     "Open folder"
                                 }
                                 Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
-                                Action::Open(_) => match home_of(&flag) {
-                                    Some((_, label)) => label,
-                                    None => continue,
-                                },
+                                Action::Open(_) => open_label(&flag),
                                 Action::Fix(_) => "Fix",
                                 Action::Waive => "Waive…",
                                 Action::Retry => "Retry",
