@@ -2,8 +2,8 @@
 //! shapes without the app.
 //!
 //!   cargo run --release -p novo-view3d --features gpu --example crane_view -- \
-//!       --png out.png [--view iso|front|side|top] [--focus all|trolley|truck|hook] \
-//!       [--size 1920x1080] [--bridge 4.0] [--trolley 5.0] [--hook 0.0] [--swing 0.0] [--lamps off|green|amber|red,...]
+//!       --png out.png [--view iso|front|side|top] [--focus all|trolley|truck|hook|floor] \
+//!       [--size 1920x1080] [--bridge 4.0] [--trolley 5.0] [--hook 0.0] [--swing 0.0] [--lamps off|green|amber|red,...] [--slack 0.0]
 
 use flate2::{Compression, write::ZlibEncoder};
 use glam::Vec3;
@@ -62,6 +62,7 @@ fn main() {
     let mut focus = String::from("all");
     let (mut bridge, mut trolley, mut hook, mut swing) = (4.0f32, 5.0f32, 0.0f32, 0.0f32);
     let mut lamps = [Lamp::Off; 2];
+    let mut slack = 0.0f32;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -71,6 +72,7 @@ fn main() {
             "--bridge" => bridge = args.next().unwrap().parse().unwrap(),
             "--trolley" => trolley = args.next().unwrap().parse().unwrap(),
             "--hook" => hook = args.next().unwrap().parse().unwrap(),
+            "--slack" => slack = args.next().unwrap().parse().unwrap(),
             "--lamps" => {
                 let v = args.next().unwrap();
                 for (k, w) in v.split(',').take(2).enumerate() {
@@ -98,6 +100,7 @@ fn main() {
         hook_m: hook,
         swing_rad: [swing, 0.0],
         lamps,
+        slack_m: slack,
         ..Default::default()
     };
     let scene = build(&layout, &state);
@@ -132,6 +135,13 @@ fn main() {
             Aabb::new(
                 c - Vec3::new(1500.0, 1700.0, 1500.0),
                 c + Vec3::new(1500.0, 900.0, 1500.0),
+            )
+        }
+        "floor" => {
+            let c = Vec3::new(bridge * 1000.0 + 1400.0, 300.0, trolley * 1000.0);
+            Aabb::new(
+                c - Vec3::new(1800.0, 300.0, 1800.0),
+                c + Vec3::new(1800.0, 900.0, 1800.0),
             )
         }
         "truck" => {

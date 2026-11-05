@@ -250,3 +250,20 @@ fn problem_census_commissioning() {
     }
     assert!(found.len() == CEILING, "{found:?}");
 }
+
+#[test]
+fn a_punch_flag_keeps_its_open_button_label() {
+    let mut store = CommissioningStore::new();
+    store.add_punch(item(0, Severity::Blocking, PunchState::Open, None));
+    let mut flags = novo_flags::FlagStore::new();
+    flags.replace_source(&Source::Commissioning, drafts(&store, &[]));
+    let flag = flags
+        .list(false)
+        .into_iter()
+        .next()
+        .expect("one punch flag");
+    assert!(flag.actions.iter().any(
+        |a| matches!(a, novo_flags::Action::Open(k) if k == super::commissioning_flags::OPEN_PUNCH)
+    ));
+    assert_eq!(super::flags::open_label(flag), "Open");
+}

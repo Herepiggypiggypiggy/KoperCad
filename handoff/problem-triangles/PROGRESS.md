@@ -13,6 +13,12 @@
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
 2026-11-04 T14 Shell flags: job chip, control flags, inline flags; shell sites migrated (see t14/HANDOFF.md); scenarios 9540/9541; census ceiling 2
 
+## 2026-11-04 Lane T11 (EMC, safety, protection, calculations, standards)
+- `app/flags.rs`: `source_of(kind)` gives EMC findings `Source::Emc`, safety function findings `Source::Safety`, cable rating / short-circuit / disconnection / thermal / voltage drop / motor starter / protective conductor findings `Source::Calc`; the standards rules stay `Issues(check.standard)`. `sync_flags` replaces per engine. Waiver keys unchanged.
+- Popover: a "?" (help mark) beside the badge holds the standing caveat of the source ("design aid, not compliance"; safety uses `novo_safety::DISCLAIMER`). EMC triangles have "Preview the fix" (`emc_flag_fix`: first applicable suggestion of that finding, shown in the EMC window as a preview, nothing changes until Apply) and all five sources have "Open <window>" (check.emc, check.safety, check.calculations, check.standards).
+- `flag_marks`: `Anchor::Device` is drawn on the device's symbols on the page (before: device findings had no mark on the schematic). Terminal and Cable anchors still not drawn.
+- Census: `census_safety_tests.rs`, ceiling `handoff/problem-triangles/ceilings/safety.txt` = 66 baseline (no sites removed yet).
+- NOT done in this lane (next PR): the findings tables of the EMC window, Calculations and Safety as filtered views of the store; migrating the 66 coloured/banner/toast sites; Structure/Plate anchors (EMC plate findings); `S1/S2` of novo-safety are risk-graph classes, not severities, and are untouched.
 ## 2026-11-04 Lane T5 (wiring flags)
 - `app/flags_wiring.rs` (new): wire-end checks (WireRange, PointOccupied, FerruleUse) are anchored `Anchor::Pin(symbol, pin)` (found from the wire ends in `sync_flags`) and drawn as a mark on the pin point (`MarkTarget::Area`). Waiver keys unchanged. Terminals drawer: the same triangle leads the Accepts cell of the row.
 - Job flags: `NovoApp::job_flag(job, red, title, detail, JobRetry)` / `job_clear(job)` (Source::Job, `Anchor::Job`, `Life::Until`). Used by Wire-it export, wire cut, wire production (xlsx, page, wiring plan DXF) and the workshop pack: failures red, "nothing to do" yellow, cleared when the same job succeeds. Top bar: `job_roll_up` beside the Issues pill; Wire-it strip: triangle on Print list. Popover gets Try again (`FlagUi.retry`) and Dismiss (any `Life::Until` flag). T12 can reuse `job_flag` with its own `JobRetry` variants.
@@ -39,4 +45,5 @@
 - `app/flags_jobs.rs`: `job_fail`/`job_fail_at`/`job_ok`, `job_pill` (top bar triangle with count), popover actions Retry / Open folder / Copy details / Dismiss for `Source::Job` flags. 48 failed-job toasts in the files area now use it; census `problem_census_files` 66 to 18 (`app/problem_census_files.txt`). Lane folder `t12-files/`. QA 9522, 9523.
 
 - T12 PR 2 (bench): `widgets::flag_chip` for inline problems on a section (triangle, short title, popover with the sentence); bench banners and readiness gaps migrated; census files 18 to 13. QA 9524/9525.
+- T12 PR 3: plot sets, report templates and bench packet refusals are job flags; census files 13 to 8.
 - T12 PR 4: DWG converter, handover, revision, change report, designer and manual refusals are job flags; files area down to the one written-with-warnings toast.

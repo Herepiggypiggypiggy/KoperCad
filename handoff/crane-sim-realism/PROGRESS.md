@@ -4,3 +4,5 @@
 2026-11-04 16:35 UTC S1 merged (#1933); S2 look started.
 
 2026-11-05 S2 floor line merged (#1940); S3 state lamps (brake, drive) on the control box started.
+
+2026-11-05 S3 lamps merged (#1952); S3b slack rope heap beside the block for a closed-loop winch.

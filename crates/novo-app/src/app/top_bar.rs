@@ -30,6 +30,17 @@ pub(super) fn cut(text: &str, chars: usize) -> String {
 /// Height of a symbol tile in the top bar: a large icon over a short caption.
 pub(super) const TILE_HEIGHT: f32 = 46.0;
 
+/// The colour of a tile's icon and caption: an enabled one reads as a button
+/// (primary text), a disabled one is the dimmed tertiary text, so Undo and
+/// Redo show at a glance which one can be used.
+pub(super) fn tile_color(pal: &novo_theme::Palette, enabled: bool) -> egui::Color32 {
+    if enabled {
+        pal.text_primary
+    } else {
+        pal.text_tertiary
+    }
+}
+
 /// A top bar button: the icon large, a short caption under it (`None` when
 /// the bar is too narrow for words; the name is then in the tooltip).
 pub(super) fn tile(
@@ -40,11 +51,7 @@ pub(super) fn tile(
 ) -> egui::Response {
     let pal = crate::theme::ui_palette();
     let font = egui::FontId::proportional(11.5);
-    let color = if enabled {
-        pal.text_secondary
-    } else {
-        pal.text_tertiary
-    };
+    let color = tile_color(pal, enabled);
     let galley = caption.map(|c| ui.painter().layout_no_wrap(c.to_owned(), font, color));
     let width = galley
         .as_ref()

@@ -14,6 +14,7 @@ click 1820 103
 wait 20
 expect "The two lamps on the crane's control box"
 expect "dark otherwise"
+expect "at most 12 pieces of 600 mm"
 shot lamps-help
 key Escape
 check_layout

@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// What the picture leaves out, shown next to it in the window.
 pub const CRANE_PICTURE_LEAVES_OUT: &[&str] = &[
     "Generic crane proportions: the girder, trolley and hook block are not your crane's sizes",
-    "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch and slack rope are not drawn (Drive run and the line above the picture give slack rope and floor pick-up as numbers)",
+    "The rope is a straight bar of fixed length: its swing is a simple pendulum model, not a measurement; stretch is not drawn, and slack rope appears as a heap beside the block only for a closed-loop winch in Drive run, at most 12 pieces of 600 mm, so a longer slack is drawn shorter than it is (the line above the picture gives slack rope and floor pick-up as numbers)",
     "Bridge and trolley follow a travel drive if you pick one (forward is +x for the bridge, +z for the trolley) and its end limits stand as upright flags, red forward and amber reverse; otherwise they stand where you set them. Your picks and the crane size are saved with the project",
     "No building, no clearance check, no structural model",
 ];
@@ -79,6 +79,9 @@ pub struct TravelMark {
 pub struct CraneState {
     /// The two state lamps on the control box: brake and drive. `Off` when nothing reports.
     pub lamps: [Lamp; 2],
+    /// Rope paid out beyond the hook while it rests on the ground, m. Above 0 a heap of loose rope
+    /// lies next to the block; 0 is a taut rope.
+    pub slack_m: f32,
     /// Bridge position along the runway, m.
     pub bridge_m: f32,
     /// Trolley position across the span, m.
@@ -195,6 +198,10 @@ const RAW_PLATE: u64 = 100;
 const RAW_BUFFER: u64 = 110;
 const RAW_MARK: u64 = 120;
 const RAW_LAMP: u64 = 130;
+const RAW_SLACK: u64 = 200;
+/// Longest straight piece of the slack rope heap and the most pieces drawn.
+const SLACK_PIECE: f32 = 600.0;
+const SLACK_PIECES_MAX: usize = 12;
 const RAW_BRIDGE_FLAG: u64 = 1000;
 const RAW_TROLLEY_FLAG: u64 = 2000;
 const RAW_COLUMN: u64 = 3000;
@@ -275,6 +282,7 @@ const UPPER_FLAG: [u8; 3] = [220, 60, 50];
 const LOWER_FLAG: [u8; 3] = [230, 180, 50];
 const WHEEL: [u8; 3] = [104, 110, 120];
 const ROPE_STEEL: [u8; 3] = [78, 80, 86];
+const SLACK_ROPE: [u8; 3] = [150, 152, 160];
 const MOTOR: [u8; 3] = [48, 62, 92];
 const GEARBOX: [u8; 3] = [92, 98, 108];
 const MARKING: [u8; 3] = [226, 190, 40];
@@ -737,6 +745,34 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             Vec3::new(w, h, d),
             LOAD,
         ));
+    }
+    // Slack rope: loose pieces lie in a zigzag on the floor beside the block, at most 600 mm of
+    // rope each, the pieces together as long as the rope paid out. Drawn twice as thick as the
+    // rope so the heap reads from a distance.
+    if state.slack_m > 0.0 {
+        let total = state.slack_m * 1000.0;
+        let n = ((total / SLACK_PIECE).ceil() as usize).clamp(1, SLACK_PIECES_MAX);
+        let each = (total / n as f32).min(SLACK_PIECE);
+        for k in 0..n {
+            let forward = k % 2 == 0;
+            push(stretched(
+                RAW_SLACK + k as u64,
+                other,
+                Part::Bar { r: mm(size::ROPE) },
+                Vec3::new(
+                    hook_x + 700.0 + if forward { 0.0 } else { each },
+                    size::ROPE,
+                    hook_z - 400.0 + k as f32 * 45.0,
+                ),
+                if forward {
+                    z_to_x
+                } else {
+                    Quat::from_rotation_y(-FRAC_PI_2)
+                },
+                SLACK_ROPE,
+                Vec3::new(size::ROPE * 2.0, size::ROPE * 2.0, each),
+            ));
+        }
     }
     // A flag at the height of each bound limit switch, on the far side of the rope's path.
     for (k, mark) in state.limits.iter().enumerate() {
@@ -1264,5 +1300,24 @@ mod tests {
         assert_eq!(tint([Lamp::Green, Lamp::Red], 0), Some(Lamp::Green.tint()));
         assert_eq!(tint([Lamp::Green, Lamp::Red], 1), Some(Lamp::Red.tint()));
         assert_ne!(Lamp::Amber.tint(), Lamp::Green.tint());
+    }
+
+    #[test]
+    fn slack_rope_lies_on_the_floor_only_when_there_is_slack() {
+        let pieces = |slack_m: f32| {
+            let st = CraneState {
+                slack_m,
+                ..Default::default()
+            };
+            let s = build(&CraneLayout::default(), &st);
+            s.items
+                .iter()
+                .filter(|i| (RAW_SLACK..RAW_SLACK + 100).contains(&i.id.raw))
+                .count()
+        };
+        assert_eq!(pieces(0.0), 0);
+        assert_eq!(pieces(0.3), 1);
+        assert_eq!(pieces(3.0), 5);
+        assert_eq!(pieces(100.0), SLACK_PIECES_MAX);
     }
 }
