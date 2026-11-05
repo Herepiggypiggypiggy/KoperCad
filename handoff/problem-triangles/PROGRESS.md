@@ -11,6 +11,7 @@
 - `novo-theme`: `widgets::flag_triangle` (painted glyph), Issues pill draws triangles.
 - `novo-app` `app/flags.rs`: `draft(&Problem)` -> `FlagDraft` for all 76 kinds (Info is no flag; DepthUnknown, GuessedWire, UnsizedDuct dashed), `FlagUi` in `wb.flags` filled from `wb.problems` by revision, `flag_marks` (replaces the old marks), `flag_popover` (title, badge, detail, Locate / Fix / Waive / Explain / Copy; Esc or click away closes), Issues list rows lead with the triangle. Qa scenario 9400.
 - Not in this lane: Flags list grouping/filters by source, Anchor::Device/Terminal/Cable drawn on the schematic (still no drawn object), cabinet/3D surfaces (T1, T3), toasts (T7+).
+2026-11-04 T14 Shell flags: job chip, control flags, inline flags; shell sites migrated (see t14/HANDOFF.md); scenarios 9540/9541; census ceiling 2
 
 ## 2026-11-04 Lane T7 (schematic edit refusals)
 - `app/flags_edit.rs`: `refuse` / `refuse_titled` / `refuse_tool` replace the warning and error toasts of refused edits. One transient flag (`Source::Edit`, badge "Edit", `Life::Until`) on the selected symbols and wires (at most 3), else on the tool in hand (`Anchor::Control("tool")`, drawn at the top left of the canvas). It goes with the next key or click (counted on release, so a click on its triangle opens the popover first). The text stays in the message log, no toast. Transient flags are not Issues: the pill and F8 do not count them.

@@ -10,7 +10,7 @@ use novo_editor::edit::{PlaceOptions, place};
 use novo_editor::{Tool, naming::Numbering};
 use novo_symbols::Library;
 
-use super::{Level, NovoApp};
+use super::NovoApp;
 
 /// What the practice project is called.
 pub(crate) const PRACTICE_NAME: &str = "Practice";
@@ -144,7 +144,13 @@ impl NovoApp {
     /// "Try the fast keys": a fresh practice project, with the card.
     pub(super) fn start_practice(&mut self) {
         if let Err(e) = self.backend.new_project(PRACTICE_NAME) {
-            self.message(Level::Error, format!("Could not start the practice: {e}"));
+            self.job_flag(
+                "onboarding.practice",
+                true,
+                "Practice not started",
+                format!("Could not start the practice: {e}"),
+                None,
+            );
             return;
         }
         self.project_path = None;
@@ -152,7 +158,13 @@ impl NovoApp {
         let built = self.backend.document_mut().map(build_practice);
         match built {
             Some(Ok(changes)) => self.backend.record(&changes),
-            Some(Err(e)) => self.message(Level::Error, format!("Could not draw the practice: {e}")),
+            Some(Err(e)) => self.job_flag(
+                "onboarding.practice",
+                true,
+                "Practice not drawn",
+                format!("Could not draw the practice: {e}"),
+                None,
+            ),
             None => {}
         }
         self.document_replaced();

@@ -137,6 +137,7 @@ mod faults;
 mod flags;
 mod flags_edit;
 mod flags_jobs;
+mod flags_shell;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -475,6 +476,8 @@ mod first_view_tests;
 mod flags_edit_tests;
 #[cfg(test)]
 mod flags_jobs_tests;
+#[cfg(test)]
+mod flags_shell_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]

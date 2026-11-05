@@ -1134,7 +1134,13 @@ impl NovoApp {
 
     pub(super) fn start_lesson_now(&mut self, id: &str) {
         let Some(entry) = self.learn.catalog.get(id).cloned() else {
-            self.message(Level::Error, format!("There is no lesson `{id}`."));
+            self.job_flag(
+                "learn.open",
+                true,
+                "Lesson not found",
+                format!("There is no lesson `{id}`."),
+                None,
+            );
             return;
         };
         // Opening a lesson replaces the open project (after the question
@@ -1144,12 +1150,16 @@ impl NovoApp {
         let opened = self.open_lesson_project(&entry);
         self.learn.opening = false;
         if let Err(why) = opened {
-            self.message(
-                Level::Error,
+            self.job_flag(
+                "learn.open",
+                true,
+                "Lesson did not open",
                 format!("Could not open lesson {}: {why}", entry.lesson.title),
+                None,
             );
             return;
         }
+        self.job_ok("learn.open");
         if let Some(name) = &entry.lesson.page
             && let Some(page) = self.backend.document().and_then(|d| {
                 d.project()
@@ -1306,7 +1316,7 @@ impl NovoApp {
                     } else {
                         "Could not do this step"
                     };
-                    self.message(Level::Warning, format!("{said}: {why}"));
+                    self.job_flag("learn.skip", false, said, &why, None);
                     break;
                 }
                 None => break,
@@ -1387,9 +1397,12 @@ impl NovoApp {
             Ok(())
         })();
         if let Err(why) = opened {
-            self.message(
-                Level::Error,
+            self.job_flag(
+                "learn.finished",
+                true,
+                "Finished version not opened",
                 format!("Could not open the finished version: {why}"),
+                None,
             );
             return false;
         }

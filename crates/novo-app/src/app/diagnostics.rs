@@ -10,7 +10,13 @@ impl NovoApp {
     /// `help.open_log_folder`: the folder with the log and crash reports.
     pub(super) fn open_log_folder(&mut self) {
         let Some(dir) = crate::diag::log_dir() else {
-            self.message(Level::Warning, "No log folder on this computer");
+            self.job_flag(
+                "diag.log_folder",
+                false,
+                "No log folder",
+                "There is no log folder on this computer.",
+                None,
+            );
             return;
         };
         if cfg!(test) {
@@ -18,10 +24,16 @@ impl NovoApp {
             return;
         }
         match parts_bulk::open_folder(&dir) {
-            Ok(()) => self.message(Level::Info, format!("Log folder: {}", dir.display())),
-            Err(e) => self.message(
-                Level::Warning,
-                format!("Could not open the log folder: {e}"),
+            Ok(()) => {
+                self.job_ok("diag.log_folder");
+                self.message(Level::Info, format!("Log folder: {}", dir.display()));
+            }
+            Err(e) => self.job_flag(
+                "diag.log_folder",
+                false,
+                "Log folder did not open",
+                format!("Could not open {}: {e}", dir.display()),
+                Some("help.open_log_folder"),
             ),
         }
     }
@@ -73,10 +85,13 @@ impl NovoApp {
         close |= shown.should_close();
         if open_report {
             match userkeymap::open_in_editor(&report) {
-                Ok(()) => {}
-                Err(e) => self.message(
-                    Level::Warning,
+                Ok(()) => self.job_ok("diag.crash_report"),
+                Err(e) => self.job_flag(
+                    "diag.crash_report",
+                    false,
+                    "Report did not open",
                     format!("Open {} in a text editor ({e})", report.display()),
+                    Some("help.open_log_folder"),
                 ),
             }
             self.crash_report = None;
