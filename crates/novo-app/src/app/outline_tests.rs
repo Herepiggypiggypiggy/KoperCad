@@ -936,3 +936,41 @@ fn a_picked_enclosure_gives_the_cabinet_its_plate_and_a_record_with_sources() {
             .is_none()
     );
 }
+
+#[test]
+fn a_cabinet_made_from_a_step_file_keeps_its_sizes_name_and_hash() {
+    use novo_layout::spec::{EnclosureSpec, Source};
+    let (_dir, mut d) = drive();
+    d.app.perform(Act::NewCabinet { in_group: None });
+    d.frame();
+    d.frame();
+    let bytes =
+        include_bytes!("../../../../qa/fixtures/enclosure-step/TS-600x1800x500.stp").as_slice();
+    let read = super::enclosure_pick::read_step_bytes("TS-600x1800x500.stp", bytes, "").unwrap();
+    let sha = read.sha256.clone();
+    d.app
+        .ol
+        .cabinet_form
+        .as_mut()
+        .expect("window open")
+        .step
+        .read = Some(read);
+    key(&mut d, egui::Key::Enter, egui::Modifiers::NONE);
+    d.frame();
+    let cab = d
+        .doc()
+        .project()
+        .structure_by_tag(&DeviceTag::parse("+CAB1").unwrap())
+        .expect("cabinet +CAB1");
+    let plate = cab.plate.expect("plate");
+    assert_eq!((plate.width, plate.height), (500.0, 1600.0));
+    let spec = EnclosureSpec::read(&cab.properties);
+    assert_eq!(spec.height.unwrap().value, 1800.0);
+    assert_eq!(spec.height.unwrap().source, Source::Step);
+    assert_eq!(spec.step_name, "TS-600x1800x500.stp");
+    assert_eq!(spec.step_sha256, sha);
+    assert_eq!(
+        cab.properties.get("depth_mm"),
+        Some(&novo_core::Value::Float(500.0))
+    );
+}

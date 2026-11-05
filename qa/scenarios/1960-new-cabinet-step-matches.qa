@@ -1,0 +1,27 @@
+@title New cabinet: the maker's STEP file for the picked enclosure matches, sizes become STEP values
+@area Cabinet
+# Where the user finds it: Outline > New cabinet > Enclosure > Choose file... (or drop the STEP file on the zone).
+user_catalog qa/fixtures/enclosure-parts.json
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..." Button
+wait 10
+click_text "Demo TS-600x1800x500"
+wait 6
+shot a-picked
+answer_dialog qa/fixtures/enclosure-step/TS-600x1800x500.stp
+click_text "Choose file…" Button
+wait 30
+expect "TS-600x1800x500.stp"
+expect "matches"
+expect "600 x 1800 x 500 mm"
+shot b-step-read
+check_layout
+key Enter
+wait 20
+click_text Cabinet #1
+wait 20
+shot c-cabinet-view
