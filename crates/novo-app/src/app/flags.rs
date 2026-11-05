@@ -34,6 +34,8 @@ pub(super) struct FlagUi {
     /// The EMC suggestion the open popover can preview (worked out once per
     /// popover, not per frame): the flag it was worked out for and the fix.
     emc_fix: Option<(FlagId, Option<novo_emc::Fix>)>,
+    /// What Retry runs for each job flag (wiring lane).
+    pub(super) retry: HashMap<FlagId, super::flags_wiring::JobRetry>,
     /// The transient flags of refused edits (lane T7).
     pub(super) edit: super::flags_edit::EditFlags,
     /// Failed jobs: what Retry and Open folder need (lane T12).
@@ -54,6 +56,7 @@ impl Default for FlagUi {
             index: HashMap::new(),
             open: None,
             emc_fix: None,
+            retry: HashMap::new(),
             edit: Default::default(),
             jobs: HashMap::new(),
             job_order: Vec::new(),
@@ -278,7 +281,16 @@ impl NovoApp {
             return;
         }
         let revision = *revision;
-        let built = drafts(problems);
+        let mut built = drafts(problems);
+        if let Some(doc) = self.backend.document() {
+            // Wire-end checks sit on the pin the wire lands on.
+            for (i, d) in &mut built {
+                let pins = super::flags_wiring::pin_anchors(doc.project(), &problems[*i]);
+                if !pins.is_empty() {
+                    d.anchors = pins;
+                }
+            }
+        }
         let flags = &mut self.wb.flags;
         flags.index.clear();
         for (i, d) in &built {
@@ -313,16 +325,16 @@ impl NovoApp {
             return;
         };
         self.cabinet.rules.ensure_loaded();
-        let rules = self.cabinet.rules.rules.clone();
         if self
             .wb
             .flags
             .layout_synced
             .as_ref()
-            .is_some_and(|(r, set)| *r == revision && *set == rules)
+            .is_some_and(|(r, set)| *r == revision && *set == self.cabinet.rules.rules)
         {
             return;
         }
+        let rules = self.cabinet.rules.rules.clone();
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -422,9 +434,11 @@ impl NovoApp {
                             novo_theme::widgets::help_mark(ui, &text);
                         }
                     });
-                    for line in &flag.detail.0 {
-                        ui.label(line);
-                    }
+                    novo_theme::widgets::help_scroll(ui, |ui| {
+                        for line in &flag.detail.0 {
+                            ui.label(line);
+                        }
+                    });
                     ui.horizontal_wrapped(|ui| {
                         for action in &flag.actions {
                             let label = match action {
@@ -502,7 +516,23 @@ impl NovoApp {
         action: Action,
         ctx: &egui::Context,
     ) {
+        // Retry of a commissioning job is run here; Dismiss and the rest are the job path's.
+        if super::commissioning_flags::is_commissioning_job(flag) && action == Action::Retry {
+            self.retry_commissioning_job(flag);
+            return;
+        }
         if self.run_job_action(flag.id, &action) {
+            return;
+        }
+        if flag.source == Source::Commissioning {
+            match action {
+                Action::Locate => self.locate_commissioning_flag(flag),
+                Action::Open(panel) => self.open_commissioning_panel(&panel),
+                Action::Copy => {
+                    ctx.copy_text(format!("{}\n{}", flag.title, flag.detail.0.join("\n")))
+                }
+                _ => {}
+            }
             return;
         }
         match action {
@@ -598,5 +628,22 @@ impl NovoApp {
         if !items.is_empty() {
             self.cabinet.view.reveal(items);
         }
+    }
+
+    /// Red and yellow counts of the Cabinet's own flags (broken Place rules,
+    /// covered wiring openings): the part of the one count the design checks
+    /// do not hold.
+    pub(super) fn layout_counts(&self) -> (usize, usize) {
+        let mut red = 0;
+        let mut yellow = 0;
+        for f in self.wb.flags.store.list(false) {
+            if f.source == Source::Layout {
+                match f.severity {
+                    novo_flags::Severity::Red => red += 1,
+                    novo_flags::Severity::Yellow => yellow += 1,
+                }
+            }
+        }
+        (red, yellow)
     }
 }

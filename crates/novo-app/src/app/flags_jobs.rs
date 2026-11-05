@@ -93,6 +93,18 @@ impl NovoApp {
         self.job_fail_in(job, title, level, text, folder, None);
     }
 
+    /// [`job_fail`](Self::job_fail) with the severity as a flag colour: red or yellow.
+    pub(super) fn job_fail_red(
+        &mut self,
+        job: &str,
+        title: &str,
+        red: bool,
+        text: impl Into<String>,
+    ) {
+        let level = if red { Level::Error } else { Level::Warning };
+        self.job_fail_in(job, title, level, text, None, None);
+    }
+
     pub(super) fn job_fail_in(
         &mut self,
         job: &str,
@@ -116,7 +128,7 @@ impl NovoApp {
         let words = self.log_only(level, text).replace('`', "'");
         let retry = retry_command(job);
         let mut actions = Vec::new();
-        if retry.is_some() {
+        if retry.is_some() || self.wb.flags.retry.contains_key(&job_flag_id(job)) {
             actions.push(Action::Retry);
         }
         if let Some(cmd) = fix {
@@ -151,6 +163,7 @@ impl NovoApp {
             flags.store.clear(id);
         }
         flags.jobs.clear();
+        flags.retry.clear();
         if flags
             .open
             .is_some_and(|(id, _)| !flags.store.get(id).is_some())
@@ -163,6 +176,7 @@ impl NovoApp {
     pub(super) fn job_ok(&mut self, job: &str) {
         let id = job_flag_id(job);
         let flags = &mut self.wb.flags;
+        flags.retry.remove(&id);
         if flags.store.clear(id) {
             flags.jobs.remove(&id);
             flags.job_order.retain(|i| *i != id);
@@ -251,7 +265,12 @@ impl NovoApp {
         };
         match action {
             Action::Retry => {
-                if let Some(command) = info.retry {
+                if let Some(again) = self.wb.flags.retry.remove(&id) {
+                    self.wb.flags.store.clear(id);
+                    self.wb.flags.jobs.remove(&id);
+                    self.wb.flags.job_order.retain(|i| *i != id);
+                    self.retry_job(again);
+                } else if let Some(command) = info.retry {
                     self.wb.flags.store.clear(id);
                     self.wb.flags.jobs.remove(&id);
                     self.wb.flags.job_order.retain(|i| *i != id);
@@ -266,6 +285,7 @@ impl NovoApp {
                 }
             }
             Action::Open(key) if key == DISMISS => {
+                self.wb.flags.retry.remove(&id);
                 self.wb.flags.store.clear(id);
                 self.wb.flags.jobs.remove(&id);
                 self.wb.flags.job_order.retain(|i| *i != id);

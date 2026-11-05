@@ -63,7 +63,14 @@ wait_s 150
 # Undo and the cooling card wait for the finished run: no "Preliminary" left.
 expect_not "Preliminary"
 shot airflow-result
+# The Flow key text is behind the "?" next to "Heat" in the strip (#1846).
 expect "Streamlines"
+click 109 73
+wait 6
+expect "Flow: streamlines, scale 0 to 2 m/s"
+shot airflow-key-help
+click 109 73
+wait 6
 check_blank airflow-result
 check_layout
 wait_s 5
@@ -90,6 +97,13 @@ click_text Undo
 wait 10
 expect "Result out of date"
 shot stale-after-edit
+# What it means is behind the "?" in the Vents and fans header.
+click 317 343
+wait 6
+expect "from before your last change"
+shot stale-help
+click 317 343
+wait 6
 check_layout
 key ctrl+k
 wait 6

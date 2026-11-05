@@ -32,7 +32,7 @@ impl NovoApp {
                 "diag.log_folder",
                 false,
                 "Log folder did not open",
-                format!("Could not open {}: {e}", dir.display()),
+                e,
                 Some("help.open_log_folder"),
             ),
         }

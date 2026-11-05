@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use novo_commissioning::{FieldPackage, Photo, is_photo_name, photo_name};
 
 use super::commissioning::now;
+use super::commissioning_flags::job;
 use super::pdf::write_replacing;
 use super::{Level, NovoApp, projects_dir};
 
@@ -52,19 +53,29 @@ impl NovoApp {
     /// Copies each picture into the photos folder under its content name and
     /// records it on item `id`. Returns how many were new to the item.
     pub(super) fn attach_photo_files(&mut self, id: u64, paths: &[PathBuf]) -> usize {
+        let key = job::PHOTO;
         let Some(dir) = self.field_photos_dir() else {
-            self.message(Level::Error, "Could not find the Documents folder");
+            self.job_error(
+                key,
+                "Photo not kept",
+                super::commissioning::NO_DOCUMENTS,
+                false,
+            );
             return 0;
         };
         self.load_commissioning();
         let mut added = 0;
+        let mut failed = false;
         for path in paths {
             let bytes = match std::fs::read(path) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    self.message(
-                        Level::Error,
-                        format!("Could not read {}: {e}", path.display()),
+                    failed = true;
+                    self.job_error(
+                        key,
+                        "Photo not read",
+                        &format!("{}: {e}", path.display()),
+                        true,
                     );
                     continue;
                 }
@@ -77,7 +88,8 @@ impl NovoApp {
                     .map_err(|e| e.to_string())
                     .and_then(|()| write_replacing(&target, &bytes).map_err(|e| e.to_string()))
             {
-                self.message(Level::Error, format!("Could not keep the photo: {e}"));
+                failed = true;
+                self.job_error(key, "Photo not kept", &e, true);
                 continue;
             }
             let Some(mode) = self.wb.commissioning.as_mut() else {
@@ -92,6 +104,9 @@ impl NovoApp {
                 mode.dirty = true;
                 added += 1;
             }
+        }
+        if !failed {
+            self.job_ok(key);
         }
         added
     }
@@ -116,6 +131,7 @@ impl NovoApp {
         let Some(dir) = self.field_photos_dir() else {
             return;
         };
+        self.job_ok(job::PHOTO_UNPACK);
         for (name, bytes) in files {
             let target = dir.join(&name);
             if target.exists() {
@@ -125,7 +141,7 @@ impl NovoApp {
                 .map_err(|e| e.to_string())
                 .and_then(|()| write_replacing(&target, &bytes).map_err(|e| e.to_string()))
             {
-                self.message(Level::Error, format!("Could not keep a photo: {e}"));
+                self.job_error(job::PHOTO_UNPACK, "Photo not kept", &e, false);
             }
         }
     }

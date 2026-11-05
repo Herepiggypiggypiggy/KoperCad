@@ -20,6 +20,7 @@ use novo_theme::{Palette, icons, space, widgets};
 
 use super::cabinet_bar::note_ctx;
 use super::commissioning::{CommissioningMode, now};
+use super::commissioning_flags::job;
 use super::{Level, NovoApp};
 
 /// What the tab asks the app to do after the frame.
@@ -524,7 +525,7 @@ impl NovoApp {
         let sheet = mode.test_sheet(project);
         let output = novo_commissioning::test_sheet_report(&sheet, &mode.store, revision);
         if sheet.points.is_empty() {
-            self.message(Level::Warning, "There are no wires to put on a test sheet.");
+            self.message(Level::Info, "There are no wires to put on a test sheet.");
             return None;
         }
         let options = novo_pdf::ReportPdfOptions {
@@ -541,15 +542,13 @@ impl NovoApp {
         let replaced = path.exists();
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
+                self.job_ok(job::TEST_SHEET);
                 let verb = if replaced { "Replaced" } else { "Exported" };
                 self.message_file(format!("{verb} {}", path.display()), path);
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not export the test sheet: {e}"),
-                );
+                self.job_error(job::TEST_SHEET, "Test sheet not exported", &e, true);
                 None
             }
         }

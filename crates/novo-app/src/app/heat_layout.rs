@@ -243,10 +243,14 @@ impl LayoutSearch {
         let mut open = true;
         let pal = crate::theme::ui_palette();
         super::panel::dialog(ctx, "Cooler layout", [WIDTH, 0.0])
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
             .scroll([false, false])
             .default_pos(at)
             .show(ctx, |ui| {
+                // Docked, the pane is narrower than the window asked for: nothing
+                // below may grow the column (the grid used to push the right edge out).
+                ui.set_max_width(ui.available_width());
                 super::heat_cooling::left_out_line(ui, self.left_out);
                 if let Some(run) = &self.run {
                     ui.horizontal(|ui| {
@@ -467,11 +471,12 @@ fn headline(s: &Suggestion) -> String {
 fn grid_of_numbers(ui: &mut egui::Ui, s: &Suggestion) {
     egui::Grid::new("cooler_layout_numbers")
         .num_columns(3)
+        .max_col_width(ui.available_width() * 0.5)
         .spacing([14.0, 2.0])
         .show(ui, |ui| {
             ui.label("");
             ui.label(egui::RichText::new("Now").small());
-            ui.label(egui::RichText::new("After the moves").small());
+            ui.label(egui::RichText::new("After").small());
             ui.end_row();
             ui.label("Devices over their limit");
             ui.label(s.before.devices_over.to_string());
@@ -489,7 +494,7 @@ fn grid_of_numbers(ui: &mut egui::Ui, s: &Suggestion) {
             ui.end_row();
             ui.label("Distance the devices move");
             ui.label("");
-            ui.label(format!("{:.1} m of travel", s.moved_mm / 1000.0));
+            ui.label(format!("{:.1} m", s.moved_mm / 1000.0));
             ui.end_row();
         });
 }

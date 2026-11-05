@@ -67,6 +67,9 @@ mod commissioning;
 mod commissioning_cabinet;
 #[cfg(test)]
 mod commissioning_cabinet_tests;
+mod commissioning_flags;
+#[cfg(test)]
+mod commissioning_flags_tests;
 mod commissioning_photos;
 mod commissioning_redlines;
 mod commissioning_signature;
@@ -135,11 +138,13 @@ mod example_mcc;
 mod example_plc;
 mod example_pump;
 mod faults;
+mod flag_rows;
 mod flags;
 mod flags_edit;
 mod flags_inline;
 mod flags_jobs;
 mod flags_shell;
+mod flags_wiring;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -188,6 +193,8 @@ mod heat_status_tests;
 mod heat_sweep;
 #[cfg(test)]
 mod heat_sweep_tests;
+#[cfg(test)]
+mod heat_tests_enclosure_lines;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
@@ -489,6 +496,8 @@ mod flags_shell_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]
+mod flags_wiring_tests;
+#[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
@@ -530,6 +539,8 @@ mod parts_table_tests;
 mod pdf_options_tests;
 #[cfg(test)]
 mod print_preview_tests;
+#[cfg(test)]
+mod problem_census_wiring_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
@@ -1661,6 +1672,7 @@ impl NovoApp {
         // A failed job belongs to the project it failed in: Retry must not run
         // for another one.
         self.forget_jobs();
+        self.drop_commissioning_flags();
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();

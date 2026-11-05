@@ -301,6 +301,100 @@ pub fn avoided_ducts(properties: &novo_core::Properties) -> Vec<u64> {
     }
 }
 
+/// Property on a duct: the kinds of wire it is meant to carry, comma
+/// separated (`power`, `earth`, `supply`, `signal`; see [`RouteClass`]).
+/// Empty or missing means any wire: categories are optional and off until a
+/// duct states one.
+pub const DUCT_CARRIES: &str = "duct.carries";
+
+/// The kind of a wire for duct categories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RouteClass {
+    /// Protective earth.
+    Earth,
+    /// Mains and motor wiring, and anything above 60 V.
+    Power,
+    /// Extra-low-voltage DC supply.
+    Supply,
+    /// Control and signal wires.
+    Signal,
+}
+
+impl RouteClass {
+    /// Every class, in the order the duct editor lists them.
+    pub const ALL: [RouteClass; 4] = [
+        RouteClass::Power,
+        RouteClass::Supply,
+        RouteClass::Signal,
+        RouteClass::Earth,
+    ];
+
+    /// The word typed and stored for the class.
+    pub fn word(self) -> &'static str {
+        match self {
+            RouteClass::Earth => "earth",
+            RouteClass::Power => "power",
+            RouteClass::Supply => "supply",
+            RouteClass::Signal => "signal",
+        }
+    }
+
+    /// The class a typed word names (case and spaces ignored).
+    pub fn parse(word: &str) -> Option<RouteClass> {
+        let w = word.trim().to_ascii_lowercase();
+        RouteClass::ALL.into_iter().find(|c| c.word() == w)
+    }
+}
+
+/// The kinds a duct is meant to carry, from its [`DUCT_CARRIES`] property.
+/// Empty for a duct that states none (any wire). Words that are not a kind
+/// are ignored.
+pub fn duct_carries(properties: &novo_core::Properties) -> Vec<RouteClass> {
+    match properties.get(DUCT_CARRIES) {
+        Some(novo_core::Value::Text(t)) => {
+            let mut v: Vec<RouteClass> = t.split(',').filter_map(RouteClass::parse).collect();
+            v.sort();
+            v.dedup();
+            v
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The class of a wire from its net's potential (kind and voltage), falling
+/// back on its size: 2.5 mm² and up counts as power, as in the bench
+/// sequence.
+pub fn wire_route_class(project: &Project, wire: &novo_core::Wire) -> RouteClass {
+    use novo_core::PotentialKind as K;
+    let net = project.netlist();
+    let potential = net
+        .potential_of(wire.from)
+        .or_else(|| net.potential_of(wire.to))
+        .and_then(|p| project.potential(p));
+    let high = |v: Option<f64>| v.is_some_and(|v| v > 60.0);
+    match potential.map(|p| (p.kind, p.voltage)) {
+        Some((K::ProtectiveEarth | K::Pen, _)) => RouteClass::Earth,
+        Some((K::Line | K::Neutral, _)) => RouteClass::Power,
+        Some((K::DcPositive | K::DcNegative, v)) if !high(v) => RouteClass::Supply,
+        Some((K::DcPositive | K::DcNegative, _)) => RouteClass::Power,
+        Some((K::Signal, v)) if high(v) => RouteClass::Power,
+        _ if wire_section_mm2(project, wire).is_some_and(|s| s >= 2.5) => RouteClass::Power,
+        _ => RouteClass::Signal,
+    }
+}
+
+/// The ducts a wire is steered away from by duct categories: those that
+/// state what they carry and do not carry its kind. Ducts without a stated
+/// category never appear, so a project that sets none is routed as before.
+/// A preference only: the router treats these like [`AVOID_DUCTS`].
+pub fn category_avoided(class: RouteClass, carries: &BTreeMap<u64, Vec<RouteClass>>) -> Vec<u64> {
+    carries
+        .iter()
+        .filter(|(_, c)| !c.is_empty() && !c.contains(&class))
+        .map(|(id, _)| *id)
+        .collect()
+}
+
 /// Property on a wire: other wires it must keep clear of, `id:mm` pairs comma
 /// separated. A hard clearance between the ducts the two wires use (edge to
 /// edge); when no way satisfies it the wire is routed without it and the plan
@@ -983,10 +1077,24 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         }
     }
     // Wires asked to stay out of some ducts (`route.avoid_ducts`).
+    // Plus the ducts whose stated category leaves the wire's kind out
+    // (`duct.carries`): the same soft preference, and only for ducts that
+    // state one.
+    let carries: BTreeMap<u64, Vec<RouteClass>> = project
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .map(|r| (r.id.raw(), duct_carries(&r.properties)))
+        .filter(|(_, c)| !c.is_empty())
+        .collect();
     let avoid: BTreeMap<u64, Vec<u64>> = project
         .wires()
         .filter_map(|w| {
-            let ducts = avoided_ducts(&w.properties);
+            let mut ducts = avoided_ducts(&w.properties);
+            if !carries.is_empty() {
+                ducts.extend(category_avoided(wire_route_class(project, w), &carries));
+                ducts.sort_unstable();
+                ducts.dedup();
+            }
             (!ducts.is_empty()).then_some((w.id.raw(), ducts))
         })
         .collect();
@@ -1046,4 +1154,44 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         }
     }
     out
+}
+
+#[cfg(test)]
+mod category_tests {
+    use super::*;
+    use novo_core::{Properties, Value};
+
+    fn props(text: &str) -> Properties {
+        let mut p = Properties::default();
+        p.insert(DUCT_CARRIES.to_owned(), Value::Text(text.to_owned()));
+        p
+    }
+
+    #[test]
+    fn a_duct_without_a_category_carries_everything() {
+        assert!(duct_carries(&Properties::default()).is_empty());
+        assert!(duct_carries(&props("")).is_empty());
+        // Words that are not a kind are ignored, never an error.
+        assert!(duct_carries(&props("heavy")).is_empty());
+    }
+
+    #[test]
+    fn the_kinds_read_back_sorted_and_without_repeats() {
+        let v = duct_carries(&props(" Signal, power ,signal"));
+        assert_eq!(v, vec![RouteClass::Power, RouteClass::Signal]);
+    }
+
+    #[test]
+    fn only_ducts_that_state_a_category_without_the_kind_are_avoided() {
+        let carries: BTreeMap<u64, Vec<RouteClass>> = [
+            (1, vec![RouteClass::Power]),
+            (2, vec![RouteClass::Signal, RouteClass::Supply]),
+            (3, vec![]),
+        ]
+        .into();
+        assert_eq!(category_avoided(RouteClass::Signal, &carries), vec![1]);
+        assert_eq!(category_avoided(RouteClass::Power, &carries), vec![2]);
+        assert_eq!(category_avoided(RouteClass::Earth, &carries), vec![1, 2]);
+        assert!(category_avoided(RouteClass::Signal, &BTreeMap::new()).is_empty());
+    }
 }

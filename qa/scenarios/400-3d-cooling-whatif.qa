@@ -42,6 +42,7 @@ scroll 250 800 -420
 wait 10
 shot ranked-scrolled
 scroll 250 300 900
+scroll 250 300 -600
 wait 10
 click_text "Copy the table"
 wait 6

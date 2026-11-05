@@ -1,0 +1,21 @@
+@title New cabinet: a STEP file of another article shows both numbers and the file's size wins
+@area Cabinet
+# Where the user finds it: Outline > New cabinet > Enclosure > Choose file...
+user_catalog qa/fixtures/enclosure-parts.json
+fresh
+key ctrl+n
+wait 20
+click_text Cabinet #1
+wait 20
+click_text "New cabinet..." Button
+wait 10
+click_text "Demo TS-600x1800x500"
+wait 6
+answer_dialog qa/fixtures/enclosure-step/TS-800x1800x500.stp
+click_text "Choose file…" Button
+wait 30
+expect "file says"
+expect "Width: file 800 mm"
+expect "800 x 1800 x 500 mm"
+shot a-differs
+check_layout

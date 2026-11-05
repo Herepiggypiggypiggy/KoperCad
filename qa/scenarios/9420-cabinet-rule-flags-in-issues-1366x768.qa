@@ -1,0 +1,17 @@
+@title Cabinet: plate triangles and Issues rows after the follow-up, no duplicate ids (1366x768)
+@area Cabinet
+@sizes 1366x768
+# T1 follow-up regression: this project has no Place-rule or opening flag, so the rows must stay exactly as before and the plate must draw cleanly. The counted rule rows are covered by the unit test a_rule_flag_is_in_the_top_bar_count_and_the_issues_rows.
+open qa/fixtures/cabinet-lesson.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot plate-badges
+check_layout
+expect_not "Second use of widget ID"
+click_text "error" Button
+wait 10
+expect "F8 next"
+shot issues-rows
+check_layout
+expect_not "Second use of widget ID"
