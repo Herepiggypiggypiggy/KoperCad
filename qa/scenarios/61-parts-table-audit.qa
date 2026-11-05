@@ -21,9 +21,17 @@ check_layout
 check_blank columns
 click_text Rows Button
 wait 10
+click_text "Warning: Repeated order numbers" Button #1
+wait 6
 expect "more than one row"
+click_text "Warning: Repeated order numbers" Button #1
+wait 6
+click_text "Warning: Check this row" Button #1
+wait 6
 expect "is not a date"
 expect "not for pieces"
+click_text "Warning: Check this row" Button #1
+wait 6
 shot rows-last
 check_layout
 click_text "First row" Button
