@@ -23,6 +23,9 @@ click_text Quick
 wait_s 3
 click_text Simulate #2
 wait_s 200
+# If Cooling what-if opened by a stray click, close it (its X is at 462,146); harmless on the blank strip otherwise.
+try click 462 146
+wait 10
 click_text Probe
 wait 10
 click 850 450
