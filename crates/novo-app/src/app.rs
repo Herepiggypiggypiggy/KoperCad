@@ -144,6 +144,7 @@ mod flags_edit;
 mod flags_inline;
 mod flags_jobs;
 mod flags_shell;
+mod flags_wiring;
 mod handover;
 mod heat;
 mod heat_3d;
@@ -493,6 +494,8 @@ mod flags_shell_tests;
 #[cfg(test)]
 mod flags_tests;
 #[cfg(test)]
+mod flags_wiring_tests;
+#[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
@@ -534,6 +537,8 @@ mod parts_table_tests;
 mod pdf_options_tests;
 #[cfg(test)]
 mod print_preview_tests;
+#[cfg(test)]
+mod problem_census_wiring_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]

@@ -29,6 +29,8 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// What Retry runs for each job flag (wiring lane).
+    pub(super) retry: HashMap<FlagId, super::flags_wiring::JobRetry>,
     /// The transient flags of refused edits (lane T7).
     pub(super) edit: super::flags_edit::EditFlags,
     /// Failed jobs: what Retry and Open folder need (lane T12).
@@ -48,6 +50,7 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            retry: HashMap::new(),
             edit: Default::default(),
             jobs: HashMap::new(),
             job_order: Vec::new(),
@@ -177,7 +180,16 @@ impl NovoApp {
             return;
         }
         let revision = *revision;
-        let built = drafts(problems);
+        let mut built = drafts(problems);
+        if let Some(doc) = self.backend.document() {
+            // Wire-end checks sit on the pin the wire lands on.
+            for (i, d) in &mut built {
+                let pins = super::flags_wiring::pin_anchors(doc.project(), &problems[*i]);
+                if !pins.is_empty() {
+                    d.anchors = pins;
+                }
+            }
+        }
         let flags = &mut self.wb.flags;
         flags.index.clear();
         for (i, d) in &built {

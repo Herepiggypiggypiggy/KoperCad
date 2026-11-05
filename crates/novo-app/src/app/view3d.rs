@@ -1269,7 +1269,28 @@ impl NovoApp {
                 .steps
                 .get(*at)
                 .is_some_and(|s| s.path.as_ref().is_some_and(|p| p.plate == id));
-            let asked = view3d_wire_it::strip(ui.ctx(), view_rect, at, project, plan, drawn_here);
+            let print_flag = self
+                .wb
+                .flags
+                .store
+                .at(
+                    &novo_flags::Anchor::Job(super::flags_wiring::job::WIRE_IT.into()),
+                    false,
+                )
+                .first()
+                .map(|f| (*f).clone());
+            let asked = view3d_wire_it::strip(
+                ui.ctx(),
+                view_rect,
+                at,
+                project,
+                plan,
+                drawn_here,
+                print_flag.as_ref(),
+            );
+            if asked.flag.is_some() {
+                self.wb.flags.open = asked.flag;
+            }
             mode.wire_it.pending.extend(asked.ticks);
             if asked.print {
                 self.wb.queued.push("export.wireit");
