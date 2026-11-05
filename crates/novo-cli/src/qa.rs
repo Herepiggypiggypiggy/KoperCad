@@ -2394,6 +2394,41 @@ mod tests {
         assert_eq!(s.steps[0].words, ["click_text", "Open example"]);
     }
 
+    /// A scenario number (the digits and an optional letter before the first `-`) names one
+    /// scenario for evidence, reports and PR notes. Older families share a number on purpose or by
+    /// accident; those are listed here and must not grow. Any other number used twice fails.
+    #[test]
+    fn scenario_numbers_are_unique_apart_from_the_old_shared_ones() {
+        const SHARED: &[&str] = &[
+            "06", "07", "08", "09", "10", "11", "12", "13", "14", "17", "18", "21", "22", "24",
+            "25", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46",
+            "47", "48", "49", "50", "51", "52", "55", "56", "57", "58", "59", "60", "61", "62",
+            "66", "69", "70", "71", "77", "79", "85", "87", "150", "200", "201", "202", "210",
+            "211", "212", "230", "250", "280", "300", "301", "341", "420", "600", "610", "611",
+            "640", "1135", "1136", "1581", "1582", "1583", "1584", "1590", "1600", "1602", "1610",
+            "1611", "1612", "1700", "1710", "1720", "1722", "1735", "1750", "1760", "1791", "1830",
+            "1850", "1860", "1862", "1866", "1869", "1895", "1923", "7390", "7391", "7392", "7395",
+            "7432", "7440", "9410", "9420", "9450", "9580", "9581", "16190", "1760b", "18760",
+            "19041a", "19041b", "19041c",
+        ];
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut seen: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        for e in std::fs::read_dir(root.join("qa/scenarios")).unwrap() {
+            let name = e.unwrap().file_name().to_string_lossy().to_string();
+            if !name.ends_with(".qa") {
+                continue;
+            }
+            let key: String = name.split('-').next().unwrap_or("").to_string();
+            seen.entry(key).or_default().push(name);
+        }
+        for (key, files) in &seen {
+            assert!(
+                files.len() < 2 || SHARED.contains(&key.as_str()),
+                "scenario number {key} is used by {files:?}: give the newer one an unused number"
+            );
+        }
+    }
+
     #[test]
     fn shipped_scenarios_all_parse_and_fixtures_exist() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
