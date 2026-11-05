@@ -223,9 +223,13 @@ impl NovoApp {
                                 self.wb.terminal_edit.rows = ticked;
                             }
                             None => {
-                                ui.weak(
-                                    "No terminal strip yet. Place a terminal (I, terminal) or accept a proposal.",
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.weak("No terminal strip");
+                                    super::window_help::mark(
+                                        ui,
+                                        "Place a terminal (I, terminal) or accept a proposal.",
+                                    );
+                                });
                             }
                         }
                         actions.extend(toolbar.into_iter().map(DrawerAction::Terminal));
@@ -390,10 +394,16 @@ fn cables_tab(
             .auto_shrink(false)
             .show(ui, |ui| {
                 proposals_section(ui, project, proposals, declined, &mut edit.ui, actions);
-                ui.weak(if proposed > 0 {
-                    "No cables yet. Accept the proposed ones, or draw wires between locations."
-                } else {
-                    "No cables yet. Wires between two locations (+CAB to +FIELD) are proposed as cables."
+                ui.horizontal(|ui| {
+                    ui.weak("No cables");
+                    super::window_help::mark(
+                        ui,
+                        if proposed > 0 {
+                            "Accept the proposed ones, or draw wires between locations."
+                        } else {
+                            "Wires between two locations (+CAB to +FIELD) are proposed as cables."
+                        },
+                    );
                 });
             });
         return;
@@ -555,7 +565,10 @@ fn devices_tab(
         ui.weak(format!("{} devices", rows.len()));
         ui.separator();
         if selected == 0 {
-            ui.weak("Select devices (click, or drag a box) to set their location");
+            super::window_help::mark(
+                ui,
+                "Select devices (click, or drag a box) to set their location",
+            );
             return;
         }
         ui.label(format!("Set location of {selected} selected:"));
