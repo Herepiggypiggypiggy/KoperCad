@@ -16,6 +16,8 @@ wait 30
 try click_text Cancel
 wait 30
 try click_text Cancel
+wait 60
+try click_text Cancel
 wait 20
 click_text "Settings for the next run"
 wait 10
