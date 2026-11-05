@@ -233,6 +233,8 @@ pub static FAMILIES: &[Family] = &[
             ProblemKind::DoorGapTight,
             ProblemKind::PlateTooBig,
             ProblemKind::DoorSwing,
+            ProblemKind::EnclosureDataMissing,
+            ProblemKind::EnclosureSizeDiffers,
             ProblemKind::WireWithoutDuct,
             ProblemKind::WireThroughDevice,
             ProblemKind::OverfullDuct,

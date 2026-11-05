@@ -232,6 +232,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::DepthUnknown,
         ProblemKind::PlateTooBig,
         ProblemKind::DoorSwing,
+        ProblemKind::EnclosureDataMissing,
+        ProblemKind::EnclosureSizeDiffers,
         // Own fixtures; see tests/eplan_style.
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,

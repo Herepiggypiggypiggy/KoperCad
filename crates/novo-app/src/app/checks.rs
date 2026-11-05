@@ -146,12 +146,23 @@ impl NovoApp {
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
+    /// The design checks' counts plus the Cabinet's own flags (Place rules,
+    /// wiring openings): the one count the pill, the list and the Cabinet agree on.
+    pub(super) fn counted_summary(&mut self) -> Summary {
+        let mut summary = Summary::of(self.shown_problems());
+        let (red, yellow) = self.layout_counts();
+        summary.errors += red;
+        summary.warnings += yellow;
+        summary
+    }
+
     /// The issue pill: the counts; a click opens the outline's Issues mode.
     pub(super) fn issue_pill(&mut self, ui: &mut egui::Ui) {
         if !self.is_open() {
             return;
         }
-        let summary = Summary::of(self.shown_problems());
+        self.sync_flags();
+        let summary = self.counted_summary();
         let from_standards = standards_note(
             standards_findings(self.shown_problems()),
             summary.errors + summary.warnings,
@@ -300,7 +311,8 @@ impl NovoApp {
 
     fn issues_list_rows(&mut self, ui: &mut egui::Ui) -> bool {
         self.recovered_note(ui);
-        let summary = Summary::of(self.shown_problems());
+        self.sync_flags();
+        let summary = self.counted_summary();
         let counts = [summary.errors, summary.warnings, summary.infos];
         ui.horizontal_wrapped(|ui| {
             for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
@@ -329,9 +341,22 @@ impl NovoApp {
             .collect();
         problems.sort_by_key(|(_, p)| severity_rank(p.severity));
         let mut go = None;
+        // The Cabinet's own flags, in the same list: errors first.
+        let mut layout_rows: Vec<novo_flags::Flag> = self
+            .wb
+            .flags
+            .store
+            .list(false)
+            .into_iter()
+            .filter(|f| f.source == novo_flags::Source::Layout)
+            .filter(|f| filter[usize::from(f.severity != novo_flags::Severity::Red)])
+            .cloned()
+            .collect();
+        layout_rows.sort_by_key(|f| f.severity.rank());
+        let mut locate = None;
         self.waive_form(ui);
         let mut toggle = None;
-        if problems.is_empty() {
+        if problems.is_empty() && layout_rows.is_empty() {
             ui.weak(if summary.errors + summary.warnings + summary.infos == 0 {
                 "No issues"
             } else {
@@ -456,6 +481,44 @@ impl NovoApp {
                         }
                     });
                 }
+                for f in &layout_rows {
+                    let text = format!("{}: {}", f.title, f.detail.0.join(" "));
+                    let row = ui
+                        .horizontal_top(|ui| {
+                            let (slot, _) = ui
+                                .allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+                            novo_theme::widgets::flag_triangle(
+                                ui.painter(),
+                                slot.center(),
+                                15.0,
+                                f.severity == novo_flags::Severity::Red,
+                                f.unchecked,
+                                novo_theme::Palette::of(ui),
+                            );
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| ui.selectable_label(false, text.clone()),
+                            )
+                            .inner
+                        })
+                        .inner;
+                    self.learn_row("issues.list", &text, row.rect);
+                    if row.clicked() {
+                        locate = Some(f.clone());
+                    }
+                    row.context_menu(|ui| {
+                        if ui.button("Go to").clicked() {
+                            locate = Some(f.clone());
+                            ui.close();
+                        }
+                        if ui.button("Copy message").clicked() {
+                            ui.ctx().copy_text(text.clone());
+                            ui.close();
+                        }
+                    });
+                }
                 // The empty space under the list has its own menu: the
                 // filters and all messages at once.
                 let rest = ui.available_height().max(32.0);
@@ -491,7 +554,11 @@ impl NovoApp {
         if let Some(i) = go {
             self.go_problem(i);
         }
-        go.is_some()
+        let located = locate.is_some();
+        if let Some(f) = locate {
+            self.locate_on_plate(&f);
+        }
+        go.is_some() || located
     }
 
     /// A soft highlight on the row of the problem just chosen (a click or
@@ -700,6 +767,13 @@ impl NovoApp {
             .map_or(0, |doc| doc.project().revision());
         self.wb.problem_flash = Some((index, std::time::Instant::now(), revision, false));
         let Some(page) = problem.page else {
+            // A problem of a mounting plate has no page: go to the plate.
+            if let Some(draft) = super::flags::draft(&problem) {
+                let flag = novo_flags::Flag::from_draft(draft);
+                if super::cabinet_flags::is_plate_flag(&flag) {
+                    self.locate_on_plate(&flag);
+                }
+            }
             return;
         };
         let symbol = problem.at.iter().find_map(|id| match id {

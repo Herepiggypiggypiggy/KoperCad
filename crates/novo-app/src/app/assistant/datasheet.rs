@@ -416,18 +416,27 @@ impl NovoApp {
                         ui.label(format!("Note: {}", review.notes));
                     }
                     for line in &review.refused {
-                        ui.colored_label(pal.warning, format!("Left out: {line}"));
+                        crate::app::flags_shell::inline_flag(ui, false, false, "Left out", line);
                     }
                     if duplicate {
-                        ui.colored_label(
-                            pal.warning,
+                        crate::app::flags_shell::inline_flag(
+                            ui,
+                            false,
+                            false,
+                            "Part already in project",
                             "A part with this manufacturer and order number is already in the \
                              project; adding it makes a second one.",
                         );
                     }
                     let problem = review.problem();
                     if let Some(p) = &problem {
-                        ui.colored_label(pal.error, p);
+                        crate::app::flags_shell::inline_flag(
+                            ui,
+                            true,
+                            false,
+                            "Cannot add this part",
+                            p,
+                        );
                     }
                     ui.horizontal(|ui| {
                         add = ui

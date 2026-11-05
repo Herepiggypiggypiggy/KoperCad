@@ -1,0 +1,19 @@
+@title PR1904: BOM Enclosure and Cabinet sheet, spec B
+@area Reports
+@sizes 1366x768 1920x1080
+# Synthetic enclosure record, catalogue numbers only.
+open qa/fixtures/cabinet-spec-b.novo
+wait 20
+key ctrl+k
+text Bill of materials
+key enter
+wait 15
+shot bom-top
+expect "Enclosure Synthetic, 800 x 1200 x 500 mm"
+check_layout
+key ctrl+f
+text Estimate
+wait 5
+shot bom-cabinet-sheet
+expect "Estimate from catalogue data"
+check_layout

@@ -88,6 +88,13 @@ pub(super) fn mark_targets(project: &Project, flag: &Flag, page: PageId) -> Vec<
     let mut out: Vec<MarkTarget> = Vec::new();
     for anchor in &flag.anchors {
         let target = match anchor {
+            Anchor::Pin(raw, pin)
+                if super::flags_wiring::pin_area(project, raw, *pin)
+                    .is_some_and(|(at, _)| at == page) =>
+            {
+                super::flags_wiring::pin_area(project, raw, *pin)
+                    .map(|(_, area)| MarkTarget::Area(area))
+            }
             Anchor::Symbol(raw) | Anchor::Pin(raw, _) => raw
                 .parse()
                 .ok()
@@ -214,6 +221,13 @@ impl NovoApp {
         }
         let id = self.wb.flags.store.set(draft(level, &shown, anchors));
         self.wb.flags.edit.transient = Some((id, born));
+    }
+
+    /// The flag of the refusal being shown, for tests.
+    #[cfg(test)]
+    pub(super) fn refusal_flag(&self) -> Option<&novo_flags::Flag> {
+        let (id, _) = self.wb.flags.edit.transient?;
+        self.wb.flags.store.get(id)
     }
 
     /// What a refusal points at: the selected symbols and wires, else the tool.

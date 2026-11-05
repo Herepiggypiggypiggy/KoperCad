@@ -861,6 +861,87 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
     assert_eq!((row[8].as_str(), row[9].as_str()), ("496", "free air"));
 
+    // The enclosure's spec brings the duct back at delivery: catalogue
+    // position is an estimate (~, and the sheet says so); read from the
+    // STEP the same duct is not.
+    use novo_layout::spec::{EnclosureSpec, FactoryPart, PartKind, Source};
+    let factory = |source: Source| EnclosureSpec {
+        article: "T1".into(),
+        parts: vec![FactoryPart {
+            kind: PartKind::Duct,
+            x: 50.0,
+            y: 250.0,
+            length: 700.0,
+            vertical: false,
+            width: 50.0,
+            height: 60.0,
+            source,
+        }],
+        ..EnclosureSpec::default()
+    };
+    let set = |doc: &mut Document, spec: &EnclosureSpec| {
+        doc.transact("spec", |tx| {
+            let mut props = novo_core::Properties::default();
+            spec.write(&mut props);
+            for (k, v) in props {
+                tx.set_property(cab, &k, Some(v))?;
+            }
+            Ok(())
+        })
+        .expect("spec");
+    };
+    set(&mut doc, &factory(Source::Catalogue));
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[9], "~ routed (catalogue)", "{row:?}");
+    assert_eq!(row[8], "736");
+    assert!(
+        wires.sections[0]
+            .title
+            .contains(novo_layout::spec::ESTIMATE_NOTICE)
+    );
+    // The factory duct has a real name on the cut sheets, not "duct ?".
+    let jobs = novo_reports::wire_cut_jobs(doc.project());
+    assert!(
+        jobs.iter().any(|j| j.track == "F1"),
+        "{:?}",
+        jobs.iter().map(|j| j.track.clone()).collect::<Vec<_>>()
+    );
+    assert!(jobs.iter().all(|j| !j.track.contains('?')));
+    let cut = report(&doc, "wirecut");
+    let ducts = cut.section("ducts").expect("duct summary").text_rows();
+    assert!(
+        ducts
+            .iter()
+            .any(|r| r[0].starts_with("F1 = +CAB factory duct at 50, 250")),
+        "{ducts:?}"
+    );
+    assert_eq!(
+        novo_reports::duct_names(doc.project())
+            .values()
+            .collect::<Vec<_>>(),
+        ["F1"]
+    );
+    set(&mut doc, &factory(Source::Step));
+    let row = wire_row(&report(&doc, "wires"), "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("736", "routed"));
+    doc.transact("Clear spec", |tx| {
+        let keys: Vec<String> = tx
+            .project()
+            .get::<novo_core::Structure>(cab)
+            .unwrap()
+            .properties
+            .keys()
+            .filter(|k| k.starts_with("encl."))
+            .cloned()
+            .collect();
+        for k in keys {
+            tx.set_property(cab, &k, None)?;
+        }
+        Ok(())
+    })
+    .expect("clear");
+
     // Moving a device changes the length with no extra edit.
     doc.transact("Move", |tx| {
         tx.place_device(h.k1, cab, Point::new(500.0, 100.0), false, None)
@@ -1401,5 +1482,67 @@ fn a_column_wider_than_its_share_borrows_from_columns_that_do_not_need_theirs() 
             width_of(text),
             need(text)
         );
+    }
+}
+
+/// Writes the QA fixtures for scenario 2451 (wires through the factory duct
+/// of the enclosure's spec):
+/// `cargo test -p novo-reports --test reports write_spec_duct_fixtures -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/spec-duct-*.novo"]
+fn write_spec_duct_fixtures() {
+    use novo_layout::spec::{CableEntry, EnclosureSpec, FactoryPart, PartKind, Source};
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures");
+    for (name, y, source) in [
+        ("spec-duct-a", 250.0, Source::Catalogue),
+        ("spec-duct-b", 450.0, Source::Catalogue),
+        ("spec-duct-step", 250.0, Source::Step),
+    ] {
+        let (mut doc, h) = starter();
+        doc.transact("Cabinet", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB")?, "Cabinet", true)?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 800.0,
+                    height: 600.0,
+                    margin: 10.0,
+                }),
+            )?;
+            tx.place_device(h.f1, cab, Point::new(100.0, 100.0), false, None)?;
+            tx.place_device(h.k1, cab, Point::new(400.0, 100.0), false, None)?;
+            let spec = EnclosureSpec {
+                article: "T1".into(),
+                parts: vec![FactoryPart {
+                    kind: PartKind::Duct,
+                    x: 50.0,
+                    y,
+                    length: 700.0,
+                    vertical: false,
+                    width: 50.0,
+                    height: 60.0,
+                    source,
+                }],
+                entries: vec![CableEntry {
+                    name: "gland plate".into(),
+                    wall: "bottom".into(),
+                    x: 400.0,
+                    y: 600.0,
+                    diameter: 32.0,
+                    source,
+                }],
+                ..EnclosureSpec::default()
+            };
+            let mut props = novo_core::Properties::default();
+            spec.write(&mut props);
+            for (k, v) in props {
+                tx.set_property(cab, &k, Some(v))?;
+            }
+            Ok(())
+        })
+        .expect("layout");
+        let path = dir.join(format!("{name}.novo"));
+        let _ = std::fs::remove_file(&path);
+        novo_storage::ProjectFile::create(&path, doc.project()).expect("save");
     }
 }

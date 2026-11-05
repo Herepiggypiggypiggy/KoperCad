@@ -1,0 +1,28 @@
+@title A job that did not work is a triangle on the top bar with Dismiss (1920x1080)
+@area Shell
+@sizes 1920x1080
+@env PATH=/nonexistent
+# T14: Help > Open log folder cannot start a file manager (PATH is empty): the toast becomes a yellow red/yellow triangle next to the Issues pill.
+click_text "New project"
+wait 20
+click_text "Cabinet" Button
+wait 10
+key ctrl+k
+wait 4
+text open log folder
+wait 6
+key Enter
+wait 10
+expect "Log folder did not open"
+shot chip
+check_layout
+click_text "Log folder did not open" Button
+wait 6
+expect "Log folder did not open"
+expect "Dismiss"
+shot popover
+check_layout
+click_text "Dismiss" Button
+wait 6
+expect_not "Log folder did not open"
+shot dismissed

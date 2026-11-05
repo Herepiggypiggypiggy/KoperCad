@@ -10,8 +10,9 @@ Source of rows: `handoff/problem-triangles/sites/sim.md` (89 rows on main 4ac005
 | Motor start result (stalls, slow, cannot be modelled) | done |
 | Controller card bindings: novo-sim `PinProblem` shown as a red triangle on the signal row | done |
 | Census ceiling per file in `sim_flags_tests.rs` (98 -> 82) | done |
-| Job flags (`Life::Until`) for save/read/export failures: faults.rs, controller_import.rs, controller_card.rs saves | next (T10b) |
-| Faults study results (`never cleared` etc.), live.rs, live_anim.rs, motor_freq.rs | next (T10b) |
-| machine.rs option refusals (transient flags on the tool) | next (T10b, with T7 refusal helper) |
+| Job flags for save/read/export failures: faults.rs, controller_import.rs, controller_card.rs saves | after #1910 (`job_fail`/`job_ok`), third PR |
+| Controller card (damaged, notes, checks, shared targets, card and popped panels), Live card (no supply, short circuit), motor at frequency | done (T10b, second PR; census 82 -> 70) |
+| Faults study results (`never cleared` etc.), live_anim.rs canvas colours | remaining |
+| machine.rs option refusals (transient flags on the tool) | remaining (with T7 refusal helper) |
 | sim_chip.rs heat rows | T6 owns them |
 | `ResistorFlag` and `check_drive_sizing` | no consumer anywhere; needs resistor power and duty cycle in the project (new spec keys, drive lane) |
