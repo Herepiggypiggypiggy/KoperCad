@@ -1,0 +1,26 @@
+@title Crane in 3D: Use my crane model swaps the hook and the hoist for the parts of a STEP file
+@area Simulate
+@sizes 1920x1080
+# A synthetic crane of named boxes (qa/fixtures/crane-model, made by make_fixture.py). The picker reads it, the hook block and
+# hook become one piece under the rope and the drum, gearbox and motor one piece on the trolley; the girder is counted as not used.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 120
+shot generic-crane
+answer_dialog qa/fixtures/crane-model/test-crane-parts.stp
+click_text "Use my crane model..."
+wait 60
+expect "5 of 6 parts used"
+shot own-model-in-the-picture
+click 1672 147
+wait 150
+shot own-model-hook-framed
+click_text "Remove model"
+wait 20
+shot generic-again
+check_layout

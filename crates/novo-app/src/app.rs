@@ -94,6 +94,7 @@ mod controller_pad_tests;
 mod controller_widgets;
 mod count_words;
 mod crane_setup;
+mod crane_user_model;
 mod defects_card;
 #[cfg(test)]
 mod defects_card_tests;

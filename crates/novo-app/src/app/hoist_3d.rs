@@ -4,9 +4,11 @@
 //! switches); the crane around them is a generic picture, see `CRANE_PICTURE_LEAVES_OUT`.
 
 use super::crane_setup::CraneSetup;
+use super::crane_user_model::{UserModel, up_label};
 use super::hoist_run::conditions;
 use super::{Level, NovoApp};
 use eframe::egui;
+use novo_interop::part3d::crane_model::UpAxis;
 use novo_machine::cl_winch_loop::ClWinchModule;
 use novo_machine::hoist_loop::{HoistModule, LimitKind};
 use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
@@ -27,6 +29,8 @@ pub(crate) struct Hoist3d {
     pub(super) open: bool,
     view: View3d,
     library: Arc<MeshLibrary>,
+    /// The user's own crane model, when one was chosen. Not saved in the project.
+    user: UserModel,
     layout: CraneLayout,
     bridge_m: f32,
     trolley_m: f32,
@@ -58,6 +62,7 @@ impl Default for Hoist3d {
             open: false,
             view: View3d::new(VIEW_ID),
             library: Arc::new(MeshLibrary::new()),
+            user: UserModel::default(),
             // Near one end, so a travel drive that runs forward has room to go.
             bridge_m: layout.runway_m * 0.2,
             trolley_m: layout.span_m * 0.5,
@@ -187,6 +192,7 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
         };
     };
     CraneState {
+        user: None,
         bridge_m,
         trolley_m,
         hook_m: m.height_m() as f32,
@@ -236,6 +242,7 @@ pub(super) fn winch_state_of(m: &ClWinchModule, bridge_m: f32, trolley_m: f32) -
         ]
     });
     CraneState {
+        user: None,
         lamps,
         slack_m: m.snapshot().map_or(0.0, |s| s.slack_m as f32),
         bridge_m,
@@ -569,6 +576,45 @@ impl NovoApp {
                 g.bridge_m = g.bridge_m.clamp(0.0, g.layout.runway_m);
                 g.trolley_m = g.trolley_m.clamp(0.0, g.layout.span_m);
                 ui.horizontal_wrapped(|ui| {
+                    if ui.button("Use my crane model...").clicked()
+                        && let Some(path) = crate::dialogs::FileDialog::new()
+                            .set_title("Choose your crane model (STEP)")
+                            .add_filter("STEP model", &["stp", "step"])
+                            .pick_file()
+                    {
+                        let ctx = ui.ctx().clone();
+                        g.user.start(path, &ctx);
+                    }
+                    if g.user.file.is_some() {
+                        let before = g.user.placement;
+                        egui::ComboBox::from_id_salt("hoist3d_user_up")
+                            .selected_text(up_label(g.user.placement.up))
+                            .show_ui(ui, |ui| {
+                                for u in [UpAxis::Z, UpAxis::Y] {
+                                    ui.selectable_value(&mut g.user.placement.up, u, up_label(u));
+                                }
+                            });
+                        ui.checkbox(&mut g.user.placement.quarter_turn, "Turn 90\u{b0}");
+                        if g.user.placement != before {
+                            let ctx = ui.ctx().clone();
+                            g.user.restart(&ctx);
+                        }
+                        if ui.button("Remove model").clicked() {
+                            g.user.clear();
+                            g.built = None;
+                        }
+                        if g.user.busy() {
+                            ui.weak("Reading...");
+                        } else if let Some(line) = &g.user.status {
+                            ui.weak(line);
+                        }
+                    }
+                    super::window_help::add(
+                        ui.ctx(),
+                        "Use my crane model: pick a STEP file of your crane. Its parts are sorted by name into the hook (block, hook) and the hoist (drum, motor, gearbox), and those replace the generic ones in the picture, at the size the file gives. The line next to the buttons says how many parts of the file were used. Girders, rails, wheels and unnamed parts are not used yet. Up says which way is up in the file; Turn 90 swings the model about the vertical if the drum runs the wrong way. The file is only read: it is not copied into the project and the choice is not saved. The names are a guess, not a measurement.",
+                    );
+                });
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Bridge driven by");
                     axis_picker(ui, "hoist3d_bridge_axis", &axes, &mut g.bridge_axis);
                     ui.label("Trolley driven by");
@@ -647,7 +693,14 @@ impl NovoApp {
                         );
                     }
                 }
+                if g.user.poll(Arc::make_mut(&mut g.library)) {
+                    g.built = None;
+                }
+                if g.user.busy() {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
                 let state = CraneState {
+                    user: g.user.crane,
                     swing_rad: travel.swing_rad,
                     bridge_limits: bridge_marks,
                     trolley_limits: trolley_marks,
