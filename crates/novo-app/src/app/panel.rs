@@ -210,11 +210,15 @@ impl Panel {
 
     /// The corner the panel hangs from and where that corner starts: against
     /// its side of the canvas, so the panel's own size never matters.
-    fn start(&self, flyout: f32) -> (egui::Align2, egui::Pos2) {
+    fn start(&self, ctx: &egui::Context, flyout: f32) -> (egui::Align2, egui::Pos2) {
         let top = self.canvas.top() + self.top;
         let bottom = self.canvas.bottom() - BOTTOM - MARGIN;
         let left = self.canvas.left() + MARGIN + flyout;
-        let right = self.canvas.right() - MARGIN;
+        let right = self
+            .canvas
+            .right()
+            .min(super::panel_dock::right_strip_left(ctx).unwrap_or(f32::MAX))
+            - MARGIN;
         match self.side {
             Side::Left => (egui::Align2::LEFT_TOP, egui::pos2(left, top)),
             Side::Right => (egui::Align2::RIGHT_TOP, egui::pos2(right, top)),
@@ -286,7 +290,7 @@ impl Panel {
         } else {
             reserved_left(ctx)
         };
-        let (pivot, start) = self.start(flyout);
+        let (pivot, start) = self.start(ctx, flyout);
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
         let corner = if self.above_card && self.side == Side::Right && !moved {
@@ -300,7 +304,13 @@ impl Panel {
         } else {
             (self.canvas.height() - self.top - below - self.bottom - corner).max(MIN_HEIGHT)
         };
-        let mut window = egui::Window::new(&self.title)
+        // The "?" of a window sits at the right of the title bar, over the
+        // centred title: trailing em spaces move the text clear of it.
+        let title = title_clear_of_help(
+            &self.title,
+            super::window_help::text(ctx, self.id).is_some(),
+        );
+        let mut window = egui::Window::new(&title)
             .id(id)
             .order(egui::Order::Middle)
             .resizable(!self.fit)
@@ -452,6 +462,16 @@ impl Panel {
             }
         }
         shown
+    }
+}
+
+/// `title` with room for the "?" icon at the right of the title bar when the
+/// window has help (the title is centred, so the pad shifts it left).
+fn title_clear_of_help(title: &str, has_help: bool) -> String {
+    if has_help {
+        format!("{title}\u{2003}\u{2003}\u{2003}\u{2003}")
+    } else {
+        title.to_owned()
     }
 }
 
@@ -632,6 +652,11 @@ const MODAL_QUESTIONS: &[&str] = &[
 #[cfg(test)]
 pub(super) const MODAL_QUESTIONS_FOR_TEST: &[&str] = MODAL_QUESTIONS;
 
+/// What a docked pane adds around its form: the header and the padding.
+const FORM_PANE_CHROME: f32 = 56.0;
+/// The least a docked form opens at.
+const FORM_PANE_MIN: f32 = 120.0;
+
 /// Dialogs wider than this open as floating windows; narrower ones dock at
 /// the right edge when they open (the strip is at most 520 points wide).
 const WIDE_DIALOG: f32 = 640.0;
@@ -658,6 +683,14 @@ pub(super) struct Dialog<'a> {
 }
 
 impl<'a> Dialog<'a> {
+    /// Docked, this window opens as tall as its slot (a window whose buttons sit
+    /// below a list: at the default pane height they were cut off and unreachable).
+    /// Floating, it keeps the size it was asked for.
+    pub(super) fn tall(mut self) -> Self {
+        self.tall = true;
+        self
+    }
+
     pub(super) fn id(mut self, id: egui::Id) -> Self {
         self.id = id;
         // A window with an id of its own keeps its dock place when its title
@@ -757,6 +790,7 @@ impl<'a> Dialog<'a> {
             // floating one on top (not while a text field has the keyboard).
             let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape))
                 && !ctx.egui_wants_keyboard_input()
+                && !novo_theme::widgets::popup_owns_escape(ctx)
                 && super::panel_dock::last_window(ctx).as_deref() == Some(name.as_str());
             if (take_closed(ctx, &name) || escape)
                 && let Some(open) = open
@@ -1172,6 +1206,14 @@ fn modal_impl<R: Default>(
         super::panel_dock::set(ctx, &dock_name, Some(super::panel_dock::Slot::Right));
     }
     if dockable && let Some(slot) = super::panel_dock::slot_of(ctx, &dock_name) {
+        // A form docks as tall as its content the first time (a height the
+        // person gave it stays): the first frame measures it, the next one
+        // sets the height. A long form is kept to what the slot can give by
+        // the stack, which shares a shortage so a short form keeps its size.
+        let measure_id = egui::Id::new(("form_content_height", name));
+        if let Some(h) = ctx.data(|d| d.get_temp::<f32>(measure_id)) {
+            super::panel_dock::open_at(ctx, &dock_name, (h + FORM_PANE_CHROME).max(FORM_PANE_MIN));
+        }
         let shown = super::panel_dock::show_docked(
             ctx,
             self::id(&dock_name),
@@ -1186,7 +1228,12 @@ fn modal_impl<R: Default>(
                 // its footer out of a narrow strip.
                 scrolls: true,
             },
-            add,
+            |ui| {
+                let out = add(ui);
+                let h = ui.min_rect().height();
+                ui.ctx().data_mut(|d| d.insert_temp(measure_id, h));
+                out
+            },
         );
         let closed = take_closed(ctx, &dock_name);
         return ModalOut {
@@ -1520,6 +1567,14 @@ pub(super) fn is_moved(ctx: &egui::Context, id: egui::Id) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_title_with_help_leaves_room_for_the_question_mark() {
+        assert_eq!(title_clear_of_help("Temperature", false), "Temperature");
+        let padded = title_clear_of_help("Temperature", true);
+        assert!(padded.starts_with("Temperature") && padded.len() > "Temperature".len());
+        assert_eq!(padded.trim(), "Temperature");
+    }
+
     use super::*;
 
     #[test]

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use eframe::egui;
 use novo_thermal::cooling::{self, Basis, Product, Selection, Source};
 
+use super::heat::ESTIMATE_TAG;
 use super::heat_run::Solution;
 
 /// File name inside the KoperCAD folder under `%APPDATA%`.
@@ -43,6 +44,9 @@ pub(super) struct CoolingSettings {
     /// The option choice leaves devices out of the cabinet: the result says
     /// so (set by the Cabinet and the 3D view each frame).
     pub left_out: bool,
+    /// The chosen enclosure of the cabinet, when it has one: its outside
+    /// size sets the cooling surface (set by the Cabinet each frame).
+    pub spec: Option<novo_layout::spec::EnclosureSpec>,
 }
 
 /// The line under a heat result when the option choice leaves devices out.
@@ -125,6 +129,31 @@ fn load_list(path: &Path) -> (Vec<Product>, Vec<cooling::ListError>) {
     }
 }
 
+impl CoolingSettings {
+    /// Takes the chosen enclosure of the shown cabinet; a cabinet without
+    /// one keeps the typed size.
+    pub(super) fn set_spec(&mut self, spec: Option<novo_layout::spec::EnclosureSpec>) {
+        self.spec = spec.filter(|s| !s.is_empty());
+    }
+
+    /// One line when the chosen enclosure lacks a number the cooling needs.
+    pub(super) fn spec_problem(&self) -> Option<String> {
+        let spec = self.spec.as_ref()?;
+        novo_layout::spec_cooling::outside(spec)
+            .err()
+            .map(|m| m.to_string())
+    }
+
+    /// Where the size comes from and the estimate notice, when the size
+    /// comes from the enclosure record.
+    pub(super) fn size_lines(&self) -> Vec<String> {
+        self.spec
+            .as_ref()
+            .map(novo_layout::spec_cooling::size_lines)
+            .unwrap_or_default()
+    }
+}
+
 /// Heat of the wires in the ducts of a scenario, W.
 pub(super) fn duct_loss_w(s: &novo_thermal::Scenario) -> f64 {
     s.obstacles.iter().map(|o| o.loss_w).sum()
@@ -140,11 +169,29 @@ pub(super) fn lowest_limit_c(sol: &Solution) -> Option<f64> {
         .reduce(f64::min)
 }
 
+/// The outside size of the chosen enclosure replaces the typed one.
+fn apply_spec(
+    e: &mut novo_thermal::Enclosure,
+    spec: &novo_layout::spec::EnclosureSpec,
+) -> Option<()> {
+    let o = novo_layout::spec_cooling::outside(spec).ok()?;
+    e.width_mm = o.width;
+    e.height_mm = o.height;
+    e.depth_mm = o.depth;
+    Some(())
+}
+
 /// What the selection is made from; `None` for a result that did not come
 /// with its enclosure (a stub) or that has no heat. The heat to carry is the
 /// devices' loss plus the heat of the wires in the ducts.
 pub(super) fn basis_for(sol: &Solution, settings: &CoolingSettings) -> Option<Basis> {
-    let e = sol.enclosure.as_ref()?;
+    let mut e = sol.enclosure.clone()?;
+    if let Some(spec) = &settings.spec {
+        // A chosen enclosure with a missing number gives no answer rather
+        // than one for a typed size (the panel says what is missing).
+        apply_spec(&mut e, spec)?;
+    }
+    let e = &e;
     let devices_w: f64 = sol.snapshot.devices.iter().map(|d| d.loss_w).sum();
     let target = settings
         .target_c
@@ -215,6 +262,7 @@ pub(super) fn report_lines(sol: &Solution, settings: &mut CoolingSettings) -> Ve
         return Vec::new();
     };
     let mut lines = selection.report_lines(&basis);
+    lines.extend(settings.size_lines());
     if sol.duct_loss_w > 0.0 {
         lines.push(format!(
             "The heat includes {:.0} W from wires in ducts (planning upper value).",
@@ -264,6 +312,10 @@ pub(super) fn show(
         .default_open(false)
         .show(ui, |ui| {
             let auto_target = lowest_limit_c(sol);
+            if let Some(problem) = settings.spec_problem() {
+                ui.label(small(&problem, pal.error));
+                return;
+            }
             let Some((basis, selection)) = selection_for(sol, settings) else {
                 ui.label(small("Needs a result with device losses", pal.text_secondary));
                 super::window_help::add(ui.ctx(), "Needs a result with device losses and the enclosure size.");
@@ -297,6 +349,18 @@ pub(super) fn show(
             } else if stale {
                 ui.label(small("Out of date", pal.warning));
                 super::window_help::add(ui.ctx(), "Out of date: the layout changed since this run.");
+            }
+            // The source line stays; the long estimate sentence sits behind the
+            // "?" and a short tag says it is there.
+            let size_lines = settings.size_lines();
+            if let Some(first) = size_lines.first() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(small(first, pal.text_secondary));
+                    if size_lines.len() > 1 {
+                        ui.label(small(ESTIMATE_TAG, pal.warning));
+                        super::window_help::add(ui.ctx(), novo_layout::spec::ESTIMATE_NOTICE);
+                    }
+                });
             }
             ui.add_space(2.0);
             ui.horizontal_wrapped(|ui| {
@@ -488,6 +552,60 @@ mod tests {
         // Wires alone still make a cabinet with no device loss need a size.
         assert!(basis_of(&e, 0.0, 50.0, 35.0, 40.0, false).is_some());
         assert!(basis_of(&e, 0.0, 0.0, 35.0, 40.0, false).is_none());
+    }
+
+    #[test]
+    fn the_chosen_enclosure_sets_the_cooling_surface() {
+        use novo_layout::sizing::{Installation, Material};
+        use novo_layout::spec::{EnclosureSpec, Field, Source as Src};
+        let typed = novo_thermal::Enclosure {
+            width_mm: 800.0,
+            height_mm: 1000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: Material::Steel,
+            installation: Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 700.0,
+                h: 900.0,
+            },
+        };
+        let mk = |w: f64, h: f64, d: f64| EnclosureSpec {
+            article: "T".into(),
+            width: Some(Field::new(w, Src::Catalogue)),
+            height: Some(Field::new(h, Src::Catalogue)),
+            depth: Some(Field::new(d, Src::Catalogue)),
+            ..EnclosureSpec::default()
+        };
+        let surface = |spec: &EnclosureSpec| {
+            let mut e = typed.clone();
+            apply_spec(&mut e, spec).unwrap();
+            cooling::need(&basis_of(&e, 200.0, 0.0, 35.0, 40.0, false).unwrap()).surface_m2
+        };
+        let a = surface(&mk(600.0, 1000.0, 300.0));
+        let b = surface(&mk(800.0, 2000.0, 500.0));
+        assert!(b > a);
+        let mut settings = CoolingSettings::default();
+        settings.set_spec(Some(EnclosureSpec {
+            depth: None,
+            ..mk(600.0, 1000.0, 300.0)
+        }));
+        assert_eq!(
+            settings.spec_problem().as_deref(),
+            Some("The enclosure has no outside depth.")
+        );
+        settings.set_spec(Some(mk(600.0, 1000.0, 300.0)));
+        assert_eq!(
+            settings.size_lines(),
+            vec![
+                "Enclosure size: catalogue.".to_owned(),
+                novo_layout::spec::ESTIMATE_NOTICE.to_owned()
+            ]
+        );
+        settings.set_spec(None);
+        assert!(settings.size_lines().is_empty() && settings.spec_problem().is_none());
     }
 
     #[test]

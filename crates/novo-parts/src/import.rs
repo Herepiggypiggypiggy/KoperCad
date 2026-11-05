@@ -462,7 +462,10 @@ impl<'a> ImportJob<'a> {
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                self.keep(&name, &bytes, None, flow)
+                // A file from a supplier window is recorded with that supplier's
+                // address, which keeps it personal (not shared).
+                let source = crate::supplier_site::landed_source_url(path);
+                self.keep(&name, &bytes, source.as_deref(), flow)
             });
         self.state = match result {
             Ok(()) => ImportState::Done(std::mem::take(&mut self.outcome)),

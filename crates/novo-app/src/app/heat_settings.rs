@@ -13,7 +13,12 @@ use serde::{Deserialize, Serialize};
 
 use novo_cfd::turb::TurbModel;
 use novo_cfd::{Fidelity, Solver};
-use novo_thermal::model::{Enclosure, Fan, FanMode, Opening, Placement, Scenario, Vent};
+use novo_thermal::gaps::{self, Filter, FilterClass, Seal};
+use novo_thermal::model::{Enclosure, Fan, FanMode, Opening, Params, Placement, Scenario, Vent};
+
+/// Pressure across a grille the filter is put into the solver at, Pa: what
+/// the warm-air stack gives a cabinet (a few Pa). Exact at that drop only.
+pub(super) const DESIGN_DROP_PA: f64 = 4.0;
 
 /// The wall an opening sits in. The door is the front of the cabinet, where
 /// filter fans usually go.
@@ -147,6 +152,12 @@ pub(super) struct VentSpec {
     /// datasheet curve).
     pub flow_m3h: f64,
     pub pressure_pa: f64,
+    /// A filter mat over a grille or a plain fan; a filter fan's datasheet
+    /// already has its mat.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<FilterClass>,
+    /// Dust on the mat, 0 (new) to 1 (due for a change).
+    pub filter_load: f64,
 }
 
 /// A suggestion the Add menu offers: a name, what it is for, the opening.
@@ -183,7 +194,17 @@ impl VentSpec {
             free_fraction: 0.6,
             flow_m3h: FAN_FLOW_M3H,
             pressure_pa: FAN_PRESSURE_PA,
+            filter: None,
+            filter_load: 0.0,
         }
+    }
+
+    /// The mat over this opening, if it has one the solver should see.
+    pub(super) fn mat(&self) -> Option<Filter> {
+        (self.kind != Kind::FilterFan)
+            .then_some(self.filter)
+            .flatten()
+            .map(|c| Filter::from_class(c).with_loading(self.filter_load.clamp(0.0, 1.5)))
     }
 
     /// Length of the wall along the `u` axis and the other way, mm.
@@ -219,6 +240,7 @@ impl VentSpec {
             (&mut self.free_fraction, start.free_fraction),
             (&mut self.flow_m3h, start.flow_m3h),
             (&mut self.pressure_pa, start.pressure_pa),
+            (&mut self.filter_load, 0.0),
         ] {
             if !v.is_finite() {
                 *v = d;
@@ -272,23 +294,51 @@ impl VentSpec {
 
     /// The passive vent for a grille; `None` for a fan.
     pub(super) fn to_vent(self, e: &Enclosure) -> Option<Vent> {
-        (!self.kind.is_fan()).then(|| Vent {
-            opening: self.opening(e),
-            free_area_fraction: self.free_fraction.clamp(0.05, 1.0),
+        (!self.kind.is_fan()).then(|| {
+            let opening = self.opening(e);
+            let free = self.free_fraction.clamp(0.05, 1.0);
+            let free_area_fraction = match self.mat() {
+                Some(m) => gaps::equivalent_free_fraction(
+                    free,
+                    &opening,
+                    &m,
+                    DESIGN_DROP_PA,
+                    &Params::default(),
+                ),
+                None => free,
+            };
+            Vent {
+                opening,
+                free_area_fraction,
+            }
         })
     }
 
     /// The fan for a fan or filter fan; `None` for a grille.
     pub(super) fn to_fan(self, e: &Enclosure) -> Option<Fan> {
-        self.kind.is_fan().then(|| Fan {
-            opening: self.opening(e),
-            mode: if self.exhaust {
-                FanMode::Exhaust
-            } else {
-                FanMode::Intake
-            },
-            free_flow_m3h: self.flow_m3h.max(1.0),
-            max_pressure_pa: self.pressure_pa.max(1.0),
+        self.kind.is_fan().then(|| {
+            let opening = self.opening(e);
+            let mut free_flow_m3h = self.flow_m3h.max(1.0);
+            let max_pressure_pa = self.pressure_pa.max(1.0);
+            if let Some(m) = self.mat() {
+                free_flow_m3h = gaps::fan_free_flow_with_filter(
+                    free_flow_m3h,
+                    max_pressure_pa,
+                    opening.area_m2(),
+                    &m,
+                )
+                .max(1.0);
+            }
+            Fan {
+                opening,
+                mode: if self.exhaust {
+                    FanMode::Exhaust
+                } else {
+                    FanMode::Intake
+                },
+                free_flow_m3h,
+                max_pressure_pa,
+            }
         })
     }
 
@@ -471,8 +521,17 @@ pub(super) struct HeatSettings {
     pub turbulence: TurbModel,
     /// Grilles, fans and filter fans, in the order the person added them.
     pub vents: Vec<VentSpec>,
+    /// Door seal and cable entries; `None` leaves the cabinet sealed (no leaks
+    /// modelled), the way every earlier run was.
+    pub seal: Option<Seal>,
     /// The opening the panel has open and the 3D view highlights.
     pub selected: Option<usize>,
+    /// Fans inside the cabinet, with no opening (lane H8).
+    pub inside: Vec<super::heat_inside_fans::InsideFan>,
+    /// The fan inside the panel has open.
+    pub inside_selected: Option<usize>,
+    /// What the project holds for the shown enclosure, as last read or written.
+    pub(super) inside_stored: Option<(novo_core::StructureId, String)>,
     /// A drag or a typed value is under way: it is one undo step.
     editing: bool,
     /// What the project holds for the shown enclosure, as last read or
@@ -492,7 +551,11 @@ impl Default for HeatSettings {
             top: Fidelity::Fine,
             turbulence: TurbModel::Laminar,
             vents: Vec::new(),
+            seal: None,
             selected: None,
+            inside: Vec::new(),
+            inside_selected: None,
+            inside_stored: None,
             editing: false,
             stored: None,
             hovered: None,
@@ -520,6 +583,18 @@ impl HeatSettings {
             .extend(self.vents.iter().filter_map(|v| v.to_vent(&e)));
         s.fans
             .extend(self.vents.iter().filter_map(|v| v.to_fan(&e)));
+        s.params
+            .circulation_fans
+            .extend(self.inside.iter().map(|f| f.to_model(&e)));
+        if let Some(seal) = &self.seal {
+            s.vents.extend(gaps::leak_vents(&e, seal, &s.params));
+        }
+    }
+
+    /// A change to a fan inside is under way: keeps the project write until
+    /// the gesture ends, like the openings.
+    pub(super) fn begin_inside_edit(&mut self) {
+        self.editing = true;
     }
 
     /// Remembers the openings as they are, to come back to with `undo`. Call
@@ -588,8 +663,9 @@ impl HeatSettings {
 
     /// Replaces the openings with what the project holds (opened, or undone
     /// there); the panel's own undo starts over.
-    pub(super) fn load(&mut self, vents: Vec<VentSpec>) {
+    pub(super) fn load(&mut self, vents: Vec<VentSpec>, seal: Option<Seal>) {
         self.vents = vents;
+        self.seal = seal;
         self.undo.clear();
         self.redo.clear();
         self.editing = false;
@@ -936,6 +1012,36 @@ mod tests {
         let mut sc = scenario();
         s.apply(&mut sc);
         assert!(sc.vents.is_empty() && sc.fans.is_empty());
+        assert!(sc.params.circulation_fans.is_empty());
+    }
+
+    #[test]
+    fn a_fan_inside_reaches_the_run_as_a_circulation_fan_and_not_as_an_opening() {
+        use super::super::heat_inside_fans::{Dir, InsideFan};
+        let e = enclosure();
+        let mut s = HeatSettings {
+            inside: vec![InsideFan {
+                x_mm: 300.0,
+                y_mm: 400.0,
+                dir: Dir::ToPlate,
+                installed_pct: 80.0,
+                off_plate_mm: 150.0,
+                ..InsideFan::default()
+            }],
+            ..HeatSettings::default()
+        };
+        let mut sc = scenario();
+        s.apply(&mut sc);
+        assert!(sc.vents.is_empty() && sc.fans.is_empty());
+        let f = &sc.params.circulation_fans[0];
+        assert_eq!(f.direction, novo_thermal::model::BlowDirection::ToPlate);
+        assert!((f.installed_factor - 0.8).abs() < 1e-12);
+        assert_eq!(f.z_mm, Some(150.0));
+        // Kept inside the cabinet whatever was typed.
+        s.inside[0].x_mm = 1.0e9;
+        let mut sc = scenario();
+        s.apply(&mut sc);
+        assert!(sc.params.circulation_fans[0].x_mm <= e.interior_width_mm());
     }
 
     #[test]

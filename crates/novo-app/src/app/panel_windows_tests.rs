@@ -405,7 +405,10 @@ fn no_fixed_window_is_built_outside_the_panel_helpers() {
             "window_help_popup",
             "the ? popup of a floating window, closes on a click elsewhere",
         ),
-        ("refusal_card_id()", "a refusal that fades away"),
+        (
+            "flag_corner",
+            "a refusal triangle that goes with the next input",
+        ),
         ("empty_sheet_ghost", "a hint drawn on the empty sheet"),
         ("lesson_note", "lesson note beside a highlighted control"),
         ("lesson_demo_keys", "lesson demo key caps"),

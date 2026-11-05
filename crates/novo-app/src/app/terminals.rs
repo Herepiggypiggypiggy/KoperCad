@@ -220,14 +220,16 @@ const STRIP_HEADS: [&str; 11] = [
 /// external targets and their wire numbers, cable, state. A drawn terminal's name selects it on the drawing (its
 /// first drawing, centred); returns that drawing when one was clicked.
 /// Rows drawn by a selected symbol show as selected.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn strip_table(
     ui: &mut egui::Ui,
     project: &novo_core::Project,
     view: &novo_terminals::StripView,
     screen: &novo_terminals::Screen,
-    selected: &[AnyId],
+    (selected, flags): (&[AnyId], &novo_flags::FlagStore),
     ticked: &mut Vec<novo_core::TerminalId>,
     out: &mut Vec<ToolbarAction>,
+    flag_open: &mut Option<(novo_flags::FlagId, egui::Pos2)>,
 ) -> Option<Occurrence> {
     let mut go = None;
     ui.horizontal(|ui| {
@@ -255,16 +257,20 @@ pub(super) fn strip_table(
                     };
                     let mut on = !row.terminals.is_empty()
                         && row.terminals.iter().all(|t| ticked.contains(t));
-                    if ui
-                        .checkbox(&mut on, "")
-                        .on_hover_text("Tick rows to edit them (kind, move up or down)")
-                        .changed()
-                    {
-                        ticked.retain(|t| !row.terminals.contains(t));
-                        if on {
-                            ticked.extend(row.terminals.iter().copied());
+                    ui.horizontal(|ui| {
+                        if ui
+                            .checkbox(&mut on, "")
+                            .on_hover_text("Tick rows to edit them (kind, move up or down)")
+                            .changed()
+                        {
+                            ticked.retain(|t| !row.terminals.contains(t));
+                            if on {
+                                ticked.extend(row.terminals.iter().copied());
+                            }
                         }
-                    }
+                        // The row's problems are flags of the one store.
+                        row_flag(ui, flags, row);
+                    });
                     match row.occurrences.first() {
                         Some(first) => {
                             let on = row
@@ -303,13 +309,89 @@ pub(super) fn strip_table(
                     ui.label(screen_cell(screen, i, |r| r.wires_external.join(", ")));
                     ui.label(cable_cell(screen, i));
                     let (accepts, why) = accepts_cell(project, row);
-                    ui.label(accepts).on_hover_text(why);
+                    ui.horizontal(|ui| {
+                        // A wire that breaks what the part accepts: the same
+                        // triangle as on the drawing, in front of the figures.
+                        if let Some(flag) = row_wire_flag(project, flags, row) {
+                            let r = super::flags_wiring::triangle_button(ui, flag);
+                            super::flags_wiring::ask_popover(flag_open, flag.id, &r);
+                        }
+                        ui.label(accepts).on_hover_text(why);
+                    });
                     ui.weak(row.state().label());
                     ui.end_row();
                 }
             });
     });
     go
+}
+
+/// The worst wire-end flag (size, ferrule, point full) on the pins of the
+/// symbols that draw a strip row; red before yellow.
+fn row_wire_flag<'a>(
+    project: &novo_core::Project,
+    flags: &'a novo_flags::FlagStore,
+    row: &novo_terminals::Row,
+) -> Option<&'a novo_flags::Flag> {
+    let mut found: Option<&novo_flags::Flag> = None;
+    for occurrence in &row.occurrences {
+        let Some(symbol) = project.symbol(occurrence.symbol) else {
+            continue;
+        };
+        let raw = AnyId::from(symbol.id).raw().to_string();
+        for pin in 0..symbol.pins.len() {
+            for flag in flags.at(&novo_flags::Anchor::Pin(raw.clone(), pin as u32), false) {
+                if found.is_none_or(|f| {
+                    f.severity != novo_flags::Severity::Red
+                        && flag.severity == novo_flags::Severity::Red
+                }) {
+                    found = Some(flag);
+                }
+            }
+        }
+    }
+    found
+}
+
+/// The flags of a strip row: the terminal-use checks on its terminals and
+/// on the symbols that draw them, as one triangle (the worst colour, the
+/// first title, every detail line). Check > Issues lists the same flags.
+fn row_flag(ui: &mut egui::Ui, flags: &novo_flags::FlagStore, row: &novo_terminals::Row) {
+    use novo_flags::{Anchor, Severity, Source};
+    let key = novo_checks::ProblemKind::TerminalUse.key();
+    let anchors = row
+        .terminals
+        .iter()
+        .map(|t| Anchor::Terminal(t.raw().to_string()))
+        .chain(
+            row.occurrences
+                .iter()
+                .map(|o| Anchor::Symbol(o.symbol.raw().to_string())),
+        );
+    let mut found: Vec<&novo_flags::Flag> = Vec::new();
+    for anchor in anchors {
+        for flag in flags.at(&anchor, false) {
+            if matches!(&flag.source, Source::Issues(k) if k == key)
+                && !found.iter().any(|f| f.id == flag.id)
+            {
+                found.push(flag);
+            }
+        }
+    }
+    let Some(first) = found.first() else {
+        return;
+    };
+    let severity = if found.iter().any(|f| f.severity == Severity::Red) {
+        Severity::Red
+    } else {
+        Severity::Yellow
+    };
+    let detail: Vec<String> = found
+        .iter()
+        .flat_map(|f| f.detail.0.iter().cloned())
+        .collect();
+    let tri = super::flags_inline::triangle(ui, severity, false, &first.title);
+    super::flags_inline::detail_popup(&tri, &detail);
 }
 
 /// The Accepts cell of a strip row: the conductor range and tightening

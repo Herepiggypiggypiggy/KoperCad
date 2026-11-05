@@ -42,3 +42,21 @@ fn long_page_names_are_cut_with_an_ellipsis() {
     assert_eq!(cut.chars().count(), 44);
     assert!(cut.ends_with('…'));
 }
+
+#[test]
+fn an_enabled_tile_is_clearly_brighter_than_a_disabled_one_in_both_themes() {
+    fn luma(c: eframe::egui::Color32) -> f32 {
+        0.2126 * f32::from(c.r()) + 0.7152 * f32::from(c.g()) + 0.0722 * f32::from(c.b())
+    }
+    for dark in [true, false] {
+        let pal = novo_theme::Palette::for_mode(dark);
+        let on = super::top_bar::tile_color(pal, true);
+        let off = super::top_bar::tile_color(pal, false);
+        assert!(
+            (luma(on) - luma(off)).abs() >= 60.0,
+            "dark={dark}: {on:?} vs {off:?}"
+        );
+        // Disabled stays readable: it is the palette's tertiary text, not a fade.
+        assert_eq!(off, pal.text_tertiary);
+    }
+}

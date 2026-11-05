@@ -237,6 +237,15 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
         if bases.contains_key("door, no gap") {
             notes.push_str(" Door wires leave out the gap to the door and the hinge loop.");
         }
+        if bases.contains_key("~ door, spec has no depth") {
+            notes.push_str(" Door wires \"~ door, spec has no depth\" are short by the plate-to-door distance: the enclosure spec lacks a number.");
+        }
+        if bases.contains_key("~ door + depth (catalogue)") {
+            notes.push_str(" Door wires \"~ door + depth (catalogue)\": the plate-to-door distance is a catalogue estimate, not a measurement of your cabinet.");
+        }
+        if bases.contains_key("~ routed (catalogue)") {
+            notes.push_str(" Wires \"~ routed (catalogue)\" run through ducts or an entry from the enclosure's catalogue data: an estimate, not a measurement of your cabinet.");
+        }
         let counts = format!(
             " A wire to cut is one connection between device pins, as in the wire list, plus the supply \
              and PE leads. The drawing holds {} drawn wire pieces, which join into these.",

@@ -371,8 +371,9 @@ impl NovoApp {
             format!("-{text}")
         };
         let Ok(tag) = DeviceTag::parse(&text) else {
-            self.message(
+            self.refuse_titled(
                 Level::Warning,
+                "Not a cable tag",
                 format!("\"{text}\" is not a cable tag, for example -W3"),
             );
             return;
@@ -382,8 +383,9 @@ impl NovoApp {
             .document()
             .is_some_and(|d| d.project().cables().any(|c| c.id != cable && c.tag == tag));
         if taken {
-            self.message(
+            self.refuse_titled(
                 Level::Warning,
+                "Cable tag taken",
                 format!("Another cable is already called {tag}"),
             );
             return;
@@ -434,8 +436,9 @@ impl NovoApp {
                 self.changed_outside_canvas(&changes);
                 self.message(Level::Info, format!("{tag} is now {name}"));
             }
-            Err(_) => self.message(
+            Err(_) => self.refuse_titled(
                 Level::Warning,
+                "Wires do not fit the type",
                 format!("The wires on {tag} do not fit {name}"),
             ),
         }
@@ -458,8 +461,9 @@ impl NovoApp {
         if let Some(t) = cable_type
             && !proposal.retype(t.clone())
         {
-            self.message(
+            self.refuse_titled(
                 Level::Warning,
+                "Wires do not fit the type",
                 format!("The wires of {} do not fit {}", proposal.tag, t.name()),
             );
             return;
@@ -569,8 +573,9 @@ impl NovoApp {
             .find(|t| t.name().eq_ignore_ascii_case(wanted));
         match found {
             Some(cable_type) => self.retype_cable(cable, &cable_type),
-            None => self.message(
+            None => self.refuse_titled(
                 Level::Warning,
+                "Unknown cable type",
                 format!("No usual cable type is called {wanted}, for example 4G1.5 or 7x1"),
             ),
         }

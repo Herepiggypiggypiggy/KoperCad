@@ -62,6 +62,8 @@ pub(crate) struct PartsWindow {
     import: Option<Import>,
     /// The folder the Downloads watch looks in.
     downloads: Option<PathBuf>,
+    /// The in-app supplier browser: list, session and landing folder.
+    suppliers: super::parts_suppliers::Suppliers,
     /// The user's catalog file, where read data is saved.
     catalog_path: Option<PathBuf>,
     /// The part whose Remove from library awaits a second click.
@@ -193,6 +195,7 @@ impl PartsWindow {
             sources,
             import: None,
             downloads: default_downloads_dir(),
+            suppliers: super::parts_suppliers::Suppliers::load(),
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
@@ -267,6 +270,54 @@ impl PartsWindow {
             .map(|i| i.key.clone())
             .or_else(|| self.selected.clone())?;
         self.catalog.get(&key).cloned()
+    }
+
+    /// Opens a maker's page. A page that belongs to a known supplier (or a
+    /// part of a known supplier's maker) opens in the in-app browser, whose
+    /// downloads land in Parts without a trip through Explorer; anything
+    /// else, and any computer without the web view runtime, uses the normal
+    /// browser and the Downloads watch.
+    fn open_page(
+        &mut self,
+        ctx: &egui::Context,
+        url: &str,
+        maker: Option<&str>,
+        order: Option<&str>,
+    ) {
+        let supplier = self
+            .suppliers
+            .for_url(url)
+            .or_else(|| maker.and_then(|m| self.suppliers.for_maker(m)))
+            .map(|s| s.id.clone());
+        match supplier {
+            Some(id) => self.open_supplier(ctx, &id, order),
+            None => ctx.open_url(egui::OpenUrl::new_tab(url.to_owned())),
+        }
+    }
+
+    fn open_supplier(&mut self, ctx: &egui::Context, id: &str, order: Option<&str>) {
+        use super::parts_suppliers::{Opened, Source};
+        let opened = self
+            .suppliers
+            .open(id, order, self.downloads.as_deref(), Source::Window);
+        if let Some(Opened::SystemBrowser(url)) = opened {
+            ctx.open_url(egui::OpenUrl::new_tab(url));
+        }
+    }
+
+    /// Every frame: hands what the supplier browser downloaded to the same
+    /// pipeline as a file dropped on the window.
+    fn pump_suppliers(&mut self, ctx: &egui::Context, now: f64) {
+        let pumped = self.suppliers.pump(now);
+        if let Some(url) = pumped.open_in_system_browser {
+            ctx.open_url(egui::OpenUrl::new_tab(url));
+        }
+        if !pumped.landed.is_empty() {
+            self.wait_for(Waiting::Dropped(pumped.landed));
+        }
+        if self.suppliers.open_name().is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
     }
 
     fn start_import(&mut self, key: &PartKey) {
@@ -965,6 +1016,11 @@ enum PartsAction {
     Import(PartKey),
     TracePartsCad(PartKey),
     OpenPage(String),
+    /// Open a supplier's site in the in-app browser (or the normal browser).
+    GetFromSupplier(String),
+    ForgetSupplier(String),
+    OpenLanding(String),
+    StopSupplier,
     ChooseFile,
     ChooseModel,
     /// Scan the part's STEP model for connection points.
@@ -1165,6 +1221,7 @@ impl NovoApp {
         }
         let now = ctx.input(|i| i.time);
         win.pump_import(now);
+        win.pump_suppliers(ctx, now);
         if win
             .import
             .as_ref()
@@ -1279,19 +1336,53 @@ impl NovoApp {
                 PartsAction::Select(key) => win.select(key),
                 PartsAction::Import(key) => {
                     win.start_import(&key);
+                    let order = win.catalog.get(&key).map(|p| p.order_number.clone());
+                    let maker = win.catalog.get(&key).map(|p| p.manufacturer.clone());
                     if let Some(url) = win.import.as_ref().and_then(|i| i.page_url.clone()) {
-                        ctx.open_url(egui::OpenUrl::new_tab(url));
+                        win.open_page(ctx, &url, maker.as_deref(), order.as_deref());
                     }
                 }
                 PartsAction::TracePartsCad(key) => {
-                    if let Some(part) = win.catalog.get(&key) {
-                        win.import = Some(Import::start_traceparts(part, win.downloads.as_deref()));
+                    if let Some(part) = win.catalog.get(&key).cloned() {
+                        win.import =
+                            Some(Import::start_traceparts(&part, win.downloads.as_deref()));
                         if let Some(url) = win.import.as_ref().and_then(|i| i.page_url.clone()) {
-                            ctx.open_url(egui::OpenUrl::new_tab(url));
+                            win.open_page(ctx, &url, Some("TraceParts"), Some(&part.order_number));
                         }
                     }
                 }
-                PartsAction::OpenPage(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
+                PartsAction::OpenPage(url) => {
+                    let maker = win
+                        .import
+                        .as_ref()
+                        .and_then(|i| win.catalog.get(&i.key))
+                        .map(|p| p.manufacturer.clone());
+                    let order = win
+                        .import
+                        .as_ref()
+                        .and_then(|i| win.catalog.get(&i.key))
+                        .map(|p| p.order_number.clone());
+                    win.open_page(ctx, &url, maker.as_deref(), order.as_deref());
+                }
+                PartsAction::GetFromSupplier(id) => {
+                    let order = win.target().map(|p| p.order_number);
+                    win.open_supplier(ctx, &id, order.as_deref());
+                }
+                PartsAction::ForgetSupplier(id) => {
+                    if let Err(e) = win.suppliers.forget(&id) {
+                        error = Some(e);
+                    }
+                }
+                PartsAction::OpenLanding(id) => {
+                    if let Some(dir) = win.suppliers.landing(&id) {
+                        let _ = std::fs::create_dir_all(&dir);
+                        ctx.open_url(egui::OpenUrl::new_tab(format!(
+                            "file:///{}",
+                            dir.display().to_string().replace('\\', "/")
+                        )));
+                    }
+                }
+                PartsAction::StopSupplier => win.suppliers.stop(),
                 PartsAction::ChooseFile => {
                     if let Some(path) = crate::dialogs::FileDialog::new()
                         .set_title("Choose the downloaded file")
@@ -1691,6 +1782,7 @@ fn parts_ui(
             }
         });
     });
+    suppliers_strip(ui, win, actions);
     if win.guide {
         guide_ui(ui, win);
     }
@@ -1859,6 +1951,90 @@ fn list_ui(
             }
         }
     });
+}
+
+/// The "Get parts from supplier" menu: the suppliers as data, the choice to
+/// use the normal browser, and removing a saved sign-in.
+fn supplier_menu(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAction>) {
+    ui.menu_button("Get parts from supplier", |ui| {
+        let list: Vec<(String, String, bool)> = win
+            .suppliers
+            .list()
+            .iter()
+            .map(|s| (s.id.clone(), s.name.clone(), s.needs_login))
+            .collect();
+        for (id, name, _) in &list {
+            let notes = win
+                .suppliers
+                .list()
+                .iter()
+                .find(|s| &s.id == id)
+                .map(|s| s.notes.clone())
+                .unwrap_or_default();
+            if ui.button(name).on_hover_text(notes).clicked() {
+                actions.push(PartsAction::GetFromSupplier(id.clone()));
+                ui.close();
+            }
+        }
+        ui.separator();
+        ui.menu_button("Downloads folder", |ui| {
+            for (id, name, _) in &list {
+                if ui.button(name).clicked() {
+                    actions.push(PartsAction::OpenLanding(id.clone()));
+                    ui.close();
+                }
+            }
+        });
+        ui.menu_button("Forget sign-in", |ui| {
+            for (id, name, _) in &list {
+                if ui.button(name).clicked() {
+                    actions.push(PartsAction::ForgetSupplier(id.clone()));
+                    ui.close();
+                }
+            }
+        });
+        ui.checkbox(
+            &mut win.suppliers.use_system_browser,
+            "Use my normal browser",
+        );
+    });
+}
+
+const SUPPLIER_HELP: &str = "The supplier's site opens in its own window. You sign in and download as you would in any browser; KoperCAD does not type, click or read the page, and never sees or keeps your password. Each supplier has its own private sign-in folder (Forget sign-in removes it). What you download is kept in a private folder on this computer, only STEP, DXF, ZIP, EDZ and catalog files, and Parts reads each file before it takes it. If the built-in browser cannot start (it needs the Microsoft WebView2 runtime, part of current Windows), your normal browser opens and your Downloads folder is watched for 30 minutes instead: any STEP, DXF, ZIP, EDZ or catalog file of that supplier's kinds saved there in that time is offered to Parts, which still reads it before taking it. Suppliers are listed in suppliers.json in KoperCAD's browser folder.";
+
+/// One line while a supplier's site is open: who, how many files were taken.
+fn suppliers_strip(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAction>) {
+    let name = win.suppliers.open_name().map(str::to_owned);
+    ui.horizontal(|ui| {
+        supplier_menu(ui, win, actions);
+        widgets::help_mark(ui, SUPPLIER_HELP);
+        if let Some(name) = &name {
+            ui.spinner();
+            ui.label(format!(
+                "{name} is open. Files taken: {}",
+                win.suppliers.handed_over()
+            ));
+            if ui.button("Stop").clicked() {
+                actions.push(PartsAction::StopSupplier);
+            }
+        }
+    });
+    if let Some(note) = &win.suppliers.note {
+        super::parts_flags::labelled(
+            ui,
+            novo_flags::Severity::Yellow,
+            "Supplier browser",
+            [note.clone()],
+        );
+    }
+    if let Some(problem) = &win.suppliers.problem {
+        super::parts_flags::labelled(
+            ui,
+            novo_flags::Severity::Yellow,
+            "suppliers.json not read",
+            [problem.clone()],
+        );
+    }
 }
 
 /// The strip under the list: what the import is waiting for, or its result.

@@ -12,8 +12,8 @@ use novo_machine::hoist_loop::{HoistModule, LimitKind};
 use novo_machine::swing::{DEFAULT_DAMPING_RATIO, SWING_MODEL_LEAVES_OUT, Swing};
 use novo_view3d::camera::ViewPreset;
 use novo_view3d::crane::{
-    CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, LimitFlag, LimitMark, TravelMark, build,
-    hook_bounds, rope_length_mm,
+    CRANE_PICTURE_LEAVES_OUT, CraneLayout, CraneState, Lamp, LimitFlag, LimitMark, TravelMark,
+    build, hook_bounds, machine_bounds, rope_length_mm,
 };
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
@@ -191,6 +191,8 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
         trolley_m,
         hook_m: m.height_m() as f32,
         swing_rad: [0.0; 2],
+        lamps: [Lamp::Off; 2],
+        slack_m: 0.0,
         warning: !conditions(m).is_empty(),
         bridge_limits: Vec::new(),
         trolley_limits: Vec::new(),
@@ -211,14 +213,31 @@ pub(super) fn state_of(module: Option<&HoistModule>, bridge_m: f32, trolley_m: f
 
 /// What the picture leaves out when it follows a closed-loop winch of Drive run.
 const WINCH_PICTURE_LEAVES_OUT: &[&str] = &[
-    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on, slack rope, the drive state and the load cell reading are in the line above the picture, not drawn",
+    "A closed-loop winch is drawn as a hook on a vertical rope at its height; the ground it may rest on and the load cell reading are in the line above the picture, not drawn; slack rope lies in a heap beside the block (at most 12 pieces); the brake and drive state are the two lamps on the control box",
     "The swing is the same one-pendulum model as for a hoist, from the travel axes picked here; a rope that hangs at an angle from the start is not drawn",
 ];
 
 /// The picture's numbers for one closed-loop winch of Drive run: its hook, the limit flags and
 /// whether the drive tripped or the rope reports a problem.
 pub(super) fn winch_state_of(m: &ClWinchModule, bridge_m: f32, trolley_m: f32) -> CraneState {
+    let lamps = m.snapshot().map_or([Lamp::Off; 2], |s| {
+        [
+            match s.brake_state {
+                novo_drive::brake::BrakeState::Released => Lamp::Green,
+                novo_drive::brake::BrakeState::Applied => Lamp::Amber,
+            },
+            if s.drive.fault.is_some() {
+                Lamp::Red
+            } else if s.hook_speed_m_s.abs() > 0.005 {
+                Lamp::Green
+            } else {
+                Lamp::Off
+            },
+        ]
+    });
     CraneState {
+        lamps,
+        slack_m: m.snapshot().map_or(0.0, |s| s.slack_m as f32),
         bridge_m,
         trolley_m,
         hook_m: m.height_m() as f32,
@@ -645,17 +664,17 @@ impl NovoApp {
                 let now = ui.input(|i| i.time);
                 if g.needs_fit {
                     g.needs_fit = false;
-                    g.view.fit(&scene, now, reduced);
                     g.pending_preset = g.pending_preset.or(Some(ViewPreset::Iso));
                 }
                 if let Some(p) = g.pending_preset.take() {
-                    g.view.go_to(p, &scene, now, reduced);
+                    g.view
+                        .go_to_bounds(p, &machine_bounds(&scene), now, reduced);
                 }
                 if std::mem::take(&mut g.frame_hook) {
                     let b = hook_bounds(&g.layout, &state);
                     g.view.frame_bounds(&b, now, reduced);
                 }
-                let height = (ui.available_height() - 190.0).max(160.0);
+                let height = (ui.available_height() - 36.0).max(200.0);
                 ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
                     g.view.show(
                         ui,
@@ -682,6 +701,14 @@ impl NovoApp {
                     notes.push_str(&format!("\n\u{2022} {line}"));
                 }
                 super::window_help::add(ui.ctx(), notes);
+                super::window_help::add(
+                    ui.ctx(),
+                    "The yellow line on the floor is a drawn marking, not a computed safety clearance.",
+                );
+                super::window_help::add(
+                    ui.ctx(),
+                    "The two lamps on the crane's control box show brake (left: green released, amber applied) and drive (right: green moving, red fault). They light only for a closed-loop winch in Drive run, and are dark otherwise.",
+                );
             });
         if !open {
             self.wb.hoist.three_d.open = false;
@@ -722,6 +749,8 @@ impl Hoist3d {
         self.revision += 1;
         let mut scene = build(&self.layout, state);
         scene.revision = self.revision;
+        // The crane parts are meshes: make the ones this scene asks for and the library lacks.
+        novo_view3d::crane_parts::ensure(Arc::make_mut(&mut self.library), &scene);
         let scene = Arc::new(scene);
         self.built = Some((self.layout, state.clone(), scene.clone()));
         scene

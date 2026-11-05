@@ -59,13 +59,14 @@ serde.workspace = true
 serde_json.workspace = true
 dirs.workspace = true
 ureq.workspace = true
+sha2.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 novo-cfd = { workspace = true, features = ["demo"] }
 ron = "0.12"
 tempfile.workspace = true
 lopdf.workspace = true
-zip.workspace = true
 flate2.workspace = true
 
 [build-dependencies]
@@ -85,3 +86,5 @@ raw-window-handle = "0.6"
 # Windows, no driver or administrator rights). Windows only: on Linux it needs the system library
 # libudev, which the CI image does not have; the card says so there (app/input_devices.rs).
 gilrs = "0.11"
+wry = "0.57.1"
+tao = "0.37.2"

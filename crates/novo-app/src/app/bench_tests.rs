@@ -235,7 +235,7 @@ fn the_readiness_strip_names_what_is_missing_and_clears_when_fixed() {
     assert!(gaps.iter().any(|g| g.text.starts_with("No mounting plate")));
     assert!(
         gaps.iter()
-            .any(|g| g.fix == Some(("Number wires", "wires.number")))
+            .any(|g| g.fix_pair() == Some(("Number wires", "wires.number")))
     );
     d.app.run_command(&ctx, "wires.number", None);
     d.frame();
@@ -288,4 +288,51 @@ fn the_default_size_is_filled_in_for_unsized_wires_in_one_undo_step() {
         novo_reports::unset_wires(d.doc().project()).no_size.len(),
         before.no_size.len()
     );
+}
+
+#[test]
+fn the_blocking_line_carries_a_size_button_with_the_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenStarterExample);
+    d.frame();
+    let p = d.doc().project();
+    let jobs = novo_reports::wire_cut_jobs_with(p, &FerruleStandard::of(p));
+    let gaps = super::bench::readiness(&jobs, true);
+    let gap = gaps
+        .iter()
+        .find(|g| g.text.ends_with("no cross-section"))
+        .expect("wires without a size");
+    let (label, command) = gap.fix_pair().expect("a fix");
+    assert!(
+        label.starts_with("Size ") && label.ends_with(" wires"),
+        "{label}"
+    );
+    assert_eq!(command, "wires.autopilot");
+    assert!(gap.detail.is_some(), "the reasoning sits behind the ?");
+    assert!(
+        !gap.text.contains("Autopilot"),
+        "no explanation on the line"
+    );
+}
+
+#[test]
+fn an_invalid_ferrule_standard_makes_the_packet_a_job_flag_not_a_toast() {
+    let (dir, mut d) = app_with_wires();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.bench", None);
+    d.frame();
+    d.app.wb.bench.as_mut().unwrap().standard.sizes[3].length_mm = 0.0;
+    let shown = |d: &Drive| d.app.messages().iter().filter(|m| !m.dismissed).count();
+    let before = shown(&d);
+    assert!(
+        d.app
+            .export_bench_packet_to(&dir.path().join("p.pdf"), &[])
+            .is_none()
+    );
+    let flags = d.app.job_flags();
+    assert_eq!(flags.len(), 1);
+    assert_eq!(flags[0].title, "Ferrule standard invalid");
+    assert_eq!(shown(&d), before, "no toast");
 }

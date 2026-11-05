@@ -16,7 +16,7 @@ wait 6
 scroll 400 450 -400
 wait 6
 shot rail-before
-double_click 329 489
+double_click 329 510
 wait 4
 key ctrl+a
 text 0

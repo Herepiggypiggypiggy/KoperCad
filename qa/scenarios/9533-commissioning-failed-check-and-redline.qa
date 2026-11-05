@@ -1,0 +1,29 @@
+@title Commissioning: a failed check is a red triangle on its row and wire, and an open redline a yellow one
+@area Commissioning
+# T13: Checks tab, open wire 1 and fail its continuity check with a reason. The check row leads with a red triangle, the Punch tab shows the item the failure opened with the same triangle, and the wire is marked on the drawing. On the Redlines tab an open redline gets a yellow triangle.
+open_starter_example
+wait 20
+click_text Commissioning #1
+wait 20
+click 103 362
+wait 10
+key f
+wait 6
+text loose crimp
+key Enter
+wait 10
+shot failed-check
+expect "Error: Continuity check failed"
+click_text Punch
+wait 10
+expect "Error: Continuity check failed"
+shot punch-same-triangle
+click_text Redlines
+wait 10
+click 170 307
+text Cable swapped on the machine
+click_text "Add redline"
+wait 10
+expect "Warning: Machine differs from drawing"
+shot open-redline
+check_layout

@@ -391,7 +391,7 @@ impl NovoApp {
         }
         if let Some(reason) = self.command_unavailable(info) {
             ui.add_space(10.0);
-            ui.label(egui::RichText::new(reason).color(pal.warning));
+            super::flags_shell::inline_flag(ui, false, false, "Not available now", reason);
         }
         ui.add_space(10.0);
         ui.label(

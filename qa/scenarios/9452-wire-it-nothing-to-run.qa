@@ -1,0 +1,20 @@
+@title Wiring: an export with nothing to do is a yellow triangle on the job
+@area Reports
+# T5: a new project has no wires. The Wire-it export says so with a yellow hollow triangle instead of a yellow toast.
+click_text "New project"
+wait 20
+key ctrl+k
+text "Export the Wire-it list"
+key Enter
+wait 20
+expect "Warning: No wires to run yet"
+shot nothing-to-run
+check_layout
+click_text "Warning: No wires to run yet" Button
+wait 6
+expect "Dismiss"
+shot nothing-to-run-popover
+check_layout
+click_text Dismiss Button
+wait 6
+expect_not "Warning: No wires to run yet"
