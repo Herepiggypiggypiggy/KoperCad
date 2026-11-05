@@ -17,3 +17,6 @@ The numbers in the hover differ from the #1859 pictures (1 h 16 min instead of 1
 
 ## Not tested
 Windows; 3D Heat view picture; any measured cabinet. Engine checked against its own analytic unit tests only.
+
+## Other heat scenarios on this head
+135: 4/4 pass. 1814: first run failed at 1920x1080 on `click_text Quick` (the automatic Heat run had already started, the same timing flake as 250-3d-heat-strip-room-short-window), second run 2/2 pass.
