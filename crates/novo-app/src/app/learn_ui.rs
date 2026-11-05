@@ -413,6 +413,52 @@ impl NovoApp {
                 }
             });
         } else {
+            // The way on sits under the header, so a pane squeezed by the others
+            // never hides Back, Show me how and Next below the text.
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        !card.first,
+                        egui::Button::new(format!("{} {}", icons::ARROW_LEFT, card.words.back)),
+                    )
+                    .clicked()
+                {
+                    action = Some(CardAction::Move(Move::Back));
+                }
+                if card.show_me {
+                    let label = if card.demo_on {
+                        &card.words.replay
+                    } else {
+                        &card.words.show_me
+                    };
+                    if ui.button(format!("{} {label}", icons::EYE)).clicked() {
+                        action = Some(CardAction::ShowMe);
+                    }
+                }
+                if card.demo_on
+                    && ui
+                        .button(format!("{} {}", icons::STOP, card.words.stop))
+                        .clicked()
+                {
+                    action = Some(CardAction::StopDemo);
+                }
+                if card.can_next {
+                    let next = format!("{} {}", card.words.next, icons::ARROW_RIGHT);
+                    if novo_theme::widgets::primary_button(ui, &next).clicked() {
+                        action = Some(CardAction::Move(Move::Next));
+                    }
+                } else if ui
+                    .button(if card.skip_does_it {
+                        format!("{} {}", icons::MAGIC_WAND, card.words.do_it)
+                    } else {
+                        format!("{} {}", icons::SKIP_FORWARD, card.words.skip)
+                    })
+                    .clicked()
+                {
+                    action = Some(CardAction::Move(Move::Skip));
+                }
+            });
+            ui.add_space(2.0);
             let mark = if card.ticked { "✓" } else { "●" };
             let title = egui::RichText::new(format!("{mark} {}", card.step_title)).strong();
             ui.label(if card.ticked {
@@ -495,50 +541,6 @@ impl NovoApp {
             if card.greyed {
                 super::window_help::mark(ui, &card.words.greyed_note);
             }
-            ui.add_space(4.0);
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(
-                        !card.first,
-                        egui::Button::new(format!("{} {}", icons::ARROW_LEFT, card.words.back)),
-                    )
-                    .clicked()
-                {
-                    action = Some(CardAction::Move(Move::Back));
-                }
-                if card.show_me {
-                    let label = if card.demo_on {
-                        &card.words.replay
-                    } else {
-                        &card.words.show_me
-                    };
-                    if ui.button(format!("{} {label}", icons::EYE)).clicked() {
-                        action = Some(CardAction::ShowMe);
-                    }
-                }
-                if card.demo_on
-                    && ui
-                        .button(format!("{} {}", icons::STOP, card.words.stop))
-                        .clicked()
-                {
-                    action = Some(CardAction::StopDemo);
-                }
-                if card.can_next {
-                    let next = format!("{} {}", card.words.next, icons::ARROW_RIGHT);
-                    if novo_theme::widgets::primary_button(ui, &next).clicked() {
-                        action = Some(CardAction::Move(Move::Next));
-                    }
-                } else if ui
-                    .button(if card.skip_does_it {
-                        format!("{} {}", icons::MAGIC_WAND, card.words.do_it)
-                    } else {
-                        format!("{} {}", icons::SKIP_FORWARD, card.words.skip)
-                    })
-                    .clicked()
-                {
-                    action = Some(CardAction::Move(Move::Skip));
-                }
-            });
             ui.add_space(2.0);
             if confirm {
                 ui.label(&card.words.restart_confirm);

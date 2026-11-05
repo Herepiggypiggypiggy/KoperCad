@@ -1,0 +1,13 @@
+@title Fast keys card is a pane of the right strip, Live off
+@sizes 1366x768 1920x1080
+@area Learn
+open qa/fixtures/radio-hoist.novo
+wait 20
+key ctrl+k
+text Fast keys card on this project
+wait 5
+key Enter
+wait 20
+expect "Skip"
+shot fast-keys-pane
+check_layout
