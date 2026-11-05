@@ -1,7 +1,7 @@
 @title PR1904: drill plan export, narrow enclosure, plate does not fit (1920)
 @area Cabinet
 @sizes 1920x1080
-# Synthetic enclosure SYN-narrow: Place all, accept, Export > Drill plan. The PDF is named with the article, so every enclosure keeps its own file.
+# A path allows one * (the harness folder), so the file name is spelled out. A second size reuses the folder and the toast says Replaced, so the check is the file name, not the verb. Synthetic enclosure SYN-narrow: Place all, accept, Export > Drill plan. The PDF is named with the article, so every enclosure keeps its own file.
 open qa/fixtures/cabinet-spec-narrow.novo
 wait 20
 key ctrl+k
@@ -22,8 +22,8 @@ wait 6
 click_text "Drill plan (hand, PDF)"
 wait 3
 shot c-exported
-expect "Exported"
+expect "SYN-narrow drill plan.pdf"
 wait 10
-expect_file "/tmp/kopercad-qa-open-*/*SYN-narrow*drill plan.pdf" 1500
-keep_file "/tmp/kopercad-qa-open-*/*SYN-narrow*drill plan.pdf"
+expect_file "/tmp/kopercad-qa-open-*/heat-place-all-synthetic +CAB1 SYN-narrow drill plan.pdf" 1500
+keep_file "/tmp/kopercad-qa-open-*/heat-place-all-synthetic +CAB1 SYN-narrow drill plan.pdf"
 check_layout
