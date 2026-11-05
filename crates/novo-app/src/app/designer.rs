@@ -388,6 +388,7 @@ impl NovoApp {
                 };
                 match store::save_to_dir(&dir, &st.draft) {
                     Ok(path) => {
+                        self.job_ok("designer.save");
                         self.message(Level::Info, format!("Saved template {}", path.display()));
                         st.base = st.draft.clone();
                         st.origin = Some(Origin::User);
@@ -425,7 +426,7 @@ impl NovoApp {
             return false;
         };
         if let Some(why) = super::flags_jobs::qa_forced_error("designer.save") {
-            self.job_fail("designer.save", "Templates not saved", Level::Error, why);
+            self.job_fail("designer.save", "Template not saved", Level::Error, why);
             return false;
         }
         let mut list = match store::project_templates(project) {
@@ -433,7 +434,7 @@ impl NovoApp {
             Err(e) => {
                 self.job_fail(
                     "designer.save",
-                    "Templates not saved",
+                    "Template not saved",
                     Level::Error,
                     format!("The project's templates cannot be read, not overwriting them: {e}"),
                 );
@@ -453,6 +454,7 @@ impl NovoApp {
             })
         });
         if ok {
+            self.job_ok("designer.save");
             self.message(Level::Info, format!("Saved template {name} in the project"));
         }
         ok
