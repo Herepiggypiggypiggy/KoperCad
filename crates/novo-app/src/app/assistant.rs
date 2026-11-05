@@ -1051,8 +1051,7 @@ impl NovoApp {
         }
         ui.add_space(4.0);
         ui.strong("Settings");
-        super::window_help::add(
-            ui.ctx(),
+        ui.weak(
             "Optional. Uses your own Anthropic API key and your own API credits. \
              KoperCAD has no account with Anthropic and sees none of your usage.",
         );
