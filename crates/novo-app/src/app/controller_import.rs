@@ -474,8 +474,16 @@ impl NovoApp {
                 }
             }
             Action::Save => match self.save_controller_profile() {
-                Ok(path) => self.message_file("Controller profile saved", &path),
-                Err(e) => self.message(Level::Error, format!("Could not save the profile: {e}")),
+                Ok(path) => {
+                    self.job_ok("controller.profile_save");
+                    self.message_file("Controller profile saved", &path);
+                }
+                Err(e) => self.job_fail(
+                    "controller.profile_save",
+                    "Profile not saved",
+                    Level::Error,
+                    format!("Could not save the profile: {e}"),
+                ),
             },
             Action::Copy => {
                 if let Some(w) = &self.wb.controller_wizard {
@@ -520,7 +528,12 @@ impl NovoApp {
                         w.pxf = Some((name, file, 0));
                     }
                 }
-                Err(e) => self.message(Level::Error, format!("Could not read {name}: {e}")),
+                Err(e) => self.job_fail(
+                    "controller.table_read",
+                    "File not read",
+                    Level::Error,
+                    format!("Could not read {name}: {e}"),
+                ),
             }
         } else {
             match read_table_file(&path) {
@@ -530,7 +543,12 @@ impl NovoApp {
                         w.set_text(text, name);
                     }
                 }
-                Err(e) => self.message(Level::Error, format!("Could not read {name}: {e}")),
+                Err(e) => self.job_fail(
+                    "controller.table_read",
+                    "File not read",
+                    Level::Error,
+                    format!("Could not read {name}: {e}"),
+                ),
             }
         }
     }
