@@ -1,7 +1,7 @@
-@title Cabinet: rule and opening flags are in the top-bar count and the Issues rows (1920x1080)
+@title Cabinet: plate triangles and Issues rows after the follow-up, no duplicate ids (1920x1080)
 @area Cabinet
 @sizes 1920x1080
-# T1 follow-up: the Place-rule and wiring-opening triangles on the plate are counted in the top bar and listed in Issues. Small devices keep their badges apart.
+# T1 follow-up regression: this project has no Place-rule or opening flag, so the rows must stay exactly as before and the plate must draw cleanly. The counted rule rows are covered by the unit test a_rule_flag_is_in_the_top_bar_count_and_the_issues_rows.
 open qa/fixtures/cabinet-lesson.novo
 wait 30
 click_text Cabinet #1
