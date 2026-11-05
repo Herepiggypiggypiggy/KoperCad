@@ -31,6 +31,9 @@ const WIDE_TABLE_COLUMNS: usize = 8;
 /// Pixels per unit of column weight, and the widest a column's minimum gets.
 const WIDE_PX_PER_WEIGHT: f32 = 5.5;
 const WIDE_MAX_COLUMN: f32 = 230.0;
+/// A saved report's column: pixels per character of its longest text, and the widest it gets.
+const SAVED_PX_PER_CHAR: f32 = 7.5;
+const SAVED_MAX_COLUMN: f32 = 340.0;
 
 use super::learn_ui::chip_button;
 use super::workspace::Workspace;
@@ -60,6 +63,8 @@ pub(crate) struct ReportsView {
     pub(super) template: Option<String>,
     /// The row counts of the list, worked out off the UI thread.
     counts: ListCounts,
+    /// The editor of the "My reports" report.
+    pub(super) queries: super::reports_queries::QueriesEditor,
 }
 
 type CountAnswer = Vec<(String, usize)>;
@@ -112,6 +117,7 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.cable_schedule", "cableschedule"),
     ("report.plugs", "plugs"),
     ("report.singleline", "singleline"),
+    ("report.queries", "queries"),
 ];
 
 impl ReportsView {
@@ -420,6 +426,10 @@ impl NovoApp {
             ui.colored_label(crate::theme::ui_palette().warning, note);
         }
         ui.separator();
+        if id == novo_reports::query::SavedQueries::ID {
+            self.queries_editor(ui);
+            ui.separator();
+        }
         // The single-line diagram shows its drawing first; its schedule tab
         // falls through to the table.
         let drawn = id == novo_reports::SingleLineDiagram::ID && self.single_line_view(ui);
@@ -438,7 +448,17 @@ impl NovoApp {
                         ui.add_space(12.0);
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
-                        ui.weak(empty_report_hint(&id));
+                        if id == novo_reports::query::SavedQueries::ID {
+                            let (text, hint) = saved_empty_state(
+                                output.sections.iter().all(|s| s.key == "presets"),
+                            );
+                            ui.horizontal(|ui| {
+                                ui.weak(text);
+                                novo_theme::widgets::help_mark(ui, hint);
+                            });
+                        } else {
+                            ui.weak(empty_report_hint(&id));
+                        }
                     }
                     jump
                 })
@@ -602,44 +622,87 @@ impl NovoApp {
         if !section.title.is_empty() {
             section_label(ui, &section.title);
         }
-        let columns: Vec<TableColumn> = section
-            .columns
-            .iter()
-            .map(|c| TableColumn {
-                header: c.header.clone(),
-                align: match c.align {
-                    Align::Left => TableAlign::Left,
-                    Align::Center => TableAlign::Center,
-                    Align::Right => TableAlign::Right,
-                },
-            })
-            .collect();
-        // The vertical scroll bar of the rows takes room from the right edge.
         let bar = ui.spacing().scroll.allocated_width() + 4.0;
-        let weights: Vec<f64> = section.columns.iter().map(|c| c.width).collect();
-        let mut mins = header_min_widths(ui, &columns);
-        let wide = columns.len() > WIDE_TABLE_COLUMNS;
-        if wide {
-            // Many columns would be squeezed until the cells are cut: give
-            // each a readable width and scroll sideways when they do not fit.
-            for (min, weight) in mins.iter_mut().zip(&weights) {
-                *min = min.max((*weight as f32 * WIDE_PX_PER_WEIGHT).min(WIDE_MAX_COLUMN));
+        let available = ui.available_width() - bar;
+        let all: Vec<usize> = (0..section.columns.len()).collect();
+        let wide_all = all.len() > WIDE_TABLE_COLUMNS;
+        let mut keep = all.clone();
+        let mut layout = self.table_layout(ui, section, &keep);
+        if wide_all && layout.total > available {
+            // Too wide for the window: hide the low-value columns first.
+            keep.retain(|&i| !section.columns[i].optional);
+            layout = self.table_layout(ui, section, &keep);
+            let hidden: Vec<&str> = section
+                .columns
+                .iter()
+                .filter(|c| c.optional)
+                .map(|c| c.header.as_str())
+                .collect();
+            // Say so, and never leave the sort on a column that is not shown.
+            ui.label(
+                egui::RichText::new(format!("{} hidden (window narrow)", hidden.join(", ")))
+                    .small()
+                    .color(crate::theme::ui_palette().text_secondary),
+            );
+            if let Some((key, col, _)) = &self.reports_view.sort
+                && *key == section.key
+                && !keep.contains(col)
+            {
+                self.reports_view.sort = None;
             }
         }
-        let available = ui.available_width() - bar;
-        let widths = column_widths_min(available, &weights, &mins);
-        let total: f32 = widths.iter().sum::<f32>() + (widths.len() as f32) * 8.0;
-        if wide && total > available {
+        if layout.wide && layout.total > available {
             let mut jump = None;
             egui::ScrollArea::horizontal()
                 .id_salt(("report_cols", &section.key))
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
-                    jump = self.section_rows(ui, section, order, lit, &columns, &widths);
+                    jump = self.section_rows(ui, section, order, lit, &layout);
                 });
             return jump;
         }
-        self.section_rows(ui, section, order, lit, &columns, &widths)
+        self.section_rows(ui, section, order, lit, &layout)
+    }
+
+    fn table_layout(&self, ui: &egui::Ui, section: &Section, keep: &[usize]) -> TableLayout {
+        let bar = ui.spacing().scroll.allocated_width() + 4.0;
+        let columns: Vec<TableColumn> = keep
+            .iter()
+            .map(|&i| {
+                let c = &section.columns[i];
+                TableColumn {
+                    header: c.header.clone(),
+                    align: match c.align {
+                        Align::Left => TableAlign::Left,
+                        Align::Center => TableAlign::Center,
+                        Align::Right => TableAlign::Right,
+                    },
+                }
+            })
+            .collect();
+        let weights: Vec<f64> = keep
+            .iter()
+            .map(|&i| {
+                section.columns[i]
+                    .screen_width
+                    .unwrap_or(section.columns[i].width)
+            })
+            .collect();
+        let mut mins = header_min_widths(ui, &columns);
+        let wide = columns.len() > WIDE_TABLE_COLUMNS || section.fit_content;
+        if wide {
+            wide_minimums(&mut mins, &weights, section.fit_content);
+        }
+        let available = ui.available_width() - bar;
+        let widths = column_widths_min(available, &weights, &mins);
+        let total: f32 = widths.iter().sum::<f32>() + (widths.len() as f32) * 8.0;
+        TableLayout {
+            keep: keep.to_vec(),
+            columns,
+            widths,
+            total,
+            wide,
+        }
     }
 
     /// The header and rows of a section laid out at fixed column widths.
@@ -649,19 +712,27 @@ impl NovoApp {
         section: &Section,
         order: &[usize],
         lit: &[AnyId],
-        columns: &[TableColumn],
-        widths: &[f32],
+        layout: &TableLayout,
     ) -> Option<AnyId> {
+        let TableLayout {
+            keep,
+            columns,
+            widths,
+            ..
+        } = layout;
+        let (keep, columns, widths) = (keep.as_slice(), columns.as_slice(), widths.as_slice());
         let sorted = match &self.reports_view.sort {
-            Some((key, col, asc)) if *key == section.key => Some((*col, *asc)),
+            Some((key, col, asc)) if *key == section.key => {
+                keep.iter().position(|&k| k == *col).map(|c| (c, *asc))
+            }
             _ => None,
         };
         if let Some(i) = table_header(ui, columns, widths, sorted) {
             self.reports_view.sort = match self.reports_view.sort.take() {
-                Some((key, col, asc)) if key == section.key && col == i => {
+                Some((key, col, asc)) if key == section.key && col == keep[i] => {
                     asc.then_some((key, col, false))
                 }
-                _ => Some((section.key.clone(), i, true)),
+                _ => Some((section.key.clone(), keep[i], true)),
             };
         }
 
@@ -682,13 +753,11 @@ impl NovoApp {
             for &index in &order[range] {
                 let row = &section.rows[index];
                 let texts: Vec<String> = row.cells.iter().map(|c| c.to_string()).collect();
-                let cells: Vec<TableCell> = row
-                    .cells
+                let cells: Vec<TableCell> = keep
                     .iter()
-                    .zip(&texts)
-                    .map(|(c, text)| TableCell {
-                        text,
-                        numeric: matches!(c, Cell::Int(_) | Cell::Number(_)),
+                    .map(|&i| TableCell {
+                        text: &texts[i],
+                        numeric: matches!(row.cells[i], Cell::Int(_) | Cell::Number(_)),
                     })
                     .collect();
                 let at_cursor = self
@@ -805,7 +874,12 @@ impl NovoApp {
                     format!("Added page {} {}", spec.name, spec.title),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
+            Err(e) => self.job_fail(
+                "report.add_page",
+                "Report page not added",
+                Level::Error,
+                format!("Could not add the page: {e}"),
+            ),
         }
     }
 
@@ -874,7 +948,12 @@ impl NovoApp {
             ReportFormat::Excel => match novo_reports::xlsx_bytes(&translated) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    self.message(Level::Error, format!("Could not export to Excel: {e}"));
+                    self.job_fail(
+                        "export.report_excel",
+                        "Excel export failed",
+                        Level::Error,
+                        format!("Could not export to Excel: {e}"),
+                    );
                     return None;
                 }
             },
@@ -888,14 +967,18 @@ impl NovoApp {
         };
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
+                self.job_ok("export.report");
                 self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.report",
+                    "Report not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }
@@ -955,7 +1038,9 @@ impl NovoApp {
             .find(|t| t.name == chosen)
         else {
             self.reports_view.template = None;
-            self.message(
+            self.job_fail(
+                "report.template",
+                "Report template missing",
                 Level::Warning,
                 format!("Template {chosen} no longer exists, using the plain layout"),
             );
@@ -963,12 +1048,15 @@ impl NovoApp {
         };
         let Some(template) = super::designer::retarget(&template, &output.report, &output.title)
         else {
-            self.message(
+            self.job_fail(
+                "report.template",
+                "Template has no table",
                 Level::Warning,
                 format!("Template {chosen} has no table to put the report in"),
             );
             return None;
         };
+        self.job_ok("report.template");
         let rendered = self.render_with_project(&template);
         Some(novo_pdf::export_layouts_pdf(
             &rendered.pages,
@@ -986,7 +1074,12 @@ impl NovoApp {
             None => match super::projects_dir() {
                 Some(dir) => dir,
                 None => {
-                    self.message(Level::Error, "Could not find the Documents folder");
+                    self.job_fail(
+                        "export.report",
+                        "Report not written",
+                        Level::Error,
+                        "Could not find the Documents folder",
+                    );
                     return None;
                 }
             },
@@ -1350,6 +1443,7 @@ mod tests {
                 "Cable schedule",
                 "Plug connection list",
                 "Single-line diagram",
+                "My reports",
             ]
         );
         // The palette still finds a report by the name it used to have.
@@ -1460,6 +1554,21 @@ mod tests {
 }
 
 /// What an empty report says, with how to get rows into it.
+/// Gives each column of a wide table a readable minimum width, so the table
+/// scrolls sideways instead of cutting cells. A saved report's weights are
+/// character counts of its longest text (`fit_content`): those get room for
+/// the text plus padding; other wide reports keep their own, tighter, scale.
+fn wide_minimums(mins: &mut [f32], weights: &[f64], fit_content: bool) {
+    let (per_weight, padding, widest) = if fit_content {
+        (SAVED_PX_PER_CHAR, 12.0, SAVED_MAX_COLUMN)
+    } else {
+        (WIDE_PX_PER_WEIGHT, 0.0, WIDE_MAX_COLUMN)
+    };
+    for (min, weight) in mins.iter_mut().zip(weights) {
+        *min = min.max((*weight as f32 * per_weight + padding).min(widest));
+    }
+}
+
 fn empty_report_hint(id: &str) -> &'static str {
     match id {
         "io" => {
@@ -1474,7 +1583,65 @@ fn empty_report_hint(id: &str) -> &'static str {
         "cables" | "cableschedule" => {
             "Nothing to list yet: no cable is drawn. Use the Cable tool to draw one between devices."
         }
+        "queries" => "No saved reports yet. Open Edit my reports above to write one.",
         _ => "Nothing to list yet",
+    }
+}
+
+/// Empty-state line and its "?" text for the My reports page. No sections
+/// means nothing is saved; sections without rows means a report that simply
+/// matches nothing right now.
+fn saved_empty_state(nothing_saved: bool) -> (&'static str, &'static str) {
+    if nothing_saved {
+        ("No saved reports", empty_report_hint("queries"))
+    } else {
+        (
+            "No rows",
+            "Nothing matches this report right now. It fills in when matching items exist.",
+        )
+    }
+}
+
+#[cfg(test)]
+mod saved_empty_tests {
+    use super::saved_empty_state;
+
+    #[test]
+    fn no_rows_is_not_no_saved_reports() {
+        assert_eq!(saved_empty_state(true).0, "No saved reports");
+        assert_eq!(saved_empty_state(false).0, "No rows");
+        assert_ne!(saved_empty_state(true).1, saved_empty_state(false).1);
+    }
+}
+
+#[cfg(test)]
+mod wide_minimum_tests {
+    use super::wide_minimums;
+
+    /// An 11-column report (the wire list) keeps the minimum widths it had
+    /// before saved reports existed.
+    #[test]
+    fn a_wide_report_keeps_its_old_minimums() {
+        let weights = [
+            15.0, 35.0, 35.0, 15.0, 12.0, 10.0, 25.0, 15.0, 14.0, 12.0, 20.0,
+        ];
+        let mut mins = vec![40.0_f32; weights.len()];
+        wide_minimums(&mut mins, &weights, false);
+        let old: Vec<f32> = weights
+            .iter()
+            .map(|w| 40.0_f32.max((*w as f32 * 5.5).min(230.0)))
+            .collect();
+        assert_eq!(mins, old);
+    }
+
+    #[test]
+    fn a_saved_report_gets_room_for_its_longest_text() {
+        let mut mins = vec![40.0_f32];
+        wide_minimums(&mut mins, &[18.0], true);
+        assert_eq!(mins[0], 18.0 * 7.5 + 12.0);
+        let mut mins = vec![40.0_f32];
+        wide_minimums(&mut mins, &[400.0], true);
+        assert_eq!(mins[0], 340.0);
     }
 }
 
@@ -1492,4 +1659,12 @@ mod empty_hint_tests {
         }
         assert_eq!(empty_report_hint("toc"), "Nothing to list yet");
     }
+}
+
+struct TableLayout {
+    keep: Vec<usize>,
+    columns: Vec<TableColumn>,
+    widths: Vec<f32>,
+    total: f32,
+    wide: bool,
 }

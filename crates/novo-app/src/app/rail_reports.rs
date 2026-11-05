@@ -201,6 +201,14 @@ impl NovoApp {
     /// What a click on one of this file's `rail.*` rows does.
     pub(super) fn workspace_rail_click(&mut self, ctx: &egui::Context, id: &'static str) {
         if let Some(tab) = tab_of(id) {
+            // The rail row is the Test (or Checks...) tab a lesson waits for.
+            let anchor = match tab {
+                Tab::Checks => "commissioning.checks",
+                Tab::Punch => "commissioning.punch",
+                Tab::Redlines => "commissioning.redlines",
+                Tab::Test => "commissioning.test",
+            };
+            self.learn_rail_click(anchor);
             self.load_commissioning();
             if let Some(mode) = self.wb.commissioning.as_mut() {
                 mode.tab = tab;
@@ -210,6 +218,7 @@ impl NovoApp {
         } else if id == "rail.export" {
             rail::toggle_flyout(ctx, id);
         } else {
+            self.learn_rail_click(id);
             self.wb.queued.push(id);
         }
         ctx.request_repaint();

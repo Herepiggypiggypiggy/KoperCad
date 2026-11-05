@@ -581,7 +581,13 @@ impl NovoApp {
         let spans = match parse_markup(text) {
             Ok(spans) => spans,
             Err(e) => {
-                ui.colored_label(crate::theme::ui_palette().error, e.to_string());
+                super::flags_shell::inline_flag(
+                    ui,
+                    true,
+                    false,
+                    "Step text broken",
+                    &e.to_string(),
+                );
                 return;
             }
         };

@@ -1,6 +1,6 @@
 @title Cabinet plate: EMC view with the magnetic field estimate (25 A drive, three phases, PLC beside it)
 @area Cabinet
-@sizes 1366x768 1920x1080
+@sizes 1366x768
 # Ctrl+K "EMC view on the plate": the exposure map is the field slice of the drawn currents (model), the legend names its ends in microtesla, and the PLC next to the drive has a numbered hot spot.
 open qa/fixtures/emc-field.novo
 wait 20
@@ -15,6 +15,9 @@ shot plate-field-overview
 check_layout
 click_text "Exposure map" #1
 wait 15
+# The legend starts folded to its title; open it with its arrow (at 1920x1080 it starts open, see 150b).
+click 237 652
+wait 10
 expect "Magnetic field of the drawn currents"
 expect "a model"
 shot plate-field-map

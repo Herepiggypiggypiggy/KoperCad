@@ -1,0 +1,50 @@
+@title A refused edit is a triangle with the reason in a popover, not a toast (1366x768)
+@area Schematic
+@sizes 1366x768
+# T7: a refused edit (a tag with a character a tag cannot have) is a yellow triangle on the selected symbol; the reason is in its popover; it goes with the next input. No toast.
+click_text "New project"
+wait 20
+key ctrl+k
+text "place macro"
+wait 5
+key Enter
+wait 10
+# The macro window docks at the right edge; its search field is at x 1205 at this size.
+click 1205 103
+wait 4
+text motor starter dol
+wait 5
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button
+wait 30
+# Select the stop button (no problem of its own), then give it a tag a tag cannot have.
+click 700 200
+wait 4
+click 520 399
+wait 6
+double_click 1100 174
+wait 4
+key ctrl+a
+wait 2
+text "bad tag!"
+wait 3
+key Enter
+wait 8
+shot refused-edit
+check_layout
+# The triangle is on the symbol; its popover names the reason and offers Copy.
+click 535 384
+wait 6
+expect "Could not rename"
+expect "Copy"
+shot refused-popover
+check_layout
+key Escape
+wait 4
+expect_not "Could not rename"
+# The next input takes the triangle away.
+click 700 200
+wait 6
+shot refused-gone
+check_layout

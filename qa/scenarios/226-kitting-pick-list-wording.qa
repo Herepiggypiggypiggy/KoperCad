@@ -9,7 +9,8 @@ click_text "Bench output..."
 wait 20
 click_text Kitting
 wait 10
-expect "Pick lists keep the step numbers"
+# The line that explains the step numbers sits behind the (?) next to "Pick list steps" since the panel docked.
+expect "Pick list steps"
 expect "New bar, to buy"
 expect_not "Stock;"
 shot kitting-pick-lists

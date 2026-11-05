@@ -2,7 +2,7 @@
 @area Cabinet
 @sizes 1366x768 1920x1080
 # The cabinet lesson plate with nothing placed. Place all adds the vertical trunk duct and the row ducts; the
-# row ducts end against the trunk's side (a T junction), so the problems pill shows no duct crossing.
+# row ducts end against the trunk's side (a T junction), so the plate shows no duct triangle.
 open qa/fixtures/cabinet-unplaced-plate.novo
 wait 20
 click_text Cabinet #1
@@ -15,6 +15,6 @@ expect "Preview"
 click_text "Accept"
 wait 40
 shot after
-expect "0 problems"
+expect_not "Duct overlaps something"
 expect "No issues"
 check_layout

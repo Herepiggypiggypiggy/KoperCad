@@ -5,25 +5,23 @@ open_starter_example
 wait 20
 click_text 3D #1
 wait 40
-click_text Section
-wait 10
-click_text "Cut the picture with a plane"
+click_text "Section plane"
 wait 20
 click_text X
 wait 20
 shot section-x
 key Escape
 wait 6
-click_text "Select and hide"
+click_text Hide
 wait 10
 click_text "Select all devices"
 wait 10
-click_text "Select and hide"
+click_text Hide
 wait 10
 click_text "Hide selection"
 wait 20
 shot devices-hidden
-click_text "Select and hide"
+click_text Hide
 wait 10
 click_text "Show all"
 wait 20

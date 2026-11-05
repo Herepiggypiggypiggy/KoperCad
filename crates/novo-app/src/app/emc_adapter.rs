@@ -59,6 +59,7 @@ fn short_title(rule: &str) -> &'static str {
         "EMC-17" => "Sensitive near drive",
         "EMC-19" => "Field at sensitive device",
         "EMC-20" => "Induced voltage",
+        "EMC-21" => "Motor cable leakage",
         _ => "EMC finding",
     }
 }
@@ -67,7 +68,7 @@ fn short_title(rule: &str) -> &'static str {
 fn kind_of(rule: &str) -> Kind {
     match rule {
         "EMC-01" | "EMC-02" => Kind::Parallel,
-        "EMC-04" | "EMC-05" | "EMC-14" => Kind::Shield,
+        "EMC-04" | "EMC-05" | "EMC-14" | "EMC-21" => Kind::Shield,
         "EMC-09" => Kind::Loop,
         "EMC-11" => Kind::Bond,
         "EMC-07" => Kind::Filter,
@@ -595,7 +596,9 @@ mod tests {
                 tag: "+CAB".into(),
                 finish: None,
                 door_bonded: None,
+                shell: None,
             }],
+            cables: Vec::new(),
             params: Params::default(),
         }
     }

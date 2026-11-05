@@ -1,5 +1,6 @@
 @title Place macro: a click on the macro's name picks it
 @area Schematic
+@sizes 1366x768
 # Acceptance A-01: rows swallowed clicks on their own text (selectable labels), so the
 # macro list could only be picked by clicking the thin padding at the row's edge.
 click_text "New project"
@@ -12,7 +13,9 @@ key Enter
 wait 10
 expect "Pick a macro to see what it will do."
 # The list is longer than the window: search, then click the row's own text.
-click 237 94
+# The Place macro window docks at the right edge: its search field is at x 1205 at 1366 wide and x 1759 at 1920 wide (a click outside the window would take the keyboard away, so each size has its own file).
+click 1205 103
+wait 4
 text motor starter dol
 wait 5
 click_text "Motor starter DOL" Label

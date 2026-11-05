@@ -361,6 +361,8 @@ pub const EXPORT_SECTIONS: &[Section] = &[
             "export.spec",
             "export.eplan",
             "export.aml",
+            "heat.export_vtk",
+            "heat.open_paraview",
         ],
     },
 ];
@@ -383,6 +385,8 @@ pub fn describe(id: &str) -> &'static str {
         "export.wiring_dxf" => "The wiring plan as DXF.",
         "export.drill_plan" => "The plan for drilling the plate by hand.",
         "export.step" => "The cabinet as a STEP 3D model.",
+        "heat.export_vtk" => "The heat and airflow result as a ParaView file.",
+        "heat.open_paraview" => "The heat and airflow result, opened in ParaView on this PC.",
         "export.print_preview" => "Paper size, scale, margins and plot sets, with a preview.",
         "export.pdf_options" => "A PDF with page range, bookmarks and other options.",
         "export.scale_check" => "A page with a ruler of known length to check the print scale.",

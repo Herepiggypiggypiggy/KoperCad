@@ -1,0 +1,29 @@
+@title PR1903: My reports empty state, Write query then Save, wide result, Ctrl+K, Reports menu
+@area Reports
+@sizes 1366x768 1920x1080
+# From QA4's run on 139dcd3a. Written without a GUI box: adjust coordinates if a click misses.
+open qa/fixtures/door-wire-spec-a.novo
+wait 20
+key ctrl+k
+text my reports
+wait 4
+shot ctrlk-my-reports
+key Enter
+wait 10
+expect "No saved reports"
+shot empty-state
+check_layout
+click_text "Build by choosing"
+wait 5
+click_text "Write query"
+wait 5
+shot write-query
+check_layout
+click_text "Start from example"
+wait 5
+shot example-menu
+key Escape
+wait 3
+click_text Reports #1
+wait 5
+shot reports-menu

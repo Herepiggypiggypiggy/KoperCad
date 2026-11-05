@@ -32,8 +32,40 @@ pub fn ducts(project: &Project, structure: StructureId) -> Vec<Duct> {
             height: r.height,
         })
         .collect();
+    // Ducts fitted at delivery, from the enclosure's spec (ids start at
+    // `SPEC_DUCT_BASE`, past any model id).
+    if let Some(st) = project.get::<novo_core::Structure>(structure) {
+        let spec = novo_layout::spec::EnclosureSpec::read(&st.properties);
+        let factory = spec
+            .parts
+            .iter()
+            .filter(|p| p.kind == novo_layout::spec::PartKind::Duct);
+        for (i, p) in factory.enumerate() {
+            ducts.push(Duct {
+                id: spec_duct_id(structure, i),
+                a: Point::new(p.x, p.y),
+                b: if p.vertical {
+                    Point::new(p.x, p.y + p.length)
+                } else {
+                    Point::new(p.x + p.length, p.y)
+                },
+                width: p.width,
+                height: p.height,
+            });
+        }
+    }
     join_ducts_at_sides(&mut ducts);
     ducts
+}
+
+/// Duct ids at or above this belong to the enclosure's spec, not to a rail
+/// of the model.
+pub const SPEC_DUCT_BASE: u64 = 1 << 40;
+
+/// The duct id of the `i`-th factory duct of an enclosure's spec: unique per
+/// enclosure (at most 1024 factory ducts each).
+pub fn spec_duct_id(structure: StructureId, i: usize) -> u64 {
+    SPEC_DUCT_BASE + structure.raw() * 1024 + i as u64
 }
 
 /// Ducts meet in a T or a corner with one ending against the side of the
@@ -267,6 +299,100 @@ pub fn avoided_ducts(properties: &novo_core::Properties) -> Vec<u64> {
         }
         _ => Vec::new(),
     }
+}
+
+/// Property on a duct: the kinds of wire it is meant to carry, comma
+/// separated (`power`, `earth`, `supply`, `signal`; see [`RouteClass`]).
+/// Empty or missing means any wire: categories are optional and off until a
+/// duct states one.
+pub const DUCT_CARRIES: &str = "duct.carries";
+
+/// The kind of a wire for duct categories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RouteClass {
+    /// Protective earth.
+    Earth,
+    /// Mains and motor wiring, and anything above 60 V.
+    Power,
+    /// Extra-low-voltage DC supply.
+    Supply,
+    /// Control and signal wires.
+    Signal,
+}
+
+impl RouteClass {
+    /// Every class, in the order the duct editor lists them.
+    pub const ALL: [RouteClass; 4] = [
+        RouteClass::Power,
+        RouteClass::Supply,
+        RouteClass::Signal,
+        RouteClass::Earth,
+    ];
+
+    /// The word typed and stored for the class.
+    pub fn word(self) -> &'static str {
+        match self {
+            RouteClass::Earth => "earth",
+            RouteClass::Power => "power",
+            RouteClass::Supply => "supply",
+            RouteClass::Signal => "signal",
+        }
+    }
+
+    /// The class a typed word names (case and spaces ignored).
+    pub fn parse(word: &str) -> Option<RouteClass> {
+        let w = word.trim().to_ascii_lowercase();
+        RouteClass::ALL.into_iter().find(|c| c.word() == w)
+    }
+}
+
+/// The kinds a duct is meant to carry, from its [`DUCT_CARRIES`] property.
+/// Empty for a duct that states none (any wire). Words that are not a kind
+/// are ignored.
+pub fn duct_carries(properties: &novo_core::Properties) -> Vec<RouteClass> {
+    match properties.get(DUCT_CARRIES) {
+        Some(novo_core::Value::Text(t)) => {
+            let mut v: Vec<RouteClass> = t.split(',').filter_map(RouteClass::parse).collect();
+            v.sort();
+            v.dedup();
+            v
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The class of a wire from its net's potential (kind and voltage), falling
+/// back on its size: 2.5 mm² and up counts as power, as in the bench
+/// sequence.
+pub fn wire_route_class(project: &Project, wire: &novo_core::Wire) -> RouteClass {
+    use novo_core::PotentialKind as K;
+    let net = project.netlist();
+    let potential = net
+        .potential_of(wire.from)
+        .or_else(|| net.potential_of(wire.to))
+        .and_then(|p| project.potential(p));
+    let high = |v: Option<f64>| v.is_some_and(|v| v > 60.0);
+    match potential.map(|p| (p.kind, p.voltage)) {
+        Some((K::ProtectiveEarth | K::Pen, _)) => RouteClass::Earth,
+        Some((K::Line | K::Neutral, _)) => RouteClass::Power,
+        Some((K::DcPositive | K::DcNegative, v)) if !high(v) => RouteClass::Supply,
+        Some((K::DcPositive | K::DcNegative, _)) => RouteClass::Power,
+        Some((K::Signal, v)) if high(v) => RouteClass::Power,
+        _ if wire_section_mm2(project, wire).is_some_and(|s| s >= 2.5) => RouteClass::Power,
+        _ => RouteClass::Signal,
+    }
+}
+
+/// The ducts a wire is steered away from by duct categories: those that
+/// state what they carry and do not carry its kind. Ducts without a stated
+/// category never appear, so a project that sets none is routed as before.
+/// A preference only: the router treats these like [`AVOID_DUCTS`].
+pub fn category_avoided(class: RouteClass, carries: &BTreeMap<u64, Vec<RouteClass>>) -> Vec<u64> {
+    carries
+        .iter()
+        .filter(|(_, c)| !c.is_empty() && !c.contains(&class))
+        .map(|(id, _)| *id)
+        .collect()
 }
 
 /// Property on a wire: other wires it must keep clear of, `id:mm` pairs comma
@@ -628,6 +754,16 @@ pub struct Routed {
     /// The leg of a cross-cabinet connection inside one plate, by
     /// connection id and plate. Ends at that plate's entry point.
     pub cross_routes: BTreeMap<(u64, StructureId), Route>,
+    /// Enclosures with a chosen `EnclosureSpec` that lacks a number the
+    /// wiring needs (plate to door distance), with the field's name. Their
+    /// door wires are cut without that distance; the checks say so, one line
+    /// per enclosure. Enclosures without a spec are not listed (old projects
+    /// behave as before).
+    pub spec_gaps: Vec<(StructureId, &'static str)>,
+    /// Routed connections whose path uses a duct or the cabinet entry from
+    /// an enclosure's spec while a number of that spec is a catalogue or
+    /// default value: the length is an estimate, not a measurement.
+    pub spec_estimate: std::collections::BTreeSet<u64>,
 }
 
 /// The part of a wire that runs on a surface other than the mounting plate.
@@ -640,9 +776,36 @@ pub struct SurfaceLeg {
     pub opening: Option<String>,
     /// Wire length on the surface (from the opening to the terminal, or
     /// between the two terminals), including the service loop at the
-    /// terminal. This is a model: the distance between plate and door and
-    /// the hinge loop are not in it.
+    /// terminal, and the plate-to-door distance (`depth_mm`) when the
+    /// enclosure has a spec with the numbers for it. This is a model: the
+    /// hinge loop is not in it, and without a spec (or with `spec_gap` set)
+    /// neither is the plate-to-door distance.
     pub length_mm: f64,
+    /// Part of `length_mm` that crosses from the plate to the door:
+    /// interior depth minus the plate setback, from the enclosure's
+    /// `EnclosureSpec` (0 without a spec or with a gap in it).
+    pub depth_mm: f64,
+    /// The field of the enclosure's spec that is missing for the
+    /// plate-to-door distance; the length is then without it.
+    pub spec_gap: Option<&'static str>,
+    /// The spec's numbers behind `depth_mm` include a catalogue or default
+    /// value (`EnclosureSpec::notice`): the length is an estimate.
+    pub estimate: bool,
+}
+
+/// Plate-to-door distance of a chosen enclosure: `Ok(None)` when the
+/// structure has no spec, `Err` names the missing field.
+fn door_gap(project: &Project, structure: StructureId) -> Result<Option<f64>, &'static str> {
+    let Some(s) = project.get::<novo_core::Structure>(structure) else {
+        return Ok(None);
+    };
+    let spec = novo_layout::spec::EnclosureSpec::read(&s.properties);
+    if spec.is_empty() {
+        return Ok(None);
+    }
+    let interior = spec.interior().map_err(|m| m.0)?;
+    let setback = spec.plate_setback.ok_or("plate setback")?;
+    Ok(Some((interior.depth - setback.value).max(0.0)))
 }
 
 /// The surface of a device's placement and what the structure offers
@@ -834,6 +997,9 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                         surface: a,
                         opening: None,
                         length_mm: length,
+                        depth_mm: 0.0,
+                        spec_gap: None,
+                        estimate: false,
                     },
                 );
             }
@@ -876,8 +1042,25 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                     to: job_to,
                     diameter_mm: c.diameter_mm,
                 });
+                let mut spec_gap = None;
+                let estimate = project.get::<novo_core::Structure>(s1).is_some_and(|st| {
+                    novo_layout::spec::EnclosureSpec::read(&st.properties)
+                        .notice()
+                        .is_some()
+                });
+                let depth = match door_gap(project, s1) {
+                    Ok(d) => d.unwrap_or(0.0),
+                    Err(field) => {
+                        spec_gap = Some(field);
+                        if !out.spec_gaps.iter().any(|(s, _)| *s == s1) {
+                            out.spec_gaps.push((s1, field));
+                        }
+                        0.0
+                    }
+                };
                 let leg = Point::new(passage.leave.0, passage.leave.1).manhattan(&off_end.pos)
-                    + rules.slack_mm;
+                    + rules.slack_mm
+                    + depth;
                 extra.push((c.id, leg));
                 out.surface_legs.insert(
                     c.id,
@@ -885,16 +1068,33 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                         surface,
                         opening: Some(passage.opening.name.clone()),
                         length_mm: leg,
+                        depth_mm: depth,
+                        spec_gap,
+                        estimate,
                     },
                 );
             }
         }
     }
     // Wires asked to stay out of some ducts (`route.avoid_ducts`).
+    // Plus the ducts whose stated category leaves the wire's kind out
+    // (`duct.carries`): the same soft preference, and only for ducts that
+    // state one.
+    let carries: BTreeMap<u64, Vec<RouteClass>> = project
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .map(|r| (r.id.raw(), duct_carries(&r.properties)))
+        .filter(|(_, c)| !c.is_empty())
+        .collect();
     let avoid: BTreeMap<u64, Vec<u64>> = project
         .wires()
         .filter_map(|w| {
-            let ducts = avoided_ducts(&w.properties);
+            let mut ducts = avoided_ducts(&w.properties);
+            if !carries.is_empty() {
+                ducts.extend(category_avoided(wire_route_class(project, w), &carries));
+                ducts.sort_unstable();
+                ducts.dedup();
+            }
             (!ducts.is_empty()).then_some((w.id.raw(), ducts))
         })
         .collect();
@@ -912,7 +1112,20 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         .collect();
     for (structure, jobs) in jobs {
         let p = plan_constrained(&network(project, structure), &jobs, rules, &avoid, &keep);
+        let weak_spec = project
+            .get::<novo_core::Structure>(structure)
+            .is_some_and(|s| {
+                novo_layout::spec::EnclosureSpec::read(&s.properties)
+                    .notice()
+                    .is_some()
+            });
+        let entry_spec = crate::entry::entry_from_spec(project, structure);
         for r in &p.routes {
+            let on_spec_duct = r.ducts.iter().any(|d| *d >= SPEC_DUCT_BASE);
+            let at_spec_entry = entry_spec && out.entry_legs.get(&r.job) == Some(&structure);
+            if weak_spec && (on_spec_duct || at_spec_entry) {
+                out.spec_estimate.insert(r.job);
+            }
             if out.cross_legs.contains_key(&r.job) {
                 out.cross_routes.insert((r.job, structure), r.clone());
             } else {
@@ -941,4 +1154,44 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         }
     }
     out
+}
+
+#[cfg(test)]
+mod category_tests {
+    use super::*;
+    use novo_core::{Properties, Value};
+
+    fn props(text: &str) -> Properties {
+        let mut p = Properties::default();
+        p.insert(DUCT_CARRIES.to_owned(), Value::Text(text.to_owned()));
+        p
+    }
+
+    #[test]
+    fn a_duct_without_a_category_carries_everything() {
+        assert!(duct_carries(&Properties::default()).is_empty());
+        assert!(duct_carries(&props("")).is_empty());
+        // Words that are not a kind are ignored, never an error.
+        assert!(duct_carries(&props("heavy")).is_empty());
+    }
+
+    #[test]
+    fn the_kinds_read_back_sorted_and_without_repeats() {
+        let v = duct_carries(&props(" Signal, power ,signal"));
+        assert_eq!(v, vec![RouteClass::Power, RouteClass::Signal]);
+    }
+
+    #[test]
+    fn only_ducts_that_state_a_category_without_the_kind_are_avoided() {
+        let carries: BTreeMap<u64, Vec<RouteClass>> = [
+            (1, vec![RouteClass::Power]),
+            (2, vec![RouteClass::Signal, RouteClass::Supply]),
+            (3, vec![]),
+        ]
+        .into();
+        assert_eq!(category_avoided(RouteClass::Signal, &carries), vec![1]);
+        assert_eq!(category_avoided(RouteClass::Power, &carries), vec![2]);
+        assert_eq!(category_avoided(RouteClass::Earth, &carries), vec![1, 2]);
+        assert!(category_avoided(RouteClass::Signal, &BTreeMap::new()).is_empty());
+    }
 }

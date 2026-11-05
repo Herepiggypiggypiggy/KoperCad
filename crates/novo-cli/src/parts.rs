@@ -52,6 +52,30 @@ pub(crate) enum Parts {
         #[arg(long, value_name = "FILE")]
         catalog: Option<PathBuf>,
     },
+    /// Check how well KoperCAD reads STEP models: for every `.stp`, `.step` or `.p21` file (also inside ZIPs) in a
+    /// folder, say whether it reads cleanly, what is approximated or missing, its
+    /// size, its product names and colours. Reads only; the files stay where they
+    /// are. Exit 1 when a file cannot be read.
+    StepHealth {
+        /// The folder of STEP files. Default: `KOPERCAD_STEP_SAMPLES`, else
+        /// `Documents\KoperCAD-tests\step-samples`.
+        dir: Option<PathBuf>,
+        /// Also write the report here as Markdown (`.md`).
+        #[arg(long, value_name = "FILE")]
+        report: Option<PathBuf>,
+    },
+    /// Split a STEP model into its parts and say what each one is (wheel, drum, hook block, ...),
+    /// guessed from its name, with its size. This is what the crane picture will use when you
+    /// give it your own crane model. Reads only; the file stays where it is. Exit 3 when it
+    /// cannot be read.
+    #[command(name = "step-parts")]
+    CraneModel {
+        /// The STEP file (`.stp`, `.step` or `.p21`).
+        file: PathBuf,
+        /// Also write the list here as Markdown (`.md`).
+        #[arg(long, value_name = "FILE")]
+        report: Option<PathBuf>,
+    },
     /// Which file to download from which maker, and what needs a login.
     Guide {
         #[command(flatten)]
@@ -145,6 +169,43 @@ pub(crate) fn run(cmd: Parts, out: &mut dyn Write) -> Result<i32, Failure> {
             let model = EtimModel::install(&path, &dir).map_err(|e| fail(exit::READ, e))?;
             print(out, &format!("Installed: {}", model.summary()))?;
             print(out, &format!("Kept in {}", dir.display()))?;
+            Ok(exit::OK)
+        }
+        Parts::StepHealth { dir, report } => {
+            let dir = dir
+                .or_else(novo_interop::part3d::health::default_samples_folder)
+                .ok_or_else(|| Failure::new(exit::READ, "no Documents folder; name a folder"))?;
+            if !dir.is_dir() {
+                return Err(Failure::new(
+                    exit::READ,
+                    format!("{} is not a folder", dir.display()),
+                ));
+            }
+            let results = novo_interop::part3d::health::health_of_folder(&dir);
+            let md = novo_interop::part3d::health::markdown_report(&results, &dir);
+            print(out, &md)?;
+            if let Some(path) = report {
+                std::fs::write(&path, &md).map_err(|e| fail(exit::WRITE, e))?;
+            }
+            let bad = results
+                .iter()
+                .any(|(_, h)| h.verdict == novo_interop::part3d::health::Verdict::Unreadable);
+            Ok(if bad { exit::PROBLEMS } else { exit::OK })
+        }
+        Parts::CraneModel { file, report } => {
+            let text = std::fs::read_to_string(&file).map_err(|e| fail(exit::READ, e))?;
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let (parts, _) = novo_interop::part3d::build::placed_parts(
+                &text,
+                &novo_interop::part3d::StepOptions::default(),
+                &cancel,
+            )
+            .map_err(|e| Failure::new(exit::READ, format!("{}: {e:?}", file.display())))?;
+            let md = novo_interop::part3d::crane_roles::parts_report(&parts);
+            print(out, &md)?;
+            if let Some(path) = report {
+                std::fs::write(&path, &md).map_err(|e| fail(exit::WRITE, e))?;
+            }
             Ok(exit::OK)
         }
         Parts::Guide { at } => {

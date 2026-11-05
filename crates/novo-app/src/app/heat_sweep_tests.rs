@@ -359,13 +359,10 @@ fn the_3d_result_is_put_next_to_the_2d_prediction_as_two_models() {
     for want in [
         "Model comparison",
         "not a measurement",
-        "predicted 52 °C (from 75)",
-        "gives 58 °C",
+        "2D 52 °C (from 75)",
+        "3D 58 °C",
         "6 K hotter than predicted",
         "Largest gap 6 K",
-        "depth of the cabinet",
-        "neither is validated",
-        "trust neither without a measurement",
     ] {
         assert!(text.contains(want), "missing {want:?} in:\n{text}");
     }

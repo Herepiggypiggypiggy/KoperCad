@@ -9,6 +9,7 @@
 //! Nothing here knows any particular add-on. With none installed the program shows one extra
 //! command ("Add-ons") and nothing else.
 
+use super::flags_shell::inline_flag;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -288,9 +289,12 @@ impl NovoApp {
         self.wb.addons.in_flight.retain(|(i, _), _| i != id);
         self.wb.addons.stopped.insert(id.to_owned(), why.clone());
         self.refresh_addons();
-        self.message(
-            Level::Warning,
-            format!("{name} stopped: {why}. Turn it off and on in Add-ons to start it again."),
+        self.job_flag(
+            &format!("addon.stopped.{id}"),
+            false,
+            "Add-on stopped",
+            format!("{name} stopped: {why}.\nTurn it off and on in Add-ons to start it again."),
+            Some("addons.manage"),
         );
     }
 
@@ -823,7 +827,7 @@ impl NovoApp {
                         ui.weak(format!("From the add-on {}", panel.addon_name));
                     }
                     Err(why) => {
-                        widgets::banner(ui, Tone::Error, why, |_| {});
+                        inline_flag(ui, true, false, "Panel did not draw", why);
                     }
                 });
             let local = panel
@@ -1027,11 +1031,21 @@ fn manager_ui(
         });
     });
     for warning in &set.warnings {
-        widgets::banner(ui, Tone::Warning, warning, |_| {});
+        inline_flag(ui, false, false, "Add-on list", warning);
     }
     if let Some((tone, text)) = &m.notice {
         let text = text.clone();
-        widgets::banner(ui, *tone, &text, |_| {});
+        match tone {
+            Tone::Error => {
+                inline_flag(ui, true, false, "Add-on action failed", &text);
+            }
+            Tone::Warning => {
+                inline_flag(ui, false, false, "Add-on notice", &text);
+            }
+            _ => {
+                widgets::banner(ui, *tone, &text, |_| {});
+            }
+        }
     }
     ui.add_space(space::S);
     if !can_store {
@@ -1228,11 +1242,12 @@ fn details_ui(
             }
             ui.add_space(space::M);
             if let Some(why) = stopped {
-                widgets::banner(
+                inline_flag(
                     ui,
-                    Tone::Error,
+                    true,
+                    false,
+                    "Stopped",
                     &format!("It stopped: {why}. Turn it off and on again to start it."),
-                    |_| {},
                 );
             }
             // A running engine: how much of its step budget its busiest call used, and a warning
@@ -1240,17 +1255,17 @@ fn details_ui(
             if let (Some((calls, peak, budget)), None) = (load, stopped) {
                 let (text, near) = novo_addons::budget_note(calls, peak, budget);
                 if near {
-                    widgets::banner(ui, Tone::Warning, &text, |_| {});
+                    inline_flag(ui, false, false, "Near its step budget", &text);
                 } else {
                     ui.weak(text);
                 }
             }
             match &entry.status {
                 Status::Incompatible(why) => {
-                    widgets::banner(ui, Tone::Warning, &format!("It is installed but off: {why}."), |_| {});
+                    inline_flag(ui, false, false, "Installed but off", &format!("It is installed but off: {why}."));
                 }
                 Status::Failed(why) => {
-                    widgets::banner(ui, Tone::Error, &format!("It did not load: {why}."), |_| {});
+                    inline_flag(ui, true, false, "Did not load", &format!("It did not load: {why}."));
                 }
                 _ => {}
             }
@@ -1409,7 +1424,7 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
     let (trust_text, tone, glyph) = trust_look(&package.trust, false);
     ui.label(egui::RichText::new(format!("{glyph} {trust_text}")).color(tone.color(p)));
     if let Compat::No(why) = &prompt.inspection.compat {
-        widgets::banner(ui, Tone::Warning, why, |_| {});
+        inline_flag(ui, false, false, "Does not fit this version", why);
     }
     ui.add_space(space::S);
     widgets::section_label(ui, "It asks to");
@@ -1433,7 +1448,7 @@ fn install_prompt_ui(ui: &mut egui::Ui, prompt: &mut Prompt, cancel: &mut bool, 
     if needs_tick {
         ui.add_space(space::M);
         if let Some(text) = tick_warning(&package.trust) {
-            widgets::banner(ui, Tone::Warning, &text, |_| {});
+            inline_flag(ui, false, false, "Signer not known", &text);
         }
         ui.checkbox(&mut prompt.tick, "I trust this file");
     }

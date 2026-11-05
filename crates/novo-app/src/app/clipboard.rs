@@ -236,7 +236,7 @@ impl NovoApp {
                 }
                 self.message(Level::Info, text);
             }
-            Err(e) => self.message(Level::Error, format!("Could not paste: {e}")),
+            Err(e) => self.refuse(Level::Error, format!("Could not paste: {e}")),
         }
     }
 }

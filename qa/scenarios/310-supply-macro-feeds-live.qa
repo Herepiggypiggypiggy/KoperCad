@@ -11,7 +11,7 @@ text "Star-delta starter"
 wait 10
 key Return
 wait 20
-click_text Place #2
+click_text Place #1
 wait 20
 key ctrl+k
 text "Three-phase supply"
@@ -19,7 +19,7 @@ wait 10
 key Return
 wait 20
 shot 01-picked
-click_text Place #2
+click_text Place #1
 wait 20
 # Six wires: L1 L2 L3, the control breaker, PE and N (the coil return rail).
 # With every entry joined the open-point warning clears, and that line
@@ -40,7 +40,7 @@ text "Three-phase supply"
 wait 10
 key Return
 wait 20
-click_text Place #2
+click_text Place #1
 wait 20
 expect "now wire its outputs"
 shot 04-supply-alone

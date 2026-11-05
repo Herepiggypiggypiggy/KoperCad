@@ -15,9 +15,11 @@ use novo_core::StructureId;
 use novo_interop::dxf::write_dxf;
 use novo_reports::{CsvOptions, Report, WireCut, wire_cut_csv, wire_cut_jobs};
 
+use super::Level;
+use super::NovoApp;
+use super::flags_wiring::{JobRetry, job};
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
-use super::{Level, NovoApp};
 
 impl NovoApp {
     /// Writes the wire-cut job file (CSV) next to the project.
@@ -45,8 +47,12 @@ impl NovoApp {
             ..CsvOptions::default()
         };
         let text = wire_cut_csv(&jobs, &options);
-        let written =
-            self.write_production(path, text.as_bytes(), &format!("{} wires", jobs.len()));
+        let written = self.write_production(
+            path,
+            text.as_bytes(),
+            &format!("{} wires", jobs.len()),
+            (job::WIRE_CUT, JobRetry::WireCut),
+        );
         if written.is_some() {
             self.learn_signal("wire_cut_exported");
         }
@@ -75,11 +81,19 @@ impl NovoApp {
         }
         let report = novo_reports::i18n::translate_output(&report, &self.report_translator());
         match novo_reports::xlsx_bytes(&[&report]) {
-            Ok(bytes) => self.write_production(path, &bytes, "wire production"),
+            Ok(bytes) => self.write_production(
+                path,
+                &bytes,
+                "wire production",
+                (job::WIRE_PRODUCTION, JobRetry::WireProduction),
+            ),
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not export wire production: {e}"),
+                self.wiring_job_flag(
+                    job::WIRE_PRODUCTION,
+                    true,
+                    "Wire production not exported",
+                    &e.to_string(),
+                    JobRetry::WireProduction,
                 );
                 None
             }
@@ -106,7 +120,12 @@ impl NovoApp {
             &self.wb.sheet_exports,
         );
         let text = write_dxf(&drawing);
-        self.write_production(&path, text.as_bytes(), "wiring plan")
+        self.write_production(
+            &path,
+            text.as_bytes(),
+            "wiring plan",
+            (job::WIRING_DXF, JobRetry::WiringDxf(structure)),
+        )
     }
 
     /// The wiring plan of the panel the Cabinet shows (Ctrl+K).
@@ -145,20 +164,34 @@ impl NovoApp {
             novo_reports::add_generated_pages(tx, std::slice::from_ref(&spec))
         }) {
             Ok(((), changes)) => {
+                self.job_clear(job::PRODUCTION_PAGE);
                 self.changed_outside_canvas(&changes);
                 self.message(
                     Level::Info,
                     format!("Added page {} {}", spec.name, spec.title),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
+            Err(e) => self.wiring_job_flag(
+                job::PRODUCTION_PAGE,
+                true,
+                "Wire production page not added",
+                &e.to_string(),
+                JobRetry::ProductionPage,
+            ),
         }
     }
 
-    fn write_production(&mut self, path: &Path, bytes: &[u8], what: &str) -> Option<PathBuf> {
+    fn write_production(
+        &mut self,
+        path: &Path,
+        bytes: &[u8],
+        what: &str,
+        job: (&'static str, JobRetry),
+    ) -> Option<PathBuf> {
         let replaced = path.exists();
         match write_replacing(path, bytes) {
             Ok(()) => {
+                self.job_clear(job.0);
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
                 self.message_file(format!("{verb} {what}: {}", path.display()), path);
@@ -166,9 +199,12 @@ impl NovoApp {
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not write {}: {e}", path.display()),
+                self.wiring_job_flag(
+                    job.0,
+                    true,
+                    "File not written",
+                    &format!("{}: {e}", path.display()),
+                    job.1,
                 );
                 None
             }

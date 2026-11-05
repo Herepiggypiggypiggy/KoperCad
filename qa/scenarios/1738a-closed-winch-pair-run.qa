@@ -19,14 +19,14 @@ wait 30
 shot before-pressing
 # Radio step 1 (S1) of the first winch commands both: each drive proves its torque, each drawn brake
 # contactor closes, both brakes open and the beam rises.
-mouse_down 123 330
+mouse_down 123 418
 wait 500
 shot torque-proof-and-brakes-open
 wait 800
 expect "running"
 expect_not "brake closed · 0 rpm"
 shot beam-rising
-mouse_up 123 330
+mouse_up 123 418
 wait 800
 expect "brake closed"
 check_layout

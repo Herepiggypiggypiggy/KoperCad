@@ -60,7 +60,7 @@ impl NovoApp {
         });
         match result {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Warning, format!("Part terminal offer: {e}")),
+            Err(e) => self.refuse(Level::Warning, format!("Part terminal offer: {e}")),
         }
     }
 
@@ -135,7 +135,7 @@ impl NovoApp {
                         self.message(Level::Info, "Renamed the terminals to the usual names")
                     }
                     Some(Err(e)) => {
-                        self.message(Level::Error, format!("Could not rename them: {e}"))
+                        self.refuse(Level::Error, format!("Could not rename them: {e}"))
                     }
                     None => {}
                 }

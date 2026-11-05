@@ -7,7 +7,7 @@ wait 40
 click_text Pages
 wait 20
 # The page rows are painted, not labelled: the row "0a Table of contents" of the Pages panel.
-click 142 313
+click 200 398
 wait 30
 shot 01-contents-page-open
 key ctrl+k
@@ -17,10 +17,14 @@ wait 8
 key Enter
 wait 20
 shot 02-place-macro-window
-click_text "Heater with thermostat"
+click 1205 103
+wait 4
+text heater with thermostat
+wait 8
+click_text "Heater with thermostat" Label
 wait 15
 shot 03-macro-picked
-click 66 417
+click_text Place Button
 wait 30
 expect "Placed Heater with thermostat"
 shot 04-placed-on-page-1

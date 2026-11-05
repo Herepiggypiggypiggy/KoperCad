@@ -742,23 +742,36 @@ fn conflicts_ui(ui: &mut egui::Ui, conflicts: &[Conflict], reveal: &mut Option<W
         return;
     }
     for c in conflicts {
-        let mark = match c.severity {
-            Severity::Error => "●",
-            Severity::Warning => "◐",
-            Severity::Info => "○",
-        };
         let kind = match c.kind {
-            ConflictKind::Duplicate => "duplicate",
-            ConflictKind::Split => "split",
-            ConflictKind::Partial => "partial",
-            ConflictKind::Unnumbered => "no number",
-            ConflictKind::OffScheme => "off scheme",
+            ConflictKind::Duplicate => "Duplicate number",
+            ConflictKind::Split => "Net split",
+            ConflictKind::Partial => "Partly numbered",
+            ConflictKind::Unnumbered => "No number",
+            ConflictKind::OffScheme => "Off scheme",
         };
-        if ui
-            .selectable_label(false, format!("{mark} {kind}: {}", c.message))
-            .clicked()
-        {
-            *reveal = c.wires.first().copied();
-        }
+        // This crate orders Info < Warning < Error, the other way round from
+        // novo-checks: the words go through the one mapping.
+        let word = match c.severity {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Info => "info",
+        };
+        let severity = super::flags_inline::severity_of(word);
+        let detail = [c.message.clone()];
+        ui.horizontal(|ui| {
+            match severity {
+                Some(s) => {
+                    let tri = super::flags_inline::triangle(ui, s, false, kind);
+                    super::flags_inline::detail_popup(&tri, &detail);
+                }
+                // Information has no triangle; keep the columns aligned.
+                None => {
+                    ui.allocate_space(egui::vec2(20.0, 20.0));
+                }
+            }
+            if ui.selectable_label(false, kind).clicked() {
+                *reveal = c.wires.first().copied();
+            }
+        });
     }
 }

@@ -22,7 +22,7 @@ wait 4
 click_text File #1
 wait 6
 shot menu-file
-move 110 412
+move 122 123
 wait 6
 shot menu-open-submenu
 expect "Recover a damaged project"

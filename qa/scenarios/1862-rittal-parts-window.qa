@@ -1,0 +1,22 @@
+@title Parts window: Import on a Rittal part opens the PARTcommunity hand-off with its steps
+@sizes 1366x768 1920x1080
+@area Parts
+# Where the user finds it: Parts window > select a Rittal part > Import.
+user_catalog qa/fixtures/rittal-parts.json
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text Parts
+wait 10
+key Return
+wait 20
+text 1500510
+wait 12
+key Down
+wait 8
+shot part-selected
+click_text Import
+wait 15
+expect "PARTcommunity"
+shot waiting-with-steps

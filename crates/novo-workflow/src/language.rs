@@ -423,6 +423,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("proposal.next", &[], &["volgend voorstel"]),
     nl("draw.tidy", &["opruimen", "netjes"], &["routes opruimen"]),
+    nl(
+        "place.list",
+        &["plaats lijst"],
+        &["onderdelenlijst plakken", "uit excel plaatsen"],
+    ),
     // Edit
     nl("edit.undo", &[], &["ongedaan maken", "terugdraaien"]),
     nl("edit.redo", &[], &["opnieuw uitvoeren"]),
@@ -646,6 +651,16 @@ pub const DUTCH: &[Aliases] = &[
         "heat.cooling_advice",
         &[],
         &["koeladvies", "ventilator plaatsen", "ventilatieroosters"],
+    ),
+    nl(
+        "heat.export_vtk",
+        &[],
+        &["warmteresultaat exporteren", "paraview export"],
+    ),
+    nl(
+        "heat.open_paraview",
+        &[],
+        &["warmteresultaat in paraview", "paraview openen"],
     ),
     nl(
         "heat.cooling_whatif",
@@ -1360,6 +1375,11 @@ pub const DUTCH: &[Aliases] = &[
         "report.plugs",
         &["connectorenlijst"],
         &["stekkers", "stekkerlijst"],
+    ),
+    nl(
+        "report.queries",
+        &["mijn rapporten", "eigen rapport"],
+        &["query", "eigen lijst"],
     ),
     nl(
         "report.singleline",

@@ -10,7 +10,7 @@ use novo_checks::standards::keys;
 use novo_core::{Project, Tx, Value, Wire, WireId};
 use novo_theme::widgets;
 
-use super::{Level, NovoApp};
+use super::NovoApp;
 use crate::app::inspector::INSPECTOR_WIDTH;
 
 /// What the panel shows for one wire.
@@ -28,6 +28,11 @@ pub(super) struct WireFacts {
     pub length: String,
     /// Design current in amperes, empty when none stated.
     pub load: String,
+    /// Stated termination of end A and B (`ring M5`), empty for the proposal.
+    pub term_a: String,
+    pub term_b: String,
+    /// Text printed on the sleeve, empty for the wire number.
+    pub sleeve: String,
 }
 
 fn text_of(value: Option<&Value>) -> String {
@@ -55,6 +60,9 @@ pub(super) fn facts(project: &Project, wire: WireId) -> Option<WireFacts> {
         grouped: text_of(w.properties.get(keys::GROUPED_CIRCUITS)),
         length: text_of(w.properties.get(calc::LENGTH_M)),
         load: text_of(w.properties.get(calc::LOAD_CURRENT_A)),
+        term_a: text_of(w.properties.get(novo_reports::TERMINATION_A_KEY)),
+        term_b: text_of(w.properties.get(novo_reports::TERMINATION_B_KEY)),
+        sleeve: text_of(w.properties.get(novo_reports::SLEEVE_TEXT_KEY)),
     })
 }
 
@@ -71,6 +79,29 @@ pub(super) enum WireEdit {
     Length(String),
     /// Design (load) current in amperes; empty clears it.
     Load(String),
+    /// Termination of end A or B as stored (`ring M5`); empty clears it.
+    TerminationA(String),
+    TerminationB(String),
+    /// Sleeve text; empty prints the wire number again.
+    Sleeve(String),
+}
+
+impl WireEdit {
+    /// The id of the field this edit comes from.
+    pub(super) fn field(&self) -> &'static str {
+        match self {
+            WireEdit::Colour(_) => "wire_colour",
+            WireEdit::Section(_) => "wire_section",
+            WireEdit::Method(_) => "wire_method",
+            WireEdit::Insulation(_) => "wire_insulation",
+            WireEdit::Grouped(_) => "wire_grouped",
+            WireEdit::Length(_) => "wire_length",
+            WireEdit::Load(_) => "wire_load",
+            WireEdit::TerminationA(_) => "wire_size_a",
+            WireEdit::TerminationB(_) => "wire_size_b",
+            WireEdit::Sleeve(_) => "wire_sleeve",
+        }
+    }
 }
 
 /// A positive number as a property value; empty clears it.
@@ -107,6 +138,13 @@ pub(super) fn apply(tx: &mut Tx<'_>, wires: &[WireId], edit: &WireEdit) -> Resul
                 tx.update::<Wire>(wire, |w| w.cross_section_mm2 = value)
                     .map_err(|e| e.to_string())?;
             }
+            WireEdit::TerminationA(text) => {
+                set_text(tx, wire, novo_reports::TERMINATION_A_KEY, text)?;
+            }
+            WireEdit::TerminationB(text) => {
+                set_text(tx, wire, novo_reports::TERMINATION_B_KEY, text)?;
+            }
+            WireEdit::Sleeve(text) => set_text(tx, wire, novo_reports::SLEEVE_TEXT_KEY, text)?,
             WireEdit::Method(text) => set_text(tx, wire, keys::INSTALLATION_METHOD, text)?,
             WireEdit::Insulation(text) => set_text(tx, wire, keys::INSULATION, text)?,
             WireEdit::Length(text) => {
@@ -157,6 +195,11 @@ pub(super) struct WirePanel {
     grouped: String,
     length: String,
     load: String,
+    sleeve: String,
+    size_a: String,
+    size_b: String,
+    /// The fields whose last edit was refused, each with its flag.
+    pub(super) errors: super::flags_wiring::FieldFlags,
 }
 
 const METHODS: [(&str, &str); 4] = [
@@ -165,6 +208,71 @@ const METHODS: [(&str, &str); 4] = [
     ("B2", "B2: multicore in conduit"),
     ("C", "C: clipped or on a tray"),
 ];
+
+/// The size part of a stored termination (`ring M5` gives `M5`).
+fn term_size(stored: &str) -> String {
+    novo_reports::Termination::parse(stored)
+        .map(|t| t.size)
+        .unwrap_or_default()
+}
+
+/// One end's termination: the kind from a list ("Proposed" clears it) and
+/// the size beside it. Either change stores `kind size`.
+#[allow(clippy::too_many_arguments)]
+fn termination_row(
+    ui: &mut egui::Ui,
+    edits: &mut Vec<WireEdit>,
+    label: &str,
+    id: &str,
+    stored: &str,
+    size: &mut String,
+    end_b: bool,
+    fields: &mut super::flags_wiring::Fields,
+) {
+    use novo_reports::{Termination, TerminationKind};
+    let wrap = move |text: String| {
+        if end_b {
+            WireEdit::TerminationB(text)
+        } else {
+            WireEdit::TerminationA(text)
+        }
+    };
+    let current = Termination::parse(stored);
+    ui.horizontal(|ui| {
+        ui.label(label);
+        egui::ComboBox::from_id_salt(format!("{id}_kind"))
+            .selected_text(current.as_ref().map_or("Proposed", |t| t.kind.label()))
+            .show_ui(ui, |ui| {
+                if ui.selectable_label(current.is_none(), "Proposed").clicked() {
+                    size.clear();
+                    edits.push(wrap(String::new()));
+                }
+                for kind in TerminationKind::PICKABLE {
+                    let on = current.as_ref().is_some_and(|t| t.kind == kind);
+                    if ui.selectable_label(on, kind.label()).clicked() && !on {
+                        edits.push(wrap(Termination::new(kind, size).stored()));
+                    }
+                }
+            });
+        if let Some(t) = current.as_ref().filter(|t| t.kind != TerminationKind::Bare) {
+            let hint = match t.kind {
+                TerminationKind::Ferrule => "A1.5-10",
+                TerminationKind::Spade => "6.3",
+                _ => "M5",
+            };
+            let r = ui.add(
+                egui::TextEdit::singleline(size)
+                    .id(egui::Id::new(id))
+                    .hint_text(format!("e.g. {hint}"))
+                    .desired_width(70.0),
+            );
+            if should_commit(r.lost_focus(), size, &term_size(stored)) {
+                edits.push(wrap(Termination::new(t.kind, size).stored()));
+            }
+        }
+        fields.mark(ui, id);
+    });
+}
 
 /// Whether leaving a field commits: only when its text really changed, so
 /// tabbing through never overwrites other selected wires or makes an empty
@@ -184,6 +292,7 @@ fn text_row(
     shown: &str,
     hint: &str,
     edit: fn(String) -> WireEdit,
+    fields: &mut super::flags_wiring::Fields,
 ) {
     ui.horizontal(|ui| {
         ui.label(label);
@@ -197,6 +306,7 @@ fn text_row(
         if should_commit(r.lost_focus(), value, shown) {
             edits.push(edit(value.clone()));
         }
+        fields.mark(ui, id);
     });
 }
 
@@ -206,6 +316,7 @@ impl NovoApp {
     pub(super) fn wire_panel(&mut self, ctx: &egui::Context, canvas: egui::Rect) -> bool {
         let wires = self.selected_wires();
         let Some(&first) = wires.first() else {
+            self.wire_fields_clear();
             return false;
         };
         let Some(shown) = self
@@ -215,6 +326,9 @@ impl NovoApp {
         else {
             return false;
         };
+        if self.wb.wire_panel.wire != Some(first) {
+            self.wire_fields_clear();
+        }
         let panel = &mut self.wb.wire_panel;
         if panel.wire != Some(first) {
             *panel = WirePanel {
@@ -235,6 +349,9 @@ impl NovoApp {
             ("wire_grouped", &mut panel.grouped, &shown.grouped),
             ("wire_length", &mut panel.length, &shown.length),
             ("wire_load", &mut panel.load, &shown.load),
+            ("wire_sleeve", &mut panel.sleeve, &shown.sleeve),
+            ("wire_size_a", &mut panel.size_a, &term_size(&shown.term_a)),
+            ("wire_size_b", &mut panel.size_b, &term_size(&shown.term_b)),
         ] {
             if focused != Some(egui::Id::new(id)) {
                 field.clone_from(value);
@@ -250,8 +367,15 @@ impl NovoApp {
             panel.length.clone(),
             panel.load.clone(),
         );
+        let (mut sleeve, mut size_a, mut size_b) = (
+            panel.sleeve.clone(),
+            panel.size_a.clone(),
+            panel.size_b.clone(),
+        );
         let mut method = shown.method.clone();
         let mut insulation = shown.insulation.clone();
+        let mut fields =
+            super::flags_wiring::Fields::of(&self.wb.flags.store, &self.wb.wire_panel.errors);
         super::panel::Panel::new(
             "inspector",
             "Inspector",
@@ -299,8 +423,17 @@ impl NovoApp {
                         });
                     }
                     widgets::section_label(ui, "Conductor");
-                    text_row(ui, &mut edits, "Colour", "wire_colour", &mut colour, &shown.colour, "BK, BU, GNYE", WireEdit::Colour);
-                    text_row(ui, &mut edits, "Section mm²", "wire_section", &mut section, &shown.section, "2.5", WireEdit::Section);
+                    text_row(ui, &mut edits, "Colour", "wire_colour", &mut colour, &shown.colour, "BK, BU, GNYE", WireEdit::Colour, &mut fields);
+                    text_row(ui, &mut edits, "Section mm²", "wire_section", &mut section, &shown.section, "2.5", WireEdit::Section, &mut fields);
+                    widgets::section_label(ui, "Wire ends");
+                    for (label, id, stored, size, end_b) in [
+                        ("End A", "wire_size_a", &shown.term_a, &mut size_a, false),
+                        ("End B", "wire_size_b", &shown.term_b, &mut size_b, true),
+                    ] {
+                        termination_row(ui, &mut edits, label, id, stored, size, end_b, &mut fields);
+                    }
+                    text_row(ui, &mut edits, "Sleeve text", "wire_sleeve", &mut sleeve, &shown.sleeve, "L1.1", WireEdit::Sleeve, &mut fields);
+                    super::dialog_ui::explained(ui, "Termination and sleeve text", "How each end is finished: ferrule, ring, fork, spade, pin or bare, and its size (M5, 6.3). Blank is what the bench proposes: a ferrule when the size is known. The crimp list in Reports > Bench output counts them. Sleeve text is printed on the sleeve instead of the wire number; the wire number stays in the schedules. End A is the end the wire list names first.");
                     widgets::section_label(ui, "Current-carrying capacity");
                     ui.horizontal(|ui| {
                         ui.label("Installation");
@@ -333,10 +466,10 @@ impl NovoApp {
                                 }
                             });
                     });
-                    text_row(ui, &mut edits, "Grouped circuits", "wire_grouped", &mut grouped, &shown.grouped, "1", WireEdit::Grouped);
+                    text_row(ui, &mut edits, "Grouped circuits", "wire_grouped", &mut grouped, &shown.grouped, "1", WireEdit::Grouped, &mut fields);
                     widgets::section_label(ui, "Calculation inputs");
-                    text_row(ui, &mut edits, "Length m", "wire_length", &mut length, &shown.length, "20", WireEdit::Length);
-                    text_row(ui, &mut edits, "Load current A", "wire_load", &mut load, &shown.load, "14", WireEdit::Load);
+                    text_row(ui, &mut edits, "Length m", "wire_length", &mut length, &shown.length, "20", WireEdit::Length, &mut fields);
+                    text_row(ui, &mut edits, "Load current A", "wire_load", &mut load, &shown.load, "14", WireEdit::Load, &mut fields);
                     super::dialog_ui::explained(ui, "Blank means unknown, never guessed", "Voltage drop, cable rating and disconnection time are calculated from these (Check > Calculations). Blank means unknown, never guessed.");
                     super::dialog_ui::explained(ui, "No installation method: not rated, never guessed", "The standards check reads these. A wire with no installation method is not rated, never guessed; set a default for the project in Standards check.");
 
@@ -346,6 +479,7 @@ impl NovoApp {
         (panel.number, panel.colour, panel.section, panel.grouped) =
             (number, colour, section, grouped);
         (panel.length, panel.load) = (length, load);
+        (panel.sleeve, panel.size_a, panel.size_b) = (sleeve, size_a, size_b);
         match number_edit {
             Some(Some(text)) => self.set_wire_number(Some(&text)),
             Some(None) => self.unlock_wire_number(),
@@ -358,9 +492,16 @@ impl NovoApp {
             match doc.transact("Edit wires", |tx| {
                 apply(tx, &wires, &edit).map_err(novo_core::ModelError::Format)
             }) {
-                Ok(((), changes)) => self.changed_outside_canvas(&changes),
-                Err(e) => self.message(Level::Warning, format!("Wire: {e}")),
+                Ok(((), changes)) => {
+                    self.wire_field_clear(edit.field());
+                    self.changed_outside_canvas(&changes);
+                }
+                // The refusal is a triangle on the field, not a toast.
+                Err(e) => self.wire_field_flag(edit.field(), "Wire edit refused", e.to_string()),
             }
+        }
+        if let Some(asked) = fields.asked {
+            self.wb.flags.open = Some(asked);
         }
         true
     }

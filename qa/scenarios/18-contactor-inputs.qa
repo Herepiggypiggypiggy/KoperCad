@@ -3,7 +3,7 @@
 @sizes 1366x768
 open_starter_example
 wait 30
-click 353 228
+click 358 246
 wait 40
 shot contactor-inspector
 expect_not "Trip curve"

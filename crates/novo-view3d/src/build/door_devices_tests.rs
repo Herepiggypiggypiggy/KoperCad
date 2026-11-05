@@ -73,6 +73,7 @@ fn scene(door_x: f64) -> Scene {
                 hinge: HingeSide::Left,
                 open_deg: 0.0,
             }),
+            body: None,
         },
         ..Options::default()
     };

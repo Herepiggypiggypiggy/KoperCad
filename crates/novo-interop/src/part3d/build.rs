@@ -152,6 +152,64 @@ pub fn step_soup_checked(
     Ok((total, stats, unit_unknown))
 }
 
+/// One placed solid of a STEP file with the name the file gives it.
+#[derive(Debug, Clone)]
+pub struct PlacedPart {
+    /// The solid's name in the file (empty when it has none).
+    pub name: String,
+    /// Its triangles in model millimetres, placement applied.
+    pub soup: Soup,
+}
+
+/// Every placed solid as its own part, so that a model can be split into its pieces (wheel,
+/// drum, hook block, ...) instead of one lump. Parts are in file order.
+pub fn placed_parts(
+    text: &str,
+    opts: &StepOptions,
+    cancel: &AtomicBool,
+) -> Result<(Vec<PlacedPart>, StepStats), BuildError> {
+    let file = StepFile::parse(text)?;
+    let mut reader = Reader::new(&file, opts.chord_tol_mm);
+    let placed = placed_solids(&file, &reader, opts);
+    if placed.is_empty() {
+        return Err(BuildError::NoGeometry);
+    }
+    let mut stats = StepStats::default();
+    let mut soups: HashMap<u32, Soup> = HashMap::new();
+    let mut parts = Vec::new();
+    let mut triangles = 0usize;
+    for (solid, xf) in &placed {
+        if let Some(e) = opts.interrupted(cancel) {
+            return Err(e);
+        }
+        if !soups.contains_key(solid) {
+            let s = solid_soup(&file, &mut reader, *solid, opts, cancel, &mut stats)?;
+            soups.insert(*solid, s);
+            stats.solids += 1;
+        }
+        let mut soup = Soup::default();
+        soup.append(&soups[solid], xf);
+        stats.placements += 1;
+        triangles += soup.tris.len();
+        if triangles > 4_000_000 {
+            return Err(BuildError::TooComplex);
+        }
+        if soup.tris.is_empty() {
+            continue;
+        }
+        let name = file
+            .entity(*solid)
+            .and_then(|e| e.args().first().and_then(Param::as_text).map(str::to_owned))
+            .unwrap_or_default();
+        parts.push(PlacedPart { name, soup });
+    }
+    stats.raw_triangles = triangles as u32;
+    if parts.is_empty() {
+        return Err(BuildError::NoGeometry);
+    }
+    Ok((parts, stats))
+}
+
 /// Solids with the transform that places each use, in millimetres.
 fn placed_solids(file: &StepFile, reader: &Reader, opts: &StepOptions) -> Vec<(u32, Xf)> {
     let all_solids = || -> Vec<u32> {
@@ -395,6 +453,94 @@ fn solid_soup(
     Ok(soup)
 }
 
+/// Every B-rep face of every placed solid, in model millimetres, with the
+/// placements of assemblies applied. Tessellated (mesh-only) solids have no
+/// analytic faces and are skipped. The flag says whether a length unit was
+/// declared but could not be read.
+pub fn placed_faces(
+    text: &str,
+    opts: &StepOptions,
+    cancel: &AtomicBool,
+) -> Result<(Vec<super::brep::Face>, bool), BuildError> {
+    let file = StepFile::parse(text)?;
+    let mut reader = Reader::new(&file, opts.chord_tol_mm);
+    let placed = placed_solids(&file, &reader, opts);
+    if placed.is_empty() {
+        return Err(BuildError::NoGeometry);
+    }
+    let mut faces = Vec::new();
+    let mut per_solid: HashMap<u32, Vec<super::brep::Face>> = HashMap::new();
+    for (solid, xf) in &placed {
+        if let Some(e) = opts.interrupted(cancel) {
+            return Err(e);
+        }
+        if !per_solid.contains_key(solid) {
+            let mut list = Vec::new();
+            if let Some(e) = file.entity(*solid)
+                && !matches!(e.name(), "TESSELLATED_SOLID" | "TESSELLATED_SHELL")
+            {
+                let shells: Vec<u32> = match e.name() {
+                    "SHELL_BASED_SURFACE_MODEL" => {
+                        e.args().get(1).map(Param::refs).unwrap_or_default()
+                    }
+                    _ => e
+                        .args()
+                        .get(1)
+                        .and_then(Param::as_ref)
+                        .into_iter()
+                        .collect(),
+                };
+                for f in shells
+                    .iter()
+                    .filter_map(|&s| file.entity(s))
+                    .flat_map(|sh| sh.args().get(1).map(Param::refs).unwrap_or_default())
+                {
+                    if list.len() >= opts.max_faces {
+                        return Err(BuildError::TooComplex);
+                    }
+                    if let Some(face) = reader.face(f) {
+                        list.push(face);
+                    }
+                }
+            }
+            per_solid.insert(*solid, list);
+        }
+        faces.extend(per_solid[solid].iter().map(|f| place_face(f, xf)));
+        if faces.len() > opts.max_faces {
+            return Err(BuildError::TooComplex);
+        }
+    }
+    Ok((faces, reader.unit_unknown))
+}
+
+fn place_frame(f: &Frame, xf: &Xf) -> Frame {
+    Frame {
+        o: xf.apply(f.o),
+        x: xf.apply_dir(f.x),
+        y: xf.apply_dir(f.y),
+        z: xf.apply_dir(f.z),
+    }
+}
+
+fn place_face(face: &super::brep::Face, xf: &Xf) -> super::brep::Face {
+    use super::brep::Surface;
+    let surface = match face.surface {
+        Surface::Plane(f) => Surface::Plane(place_frame(&f, xf)),
+        Surface::Cylinder(f, r) => Surface::Cylinder(place_frame(&f, xf), r),
+        other => other,
+    };
+    super::brep::Face {
+        loops: face
+            .loops
+            .iter()
+            .map(|l| l.iter().map(|&p| xf.apply(p)).collect())
+            .collect(),
+        surface,
+        nurbs: face.nurbs.clone(),
+        same_sense: face.same_sense,
+    }
+}
+
 /// `TRIANGULATED_FACE(name, coordinates, pnmax, normals, link, pnindex, triangles)`
 fn triangulated_face(file: &StepFile, scale: f64, id: u32) -> Option<Soup> {
     let e = file.entity(id)?;
@@ -451,6 +597,25 @@ pub(crate) mod test_support {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placed_parts_carry_the_names_of_their_solids() {
+        let named =
+            block_step(MM).replace("MANIFOLD_SOLID_BREP('',", "MANIFOLD_SOLID_BREP('Wheel 1',");
+        assert_ne!(named, block_step(MM));
+        let opts = StepOptions::default();
+        let (parts, stats) = placed_parts(&named, &opts, &AtomicBool::new(false)).unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].name, "Wheel 1");
+        assert!(parts[0].soup.tris.len() >= 12);
+        assert_eq!(stats.solids, 1);
+        assert_eq!(
+            crate::part3d::crane_roles::role_of(&parts[0].name),
+            crate::part3d::crane_roles::CraneRole::Wheel
+        );
+        // A file that is not a STEP file has no parts.
+        assert!(placed_parts("nope", &opts, &AtomicBool::new(false)).is_err());
+    }
 
     /// A 10 x 20 x 30 mm block as an AP214-style manifold solid.
     pub(crate) fn block_step(unit: &str) -> String {

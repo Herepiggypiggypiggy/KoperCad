@@ -5,7 +5,7 @@ use eframe::egui;
 use novo_core::Value;
 use novo_symbols::Pack;
 
-use super::{Level, NovoApp};
+use super::NovoApp;
 
 impl NovoApp {
     /// The project's drawing standard; IEC when the project does not say.
@@ -38,7 +38,14 @@ impl NovoApp {
             tx.set_info(|i| i.rules.standard = id.to_owned())
         }) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Drawing standard: {e}")),
+            Err(e) => self.control_flag(
+                "project_settings",
+                "standard",
+                true,
+                "Standard not changed",
+                format!("Drawing standard: {e}"),
+                None,
+            ),
         }
     }
 
@@ -71,7 +78,14 @@ impl NovoApp {
         });
         match result {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Check rules: {e}")),
+            Err(e) => self.control_flag(
+                "project_settings",
+                "check_rules",
+                true,
+                "Check rules not saved",
+                format!("Check rules: {e}"),
+                None,
+            ),
         }
     }
 
@@ -90,7 +104,14 @@ impl NovoApp {
         }
         match doc.execute(plan.command()) {
             Ok(out) => self.changed_outside_canvas(&out.changes),
-            Err(e) => self.message(Level::Error, format!("Drawing standard: {e}")),
+            Err(e) => self.control_flag(
+                "project_settings",
+                "standard",
+                true,
+                "Standard not changed",
+                format!("Drawing standard: {e}"),
+                None,
+            ),
         }
     }
 
@@ -135,7 +156,14 @@ impl NovoApp {
         });
         match result {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("Project information: {e}")),
+            Err(e) => self.control_flag(
+                "project_settings",
+                "info",
+                true,
+                "Information not saved",
+                format!("Project information: {e}"),
+                None,
+            ),
         }
     }
 
@@ -157,6 +185,8 @@ impl NovoApp {
             .document()
             .map(|d| d.project().info().rules.standard.clone())
             .unwrap_or_default();
+        let mine = self.control_flags("project_settings");
+        let mut flag_asked = None;
         let mut apply = false;
         let mut tag_rule = self.project_property_is("tag.rule", "page-column");
         let mut structure_complete = self.project_property_is("structure.list", "complete");
@@ -213,11 +243,17 @@ impl NovoApp {
                         ));
                     }
                     ui.add_space(8.0);
+                    flag_asked = super::flags_shell::flag_row(ui, &mine);
                     if !stored.is_empty() && Pack::from_id(&stored).is_none() {
-                        ui.colored_label(
-                    crate::theme::ui_palette().warning,
-                    format!("This project says \"{stored}\", which this version does not know. It is shown as IEC."),
-                );
+                        super::flags_shell::inline_flag(
+                            ui,
+                            false,
+                            false,
+                            "Unknown standard",
+                            &format!(
+                                "This project says \"{stored}\", which this version does not know. It is shown as IEC."
+                            ),
+                        );
                     }
                     if let Some(plan) = &plan {
                         apply = switch_section(ui, plan, &mut marks);
@@ -321,8 +357,12 @@ or its Supply or External property is set.",
         if apply {
             self.switch_placed_symbols();
         }
+        if flag_asked.is_some() {
+            self.wb.flags.open = flag_asked;
+        }
         if modal.inner || modal.should_close() {
             self.wb.project_settings = false;
+            self.control_clear_all("project_settings");
         }
     }
 }

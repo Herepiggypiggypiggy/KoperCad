@@ -18,15 +18,15 @@ click_text "Start"
 wait 20
 key Home
 wait 30
-mouse_down 123 343
+mouse_down 123 359
 wait 150
 shot lifting
 wait 1800
 expect "slow-down switch"
 expect "final limit"
-expect "What the hoist run found"
+expect "What the run found"
 check_layout
 shot slowed-before-the-final-limit
-mouse_up 123 343
+mouse_up 123 359
 wait 300
 shot stopped

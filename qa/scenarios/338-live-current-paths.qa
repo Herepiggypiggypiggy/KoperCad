@@ -14,12 +14,12 @@ try click_text "Go to page 2 Control circuit"
 wait 20
 shot at-rest
 expect_not "Current paths"
-mouse_down 75 397
+mouse_down 123 413
 wait 20
 shot start-held
 expect "Current paths"
 check_layout
-mouse_up 75 397
+mouse_up 123 413
 wait 20
 shot start-released-sealed-in
 expect "Current paths"

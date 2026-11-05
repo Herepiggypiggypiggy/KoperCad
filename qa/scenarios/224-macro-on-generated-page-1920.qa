@@ -4,7 +4,7 @@
 # The Pages panel is already open in a wide window. Same check as scenario 223: the macro goes to page 1, not onto the contents table. The pictures are the evidence.
 open_starter_example
 wait 40
-click 136 300
+click 180 336
 wait 30
 shot 01-contents-page-open
 key ctrl+k
@@ -13,10 +13,14 @@ text place macro
 wait 8
 key Enter
 wait 20
-click_text "Heater with thermostat"
+click 1759 103
+wait 4
+text heater with thermostat
+wait 8
+click_text "Heater with thermostat" Label
 wait 15
 shot 02-macro-picked
-click_text Place #2
+click_text Place Button
 wait 30
 expect "Placed Heater with thermostat"
 shot 03-placed-on-page-1

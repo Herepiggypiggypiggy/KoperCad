@@ -463,24 +463,29 @@ impl NovoApp {
         // (hoist, true = reset the overload relay, false = let the motors cool down)
         let mut heat_action: Option<(String, bool)> = None;
         let running = hoist.active.is_some();
-        let notice = hoist.notice.clone();
+        let sim_flags = self.sim_flags_of(super::sim_flags::HOIST);
+        let mut flag_click = None;
         let names: Vec<String> = hoists.iter().map(|h| h.id.clone()).collect();
         // The Live card sits at the left edge and takes the buttons of the drawing: the window
         // opens at the right edge (the constraint pulls it inside) so neither covers the other.
         super::panel::dialog(ctx, "Hoist run", [560.0, 440.0])
+            // Docked, the window opens as tall as its slot: "Faults to try" opens below the
+            // readings and its "Clear faults" button was scrolled out of reach.
+            .tall()
             .default_pos([ctx.content_rect().max.x, 60.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
-                ui.label(
+                super::window_help::add(
+                    ui.ctx(),
                     "Press the buttons of the drawing in the live view: the contactors settle, \
                      the two-speed motor and its brake move the hook, and the limit switches you \
                      bound open their contacts at their height.",
                 );
-                ui.add_space(4.0);
                 if names.is_empty() {
-                    ui.weak(
-                        "No hoist yet. Select a motor and enter its hook load under \
-                         Mechanical load in the property sheet.",
+                    ui.weak("No hoist yet");
+                    super::window_help::add(
+                        ui.ctx(),
+                        "Select a motor and enter its hook load under Mechanical load in the property sheet.",
                     );
                 } else {
                     ui.label(format!("Hoists in this project: {}", names.join(", ")));
@@ -498,15 +503,12 @@ impl NovoApp {
                         start = true;
                     }
                     if !live_on {
-                        ui.weak("The run reads the live view (Shift+L).");
+                        ui.weak("Live is off");
+                        super::window_help::add(ui.ctx(), "The run reads the live view (Shift+L).");
                     }
                 });
-                for (level, text) in &notice {
-                    let w = match level {
-                        Level::Error => novo_theme::widgets::Level::Error,
-                        _ => novo_theme::widgets::Level::Warning,
-                    };
-                    novo_theme::widgets::banner(ui, w, text, |_| {});
+                if let Some(c) = super::sim_flags::strip(ui, &sim_flags) {
+                    flag_click = Some(c);
                 }
                 if !rows.is_empty() {
                     ui.separator();
@@ -576,25 +578,28 @@ impl NovoApp {
                     }
                 }
                 ui.separator();
-                ui.label(egui::RichText::new("Model, not measurement").strong());
+                ui.label(egui::RichText::new("Model, not measurement. Not a safety function.").strong());
+                let mut model = String::from("Model, not measurement:");
                 for line in novo_drive::motor::MOTOR_MODEL_LEAVES_OUT
                     .iter()
                     .chain(novo_drive::brake_system::FAMILY_MODEL_LEAVES_OUT)
                     .chain(novo_drive::hoist_thermal::THERMAL_MODEL_LEAVES_OUT)
                 {
-                    ui.weak(format!("\u{2022} {line}"));
+                    model.push_str(&format!("\n\u{2022} {line}"));
                 }
-                ui.weak(
-                    "\u{2022} Brake delays and torque are the numbers you enter; \
-                     speeds follow the nameplate fit, not a measured curve.",
+                model.push_str(
+                    "\n\u{2022} Brake delays and torque are the numbers you enter; \
+                     speeds follow the nameplate fit, not a measured curve.\n\
+                     \u{2022} Assumed from the drawing: motor speed 0 is the fine winding, any \
+                     other is coarse, and forward is up.\n\
+                     \u{2022} Limit heights are measured from where the hook starts.\n\
+                     \u{2022} Not a safety or compliance statement.",
                 );
-                ui.weak(
-                    "\u{2022} Assumed from the drawing: motor speed 0 is the fine winding, any \
-                     other is coarse, and forward is up.",
-                );
-                ui.weak("\u{2022} Limit heights are measured from where the hook starts.");
-                ui.weak("\u{2022} Not a safety or compliance statement.");
+                super::window_help::add(ui.ctx(), model);
             });
+        if flag_click.is_some() {
+            self.wb.flags.open = flag_click;
+        }
         if !open {
             self.wb.hoist.open = false;
         }
@@ -606,7 +611,10 @@ impl NovoApp {
             && let Some(m) = active.lp.hoists.iter_mut().find(|m| m.id == id)
             && let Err(why) = m.unit.set_faults(faults)
         {
-            self.wb.hoist.notice = vec![(Level::Warning, format!("{id}: {why}"))];
+            self.wb.hoist.notice = self.set_sim_notes(
+                super::sim_flags::HOIST,
+                vec![(Level::Warning, format!("{id}: {why}"))],
+            );
         }
         if let Some((id, reset)) = heat_action
             && let Some(active) = self.wb.hoist.active.as_mut()
@@ -627,7 +635,7 @@ impl NovoApp {
     }
 
     /// Builds the loop from the hoists of the project and checks their bindings.
-    fn start_hoist_run(&mut self) {
+    pub(super) fn start_hoist_run(&mut self) {
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -638,13 +646,23 @@ impl NovoApp {
                 Level::Warning,
                 "No hoist can run: see the notes above.".into(),
             ));
-            self.wb.hoist.notice = notes;
+            self.wb.hoist.notice = super::sim_flags::set_notes(
+                &mut self.wb.flags,
+                project,
+                super::sim_flags::HOIST,
+                notes,
+            );
             return;
         }
         let mut lp = match HoistLoop::new(StepConfig::default()) {
             Ok(lp) => lp,
             Err(why) => {
-                self.wb.hoist.notice = vec![(Level::Error, why.to_string())];
+                self.wb.hoist.notice = super::sim_flags::set_notes(
+                    &mut self.wb.flags,
+                    project,
+                    super::sim_flags::HOIST,
+                    vec![(Level::Error, why.to_string())],
+                );
                 return;
             }
         };
@@ -658,7 +676,12 @@ impl NovoApp {
                 .into_iter()
                 .map(|f| (Level::Warning, format!("{}: {}", f.module, f.message))),
         );
-        self.wb.hoist.notice = notes;
+        self.wb.hoist.notice = super::sim_flags::set_notes(
+            &mut self.wb.flags,
+            project,
+            super::sim_flags::HOIST,
+            notes,
+        );
         self.wb.hoist.active = Some(Active { lp, acc: 0.0 });
     }
 }
