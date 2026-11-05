@@ -29,6 +29,9 @@ wait_s 60
 click_text "Cooling advice"
 wait_s 90
 expect "Tightest margin"
+# At 1366 the advice window is as tall as its dock slot and the Add button is below its fold: scroll the list (just far enough for the winner's button, not to the last candidate; over the dock at 1366, over the 3D view at 1920 where it only zooms a little).
+scroll 1200 300 -250
+wait 6
 click_text "Add these two to Vents and fans"
 wait 10
 expect "Added"
@@ -36,6 +39,9 @@ shot added-before-3d-result
 # Auto is off, so the 3D run does not go again by itself: run it (Quick, as set above).
 click_text Simulate #2
 wait_s 400
+# Back to the top of the advice list, where the comparison block sits.
+scroll 1200 300 900
+wait 6
 expect "Model comparison"
 expect "not a measurement"
 shot comparison
