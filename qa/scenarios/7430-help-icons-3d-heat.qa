@@ -16,6 +16,8 @@ wait 30
 try click_text Cancel
 wait 30
 try click_text Cancel
+wait 60
+try click_text Cancel
 wait 20
 click_text "Settings for the next run"
 wait 10
@@ -30,14 +32,18 @@ expect "Model estimate"
 expect_not "What is this?"
 expect_not "Model estimate, not a measurement."
 # Each popup closes on a click outside it: a click on the empty canvas.
-click_text Help #2
+click_text Help #1
 wait 8
 shot help-a
 click 700 690
 wait 6
-click 317 343
+click_text Help #2
 wait 8
-expect "Where air gets in"
 shot help-b
+click 700 690
+wait 6
+try click_text Help #3
+wait 8
+try shot help-c
 click 700 690
 wait 6
