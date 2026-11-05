@@ -736,7 +736,15 @@ pub fn drill_plan(project: &Project, id: StructureId, project_name: &str) -> Opt
         .collect();
     let title = structure(project, id)?.tag.to_string();
     let table = crate::drill::drill_table(&layout, &features);
-    Some(plan(project_name, &title, &layout, &table, &basis, true))
+    let mut out = plan(project_name, &title, &layout, &table, &basis, true);
+    let st = structure(project, id)?;
+    let spec = crate::spec::EnclosureSpec::read(&st.properties);
+    let plate = st.plate.map(|p| crate::spec_output::PlateSize {
+        width: p.width,
+        height: p.height,
+    });
+    out.enclosure = crate::spec_output::drill_lines(&spec, plate);
+    Some(out)
 }
 
 /// The 1:1 drilling template sheets and drill table of an enclosure; `None`
