@@ -469,6 +469,9 @@ impl NovoApp {
         // The Live card sits at the left edge and takes the buttons of the drawing: the window
         // opens at the right edge (the constraint pulls it inside) so neither covers the other.
         super::panel::dialog(ctx, "Hoist run", [560.0, 440.0])
+            // Docked, the window opens as tall as its slot: "Faults to try" opens below the
+            // readings and its "Clear faults" button was scrolled out of reach.
+            .tall()
             .default_pos([ctx.content_rect().max.x, 60.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
