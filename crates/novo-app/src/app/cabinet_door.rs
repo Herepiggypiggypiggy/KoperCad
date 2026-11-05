@@ -159,9 +159,16 @@ impl DoorState {
         let top = ui.cursor().left_top();
 
         if layout.enclosure.is_none() {
-            ui.weak("Not stored yet: the inside size follows the plate until you apply it.");
+            ui.weak("Not stored");
+            super::window_help::add(
+                ui.ctx(),
+                "Not stored yet: the inside size follows the plate until you apply it.",
+            );
         }
-        ui.weak("Depth and door swing are checked against these. The plate is taken as centred.");
+        super::window_help::add(
+            ui.ctx(),
+            "Depth and door swing are checked against these. The plate is taken as centred.",
+        );
         ui.add_space(4.0);
         egui::Grid::new("cabinet_door_form")
             .num_columns(2)
@@ -260,7 +267,10 @@ impl DoorState {
                 for text in &layout.opening_problems {
                     line(ui, true, text.clone());
                 }
-                ui.weak("Set the inside size to see the top view and the checks.");
+                super::window_help::add(
+                    ui.ctx(),
+                    "Set the inside size to see the top view and the checks.",
+                );
             }
         }
         let card =
@@ -271,6 +281,8 @@ impl DoorState {
 }
 
 fn line(ui: &mut egui::Ui, bad: bool, text: String) {
+    // Results stay on the card, problems in the error colour and fine ones
+    // weak; only explanations go behind the "?".
     let style = theme::cabinet_style();
     let color = if bad {
         paint_color(style.error)

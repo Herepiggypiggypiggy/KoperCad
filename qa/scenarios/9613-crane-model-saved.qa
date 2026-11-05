@@ -1,0 +1,55 @@
+@title Crane model is kept in the project: file, an edited role and the bridge axis survive save and reopen
+@area Simulate
+@sizes 1366x768
+# Hoist in 3D with the synthetic STEP crane, one role changed in Parts and the bridge driven by an
+# axis. The project is saved, closed and opened again: the model, the role and the axis come back,
+# and the picture shows the moving model again.
+open qa/fixtures/travel-drive.novo
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 30
+answer_dialog qa/fixtures/crane-model/workshop-crane.stp
+click_text "Crane model…"
+wait 120
+expect "workshop-crane.stp"
+click_text "none"
+wait 10
+click_text "=A1+FLD-M1"
+wait 10
+expect "Bridge start"
+click_text "Parts"
+wait 30
+expect "Crane model parts"
+click_text "other"
+wait 10
+click_text "girder" #2
+wait 30
+expect_enabled "Guess from names"
+shot before-save
+answer_dialog ~/Documents/KoperCAD/crane-model-saved.kopercad
+key ctrl+shift+s
+wait 30
+expect_file ~/Documents/KoperCAD/crane-model-saved.kopercad 4000
+key ctrl+w
+wait 20
+open ~/Documents/KoperCAD/crane-model-saved.kopercad
+wait 40
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 120
+expect "workshop-crane.stp"
+expect "Bridge start"
+shot reopened
+click_text "Parts"
+wait 30
+expect "Crane model parts"
+expect_enabled "Guess from names"
+shot reopened-parts
+check_layout

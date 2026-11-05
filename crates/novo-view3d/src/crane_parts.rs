@@ -199,6 +199,13 @@ pub fn stretched(
     it
 }
 
+/// Whether `scene` asks for a crane part `library` lacks (so [`ensure`] would add one).
+pub fn lacks(library: &MeshLibrary, scene: &Scene) -> bool {
+    scene.items.iter().any(|it| {
+        matches!(it.shape, Shape::Part(k) if library.get(k).is_none() && Part::from_key(k).is_some())
+    })
+}
+
 /// Builds into `library` the crane parts `scene` asks for and it lacks. Returns whether it added any.
 pub fn ensure(library: &mut MeshLibrary, scene: &Scene) -> bool {
     let mut added = false;
