@@ -390,3 +390,57 @@ fn the_emc_record_lists_findings_with_what_to_do_and_writes_both_files() {
         assert!(std::fs::read(&path).unwrap().starts_with(magic), "{name}");
     }
 }
+
+/// Writes `qa/fixtures/enclosure-spec-wide.novo` and
+/// `qa/fixtures/enclosure-spec-small.novo`: the EMC cabinet fixture with two
+/// different chosen enclosures (synthetic catalogue numbers, no maker file),
+/// for scenarios 18900 and 18901. -T1 stands 230 mm deep.
+/// `cargo test -p novo-app --lib write_the_enclosure_spec_fixtures -- --ignored`
+#[test]
+#[ignore = "writes fixture files"]
+fn write_the_enclosure_spec_fixtures() {
+    use novo_layout::spec::{CatalogueRow, Field, Source};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures");
+    for (name, w, h, d) in [
+        ("wide", 1200.0, 1000.0, 400.0),
+        ("small", 900.0, 500.0, 240.0),
+    ] {
+        let mut project = novo_storage::ProjectFile::open(root.join("emc-cabinet.novo"))
+            .unwrap()
+            .load()
+            .unwrap();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        let drive = project
+            .devices()
+            .find(|x| x.tag.to_string().contains("T1"))
+            .map(|x| x.id)
+            .unwrap();
+        let mut spec = CatalogueRow {
+            article: format!("TEST-{}", name.to_uppercase()),
+            series: "Synthetic".into(),
+            width: w,
+            height: h,
+            depth: d,
+            wall: 2.0,
+            plate_article: String::new(),
+            source: "synthetic QA".into(),
+            terms: "none: invented numbers".into(),
+        }
+        .spec();
+        spec.plate_setback = Some(Field::new(20.0, Source::Catalogue));
+        let mut props = project.get::<Structure>(cab).unwrap().properties.clone();
+        spec.write(&mut props);
+        project
+            .transact("spec", |tx| {
+                for (k, v) in props {
+                    tx.set_property(cab, k, Some(v))?;
+                }
+                tx.set_property(drive, "depth_mm", Some(Value::Float(230.0)))?;
+                Ok(())
+            })
+            .unwrap();
+        let path = root.join(format!("enclosure-spec-{name}.novo"));
+        let _ = std::fs::remove_file(&path);
+        novo_storage::ProjectFile::create(&path, &project).unwrap();
+    }
+}

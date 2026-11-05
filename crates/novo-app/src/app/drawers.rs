@@ -70,7 +70,7 @@ impl NovoApp {
             && self.wb.cable_edit.picker.open
             && let Some(problem) = self.wb.part_catalog.ensure()
         {
-            self.message(Level::Error, problem);
+            self.job_flag("drawers.catalogue", true, "Parts catalogue", problem, None);
         }
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
@@ -302,7 +302,13 @@ impl NovoApp {
             return;
         };
         let Some(proposal) = novo_cables::proposal_for_wires(doc.project(), wires) else {
-            self.message(Level::Warning, "None of those wires lands on a device");
+            self.job_flag(
+                "drawers.cable",
+                false,
+                "No cable made",
+                "None of those wires lands on a device.",
+                None,
+            );
             return;
         };
         let (tag, name) = (proposal.tag.clone(), proposal.cable_type.name());
@@ -317,7 +323,13 @@ impl NovoApp {
                     format!("Cable {tag}: {name} on {} wires", wires.len()),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the cable: {e}")),
+            Err(e) => self.job_flag(
+                "drawers.cable",
+                true,
+                "Cable not added",
+                format!("Could not add the cable: {e}"),
+                None,
+            ),
         }
     }
 
@@ -339,7 +351,13 @@ impl NovoApp {
                 self.changed_outside_canvas(&changes);
                 self.message(Level::Info, format!("Accepted {summary}"));
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the cables: {e}")),
+            Err(e) => self.job_flag(
+                "drawers.cables",
+                true,
+                "Cables not added",
+                format!("Could not add the cables: {e}"),
+                None,
+            ),
         }
     }
 }

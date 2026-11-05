@@ -39,8 +39,8 @@ impl NovoApp {
             "New crane project",
             [novo_theme::dialog_width::MEDIUM, 0.0],
             |ui| {
-                super::dialog_ui::hint(
-                    ui,
+                super::window_help::add(
+                    ctx,
                     "Starts a project with the crane structure, the cover pages and a circuit \
 from the library on each page. You can change all of it afterwards.",
                 );
@@ -51,7 +51,7 @@ from the library on each page. You can change all of it afterwards.",
                 if widgets::segmented(ui, &mut units, &labels) {
                     options.hoist_units = units as u8 + 1;
                 }
-                super::dialog_ui::help(ui, "Each hoist unit gets its own cabinets and a page.");
+                super::window_help::add(ctx, "Each hoist unit gets its own cabinets and a page.");
                 super::dialog_ui::section(ui, "Hoist drive", false);
                 let mut hoist = drive_index(options.hoist_drive);
                 if widgets::segmented(ui, &mut hoist, &DRIVES) {
