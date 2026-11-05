@@ -1,0 +1,18 @@
+@title EMC-05: shield pigtail impedance is computed from the wire (no 1 nH per mm rule)
+@area Check
+@sizes 1366x768 1920x1080
+# The shields fixture has a 60 mm pigtail: 2e-7 * 0.06 * (ln(120) - 1) = 45.4 nH, 2.9 ohm at 10 MHz.
+open qa/fixtures/emc-cabinet-shields.novo
+wait 20
+key ctrl+k
+wait 6
+text emc check
+wait 8
+key Enter
+wait 30
+expect "EMC-05"
+scroll 360 400 -450
+wait 10
+expect "computed from a 2 mm wire"
+shot 01-pigtail-impedance
+check_layout

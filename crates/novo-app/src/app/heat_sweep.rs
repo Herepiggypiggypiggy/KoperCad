@@ -178,7 +178,7 @@ pub(super) fn key_of(
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (structure, project.revision(), ambient.to_bits()).hash(&mut h);
-    format!("{:?}", settings.vents).hash(&mut h);
+    format!("{:?}{:?}", settings.vents, settings.inside).hash(&mut h);
     for f in fans {
         (&f.name, f.airflow_m3h.to_bits()).hash(&mut h);
     }
@@ -443,7 +443,7 @@ impl CoolingAdvice {
             )
         };
         super::panel::dialog(ctx, "Cooling advice", [WINDOW_WIDTH, 0.0])
-            .tall_when_docked()
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
             // The list scrolls inside; the buttons below it stay in view. A
             // dock slot shorter than that scrolls the whole window rather than

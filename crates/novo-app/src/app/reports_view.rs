@@ -60,6 +60,8 @@ pub(crate) struct ReportsView {
     pub(super) template: Option<String>,
     /// The row counts of the list, worked out off the UI thread.
     counts: ListCounts,
+    /// The editor of the "My reports" report.
+    pub(super) queries: super::reports_queries::QueriesEditor,
 }
 
 type CountAnswer = Vec<(String, usize)>;
@@ -420,6 +422,10 @@ impl NovoApp {
             ui.colored_label(crate::theme::ui_palette().warning, note);
         }
         ui.separator();
+        if id == novo_reports::query::SavedQueries::ID {
+            self.queries_editor(ui);
+            ui.separator();
+        }
         // The single-line diagram shows its drawing first; its schedule tab
         // falls through to the table.
         let drawn = id == novo_reports::SingleLineDiagram::ID && self.single_line_view(ui);
@@ -805,7 +811,12 @@ impl NovoApp {
                     format!("Added page {} {}", spec.name, spec.title),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
+            Err(e) => self.job_fail(
+                "report.add_page",
+                "Report page not added",
+                Level::Error,
+                format!("Could not add the page: {e}"),
+            ),
         }
     }
 
@@ -874,7 +885,12 @@ impl NovoApp {
             ReportFormat::Excel => match novo_reports::xlsx_bytes(&translated) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    self.message(Level::Error, format!("Could not export to Excel: {e}"));
+                    self.job_fail(
+                        "export.report_excel",
+                        "Excel export failed",
+                        Level::Error,
+                        format!("Could not export to Excel: {e}"),
+                    );
                     return None;
                 }
             },
@@ -888,14 +904,18 @@ impl NovoApp {
         };
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
+                self.job_ok("export.report");
                 self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
+                self.job_fail_at(
+                    "export.report",
+                    "Report not written",
                     Level::Error,
                     format!("Could not write {}: {e}", path.display()),
+                    path,
                 );
                 None
             }
@@ -986,7 +1006,12 @@ impl NovoApp {
             None => match super::projects_dir() {
                 Some(dir) => dir,
                 None => {
-                    self.message(Level::Error, "Could not find the Documents folder");
+                    self.job_fail(
+                        "export.report",
+                        "Report not written",
+                        Level::Error,
+                        "Could not find the Documents folder",
+                    );
                     return None;
                 }
             },
@@ -1474,6 +1499,7 @@ fn empty_report_hint(id: &str) -> &'static str {
         "cables" | "cableschedule" => {
             "Nothing to list yet: no cable is drawn. Use the Cable tool to draw one between devices."
         }
+        "queries" => "No saved reports yet. Open Edit my reports above to write one.",
         _ => "Nothing to list yet",
     }
 }

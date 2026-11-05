@@ -1,0 +1,24 @@
+@title Wiring: a wire too large for its terminal is a red triangle on the wire end
+@area Check
+# T5: the fixture terminal takes 0.5-2.5 mm2 and a 6 mm2 wire is on it. The triangle sits on the pin the wire lands on, not on the whole wire or symbol; the Terminals drawer shows the same triangle in front of the Accepts figures; a click opens the popover with Locate and Waive.
+open qa/fixtures/connection-points.novo
+wait 30
+shot wire-end-on-drawing
+check_layout
+key ctrl+k
+text Terminals
+key Enter
+wait 10
+expect "Accepts"
+expect "Error: Wire size at terminal"
+shot wire-end-in-drawer
+check_layout
+click_text "Error: Wire size at terminal" Button
+wait 6
+expect "Locate"
+expect "Waive"
+shot wire-end-popover
+check_layout
+key Escape
+wait 4
+expect_not "Locate"

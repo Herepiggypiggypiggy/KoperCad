@@ -85,6 +85,7 @@
 //! | [`PlateTooBig`](ProblemKind::PlateTooBig) | error | A plate larger than the inside of its enclosure |
 //! | [`SafetyLevelNotMet`](ProblemKind::SafetyLevelNotMet) | error | A safety function whose achieved performance level is below the required one (ISO 13849-1 calculation aid) |
 //! | [`SafetyBinding`](ProblemKind::SafetyBinding) | warning | A safety function block bound to a device that is missing or states no reliability data |
+//! | [`EnclosureDataMissing`](ProblemKind::EnclosureDataMissing) | warning | A chosen enclosure whose record lacks a number the mechanical checks need (no silent default is used) |
 //! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows, or a device on the door that touches a wall or a plate device as the door opens |
 //! | [`Emc`](ProblemKind::Emc) | per rule | An EMC design rule is not met (novo-emc, rules EMC-01..); opt-in with the project property `emc.check`. A design aid, never a compliance statement |
 //!
@@ -369,6 +370,9 @@ pub enum ProblemKind {
     /// The open door needs more room in front or beside the hinge side than
     /// the enclosure's stated free room.
     DoorSwing,
+    /// A chosen enclosure (its `encl.` record) lacks a number the door and
+    /// depth checks need; they use the typed values, if any, and say so.
+    EnclosureDataMissing,
     /// An EMC design rule is not met (novo-emc). Only produced for projects
     /// that turned the EMC check on (`emc.check`). Each problem carries its
     /// rule id (`EMC-01`) in [`Problem::rule`] and its own severity.
@@ -377,7 +381,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 76] = [
+    pub const ALL: [ProblemKind; 77] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -423,6 +427,7 @@ impl ProblemKind {
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
         ProblemKind::DoorSwing,
+        ProblemKind::EnclosureDataMissing,
         ProblemKind::Emc,
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,
@@ -496,6 +501,7 @@ impl ProblemKind {
             | ProblemKind::FieldDeviceInCabinet
             | ProblemKind::DoorGapTight
             | ProblemKind::DoorSwing
+            | ProblemKind::EnclosureDataMissing
             | ProblemKind::WireNumber
             | ProblemKind::UntaggedDevice
             | ProblemKind::UnnamedTerminal
@@ -585,6 +591,7 @@ impl ProblemKind {
             ProblemKind::SafetyLevelNotMet => "Safety level not met",
             ProblemKind::SafetyBinding => "Safety function binding",
             ProblemKind::DoorSwing => "Door swing",
+            ProblemKind::EnclosureDataMissing => "Enclosure data missing",
             ProblemKind::Emc => "EMC",
             ProblemKind::AmbiguousInterruption => "Interruption branch",
             ProblemKind::WireNumber => "Wire number",
@@ -667,6 +674,7 @@ impl ProblemKind {
             ProblemKind::SafetyLevelNotMet => "check.safety_level",
             ProblemKind::SafetyBinding => "check.safety_binding",
             ProblemKind::DoorSwing => "check.door_swing",
+            ProblemKind::EnclosureDataMissing => "check.enclosure_data_missing",
             ProblemKind::Emc => "check.emc",
             ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
             ProblemKind::WireNumber => "check.wire_number",

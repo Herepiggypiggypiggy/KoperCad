@@ -7,6 +7,9 @@ click_text Reports
 wait 5
 click_text "Bench output..."
 wait 20
+expect "Calibrate printer"
+click_text "Calibrate printer"
+wait 3
 expect "Print scale check (PDF)"
 shot window
 check_layout

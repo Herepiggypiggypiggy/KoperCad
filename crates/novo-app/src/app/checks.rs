@@ -2,8 +2,7 @@
 //! outline's Issues mode and F8 / Shift+F8.
 
 use eframe::egui;
-use novo_canvas::model::item_id;
-use novo_canvas::{Mark, MarkKind};
+use novo_canvas::Mark;
 use novo_checks::{Problem, Severity, Summary};
 use novo_core::{AnyId, PageId, Project};
 use novo_xref::Place;
@@ -51,30 +50,8 @@ impl NovoApp {
             return Vec::new();
         }
         self.refresh_problems(true);
-        let Some(doc) = self.backend.document() else {
-            return Vec::new();
-        };
-        let project = doc.project();
-        let on_page = |id: &AnyId| match id {
-            AnyId::Symbol(s) => project.symbol(*s).is_some_and(|s| s.page == page),
-            AnyId::Wire(w) => project.wire(*w).is_some_and(|w| w.page == page),
-            _ => false,
-        };
-        // While a background run is catching up, the marks of the last
-        // finished one stay (they may be a revision old).
-        let problems = self.wb.problems.as_ref().map_or(&[][..], |(_, p)| p);
-        let mut marks = Vec::new();
-        for p in problems {
-            let kind = match p.severity {
-                Severity::Error => MarkKind::Error,
-                Severity::Warning => MarkKind::Warning,
-                Severity::Info => continue,
-            };
-            for id in p.at.iter().filter(|id| on_page(id)) {
-                marks.push(Mark::on(kind, item_id(*id)).with_text(p.message.clone()));
-            }
-        }
-        marks
+        // The triangles come from the flag store, which the same problems fill.
+        self.flag_marks(page)
     }
 
     /// The problems the person is shown: none while a lesson about something
@@ -169,12 +146,23 @@ impl NovoApp {
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
+    /// The design checks' counts plus the Cabinet's own flags (Place rules,
+    /// wiring openings): the one count the pill, the list and the Cabinet agree on.
+    pub(super) fn counted_summary(&mut self) -> Summary {
+        let mut summary = Summary::of(self.shown_problems());
+        let (red, yellow) = self.layout_counts();
+        summary.errors += red;
+        summary.warnings += yellow;
+        summary
+    }
+
     /// The issue pill: the counts; a click opens the outline's Issues mode.
     pub(super) fn issue_pill(&mut self, ui: &mut egui::Ui) {
         if !self.is_open() {
             return;
         }
-        let summary = Summary::of(self.shown_problems());
+        self.sync_flags();
+        let summary = self.counted_summary();
         let from_standards = standards_note(
             standards_findings(self.shown_problems()),
             summary.errors + summary.warnings,
@@ -323,7 +311,8 @@ impl NovoApp {
 
     fn issues_list_rows(&mut self, ui: &mut egui::Ui) -> bool {
         self.recovered_note(ui);
-        let summary = Summary::of(self.shown_problems());
+        self.sync_flags();
+        let summary = self.counted_summary();
         let counts = [summary.errors, summary.warnings, summary.infos];
         ui.horizontal_wrapped(|ui| {
             for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
@@ -352,9 +341,22 @@ impl NovoApp {
             .collect();
         problems.sort_by_key(|(_, p)| severity_rank(p.severity));
         let mut go = None;
+        // The Cabinet's own flags, in the same list: errors first.
+        let mut layout_rows: Vec<novo_flags::Flag> = self
+            .wb
+            .flags
+            .store
+            .list(false)
+            .into_iter()
+            .filter(|f| f.source == novo_flags::Source::Layout)
+            .filter(|f| filter[usize::from(f.severity != novo_flags::Severity::Red)])
+            .cloned()
+            .collect();
+        layout_rows.sort_by_key(|f| f.severity.rank());
+        let mut locate = None;
         self.waive_form(ui);
         let mut toggle = None;
-        if problems.is_empty() {
+        if problems.is_empty() && layout_rows.is_empty() {
             ui.weak(if summary.errors + summary.warnings + summary.infos == 0 {
                 "No issues"
             } else {
@@ -368,33 +370,56 @@ impl NovoApp {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 for (i, p) in &problems {
+                    let pal = crate::theme::ui_palette();
+                    let triangle = p.severity != Severity::Info;
                     let (mark, color) = match p.severity {
-                        Severity::Error => (
-                            novo_theme::icons::status::ERROR,
-                            crate::theme::ui_palette().error,
-                        ),
-                        Severity::Warning => (
-                            novo_theme::icons::status::WARNING,
-                            crate::theme::ui_palette().warning,
-                        ),
-                        Severity::Info => (
-                            novo_theme::icons::status::INFO,
-                            crate::theme::ui_palette().info,
-                        ),
+                        Severity::Error | Severity::Warning => ("", pal.text_primary),
+                        Severity::Info => (novo_theme::icons::status::INFO, pal.info),
                     };
                     let mut text = egui::text::LayoutJob::default();
                     let font = egui::TextStyle::Body.resolve(ui.style());
-                    text.append(
-                        &format!("{mark}  "),
-                        0.0,
-                        egui::TextFormat::simple(font.clone(), color),
-                    );
+                    if !mark.is_empty() {
+                        text.append(
+                            &format!("{mark}  "),
+                            0.0,
+                            egui::TextFormat::simple(font.clone(), color),
+                        );
+                    }
                     text.append(
                         &p.message,
                         0.0,
                         egui::TextFormat::simple(font, ui.visuals().text_color()),
                     );
-                    let row = ui.selectable_label(false, text);
+                    // The triangle has its own column; the text, wrapped or
+                    // not, starts after it.
+                    let row = ui
+                        .horizontal_top(|ui| {
+                            if triangle {
+                                let (slot, _) = ui.allocate_exact_size(
+                                    egui::vec2(20.0, 20.0),
+                                    egui::Sense::hover(),
+                                );
+                                novo_theme::widgets::flag_triangle(
+                                    ui.painter(),
+                                    slot.center(),
+                                    15.0,
+                                    p.severity == Severity::Error,
+                                    super::flags::is_unchecked(p.kind),
+                                    novo_theme::Palette::of(ui),
+                                );
+                            }
+                            // A horizontal layout never wraps: give the label a
+                            // top-down cell of the width left after the triangle,
+                            // so a long message wraps there as it did before.
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| ui.selectable_label(false, text),
+                            )
+                            .inner
+                        })
+                        .inner;
                     self.problem_flash(ui, *i, &row);
                     self.learn_row("issues.list", &p.message, row.rect);
                     if row.clicked() {
@@ -427,15 +452,7 @@ impl NovoApp {
                                 .clicked()
                             }
                         {
-                            match self.execute(fix.command) {
-                                Some(Ok(_)) => {
-                                    self.message(Level::Info, "Renamed to the usual pin names");
-                                }
-                                Some(Err(e)) => {
-                                    self.message(Level::Error, format!("Could not rename: {e}"));
-                                }
-                                None => {}
-                            }
+                            self.fix_pin_names(*i);
                             ui.close();
                         }
                         let waive = ui.button("Waive with a reason…");
@@ -460,6 +477,44 @@ impl NovoApp {
                         self.learn_row("issues.list", "Copy message", copy.rect);
                         if copy.clicked() {
                             ui.ctx().copy_text(p.message.clone());
+                            ui.close();
+                        }
+                    });
+                }
+                for f in &layout_rows {
+                    let text = format!("{}: {}", f.title, f.detail.0.join(" "));
+                    let row = ui
+                        .horizontal_top(|ui| {
+                            let (slot, _) = ui
+                                .allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+                            novo_theme::widgets::flag_triangle(
+                                ui.painter(),
+                                slot.center(),
+                                15.0,
+                                f.severity == novo_flags::Severity::Red,
+                                f.unchecked,
+                                novo_theme::Palette::of(ui),
+                            );
+                            let width = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| ui.selectable_label(false, text.clone()),
+                            )
+                            .inner
+                        })
+                        .inner;
+                    self.learn_row("issues.list", &text, row.rect);
+                    if row.clicked() {
+                        locate = Some(f.clone());
+                    }
+                    row.context_menu(|ui| {
+                        if ui.button("Go to").clicked() {
+                            locate = Some(f.clone());
+                            ui.close();
+                        }
+                        if ui.button("Copy message").clicked() {
+                            ui.ctx().copy_text(text.clone());
                             ui.close();
                         }
                     });
@@ -499,7 +554,11 @@ impl NovoApp {
         if let Some(i) = go {
             self.go_problem(i);
         }
-        go.is_some()
+        let located = locate.is_some();
+        if let Some(f) = locate {
+            self.locate_on_plate(&f);
+        }
+        go.is_some() || located
     }
 
     /// A soft highlight on the row of the problem just chosen (a click or
@@ -642,6 +701,32 @@ impl NovoApp {
         }
     }
 
+    /// Runs the pin-name fix of problem `index` as one undo step.
+    pub(super) fn fix_pin_names(&mut self, index: usize) {
+        let Some(problem) = self.shown_problems().get(index).cloned() else {
+            return;
+        };
+        let Some(fix) = self
+            .backend
+            .document()
+            .and_then(|d| novo_checks::pin_fix(d.project(), &problem))
+        else {
+            return;
+        };
+        match self.execute(fix.command) {
+            Some(Ok(_)) => self.message(Level::Info, "Renamed to the usual pin names"),
+            Some(Err(e)) => self.message(Level::Error, format!("Could not rename: {e}")),
+            None => {}
+        }
+    }
+
+    /// Sends problem `index` to Ask Claude (when the assistant is on).
+    pub(super) fn explain_problem(&mut self, index: usize) {
+        if let Some(p) = self.shown_problems().get(index).cloned() {
+            self.wb.assistant.ask_later(explain_question(&p));
+        }
+    }
+
     pub(super) fn step_problem(&mut self, forward: bool) {
         let n = self
             .shown_problems()
@@ -682,6 +767,13 @@ impl NovoApp {
             .map_or(0, |doc| doc.project().revision());
         self.wb.problem_flash = Some((index, std::time::Instant::now(), revision, false));
         let Some(page) = problem.page else {
+            // A problem of a mounting plate has no page: go to the plate.
+            if let Some(draft) = super::flags::draft(&problem) {
+                let flag = novo_flags::Flag::from_draft(draft);
+                if super::cabinet_flags::is_plate_flag(&flag) {
+                    self.locate_on_plate(&flag);
+                }
+            }
             return;
         };
         let symbol = problem.at.iter().find_map(|id| match id {

@@ -87,12 +87,21 @@ fn the_packet_has_a_cover_then_the_parts_and_the_cover_names_the_right_pages() {
     for n in &marks {
         assert!(*n >= 2 && *n <= pages.len(), "page {n} of {}", pages.len());
     }
-    let circuits = marks.iter().copied().max().unwrap();
+    // The circuit sheets are named on the cover and start on a page that shows them.
     assert!(
-        pages[circuits - 1].contains("Tag / wire") || pages[circuits - 1].contains("Step"),
-        "{}",
-        pages[circuits - 1]
+        marks
+            .iter()
+            .any(|n| pages[*n - 1].contains("Tag / wire") || pages[*n - 1].contains("Step")),
+        "no circuit sheet at a page the cover names"
     );
+    // The sign-off sheet is the last part, with its tick boxes and signature lines.
+    let last = pages.last().unwrap();
+    assert!(last.contains("Wiring sign-off"), "{last}");
+    assert!(
+        last.contains("Wired by") && last.contains("Signature"),
+        "{last}"
+    );
+    assert!(cover.contains("sign-off on the last page"), "{cover}");
 }
 
 #[test]

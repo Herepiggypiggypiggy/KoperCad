@@ -27,7 +27,15 @@ use super::view3d_wires::WireFacts;
 
 /// Basis texts that are not a measurement of the finished wire: the card
 /// says in words what is still missing.
-const WEAK_BASES: [&str; 4] = ["estimate", "free air", "routed, no depth", "door, no gap"];
+const WEAK_BASES: [&str; 7] = [
+    "estimate",
+    "free air",
+    "routed, no depth",
+    "door, no gap",
+    "~ door + depth (catalogue)",
+    "~ door, spec has no depth",
+    "~ routed (catalogue)",
+];
 
 /// How the length of one wire was found, as the wire list states it.
 #[derive(Debug, Clone, PartialEq)]
@@ -187,6 +195,18 @@ fn why(text: &str, gap: Gap) -> &'static str {
         }
         "door, no gap" => {
             "The part on the plate is routed; the gap to the door and the hinge loop are not in it."
+        }
+        "~ routed (catalogue)" => {
+            "Routed through a duct or to a cabinet entry whose position comes from catalogue or default numbers of the enclosure: an estimate, not a measurement of your cabinet."
+        }
+        "door + depth (spec)" => {
+            "The part on the plate is routed; the plate-to-door distance comes from the enclosure spec. The hinge loop is not in it."
+        }
+        "~ door + depth (catalogue)" => {
+            "The plate-to-door distance comes from catalogue or default numbers of the enclosure: an estimate, not a measurement of your cabinet. The hinge loop is not in it."
+        }
+        "~ door, spec has no depth" => {
+            "The enclosure's spec lacks a number for the plate-to-door distance, so the length is short by it. Complete the enclosure."
         }
         "cable length" => {
             "The cable's stated length: the whole cable as bought, stripped ends included."

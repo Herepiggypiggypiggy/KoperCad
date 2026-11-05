@@ -101,3 +101,7 @@ Severity: red = Error, yellow = Warning, as the code says today. Rows marked `?`
 | banner | `app/winch_scenarios.rs:321` | `result` | Warning | (text built in code) | P | yellow |
 | banner | `app/winch_scenarios.rs:418` | `winch_scenarios_window` | Error | (text built in code) | P | red |
 | toast | `app/winch_scenarios.rs:420` | `winch_scenarios_window` | Error | (text built in code) | P | red |
+
+## Lane T10 status (2026-11-04)
+
+Migrated to flags: drive_run.rs notes and banners (drive_hoists_of, closed_winches_of, closed_pairs_of, axes_of, drive_run_window, start_drive_run rows), hoist_run.rs (same rows), winch_scenarios.rs (run, colour kept for chart legend, level, result, window), simulate.rs (motor_start_window, show_run rows), controller_card.rs bindings_block (1047, 1084). Remaining rows: faults.rs, controller_import.rs, controller_card.rs (other), live.rs, live_anim.rs, motor_freq.rs, machine.rs, sim_chip.rs (T6). See t10/ROADMAP.md.

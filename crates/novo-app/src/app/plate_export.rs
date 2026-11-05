@@ -173,7 +173,22 @@ impl NovoApp {
             );
             return None;
         }
-        let file_name = format!("{name} {location} drill plan.pdf").replace(['/', '\\', ':'], "-");
+        // The chosen enclosure's article is part of the name, so plans of
+        // different enclosures never overwrite each other.
+        let article = {
+            let project = self.machine()?;
+            project
+                .structures()
+                .find(|s| s.enclosure && s.tag == location)
+                .map(|s| novo_layout::spec::EnclosureSpec::read(&s.properties).article)
+                .unwrap_or_default()
+        };
+        let file_name = if article.is_empty() {
+            format!("{name} {location} drill plan.pdf")
+        } else {
+            format!("{name} {location} {article} drill plan.pdf")
+        }
+        .replace(['/', '\\', ':'], "-");
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         let dir = match file.as_ref().and_then(|f| f.parent()) {
             Some(dir) => dir.to_owned(),

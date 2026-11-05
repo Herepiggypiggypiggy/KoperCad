@@ -6,8 +6,9 @@
 
 use std::path::{Path, PathBuf};
 
+use super::NovoApp;
+use super::flags_wiring::{JobRetry, job};
 use super::pdf::write_replacing;
-use super::{Level, NovoApp};
 
 impl NovoApp {
     /// The list as PDF bytes, or a warning when the project has no wire to run.
@@ -24,9 +25,12 @@ impl NovoApp {
             novo_pdf::wireit::export_wireit_pdf(&plan, &done, &name)
         };
         if bytes.is_none() {
-            self.message(
-                Level::Warning,
-                "No wires to run yet: draw wires between device pins in the schematic.",
+            self.wiring_job_flag(
+                job::WIRE_IT,
+                false,
+                "No wires to run yet",
+                "Draw wires between device pins in the schematic.",
+                JobRetry::WireIt,
             );
         }
         bytes
@@ -64,14 +68,18 @@ impl NovoApp {
         };
         match write_replacing(path, bytes) {
             Ok(()) => {
+                self.job_clear(job::WIRE_IT);
                 self.message_file(format!("{verb} {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not export the Wire-it list: {e}"),
+                self.wiring_job_flag(
+                    job::WIRE_IT,
+                    true,
+                    "Wire-it list not exported",
+                    &format!("{}: {e}", path.display()),
+                    JobRetry::WireIt,
                 );
                 None
             }

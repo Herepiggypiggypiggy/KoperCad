@@ -243,11 +243,14 @@ impl LayoutSearch {
         let mut open = true;
         let pal = crate::theme::ui_palette();
         super::panel::dialog(ctx, "Cooler layout", [WIDTH, 0.0])
-            .tall_when_docked()
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
             .scroll([false, true])
             .default_pos(at)
             .show(ctx, |ui| {
+                // Docked, the pane is narrower than the window asked for: nothing
+                // below may grow the column (the grid used to push the right edge out).
+                ui.set_max_width(ui.available_width());
                 super::heat_cooling::left_out_line(ui, self.left_out);
                 if let Some(run) = &self.run {
                     ui.horizontal(|ui| {
@@ -468,6 +471,7 @@ fn headline(s: &Suggestion) -> String {
 fn grid_of_numbers(ui: &mut egui::Ui, s: &Suggestion) {
     egui::Grid::new("cooler_layout_numbers")
         .num_columns(3)
+        .max_col_width(ui.available_width() * 0.5)
         .spacing([14.0, 2.0])
         .show(ui, |ui| {
             ui.label("");

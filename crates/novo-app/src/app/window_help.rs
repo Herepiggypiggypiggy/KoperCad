@@ -139,7 +139,7 @@ pub(super) fn title_button(
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_max_width(320.0);
-                    ui.add(egui::Label::new(text).wrap());
+                    novo_theme::widgets::help_text(ui, text);
                 });
             });
         let outside = clicked && !area.response.contains_pointer();

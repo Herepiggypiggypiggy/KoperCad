@@ -36,6 +36,7 @@ pub(super) enum DrawerAction {
     DeclineOne(u64),
     RestoreDeclined,
     Tab(Drawer),
+    Pass(super::parts_pass::PassAction),
     Lesson(String),
     Close,
 }
@@ -60,6 +61,8 @@ impl NovoApp {
         if !self.is_open() {
             return;
         }
+        // The rows read their triangles from the one flag store.
+        self.sync_flags();
         let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
         let selected = self.selection();
         self.sync_strip_follow();
@@ -69,7 +72,7 @@ impl NovoApp {
             && self.wb.cable_edit.picker.open
             && let Some(problem) = self.wb.part_catalog.ensure()
         {
-            self.message(Level::Error, problem);
+            self.job_flag("drawers.catalogue", true, "Parts catalogue", problem, None);
         }
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
@@ -89,6 +92,11 @@ impl NovoApp {
             Drawer::Cables => cable_proposals.len(),
             Drawer::Devices => 0,
         };
+        let pass = if tab == Drawer::Devices {
+            self.parts_pass_rows()
+        } else {
+            None
+        };
         let grouping = novo_terminals::grouping(project);
         let chip = match tab {
             Drawer::Terminals => self.learn.chip("terminals"),
@@ -96,6 +104,7 @@ impl NovoApp {
             Drawer::Devices => None,
         };
         let mut actions = Vec::new();
+        let mut flag_open: Option<(novo_flags::FlagId, egui::Pos2)> = None;
         // Controls for lessons to point at, registered after the panel.
         let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
         let panel = egui::Panel::bottom("drawer")
@@ -201,9 +210,10 @@ impl NovoApp {
                                     project,
                                     &view,
                                     &screen,
-                                    &selected,
+                                    (&selected, &self.wb.flags.store),
                                     &mut ticked,
                                     &mut toolbar,
+                                    &mut flag_open,
                                 ) {
                                     actions.push(DrawerAction::Go(Place {
                                         page: o.page,
@@ -235,8 +245,14 @@ impl NovoApp {
                             self.wb.drawer_cable,
                             (&cable_proposals, declined),
                             (&mut self.wb.cable_edit, &candidates),
+                            &self.wb.flags.store,
                             &mut actions,
                         );
+                    }
+                    Drawer::Devices if pass.is_some() => {
+                        if let Some((rows, cursor)) = &pass {
+                            super::parts_pass::pass_tab(ui, rows, *cursor, &mut actions);
+                        }
                     }
                     Drawer::Devices => {
                         let rows = device_rows(project, &selected);
@@ -255,6 +271,9 @@ impl NovoApp {
             if clicked {
                 self.learn_event(novo_learn::Event::Clicked(id));
             }
+        }
+        if flag_open.is_some() {
+            self.wb.flags.open = flag_open;
         }
         for action in actions {
             match action {
@@ -277,6 +296,7 @@ impl NovoApp {
                 DrawerAction::DeclineOne(key) => self.decline_one_cable(key),
                 DrawerAction::RestoreDeclined => self.restore_declined_cables(),
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
+                DrawerAction::Pass(a) => self.pass_action(a),
                 DrawerAction::Lesson(id) => self.learn_run_command_lesson(&id),
                 DrawerAction::Close => self.wb.drawer = None,
             }
@@ -290,7 +310,13 @@ impl NovoApp {
             return;
         };
         let Some(proposal) = novo_cables::proposal_for_wires(doc.project(), wires) else {
-            self.message(Level::Warning, "None of those wires lands on a device");
+            self.job_flag(
+                "drawers.cable",
+                false,
+                "No cable made",
+                "None of those wires lands on a device.",
+                None,
+            );
             return;
         };
         let (tag, name) = (proposal.tag.clone(), proposal.cable_type.name());
@@ -305,7 +331,13 @@ impl NovoApp {
                     format!("Cable {tag}: {name} on {} wires", wires.len()),
                 );
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the cable: {e}")),
+            Err(e) => self.job_flag(
+                "drawers.cable",
+                true,
+                "Cable not added",
+                format!("Could not add the cable: {e}"),
+                None,
+            ),
         }
     }
 
@@ -327,7 +359,13 @@ impl NovoApp {
                 self.changed_outside_canvas(&changes);
                 self.message(Level::Info, format!("Accepted {summary}"));
             }
-            Err(e) => self.message(Level::Error, format!("Could not add the cables: {e}")),
+            Err(e) => self.job_flag(
+                "drawers.cables",
+                true,
+                "Cables not added",
+                format!("Could not add the cables: {e}"),
+                None,
+            ),
         }
     }
 }
@@ -340,6 +378,7 @@ fn cables_tab(
     picked: Option<CableId>,
     (proposals, declined): (&[novo_cables::CableProposal], usize),
     (edit, candidates): (&mut CableEdit, &[Candidate]),
+    flags: &novo_flags::FlagStore,
     actions: &mut Vec<DrawerAction>,
 ) {
     let overview = novo_cables::overview(project);
@@ -400,7 +439,7 @@ fn cables_tab(
                 });
                 let mut changes = Vec::new();
                 header_controls(ui, project, shown, edit, &mut changes);
-                cable_controls(ui, project, shown, edit, candidates, &mut changes);
+                cable_controls(ui, project, shown, edit, candidates, flags, &mut changes);
                 let wires = candidate_wires(project, shown);
                 let record = project.cable(shown);
                 egui::Grid::new("cable_cores")

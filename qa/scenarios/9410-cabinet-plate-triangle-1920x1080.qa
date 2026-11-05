@@ -1,0 +1,30 @@
+@title Cabinet plate: a problem is a triangle on the plate, the pill counts it, Locate and Waive work (1920x1080)
+@area Cabinet
+@sizes 1920x1080
+# T1: the example's cabinet has one problem (the open door needs free room). It is a triangle on the plate frame; the Cabinet pill and the top bar count the same flag.
+open_starter_example
+wait 20
+click_text Cabinet #1
+wait 30
+shot plate-triangle
+check_layout
+expect "Warning: "
+# The pill is the top bar's pill for this plate; the old "1 problem" pill and the rule pill are gone.
+expect_not "1 problem"
+expect_not "rule problem"
+# A click on the triangle opens its popover (title, source badge, numbers, actions).
+click_text "Warning: " Button
+wait 8
+expect "Locate"
+expect "Waive"
+shot plate-popover
+check_layout
+key Escape
+wait 4
+expect_not "Locate"
+# Waive with a reason: the flag leaves the plate and the count.
+click_text "Warning: " Button
+wait 8
+click_text "Waive…" Button
+wait 8
+shot plate-waive-form

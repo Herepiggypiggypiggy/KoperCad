@@ -62,3 +62,8 @@ Severity: red = Error, yellow = Warning, as the code says today. Rows marked `?`
 | toast | `app/terminals.rs:155` | `set_strip_grouping` | Error | Could not change it: {e} | J | red |
 | toast | `app/terminals.rs:176` | `accept_terminals` | Error | Could not place the terminal: {e} | J | red |
 | toast | `app/terminals.rs:547` | `terminal_command` | Error | {label}: {e} | P | red |
+
+## Lane T8 status (2026-11-04)
+
+Done: `cable_controls.rs:224`, `plc_card.rs:298/447/462`, `plc_run.rs:298/299/308/313` (coloured, now triangle rows); `terminal_edit.rs:163/266/296/315/321/332`, `cable_cores.rs:375/386/438/462/573`, `plc.rs:43` (toast to refusal chip); `terminal_edit.rs:257` (red chip); rename dialog Taken/Empty rows; numbering Conflicts rows. Census ceiling: `app/problem_census_terminals.rs`.
+Open: all J rows (Could not ...: {e}) until the job chip lands; `plc_link.rs:111/154`, `plc_list.rs:50/65` (P-class import messages, to Job flags with T12).

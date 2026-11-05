@@ -37,3 +37,13 @@ Severity: red = Error, yellow = Warning, as the code says today. Rows marked `?`
 | coloured | `app/defects_card.rs:725` | `report_view` | Error | (text built in code) | P | red |
 | coloured | `app/defects_card.rs:741` | `report_view` | Warning | Not applied: {p} | P | yellow |
 | coloured | `app/defects_card.rs:753` | `report_view` | Error | ✗ {line}: {} | P | red |
+
+## Status after lane T13 (2026-11-04)
+
+All 25 rows are migrated. Census `problem_census_commissioning` (in `app/commissioning_flags_tests.rs`) is 0 for `Level::Error`, `Level::Warning` and the warning/error coloured sentences in `commissioning*.rs` and `defects_card.rs`.
+
+- `commissioning.rs:411` (state icon): failed check is a red triangle at the check row (flag), fallback icon is a plain warning glyph.
+- `:599`, `:865` to `:1145`, photos, redlines apply: job flags (`Source::Job`, `commissioning.*` keys) with Retry, drawn in the panel's job strip; away from the panel an Info line says where to look.
+- `:897`, `redlines_tab`, `:280`: yellow flags (open redline row, "Some redlines not applied" job flag).
+- `defects_card.rs`: rows with a leading triangle (`flag_rows::problem_row`). Reclassified N: "Different from a healthy plant" lines and the "Recording" line (results and state of the experiment, not problems). "Operate the circuit..." and "stored text is kept" were instruction text (T): the first is gone with the recording line, the second joined the damaged-text row.
+- `commissioning_test.rs` (not in the original scan): test sheet export failure is a job flag; "no wires to put on a test sheet" is an Info toast.

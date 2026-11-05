@@ -77,6 +77,8 @@ pub struct TravelMark {
 /// The moving numbers of one frame.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CraneState {
+    /// The two state lamps on the control box: brake and drive. `Off` when nothing reports.
+    pub lamps: [Lamp; 2],
     /// Bridge position along the runway, m.
     pub bridge_m: f32,
     /// Trolley position across the span, m.
@@ -95,18 +97,67 @@ pub struct CraneState {
     pub trolley_limits: Vec<TravelMark>,
 }
 
+/// A state lamp on the crane's control box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lamp {
+    /// Nothing reports: the lamp is dark.
+    #[default]
+    Off,
+    /// All well: brake released, drive running.
+    Green,
+    /// Held or waiting: brake applied while the drive is ready.
+    Amber,
+    /// Fault.
+    Red,
+}
+
+impl Lamp {
+    fn tint(self) -> [u8; 3] {
+        match self {
+            Lamp::Off => [48, 50, 56],
+            Lamp::Green => [60, 200, 90],
+            Lamp::Amber => [240, 170, 40],
+            Lamp::Red => [230, 60, 50],
+        }
+    }
+}
+
 /// Sizes of the generic crane parts, mm. One place so the tests and the builder agree.
 pub mod size {
+    /// Runway beam: an I-beam this high and `BEAM_FLANGE` wide, under a crane rail `RAIL_H` high.
     pub const BEAM: f32 = 400.0;
+    pub const BEAM_FLANGE: f32 = 300.0;
+    pub const RAIL_H: f32 = 70.0;
+    /// The runway beams stand on columns at most this far apart, and run this far past the ends
+    /// of the bridge's travel.
+    pub const COLUMN_PITCH: f32 = 6000.0;
+    pub const RUNWAY_OVERHANG: f32 = 1500.0;
     pub const GIRDER_DEPTH: f32 = 800.0;
-    pub const GIRDER_WIDTH: f32 = 300.0;
-    pub const TRUCK_LEN: f32 = 900.0;
-    pub const TRUCK_HEIGHT: f32 = 300.0;
-    pub const TROLLEY: [f32; 3] = [1400.0, 500.0, 1100.0];
+    pub const GIRDER_WIDTH: f32 = 560.0;
+    /// End truck: length along the runway, wheelbase, wheel diameter and tread width.
+    pub const TRUCK_LEN: f32 = 2400.0;
+    pub const TRUCK_WHEELBASE: f32 = 1800.0;
+    pub const TRUCK_WHEEL: f32 = 400.0;
+    pub const TRUCK_WHEEL_W: f32 = 100.0;
+    /// From the top of the runway beam to the top of the end truck, where the girder sits.
+    pub const TRUCK_HEIGHT: f32 = 600.0;
+    /// Trolley frame: across the girder (x), up, along it (z). It overhangs the girder on the
+    /// rope side, so the drum hangs beside the girder.
+    pub const TROLLEY: [f32; 3] = [1250.0, 500.0, 1100.0];
+    /// Where the trolley frame's middle is across the girder, from the girder's centre line.
+    pub const TROLLEY_SHIFT: f32 = 325.0;
+    /// Trolley rails on the girder top (each side of the centre line) and the trolley wheels.
+    pub const TROLLEY_GAUGE: f32 = 220.0;
+    pub const TROLLEY_WHEEL: f32 = 200.0;
+    pub const TROLLEY_WHEEL_W: f32 = 70.0;
+    /// Rope drum: diameter, (unused), length.
     pub const DRUM: [f32; 3] = [500.0, 500.0, 900.0];
     pub const ROPE: f32 = 24.0;
-    pub const BLOCK: [f32; 3] = [380.0, 520.0, 260.0];
-    pub const HOOK: [f32; 3] = [90.0, 260.0, 90.0];
+    /// The block: width (x), height, depth (z). Two falls hang from it, `FALL_SPACING` apart in z.
+    pub const BLOCK: [f32; 3] = [300.0, 520.0, 420.0];
+    pub const FALL_SPACING: f32 = 260.0;
+    pub const SHEAVE: f32 = 250.0;
+    pub const HOOK: [f32; 3] = [160.0, 330.0, 70.0];
     pub const FLAG: [f32; 3] = [260.0, 40.0, 40.0];
     /// An upright flag of a travel end limit: along the travel, up, across.
     pub const TRAVEL_FLAG: [f32; 3] = [400.0, 1400.0, 60.0];
@@ -127,9 +178,26 @@ const RAW_BLOCK: u64 = 10;
 const RAW_HOOK: u64 = 11;
 const RAW_LOAD: u64 = 12;
 const RAW_SLING: u64 = 13;
+const RAW_ROPE2: u64 = 14;
+const RAW_SHEAVE: u64 = 15;
+const RAW_SLING2: u64 = 17;
 const RAW_FLAG: u64 = 20;
+const RAW_RUNWAY_RAIL: u64 = 30;
+const RAW_WALKWAY: u64 = 32;
+const RAW_TROLLEY_RAIL: u64 = 34;
+const RAW_TRUCK_WHEEL: u64 = 40;
+const RAW_TROLLEY_WHEEL: u64 = 50;
+const RAW_TRUCK_DRIVE: u64 = 60;
+const RAW_HOIST_DRIVE: u64 = 70;
+const RAW_TROLLEY_DRIVE: u64 = 80;
+const RAW_PANEL: u64 = 90;
+const RAW_PLATE: u64 = 100;
+const RAW_BUFFER: u64 = 110;
+const RAW_MARK: u64 = 120;
+const RAW_LAMP: u64 = 130;
 const RAW_BRIDGE_FLAG: u64 = 1000;
 const RAW_TROLLEY_FLAG: u64 = 2000;
+const RAW_COLUMN: u64 = 3000;
 
 /// Length of the rope from the drum's underside to the top of the block, mm.
 pub fn rope_length_mm(layout: &CraneLayout, hook_m: f32) -> f32 {
@@ -195,24 +263,8 @@ fn boxed(raw: u64, kind: ItemKind, min: Vec3, extent: Vec3, tint: [u8; 3]) -> It
     item
 }
 
-/// A bar of square section `thick` from `a` to `b`, mm.
-fn bar(raw: u64, a: Vec3, b: Vec3, thick: f32, tint: [u8; 3]) -> Item {
-    let d = b - a;
-    let len = d.length().max(1.0);
-    let mut item = Item::new(
-        ItemId::new(ItemKind::Other, raw),
-        Shape::Box,
-        Pose {
-            translation: a,
-            rotation: Quat::from_rotation_arc(Vec3::Z, d / len),
-        },
-        Vec3::new(thick, thick, len),
-    );
-    item.tint = Some(tint);
-    item
-}
-
 const STEEL: [u8; 3] = [120, 130, 145];
+const RAIL_STEEL: [u8; 3] = [150, 156, 166];
 const GIRDER: [u8; 3] = [60, 110, 170];
 const YELLOW: [u8; 3] = [235, 190, 40];
 const BLOCK_OK: [u8; 3] = [235, 150, 40];
@@ -221,6 +273,16 @@ const FLOOR: [u8; 3] = [70, 72, 78];
 const LOAD: [u8; 3] = [150, 120, 90];
 const UPPER_FLAG: [u8; 3] = [220, 60, 50];
 const LOWER_FLAG: [u8; 3] = [230, 180, 50];
+const WHEEL: [u8; 3] = [104, 110, 120];
+const ROPE_STEEL: [u8; 3] = [78, 80, 86];
+const MOTOR: [u8; 3] = [48, 62, 92];
+const GEARBOX: [u8; 3] = [92, 98, 108];
+const MARKING: [u8; 3] = [226, 190, 40];
+const CONCRETE: [u8; 3] = [150, 150, 146];
+const PANEL: [u8; 3] = [196, 200, 204];
+
+use crate::crane_parts::{Part, item as part_item, mm, stretched};
+use std::f32::consts::FRAC_PI_2;
 
 /// The scene for one frame.
 pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
@@ -235,71 +297,352 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         height: rail,
     });
     let mut push = |item: Item| scene.push(item);
+    let other = ItemKind::Other;
+    // Along +x, +y, and the quarter turns that lay a part's long z axis on them.
+    let z_to_x = Quat::from_rotation_y(FRAC_PI_2);
+    let z_to_y = Quat::from_rotation_x(-FRAC_PI_2);
 
     // Floor, a little larger than the runway.
     push(boxed(
         RAW_FLOOR,
         ItemKind::Plate,
-        Vec3::new(-1500.0, -60.0, -1500.0),
-        Vec3::new(runway + 3000.0, 60.0, span + 3000.0),
+        Vec3::new(-3000.0, -60.0, -3000.0),
+        Vec3::new(runway + 6000.0, 60.0, span + 6000.0),
         FLOOR,
     ));
-    // Runway beams along x at both ends of the span.
+    // Safety markings on the floor: a yellow line along the outside of each runway and across both
+    // ends, 4 mm proud of the floor so they never z-fight with it.
+    {
+        let (w, t) = (150.0, 4.0);
+        let (x_lo, x_hi) = (-2000.0, runway + 2000.0);
+        let (z_lo, z_hi) = (-1500.0, span + 1500.0);
+        let bars = [
+            (Vec3::new(x_lo, 0.0, z_lo), Vec3::new(x_hi - x_lo, t, w)),
+            (Vec3::new(x_lo, 0.0, z_hi - w), Vec3::new(x_hi - x_lo, t, w)),
+            (Vec3::new(x_lo, 0.0, z_lo), Vec3::new(w, t, z_hi - z_lo)),
+            (Vec3::new(x_hi - w, 0.0, z_lo), Vec3::new(w, t, z_hi - z_lo)),
+        ];
+        for (k, (min, ext)) in bars.into_iter().enumerate() {
+            push(boxed(
+                RAW_MARK + k as u64,
+                ItemKind::Plate,
+                min,
+                ext,
+                MARKING,
+            ));
+        }
+    }
+    // Runway beams along x at both ends of the span, with a crane rail on top and columns under
+    // them. They run past the bridge's travel so an end truck at the end still has beam under it.
+    let beam_len = runway + 2.0 * size::RUNWAY_OVERHANG;
+    let x0 = -size::RUNWAY_OVERHANG;
     for (k, z) in [0.0, span].into_iter().enumerate() {
-        push(boxed(
+        push(part_item(
             RAW_BEAM + k as u64 * 100,
-            ItemKind::Other,
-            Vec3::new(0.0, rail - size::BEAM, z - size::BEAM * 0.5),
-            Vec3::new(runway, size::BEAM, size::BEAM),
+            other,
+            Part::Beam {
+                h: mm(size::BEAM),
+                b: mm(size::BEAM_FLANGE),
+                len: mm(beam_len),
+            },
+            Vec3::new(x0, rail - size::BEAM * 0.5, z),
+            z_to_x,
             STEEL,
         ));
+        push(part_item(
+            RAW_RUNWAY_RAIL + k as u64,
+            other,
+            Part::Rail { len: mm(beam_len) },
+            Vec3::new(x0, rail, z),
+            z_to_x,
+            RAIL_STEEL,
+        ));
+        let col_h = (rail - size::BEAM).max(0.0);
+        if col_h > 200.0 {
+            let n = (beam_len / size::COLUMN_PITCH).ceil().max(1.0) as usize;
+            for c in 0..=n {
+                let x = x0 + beam_len * c as f32 / n as f32;
+                push(part_item(
+                    RAW_COLUMN + (k * 100 + c) as u64,
+                    other,
+                    Part::Beam {
+                        h: 300,
+                        b: 300,
+                        len: mm(col_h),
+                    },
+                    Vec3::new(x, 0.0, z),
+                    z_to_y,
+                    CONCRETE,
+                ));
+            }
+        }
     }
-    // End trucks and the girder across the span.
+    // End trucks (frame, wheels, drive, buffers) and the girder across the span.
     let girder_bottom = girder_bottom_mm(l);
+    let contact = rail + size::RAIL_H;
+    let wheel_r = size::TRUCK_WHEEL * 0.5;
+    let half_base = size::TRUCK_WHEELBASE * 0.5;
+    let truck = Part::Truck {
+        len: mm(size::TRUCK_LEN),
+        wheelbase: mm(size::TRUCK_WHEELBASE),
+        dia: mm(size::TRUCK_WHEEL),
+    };
+    let truck_wheel = Part::Wheel {
+        dia: mm(size::TRUCK_WHEEL),
+        w: mm(size::TRUCK_WHEEL_W),
+    };
     for (k, z) in [0.0, span].into_iter().enumerate() {
-        push(boxed(
+        let side = if k == 0 { -1.0 } else { 1.0 };
+        push(part_item(
             RAW_TRUCK + k as u64 * 100,
-            ItemKind::Other,
-            Vec3::new(bridge - size::TRUCK_LEN * 0.5, rail, z - size::BEAM * 0.5),
-            Vec3::new(size::TRUCK_LEN, size::TRUCK_HEIGHT, size::BEAM),
+            other,
+            truck,
+            Vec3::new(bridge, contact, z),
+            Quat::IDENTITY,
+            YELLOW,
+        ));
+        for (w, dx) in [-half_base, half_base].into_iter().enumerate() {
+            // A wheel turns once per circumference of travel: top forward, so about -z when
+            // the bridge goes towards +x.
+            let spin = Quat::from_rotation_z(-(bridge + dx) / wheel_r);
+            push(part_item(
+                RAW_TRUCK_WHEEL + (k * 2 + w) as u64,
+                other,
+                truck_wheel,
+                Vec3::new(bridge + dx, contact + wheel_r, z),
+                spin,
+                WHEEL,
+            ));
+        }
+        // The drive: gearbox on the outer side of one wheel, motor reaching back along the truck.
+        let gx = bridge + half_base;
+        let gz = z + side * 200.0;
+        push(part_item(
+            RAW_TRUCK_DRIVE + k as u64 * 2,
+            other,
+            Part::Gearbox {
+                w: 280,
+                h: 250,
+                l: 200,
+            },
+            Vec3::new(gx, contact + wheel_r, gz),
+            Quat::from_rotation_y(FRAC_PI_2),
+            GEARBOX,
+        ));
+        push(part_item(
+            RAW_TRUCK_DRIVE + k as u64 * 2 + 1,
+            other,
+            Part::Motor { dia: 230, len: 460 },
+            Vec3::new(gx - 110.0, contact + wheel_r, gz),
+            Quat::from_rotation_y(-FRAC_PI_2),
+            MOTOR,
+        ));
+        // Buffers on both ends of the truck.
+        for (b, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+            push(part_item(
+                RAW_BUFFER + (k * 2 + b) as u64,
+                other,
+                Part::Buffer { dia: 120, len: 170 },
+                Vec3::new(
+                    bridge + s * (size::TRUCK_LEN * 0.5 + 8.0),
+                    contact + wheel_r + 210.0,
+                    z,
+                ),
+                Quat::from_rotation_y(s * FRAC_PI_2),
+                BLOCK_WARN,
+            ));
+        }
+    }
+    // A control box on the outside of the first end truck.
+    push(part_item(
+        RAW_PANEL,
+        other,
+        Part::Panel {
+            w: 420,
+            h: 520,
+            d: 220,
+        },
+        Vec3::new(bridge - 350.0, contact + wheel_r + 90.0, -130.0),
+        Quat::from_rotation_y(std::f32::consts::PI),
+        PANEL,
+    ));
+    // Two state lamps on top of the control box: brake (left) and drive (right).
+    for (k, lamp) in state.lamps.iter().enumerate() {
+        push(boxed(
+            RAW_LAMP + k as u64,
+            other,
+            Vec3::new(
+                bridge - 350.0 + (k as f32 - 0.5) * 160.0 - 45.0,
+                contact + wheel_r + 90.0 + 520.0,
+                -130.0 - 110.0 - 45.0,
+            ),
+            Vec3::new(90.0, 90.0, 90.0),
+            lamp.tint(),
+        ));
+    }
+    push(part_item(
+        RAW_GIRDER,
+        other,
+        Part::BoxGirder {
+            w: mm(size::GIRDER_WIDTH),
+            d: mm(size::GIRDER_DEPTH),
+            len: mm(span),
+        },
+        Vec3::new(bridge, girder_bottom, 0.0),
+        Quat::IDENTITY,
+        GIRDER,
+    ));
+    // A walkway along the girder on the side away from the drum, with its handrail.
+    let girder_top = girder_bottom + size::GIRDER_DEPTH;
+    push(part_item(
+        RAW_WALKWAY,
+        other,
+        Part::Walkway {
+            w: 700,
+            len: mm(span),
+        },
+        Vec3::new(bridge - size::GIRDER_WIDTH * 0.5, girder_top - 100.0, span),
+        Quat::from_rotation_y(std::f32::consts::PI),
+        YELLOW,
+    ));
+    // Trolley rails on the girder top, the frame, its four wheels and a drive.
+    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+        push(part_item(
+            RAW_TROLLEY_RAIL + k as u64,
+            other,
+            Part::Rail {
+                len: mm((span - 300.0).max(1.0)),
+            },
+            Vec3::new(bridge + s * size::TROLLEY_GAUGE, girder_top, 150.0),
+            Quat::IDENTITY,
+            RAIL_STEEL,
+        ));
+    }
+    let t_wheel_r = size::TROLLEY_WHEEL * 0.5;
+    let t_wheel_y = girder_top + size::RAIL_H + t_wheel_r;
+    push(part_item(
+        RAW_TROLLEY,
+        other,
+        Part::Frame {
+            x: mm(size::TROLLEY[0]),
+            y: mm(size::TROLLEY[1]),
+            z: mm(size::TROLLEY[2]),
+        },
+        Vec3::new(bridge + size::TROLLEY_SHIFT, t_wheel_y, trolley),
+        Quat::IDENTITY,
+        YELLOW,
+    ));
+    let t_wheel = Part::Wheel {
+        dia: mm(size::TROLLEY_WHEEL),
+        w: mm(size::TROLLEY_WHEEL_W),
+    };
+    for (k, (sx, sz)) in [(-1.0f32, -1.0f32), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)]
+        .into_iter()
+        .enumerate()
+    {
+        // Axle along x; going towards +z the top moves towards +z, a turn about +x.
+        let spin = z_to_x * Quat::from_rotation_z(trolley / t_wheel_r);
+        push(part_item(
+            RAW_TROLLEY_WHEEL + k as u64,
+            other,
+            t_wheel,
+            Vec3::new(
+                bridge + sx * size::TROLLEY_GAUGE,
+                t_wheel_y,
+                trolley + sz * 400.0,
+            ),
+            spin,
+            WHEEL,
+        ));
+    }
+    push(part_item(
+        RAW_TROLLEY_DRIVE,
+        other,
+        Part::Gearbox {
+            w: 120,
+            h: 130,
+            l: 110,
+        },
+        Vec3::new(
+            bridge - size::TROLLEY_GAUGE - 120.0,
+            t_wheel_y,
+            trolley - 400.0,
+        ),
+        Quat::IDENTITY,
+        GEARBOX,
+    ));
+    push(part_item(
+        RAW_TROLLEY_DRIVE + 1,
+        other,
+        Part::Motor { dia: 120, len: 260 },
+        Vec3::new(
+            bridge - size::TROLLEY_GAUGE - 190.0,
+            t_wheel_y,
+            trolley - 400.0,
+        ),
+        Quat::from_rotation_y(-FRAC_PI_2),
+        MOTOR,
+    ));
+    // The drum hangs beside the girder between two cheeks of the trolley, driven by a gearbox
+    // and motor on the outside of one cheek.
+    let rope_x = bridge + size::ROPE_OFFSET;
+    let drum_bottom = drum_underside_mm(l);
+    let drum_cy = drum_bottom + size::DRUM[1] * 0.5;
+    let half_len = size::DRUM[2] * 0.5;
+    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+        let (lo_x, hi_x) = (
+            bridge + size::GIRDER_WIDTH * 0.5 + 20.0,
+            rope_x + size::DRUM[0] * 0.5 + 60.0,
+        );
+        let z = trolley + s * (half_len + 25.0);
+        push(boxed(
+            RAW_PLATE + k as u64,
+            other,
+            Vec3::new(lo_x, drum_cy - 330.0, z - 14.0),
+            Vec3::new(hi_x - lo_x, t_wheel_y + 180.0 - (drum_cy - 330.0), 28.0),
             YELLOW,
         ));
     }
-    push(boxed(
-        RAW_GIRDER,
-        ItemKind::Other,
-        Vec3::new(bridge - size::GIRDER_WIDTH * 0.5, girder_bottom, 0.0),
-        Vec3::new(size::GIRDER_WIDTH, size::GIRDER_DEPTH, span),
-        GIRDER,
-    ));
-    // Trolley on top of the girder and the drum on its side, where the rope leaves.
-    let girder_top = girder_bottom + size::GIRDER_DEPTH;
-    push(boxed(
-        RAW_TROLLEY,
-        ItemKind::Other,
-        Vec3::new(
-            bridge - size::TROLLEY[0] * 0.5,
-            girder_top,
-            trolley - size::TROLLEY[2] * 0.5,
-        ),
-        Vec3::new(size::TROLLEY[0], size::TROLLEY[1], size::TROLLEY[2]),
-        YELLOW,
-    ));
-    let rope_x = bridge + size::ROPE_OFFSET;
-    let drum_bottom = drum_underside_mm(l);
-    push(boxed(
+    // Turning the drum: the rope pays out 1 mm per mm of hook travel, per fall, and the block
+    // hangs on two falls, so the drum turns twice as far as one fall's length.
+    let drum_spin = Quat::from_rotation_z(-2.0 * state.hook_m * 1000.0 / (size::DRUM[0] * 0.5));
+    push(part_item(
         RAW_DRUM,
-        ItemKind::Other,
-        Vec3::new(
-            rope_x - size::DRUM[0] * 0.5,
-            drum_bottom,
-            trolley - size::DRUM[2] * 0.5,
-        ),
-        Vec3::new(size::DRUM[0], size::DRUM[1], size::DRUM[2]),
+        other,
+        Part::Drum {
+            dia: mm(size::DRUM[0]),
+            len: mm(size::DRUM[2]),
+        },
+        Vec3::new(rope_x, drum_cy, trolley),
+        drum_spin,
         STEEL,
     ));
+    push(part_item(
+        RAW_HOIST_DRIVE,
+        other,
+        Part::Gearbox {
+            w: 320,
+            h: 320,
+            l: 260,
+        },
+        Vec3::new(rope_x, drum_cy, trolley + half_len + 25.0 + 14.0 + 145.0),
+        Quat::from_rotation_y(FRAC_PI_2),
+        GEARBOX,
+    ));
+    push(part_item(
+        RAW_HOIST_DRIVE + 1,
+        other,
+        Part::Motor { dia: 300, len: 560 },
+        Vec3::new(
+            rope_x + 130.0,
+            drum_cy,
+            trolley + half_len + 25.0 + 14.0 + 145.0,
+        ),
+        z_to_x,
+        MOTOR,
+    ));
 
-    // Hook block, hook, load and rope.
+    // Hook block, hook, load and the two falls of rope.
     let (still_top, clamped) = block_top_mm(l, state.hook_m);
     let warn = state.warning || clamped;
     let block_tint = if warn { BLOCK_WARN } else { BLOCK_OK };
@@ -308,47 +651,85 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
     let (dx, drop, dz) = swung_offset_mm(rope_mm, state.swing_rad);
     let top = drum_bottom - drop;
     let (hook_x, hook_z) = (rope_x + dx, trolley + dz);
-    let block_min = Vec3::new(
-        hook_x - size::BLOCK[0] * 0.5,
-        top - size::BLOCK[1],
-        hook_z - size::BLOCK[2] * 0.5,
-    );
-    push(bar(
-        RAW_ROPE,
-        Vec3::new(rope_x, drum_bottom, trolley),
-        Vec3::new(hook_x, top, hook_z),
-        size::ROPE,
-        STEEL,
-    ));
-    push(boxed(
+    let half_fall = size::FALL_SPACING * 0.5;
+    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+        let a = Vec3::new(rope_x, drum_bottom, trolley + s * half_fall);
+        let b = Vec3::new(hook_x, top, hook_z + s * half_fall);
+        let d = b - a;
+        let len = d.length().max(1.0);
+        push(stretched(
+            if k == 0 { RAW_ROPE } else { RAW_ROPE2 },
+            other,
+            Part::Bar {
+                r: mm(size::ROPE * 0.5),
+            },
+            a,
+            Quat::from_rotation_arc(Vec3::Z, d / len),
+            ROPE_STEEL,
+            Vec3::new(size::ROPE, size::ROPE, len),
+        ));
+    }
+    push(part_item(
         RAW_BLOCK,
-        ItemKind::Other,
-        block_min,
-        Vec3::new(size::BLOCK[0], size::BLOCK[1], size::BLOCK[2]),
+        other,
+        Part::Block {
+            w: mm(size::BLOCK[0]),
+            h: mm(size::BLOCK[1]),
+            d: mm(size::BLOCK[2]),
+        },
+        Vec3::new(hook_x, top, hook_z),
+        Quat::IDENTITY,
         block_tint,
     ));
-    let hook_bottom = block_min.y - size::HOOK[1];
-    push(boxed(
+    // The two sheaves in the block turn with the rope (the picture shows the rope moving).
+    let sheave_spin = Quat::from_rotation_z(2.0 * state.hook_m * 1000.0 / (size::SHEAVE * 0.5));
+    for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+        push(part_item(
+            RAW_SHEAVE + k as u64,
+            other,
+            Part::Sheave {
+                dia: mm(size::SHEAVE),
+                w: 70,
+            },
+            Vec3::new(hook_x, top - size::BLOCK[1] * 0.31, hook_z + s * half_fall),
+            z_to_x * sheave_spin,
+            WHEEL,
+        ));
+    }
+    let hook_part = Part::Hook {
+        h: mm(size::HOOK[1]),
+    };
+    let hook_top = top - size::BLOCK[1];
+    let hook_bottom = hook_top - crate::crane_parts::entry(hook_part).size.y;
+    push(part_item(
         RAW_HOOK,
-        ItemKind::Other,
-        Vec3::new(
-            hook_x - size::HOOK[0] * 0.5,
-            hook_bottom,
-            hook_z - size::HOOK[2] * 0.5,
-        ),
-        Vec3::new(size::HOOK[0], size::HOOK[1], size::HOOK[2]),
+        other,
+        hook_part,
+        Vec3::new(hook_x, hook_top, hook_z),
+        Quat::IDENTITY,
         STEEL,
     ));
     if let Some([w, h, d]) = l.load_m {
         let (w, h, d) = (w * 1000.0, h * 1000.0, d * 1000.0);
         let load_top = hook_bottom - size::SLING;
-        push(bar(
-            RAW_SLING,
-            Vec3::new(hook_x, hook_bottom, hook_z),
-            Vec3::new(hook_x, load_top, hook_z),
-            size::ROPE * 0.6,
-            STEEL,
-        ));
+        // Two sling legs from the hook to lifting lugs near the ends of the load.
+        for (k, s) in [-1.0f32, 1.0].into_iter().enumerate() {
+            let from = Vec3::new(hook_x, hook_bottom + 30.0, hook_z);
+            let to = Vec3::new(hook_x + s * w * 0.4, load_top, hook_z);
+            let dir = to - from;
+            let len = dir.length().max(1.0);
+            push(stretched(
+                if k == 0 { RAW_SLING } else { RAW_SLING2 },
+                other,
+                Part::Bar {
+                    r: mm(size::ROPE * 0.3),
+                },
+                from,
+                Quat::from_rotation_arc(Vec3::Z, dir / len),
+                ROPE_STEEL,
+                Vec3::new(size::ROPE * 0.6, size::ROPE * 0.6, len),
+            ));
+        }
         push(boxed(
             RAW_LOAD,
             ItemKind::Other,
@@ -357,7 +738,6 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             LOAD,
         ));
     }
-
     // A flag at the height of each bound limit switch, on the far side of the rope's path.
     for (k, mark) in state.limits.iter().enumerate() {
         let y = (l.hook_start_m + mark.height_m) * 1000.0;
@@ -393,7 +773,7 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             Vec3::new(
                 mark.position_m * 1000.0 - size::TRAVEL_FLAG[0] * 0.5,
                 rail,
-                -size::TRAVEL_FLAG[2] * 0.5,
+                -size::BEAM_FLANGE * 0.5 - size::TRAVEL_FLAG[2],
             ),
             Vec3::new(
                 size::TRAVEL_FLAG[0],
@@ -433,9 +813,14 @@ pub fn hook_bounds(layout: &CraneLayout, state: &CraneState) -> crate::math::Aab
     let (top, _) = block_top_mm(layout, state.hook_m);
     let rope_x = state.bridge_m.clamp(0.0, layout.runway_m) * 1000.0 + size::ROPE_OFFSET;
     let z = state.trolley_m.clamp(0.0, layout.span_m) * 1000.0;
+    let hook_h = crate::crane_parts::entry(crate::crane_parts::Part::Hook {
+        h: crate::crane_parts::mm(size::HOOK[1]),
+    })
+    .size
+    .y;
     let bottom = top
         - size::BLOCK[1]
-        - size::HOOK[1]
+        - hook_h
         - layout
             .load_m
             .map_or(0.0, |[_, h, _]| size::SLING + h * 1000.0);
@@ -444,10 +829,23 @@ pub fn hook_bounds(layout: &CraneLayout, state: &CraneState) -> crate::math::Aab
         Vec3::new(rope_x - pad, bottom.min(top) - 300.0, z - pad),
         Vec3::new(
             rope_x + pad,
-            drum_underside_mm(layout) + size::DRUM[1],
+            drum_underside_mm(layout) + size::DRUM[1] * 1.3,
             z + pad,
         ),
     )
+}
+
+/// The box around the crane without its floor and the columns under the runway: what a camera
+/// frames to see the machine.
+pub fn machine_bounds(scene: &Scene) -> crate::math::Aabb {
+    let mut b = crate::math::Aabb::EMPTY;
+    let machine = |i: &&Item| {
+        i.id.kind != ItemKind::Plate && !(RAW_COLUMN..RAW_COLUMN + 1000).contains(&i.id.raw)
+    };
+    for it in scene.items.iter().filter(machine) {
+        b = b.union(&scene.world_bounds(it));
+    }
+    if b.is_empty() { scene.bounds() } else { b }
 }
 
 /// The scene as the shared handle the widget takes.
@@ -747,6 +1145,98 @@ mod tests {
     }
 
     #[test]
+    fn the_block_hangs_on_two_falls_that_end_at_its_top() {
+        let l = CraneLayout::default();
+        let s = build(&l, &CraneState::default());
+        let a = s.world_bounds(item(&s, RAW_ROPE));
+        let b = s.world_bounds(item(&s, RAW_ROPE2));
+        // Same height, one fall each side of the trolley's line, a fall spacing apart.
+        assert!((a.min.y - b.min.y).abs() < 1e-2 && (a.max.y - b.max.y).abs() < 1e-2);
+        let (za, zb) = ((a.min.z + a.max.z) * 0.5, (b.min.z + b.max.z) * 0.5);
+        assert!((zb - za - size::FALL_SPACING).abs() < 1.0, "{za} {zb}");
+    }
+
+    #[test]
+    fn wheels_turn_with_the_travel_of_the_bridge_the_trolley_and_the_hook() {
+        let l = CraneLayout::default();
+        let angle = |s: &Scene, raw: u64| {
+            let (axis, a) = item(s, raw).pose.rotation.to_axis_angle();
+            (axis, a)
+        };
+        let at = |bridge: f32, trolley: f32, hook: f32| {
+            build(
+                &l,
+                &CraneState {
+                    bridge_m: bridge,
+                    trolley_m: trolley,
+                    hook_m: hook,
+                    ..Default::default()
+                },
+            )
+        };
+        let (a, b) = (at(1.0, 2.0, 0.0), at(1.5, 2.0, 0.0));
+        let turn = |s: &Scene| item(s, RAW_TRUCK_WHEEL).pose.rotation;
+        assert!(
+            turn(&a).angle_between(turn(&b)) > 0.1,
+            "a truck wheel turns"
+        );
+        let (a, b) = (at(1.0, 2.0, 0.0), at(1.0, 2.5, 0.0));
+        let turn = |s: &Scene| item(s, RAW_TROLLEY_WHEEL).pose.rotation;
+        assert!(
+            turn(&a).angle_between(turn(&b)) > 0.1,
+            "a trolley wheel turns"
+        );
+        let (a, b) = (at(1.0, 2.0, 0.0), at(1.0, 2.0, 0.5));
+        let turn = |s: &Scene| item(s, RAW_DRUM).pose.rotation;
+        assert!(turn(&a).angle_between(turn(&b)) > 0.1, "the drum turns");
+        // Still: nothing turns on its own.
+        let (a, b) = (at(1.0, 2.0, 0.0), at(1.0, 2.0, 0.0));
+        assert_eq!(angle(&a, RAW_TRUCK_WHEEL), angle(&b, RAW_TRUCK_WHEEL));
+    }
+
+    #[test]
+    fn a_wheel_turns_one_round_per_circumference_of_travel() {
+        let l = CraneLayout::default();
+        let r = size::TRUCK_WHEEL * 0.5;
+        let circ = std::f32::consts::TAU * r;
+        let rot = |bridge_m: f32| {
+            let s = build(
+                &l,
+                &CraneState {
+                    bridge_m,
+                    ..Default::default()
+                },
+            );
+            item(&s, RAW_TRUCK_WHEEL).pose.rotation
+        };
+        // One circumference further on is the same orientation.
+        assert!(rot(2.0).angle_between(rot(2.0 + circ / 1000.0)) < 1e-2);
+    }
+
+    #[test]
+    fn the_crane_items_are_meshes_the_view_can_build_from_the_scene_alone() {
+        let s = build(&CraneLayout::default(), &CraneState::default());
+        let mut lib = crate::mesh::MeshLibrary::new();
+        crate::crane_parts::ensure(&mut lib, &s);
+        for it in &s.items {
+            if let Shape::Part(k) = it.shape {
+                assert!(lib.get(k).is_some(), "item {} has no mesh", it.id.raw);
+            }
+        }
+        assert!(lib.len() >= 10);
+        // A bounded drawing cost: the whole crane stays under a quarter million triangles.
+        let tris: usize = s
+            .items
+            .iter()
+            .filter_map(|i| match i.shape {
+                Shape::Part(k) => lib.get(k).map(|g| g.lods[0].triangles()),
+                _ => Some(12),
+            })
+            .sum();
+        assert!(tris < 250_000, "{tris} triangles");
+    }
+
+    #[test]
     fn the_whole_crane_has_bounds_and_unique_ids() {
         let s = build(&CraneLayout::default(), &CraneState::default());
         assert!(!s.bounds().is_empty());
@@ -755,5 +1245,24 @@ mod tests {
         ids.sort();
         ids.dedup();
         assert_eq!(ids.len(), n);
+    }
+
+    #[test]
+    fn state_lamps_take_their_colour_from_the_state() {
+        let tint = |lamps: [Lamp; 2], k: u64| {
+            let st = CraneState {
+                lamps,
+                ..Default::default()
+            };
+            let s = build(&CraneLayout::default(), &st);
+            s.items
+                .iter()
+                .find(|i| i.id.raw == RAW_LAMP + k)
+                .and_then(|i| i.tint)
+        };
+        assert_eq!(tint([Lamp::Off; 2], 0), Some(Lamp::Off.tint()));
+        assert_eq!(tint([Lamp::Green, Lamp::Red], 0), Some(Lamp::Green.tint()));
+        assert_eq!(tint([Lamp::Green, Lamp::Red], 1), Some(Lamp::Red.tint()));
+        assert_ne!(Lamp::Amber.tint(), Lamp::Green.tint());
     }
 }

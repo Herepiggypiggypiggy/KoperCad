@@ -21,6 +21,18 @@ pub(crate) enum Basis {
     /// the leg on the surface is measured from the opening, and the distance
     /// between plate and door and the hinge loop are left out.
     Door,
+    /// As `Door`, with the plate-to-door distance from the enclosure spec.
+    DoorDepth,
+    /// As `DoorDepth`, but a number of the spec is a catalogue or default
+    /// value: an estimate, not a measurement of the cabinet.
+    DoorDepthEstimate,
+    /// As `Door`, but the enclosure's spec lacks a number for the
+    /// plate-to-door distance: the length is too short by it.
+    DoorSpecGap,
+    /// Routed through a duct or to the cabinet entry that comes from the
+    /// enclosure's spec while a number of that spec is a catalogue or
+    /// default value: an estimate, not a measurement of the cabinet.
+    RoutedSpecEstimate,
     /// At least one device is not placed on a plate: see [`estimate`].
     Estimate,
     /// The cable's stated length: its cores run the whole cable, stripped ends
@@ -37,6 +49,10 @@ impl Basis {
             Basis::RoutedFlat => "routed, no depth",
             Basis::FreeAir => "free air",
             Basis::Door => "door, no gap",
+            Basis::RoutedSpecEstimate => "~ routed (catalogue)",
+            Basis::DoorDepth => "door + depth (spec)",
+            Basis::DoorDepthEstimate => "~ door + depth (catalogue)",
+            Basis::DoorSpecGap => "~ door, spec has no depth",
             Basis::Estimate => "estimate",
             Basis::CableLength => "cable length",
             Basis::ToEntryStated => "to entry + stated outside",
@@ -210,7 +226,16 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                             .get(&(i as u64))
                             .is_some_and(|leg| leg.opening.is_some()) =>
                         {
-                            Basis::Door
+                            let leg = &routed.surface_legs[&(i as u64)];
+                            if leg.spec_gap.is_some() {
+                                Basis::DoorSpecGap
+                            } else if leg.depth_mm > 0.0 && leg.estimate {
+                                Basis::DoorDepthEstimate
+                            } else if leg.depth_mm > 0.0 {
+                                Basis::DoorDepth
+                            } else {
+                                Basis::Door
+                            }
                         }
                         Kind::Ducted if routed.unknown_height.contains(&(i as u64)) => {
                             Basis::RoutedFlat
@@ -226,8 +251,18 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                     ducts: Vec::new(),
                 }),
             };
+            let spec_estimate = routed.spec_estimate.contains(&(i as u64))
+                && matches!(
+                    found.basis,
+                    Basis::Routed | Basis::RoutedFlat | Basis::ToEntryStated
+                );
             CutLength {
                 mm: found.mm.ceil().max(1.0),
+                basis: if spec_estimate {
+                    Basis::RoutedSpecEstimate
+                } else {
+                    found.basis
+                },
                 ..found
             }
         })
@@ -251,5 +286,16 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
         lengths,
         paths,
         plans: routed.plans,
+    }
+}
+
+impl Basis {
+    /// Whether a length of this basis is an estimate from the enclosure
+    /// spec: the report then prints [`novo_layout::spec::ESTIMATE_NOTICE`].
+    pub(crate) fn is_spec_estimate(self) -> bool {
+        matches!(
+            self,
+            Basis::DoorDepthEstimate | Basis::DoorSpecGap | Basis::RoutedSpecEstimate
+        )
     }
 }

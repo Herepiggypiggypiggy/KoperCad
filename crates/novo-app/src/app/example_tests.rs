@@ -337,22 +337,25 @@ fn the_example_survives_a_pxf_round_trip() {
 }
 
 #[test]
-fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
+fn the_example_cabinet_door_room_problem_is_a_flag_on_the_plate() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::OpenStarterExample);
     d.frame();
+    let _ = d.app.shown_problems();
+    d.app.sync_flags();
     let p = d.doc().project();
     let cab = p
         .structures()
         .find(|s| s.tag.to_string() == "+CAB")
         .unwrap();
     let l = novo_layout::model::load(p, cab.id).unwrap();
-    let name = |id: u64| format!("#{id}");
-    let lines = super::cabinet::panel_problem_lines(&l, &name);
+    let flags = super::cabinet_flags::plate_flags(&d.app.wb.flags.store, &l, cab.id);
     assert!(
-        lines.iter().any(|t| t.contains("free room in front")),
-        "{lines:?}"
+        flags
+            .iter()
+            .any(|f| f.detail.0.iter().any(|t| t.contains("more room in front"))),
+        "{flags:?}"
     );
 }
 
