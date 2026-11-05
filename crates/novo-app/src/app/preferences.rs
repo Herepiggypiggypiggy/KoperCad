@@ -234,7 +234,7 @@ impl NovoApp {
                         );
                     });
                     if let Some(line) = self.wb.custom_symbols.summary() {
-                        hint(ui, &line);
+                        ui.weak(line);
                     }
                     for problem in self.wb.custom_symbols.problems.iter().take(5) {
                         super::flags_shell::inline_flag(ui, false, false, "Symbol file", problem);

@@ -3202,10 +3202,9 @@ impl NovoApp {
                     "Works offline. Nothing is sent unless you use Ask Claude (your question goes to Anthropic with your own key) or press Check for updates (asks GitHub for the release list).".into(),
                 );
                 ui.add_space(novo_theme::space::M);
-                ui.horizontal(|ui| {
-                    ui.label("Made by KoperVonk · MIT licence");
-                    window_help::mark(ui, &notes.join("\n\n"));
-                });
+                ui.label("Made by KoperVonk");
+                ui.weak("Free software, MIT or Apache-2.0, at your choice");
+                window_help::add(ui.ctx(), notes.join("\n\n"));
                 ui.add_space(novo_theme::space::M);
                 ui.columns(2, |cols| {
                     cols[0].vertical_centered(|ui| {
@@ -3235,7 +3234,7 @@ impl NovoApp {
                         match other {
                             UpdateCheck::Done(crate::update_check::Outcome::UpToDate) => {
                                 ui.label("No newer stable version found");
-
+                                ui.weak("Release candidates are not checked");
                             }
                             UpdateCheck::Done(crate::update_check::Outcome::Newer {
                                 tag,
@@ -3243,7 +3242,10 @@ impl NovoApp {
                             }) => {
                                 ui.label(format!("{tag} is available"));
                                 ui.hyperlink_to("Open the download page", url);
-                                window_help::mark(ui, "Run the new installer over this copy; your projects stay as they are");
+                                window_help::add(
+                                    ui.ctx(),
+                                    "Run the new installer over this copy; your projects stay as they are",
+                                );
                             }
                             UpdateCheck::Done(crate::update_check::Outcome::Failed(why)) => {
                                 ui.label(format!("Could not check: {why}"));

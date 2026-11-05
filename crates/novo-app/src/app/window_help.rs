@@ -33,7 +33,17 @@ pub(super) fn scope<R>(ctx: &egui::Context, name: &str, f: impl FnOnce() -> R) -
     let built: Vec<String> = ctx
         .data_mut(|d| d.remove_temp(building_id(name)))
         .unwrap_or_default();
-    let text = built.join("\n\n");
+    let mut unique: Vec<&String> = Vec::new();
+    for p in &built {
+        if !unique.contains(&p) {
+            unique.push(p);
+        }
+    }
+    let text = unique
+        .iter()
+        .map(|p| p.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     let before: Option<String> = ctx.data(|d| d.get_temp(shown_id(name)));
     if before.as_deref().unwrap_or("") != text {
         ctx.data_mut(|d| {

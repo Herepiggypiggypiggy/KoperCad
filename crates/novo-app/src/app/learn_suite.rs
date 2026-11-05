@@ -210,20 +210,16 @@ impl NovoApp {
     /// where the per-lesson tag is left off (see [`Self::early_is_the_norm`]).
     fn early_note(&self, ui: &mut egui::Ui) {
         if self.early_is_the_norm() {
-            super::window_help::mark(ui, &self.learn.say("early_note"));
+            super::window_help::add(ui.ctx(), self.learn.say("early_note"));
         }
     }
 
-    /// A page heading with one "?" holding what the page is about (and the
-    /// early-access note), instead of lines of text under it.
+    /// A page heading; what the page is about (and the early-access note)
+    /// goes into the window's one "?" instead of lines of text under it.
     fn heading_row(&self, ui: &mut egui::Ui, title: &str, about: &str) {
-        ui.horizontal(|ui| {
-            ui.heading(title);
-            if !about.is_empty() {
-                super::window_help::mark(ui, about);
-            }
-            self.early_note(ui);
-        });
+        ui.heading(title);
+        super::window_help::add(ui.ctx(), about);
+        self.early_note(ui);
     }
 
     /// Search and the level chips. Returns whether Enter was pressed in the
@@ -788,10 +784,8 @@ impl NovoApp {
                         ui.set_width(text_w);
                         section_label(ui, reason);
                         ui.add_space(2.0);
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(lesson.title(lang)).heading());
-                            super::window_help::mark(ui, lesson.summary(lang));
-                        });
+                        ui.label(egui::RichText::new(lesson.title(lang)).heading())
+                            .on_hover_text(lesson.summary(lang));
                         ui.add_space(4.0);
                         self.meta_line(ui, &lesson);
                     });
@@ -843,10 +837,8 @@ impl NovoApp {
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(path.title(lang)).strong().size(15.0));
-                    super::window_help::mark(ui, path.summary(lang));
-                });
+                ui.label(egui::RichText::new(path.title(lang)).strong().size(15.0))
+                    .on_hover_text(path.summary(lang));
                 ui.add_space(6.0);
                 if let (Some(low), Some(high)) = (low, high) {
                     ui.horizontal(|ui| {
@@ -961,14 +953,12 @@ impl NovoApp {
                     ui.vertical(|ui| {
                         ui.set_width(text_w);
                         let title = egui::RichText::new(lesson.title(lang)).strong();
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(if coming {
-                                title.color(p.text_tertiary)
-                            } else {
-                                title
-                            });
-                            super::window_help::mark(ui, lesson.summary(lang));
-                        });
+                        ui.label(if coming {
+                            title.color(p.text_tertiary)
+                        } else {
+                            title
+                        })
+                        .on_hover_text(lesson.summary(lang));
                         ui.add_space(2.0);
                         self.meta_line(ui, &lesson);
                         if coming {
