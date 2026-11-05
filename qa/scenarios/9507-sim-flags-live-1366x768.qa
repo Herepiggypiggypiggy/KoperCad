@@ -1,0 +1,18 @@
+@title Live card: no supply is a triangle with a popover (1366x768)
+@area Simulate
+@sizes 1366x768
+# T10b: the Live card says "no supply" with a triangle, not a coloured sentence; the popover has the sentence.
+click_text "New project"
+wait 20
+key shift+l
+wait 20
+expect "No supply in the drawing"
+shot live-no-supply
+check_layout
+click_text "Warning: No supply in the drawing" Button
+wait 8
+expect "Copy"
+shot live-no-supply-popover
+key Escape
+wait 6
+expect_not "Copy"

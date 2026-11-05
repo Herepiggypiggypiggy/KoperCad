@@ -371,6 +371,9 @@ impl NovoApp {
     /// The 3D view in the central area.
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
         self.sync_openings(ui.ctx());
+        // The inspector lists the flags of the selected device from the store.
+        let _ = self.shown_problems();
+        self.sync_flags();
         self.whatif_apply();
         self.sync_flags();
         // Compared once per project revision, and only with the strip showing.
@@ -2069,8 +2072,10 @@ impl NovoApp {
                         .and_then(|d| d.tag.device_code().map(str::to_owned))
                         .unwrap_or_default()
                 };
+                let store = &self.wb.flags.store;
+                let flags_of = |d: u64| super::cabinet_flags::device_flags(store, &stored, id, d);
                 let facts =
-                    cabinet_inspector::gather(project, id, &stored, &stored, &devices, &tag_of);
+                    cabinet_inspector::gather(project, id, &stored, &stored, &devices, &flags_of);
                 ask = cabinet_inspector::overlay(
                     ui.ctx(),
                     view_rect,

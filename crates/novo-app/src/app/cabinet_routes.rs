@@ -243,6 +243,9 @@ fn rows(
                 .get(&r.job)
                 .filter(|leg| leg.opening.is_some());
             let basis = match r.kind {
+                _ if routed.spec_estimate.contains(&r.job) && door_leg.is_none() => {
+                    "~ routed (catalogue)"
+                }
                 _ if door_leg.is_some_and(|l| l.spec_gap.is_some()) => "~ door, spec has no depth",
                 _ if door_leg.is_some_and(|l| l.depth_mm > 0.0 && l.estimate) => {
                     "~ door + depth (catalogue)"
@@ -382,6 +385,19 @@ fn chips(
             if estimated == 1 { "s" } else { "" }
         ),
         Some(("Detect pins", FixKind::DetectPins)),
+    );
+    let from_spec = rows
+        .iter()
+        .filter(|r| routed.spec_estimate.contains(&r.wire))
+        .count();
+    add(
+        from_spec,
+        "~ catalogue ducts",
+        format!(
+            "{} through ducts or to an entry from the enclosure's catalogue data: an estimate, not a measurement of your cabinet",
+            plural(from_spec, "wire runs", "wires run")
+        ),
+        None,
     );
     let gap = routed.spec_gaps.iter().find(|(s, _)| *s == structure);
     add(

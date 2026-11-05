@@ -216,6 +216,13 @@ impl NovoApp {
         self.wb.flags.edit.transient = Some((id, born));
     }
 
+    /// The flag of the refusal being shown, for tests.
+    #[cfg(test)]
+    pub(super) fn refusal_flag(&self) -> Option<&novo_flags::Flag> {
+        let (id, _) = self.wb.flags.edit.transient?;
+        self.wb.flags.store.get(id)
+    }
+
     /// What a refusal points at: the selected symbols and wires, else the tool.
     fn refusal_anchors(&self) -> Vec<Anchor> {
         let mut anchors: Vec<Anchor> = self

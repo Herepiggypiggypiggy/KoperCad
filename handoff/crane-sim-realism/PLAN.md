@@ -10,8 +10,7 @@ A customer STEP file (private, kept on the project mount, never committed) was i
 and typical details. Generic proportions only, nothing copied: no geometry, names or numbers. The
 private notes are in the project mount's `handoff/crane-sim-realism/PLAN-private.md`.
 
-Reader finding: big plates with many holes triangulate badly. Loading such a model at run time needs a
-better planar-face triangulator first (lane R2).
+Reader check: the STEP reader reads such a file correctly (checked numerically). Lane R2 is dropped.
 
 ## Lanes, one small PR each, no stacking
 
@@ -22,7 +21,6 @@ better planar-face triangulator first (lane R2).
 | S3 | Behaviour in the picture: bridge skew and wheel slip warning, rope slack and stretch, brake and motor state lamps on the crane, limit switch cams that really trip, anti-collision zones | Hoist in 3D |
 | S4 | Crane kinds: double girder, monorail (KBK), jib crane, tandem cranes; crane size presets from the setup | Crane setup in Hoist in 3D |
 | R1 | Per-product meshes from a STEP file (`part3d::build::placed_parts`, added with S1 work) | internal |
-| R2 | Planar faces with holes and non-convex outlines triangulated properly in the STEP reader (needed for plates with lightening holes) | Parts > Add CAD files, 3D views |
 | R3 | User model slot: "Use my crane model" picks a STEP file at run time (private, never copied into the project unless the user embeds it), with part roles (wheel, drum, hook block) mapped by name | Hoist in 3D, crane setup |
 
 ## Honesty

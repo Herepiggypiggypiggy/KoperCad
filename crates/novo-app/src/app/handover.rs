@@ -452,10 +452,15 @@ impl NovoApp {
             .iter()
             .filter(|f| f.status == FileStatus::Written)
             .count();
-        if written == 0 {
-            self.message(
+        let forced = super::flags_jobs::qa_forced_error("export.handover");
+        if written == 0 || forced.is_some() {
+            self.job_fail(
+                "export.handover",
+                "Handover is empty",
                 Level::Warning,
-                "Nothing to put in a handover package yet: draw something first",
+                forced.unwrap_or_else(|| {
+                    "Nothing to put in a handover package yet: draw something first.".to_owned()
+                }),
             );
             return None;
         }
