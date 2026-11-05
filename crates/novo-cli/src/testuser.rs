@@ -309,7 +309,8 @@ impl Server {
                     .map_or(crate::qa::TEXT_WORDS, |v| v as usize);
                 let r = self.send(json!({"cmd": "ui_tree"}))?;
                 let nodes = r["nodes"].as_array().cloned().unwrap_or_default();
-                let hits = crate::qa::text_hits(&nodes, max);
+                let skip_cells = a.get("cells").and_then(Value::as_bool).unwrap_or(false);
+                let hits = crate::qa::text_hits(&nodes, max, skip_cells);
                 if hits.is_empty() {
                     return text(format!("no label longer than {max} words on screen"));
                 }
@@ -979,7 +980,7 @@ fn tools() -> Value {
         tool(
             "check_text",
             "Explanation text on the current screen: labels longer than max_words (default 8) from the widget tree. Explanations belong behind the window's ? icon.",
-            json!({"max_words": num}),
+            json!({"max_words": num, "cells": json!({"type": "boolean"})}),
             json!([])
         ),
         tool(

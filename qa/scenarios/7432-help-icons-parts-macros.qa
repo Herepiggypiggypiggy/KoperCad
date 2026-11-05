@@ -9,7 +9,7 @@ wait 10
 key Return
 wait 20
 shot parts-empty
-check_text 20
+check_text 20 cells
 check_layout
 key ctrl+k
 text "place macro"

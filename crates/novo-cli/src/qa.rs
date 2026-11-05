@@ -366,13 +366,19 @@ pub(crate) type Hit = (&'static str, &'static str, String, String);
 /// belong behind a window's "?" (`window_help`); a label, a value or a result is shorter.
 pub(crate) const TEXT_WORDS: usize = 8;
 
+/// Longest neighbour, in words, that makes a long label a data table cell.
+pub(crate) const CELL_NEIGHBOUR_WORDS: usize = 4;
+
 /// Explanation text on screen: labels (not buttons, fields or menus) of more
 /// than `max_words` words, from the widget tree. One finding lists them all.
 ///
-/// A label that shares its line with two or more other labels is a cell of a
-/// table row (a catalog description between maker, order number and library):
-/// data, not explanation text, so it is not counted.
-pub(crate) fn text_hits(nodes: &[Value], max_words: usize) -> Vec<Hit> {
+/// With `skip_cells` (opt-in per scenario, `check_text N cells`) a label that
+/// has SHORT labels (at most `CELL_NEIGHBOUR_WORDS` words each: maker, order
+/// number, status) on both sides on its line, two or more in all, is a cell of a data table row, not
+/// explanation text, and is not counted. A sentence next to other sentences, or
+/// next to labels of any length that are not short, is still flagged. Without
+/// `skip_cells` every long label counts.
+pub(crate) fn text_hits(nodes: &[Value], max_words: usize, skip_cells: bool) -> Vec<Hit> {
     let is_label = |n: &Value| {
         n["role"]
             .as_str()
@@ -381,15 +387,22 @@ pub(crate) fn text_hits(nodes: &[Value], max_words: usize) -> Vec<Hit> {
     let label_rects: Vec<[f64; 4]> = nodes
         .iter()
         .filter(|n| is_label(n))
+        .filter(|n| {
+            n["label"].as_str().unwrap_or("").split_whitespace().count() <= CELL_NEIGHBOUR_WORDS
+        })
         .filter_map(rect)
         .collect();
     let table_cell = |r: &[f64; 4]| {
+        if !skip_cells {
+            return false;
+        }
         let mid = (r[1] + r[3]) / 2.0;
-        label_rects
-            .iter()
-            .filter(|o| o[1] <= mid && mid <= o[3] && (o[2] <= r[0] || o[0] >= r[2]))
-            .count()
-            >= 2
+        let on_line = |o: &&[f64; 4]| o[1] <= mid && mid <= o[3];
+        let left = label_rects.iter().filter(on_line).filter(|o| o[2] <= r[0]);
+        let right = label_rects.iter().filter(on_line).filter(|o| o[0] >= r[2]);
+        left.count() + right.count() >= 2
+            && label_rects.iter().filter(on_line).any(|o| o[2] <= r[0])
+            && label_rects.iter().filter(on_line).any(|o| o[0] >= r[2])
     };
     let mut long: Vec<(usize, String)> = Vec::new();
     for n in nodes {
@@ -1464,8 +1477,13 @@ impl Ctx<'_> {
                     })
                     .transpose()?
                     .unwrap_or(TEXT_WORDS);
+                let skip_cells = match a(2) {
+                    None => false,
+                    Some("cells") => true,
+                    Some(o) => return Err(format!("check_text option must be cells, not {o}")),
+                };
                 let nodes = self.tree()?;
-                for (sev, kind, title, detail) in text_hits(&nodes, max) {
+                for (sev, kind, title, detail) in text_hits(&nodes, max, skip_cells) {
                     self.add(
                         sev,
                         kind,
@@ -2308,9 +2326,36 @@ mod tests {
             node(long, 566.0, 1050.0, 100.0),
             node("Not imported", 1360.0, 1440.0, 100.0),
         ];
-        assert!(super::text_hits(&row, 20).is_empty());
+        assert!(super::text_hits(&row, 8, true).is_empty());
+        // Not opted in: the long cell is flagged.
+        assert_eq!(super::text_hits(&row, 8, false).len(), 1);
         let alone = vec![node(long, 566.0, 1050.0, 100.0)];
-        assert_eq!(super::text_hits(&alone, 8).len(), 1);
+        assert_eq!(super::text_hits(&alone, 8, true).len(), 1);
+        // Explanation sentences next to short labels or to each other are still flagged.
+        let note =
+            "Pick a part from the list, then press Place to put it on the page and wire it up";
+        let beside = vec![
+            node("Parts", 10.0, 60.0, 200.0),
+            node("Close", 70.0, 120.0, 200.0),
+            node(note, 130.0, 700.0, 200.0),
+        ];
+        assert_eq!(super::text_hits(&beside, 8, true).len(), 1);
+        let beside = vec![
+            node("Hint", 10.0, 60.0, 200.0),
+            node(note, 70.0, 700.0, 200.0),
+        ];
+        assert_eq!(super::text_hits(&beside, 8, true).len(), 1);
+        let two_notes = vec![
+            node(note, 10.0, 500.0, 300.0),
+            node(
+                "Then save the project with ctrl+s and reopen it from the start screen later",
+                510.0,
+                1000.0,
+                300.0,
+            ),
+            node("OK", 1010.0, 1050.0, 300.0),
+        ];
+        assert_eq!(super::text_hits(&two_notes, 8, true).len(), 1);
     }
 
     #[test]
