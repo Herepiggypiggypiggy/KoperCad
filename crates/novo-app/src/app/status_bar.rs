@@ -154,11 +154,9 @@ impl NovoApp {
                                 }
                             }
                             (None, Some((text, _))) => {
-                                let (lead, rest) = split_lead(text);
-                                ui.add(egui::Label::new(lead).truncate());
-                                if rest.is_some() {
-                                    super::window_help::mark(ui, text);
-                                }
+                                // Messages (results, warnings) stay whole: only hints are split.
+                                let label = ui.add(egui::Label::new(text).truncate());
+                                label.on_hover_text(text);
                             }
                             (None, None) => {
                                 let hint =

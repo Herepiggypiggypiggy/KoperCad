@@ -1052,7 +1052,7 @@ fn manager_ui(
             EmptySize::Panel,
             icons::ADDON_ICON,
             "Add-ons are not available here",
-            "",
+            "This session has no profile folder to keep them in.",
             |_| {},
         );
         return;
@@ -1084,7 +1084,7 @@ fn manager_ui(
                     EmptySize::Panel,
                     icons::ADDON_ICON,
                     "No add-ons installed",
-                    "",
+                    "Install a .kcaddon file to add features.",
                     |ui| {
                         if widgets::primary_button(ui, "Install from file...").clicked() {
                             actions.push(Act::Pick(None));

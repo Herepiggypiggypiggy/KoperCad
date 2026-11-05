@@ -470,14 +470,12 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
         r.i2t / 1e6
     ));
     let (bd, _) = m.breakdown();
-    super::window_help::note(
-        ui,
-        &format!(
-            "Estimated from the nameplate: locked-rotor torque {:.1} × rated, breakdown {:.1} × rated",
-            m.locked_rotor_torque() / m.rated_torque(),
-            bd / m.rated_torque()
-        ),
-    );
+    ui.weak(format!(
+        "Locked-rotor torque {:.1} × rated, breakdown {:.1} × rated (estimate)",
+        m.locked_rotor_torque() / m.rated_torque(),
+        bd / m.rated_torque()
+    ));
+    super::window_help::note(ui, "Estimated from the motor's nameplate data.");
     ui.add_space(4.0);
     chart(ui, r, m);
     for n in &run.notes {
