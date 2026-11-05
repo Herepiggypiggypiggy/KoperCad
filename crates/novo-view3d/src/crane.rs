@@ -472,11 +472,11 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             RAW_LAMP + k as u64,
             other,
             Vec3::new(
-                bridge - 350.0 + (k as f32 - 0.5) * 160.0 - 35.0,
+                bridge - 350.0 + (k as f32 - 0.5) * 160.0 - 45.0,
                 contact + wheel_r + 90.0 + 520.0,
-                -130.0 - 110.0 - 35.0,
+                -130.0 - 110.0 - 45.0,
             ),
-            Vec3::new(70.0, 70.0, 70.0),
+            Vec3::new(90.0, 90.0, 90.0),
             lamp.tint(),
         ));
     }
