@@ -41,14 +41,7 @@ pub(super) fn show(
     let whatif_right = super::heat_whatif::drawn_rect(ctx)
         .map_or(super::heat_whatif::WINDOW_WIDTH, |r| r.max.x - view.min.x)
         .max(super::heat_whatif::WINDOW_WIDTH);
-    let view = if shown.whatif_open {
-        egui::Rect::from_min_max(
-            egui::pos2(view.min.x + whatif_right + super::panel::MARGIN, view.min.y),
-            view.max,
-        )
-    } else {
-        view
-    };
+    let (view, below_whatif) = whatif_placement(ctx, view, whatif_right, shown.whatif_open);
     super::panel::Panel::new(
         "view3d_vents",
         "Vents and fans",
@@ -56,13 +49,16 @@ pub(super) fn show(
         super::panel::Side::Left,
         WIDTH,
     )
-    .top(super::view3d_controls::below(ctx))
+    .top(below_whatif.unwrap_or_else(|| super::view3d_controls::below(ctx)))
     // As tall as its content: the list, and the form of the one open opening.
     .fit()
     .dockable()
     .show(ctx, |ui| {
         // Past the window's bottom the list scrolls instead of being cut off.
-        let room = (view.height() - super::view3d_controls::below(ctx) - 64.0).max(160.0);
+        let room = (view.height()
+            - below_whatif.unwrap_or_else(|| super::view3d_controls::below(ctx))
+            - 64.0)
+            .max(160.0);
         egui::ScrollArea::vertical()
             .max_height(room)
             .auto_shrink([false, true])
@@ -70,6 +66,40 @@ pub(super) fn show(
                 body(ui, settings, enclosure, flows, running, stale, suggestion)
             });
     });
+}
+
+/// Where the panel starts while the Cooling what-if window is open at the left
+/// edge: beside it when the panel then still fits left of the Heat window at
+/// the right edge, else under it (at the left edge) so the two never overlap
+/// and the Heat window cannot cover the panel's buttons. Returns the view to
+/// place in and the top offset when it goes under the window.
+fn whatif_placement(
+    ctx: &egui::Context,
+    view: egui::Rect,
+    whatif_right: f32,
+    whatif_open: bool,
+) -> (egui::Rect, Option<f32>) {
+    if !whatif_open {
+        return (view, None);
+    }
+    let beside = view.min.x + whatif_right + super::panel::MARGIN;
+    let heat_left = view
+        .max
+        .x
+        .min(super::panel_dock::right_strip_left(ctx).unwrap_or(f32::MAX))
+        - super::panel::MARGIN
+        - super::view3d_heat::WIDTH;
+    if beside + WIDTH + super::panel::MARGIN <= heat_left {
+        return (
+            egui::Rect::from_min_max(egui::pos2(beside, view.min.y), view.max),
+            None,
+        );
+    }
+    let under = super::heat_whatif::drawn_rect(ctx)
+        .map_or(super::view3d_controls::below(ctx), |r| {
+            r.max.y - view.min.y + super::panel::MARGIN
+        });
+    (view, Some(under))
 }
 
 fn body(
@@ -902,6 +932,33 @@ fn planned_flow(kind: Kind, product: &novo_thermal::cooling::Product) -> f64 {
 mod tests {
     use super::*;
     use novo_thermal::cooling::{Kind as Cool, Product, Source};
+
+    /// The panel and the Heat window at the right edge never overlap while the
+    /// Cooling what-if window is open, at the small and the large sizes.
+    #[test]
+    fn beside_the_whatif_window_the_panel_never_meets_the_heat_window() {
+        let ctx = egui::Context::default();
+        let whatif = super::super::heat_whatif::WINDOW_WIDTH;
+        for (w, h, beside) in [
+            (912.0, 620.0, false),
+            (1366.0, 700.0, true),
+            (1700.0, 900.0, true),
+        ] {
+            let view = egui::Rect::from_min_size(egui::pos2(48.0, 58.0), egui::vec2(w, h));
+            let (placed, under) = whatif_placement(&ctx, view, whatif, true);
+            let left = placed.min.x + super::super::panel::MARGIN;
+            let heat_left =
+                view.max.x - super::super::panel::MARGIN - super::super::view3d_heat::WIDTH;
+            assert_eq!(under.is_none(), beside, "{w}x{h}");
+            match under {
+                None => assert!(left + WIDTH <= heat_left, "{w}x{h}"),
+                Some(top) => assert!(top > 0.0),
+            }
+        }
+        // Not open: untouched.
+        let view = egui::Rect::from_min_size(egui::pos2(48.0, 58.0), egui::vec2(912.0, 620.0));
+        assert_eq!(whatif_placement(&ctx, view, whatif, false), (view, None));
+    }
 
     #[test]
     fn a_fan_with_no_way_out_says_so_instead_of_comparing_zeros() {

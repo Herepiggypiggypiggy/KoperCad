@@ -12,7 +12,7 @@ use super::heat_status::SimStatus;
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
-const WIDTH: f32 = 330.0;
+pub(super) const WIDTH: f32 = 330.0;
 /// The view cube's size and margin (`novo-view3d::widget`); the panel starts
 /// below it so the cube stays usable.
 pub(super) const CUBE_SIZE: f32 = 88.0;

@@ -1,0 +1,35 @@
+@title 3D vents card with the Cooling what-if window open: the Heat window does not cover the card's buttons
+@area 3D
+@sizes 1280x688 1366x768 1920x1080
+# Hot run, then Cooling what-if opens at the left edge and Heat sits at the right: the Vents and fans card goes beside the what-if window when there is room, else under it. Its "Add the filter fan and a grille" button stays reachable at 1280x688.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+wait 30
+try click_text Cancel
+wait 30
+try click_text Cancel
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 45
+click_text "Cooling what-if"
+wait 20
+shot 01-whatif-open
+check_layout
+expect "Cooling selection proposes"
+click_text "Add the filter fan and a grille to the cabinet"
+wait 10
+expect "Already added"
+shot 02-added
+check_layout
