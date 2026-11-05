@@ -1,0 +1,35 @@
+@title Crane in 3D: the lamps on the control box follow a closed-loop winch of Drive run
+@area Simulate
+@sizes 1920x1080
+# Simulate > Drive run starts the winch of the closed-loop fixture and Hoist in 3D follows it; while the
+# hook rises the brake lamp is green and the drive lamp is green, and the line under the controls says rising.
+open qa/fixtures/closed-winch.novo
+wait 20
+key ctrl+k
+wait 3
+text Simulate drive run
+wait 4
+key Enter
+wait 20
+click_text "Switch on Live"
+wait 20
+click_text "Start"
+wait 20
+key ctrl+k
+wait 3
+text Hoist in 3D
+wait 4
+key Enter
+wait 40
+key Home
+wait 30
+shot lamps-before-lifting
+mouse_down 371 370
+wait 3000
+expect "rising"
+shot lamps-while-rising
+mouse_up 371 370
+wait 800
+expect "Picture, not measurement"
+check_layout
+shot lamps-stopped
