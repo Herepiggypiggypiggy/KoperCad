@@ -193,6 +193,8 @@ impl NovoApp {
                 } else {
                     "remain"
                 };
+                // The consequence of handing over stays on screen: it is what the
+                // person decides on.
                 ui.label(format!(
                     "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
                     ask.summary.pill_text()

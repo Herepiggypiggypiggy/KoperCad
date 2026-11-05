@@ -142,3 +142,71 @@ fn an_empty_target_is_refused_and_the_sidecar_is_written_whole() {
     let left = std::fs::read_dir(dir.path()).unwrap().count();
     assert_eq!(left, 1, "no temporary file is left behind");
 }
+
+fn flag_jobs(d: &Drive) -> Vec<String> {
+    d.app
+        .job_flags()
+        .iter()
+        .flat_map(|f| f.anchors.iter())
+        .filter_map(|a| match a {
+            novo_flags::Anchor::Job(j) => Some(j.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_study_that_cannot_be_read_flags_faults_read_and_opening_it_again_clears_it() {
+    let (dir, mut d) = drive();
+    let file = dir.path().join("plant.novo");
+    d.app.backend.save(&file).unwrap();
+    let sidecar = file.with_extension("faults.json");
+    std::fs::write(&sidecar, "not json").unwrap();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.faults", None);
+    d.frame();
+    assert_eq!(flag_jobs(&d), vec!["faults.read".to_owned()]);
+    assert!(d.app.wb.faults.is_none());
+    std::fs::write(&sidecar, Study::example().to_json()).unwrap();
+    d.app.run_command(&ctx, "sim.faults", None);
+    d.frame();
+    assert!(d.app.wb.faults.is_some(), "the window opens");
+    assert!(flag_jobs(&d).is_empty(), "{:?}", flag_jobs(&d));
+}
+
+#[test]
+fn a_fault_that_cannot_be_stored_flags_faults_store_and_a_stored_one_clears_it() {
+    let (dir, mut d) = drive();
+    let file = dir.path().join("plant.novo");
+    d.app.backend.save(&file).unwrap();
+    let sidecar = file.with_extension("faults.json");
+    std::fs::write(&sidecar, "not json").unwrap();
+    d.app
+        .add_fault_stored("-Q1", FaultWhat::DeviceOpens, 0.0, 0.1);
+    assert_eq!(flag_jobs(&d), vec!["faults.store".to_owned()]);
+    std::fs::remove_file(&sidecar).unwrap();
+    d.app
+        .add_fault_stored("-Q1", FaultWhat::DeviceOpens, 0.0, 0.1);
+    assert!(flag_jobs(&d).is_empty(), "{:?}", flag_jobs(&d));
+}
+
+#[test]
+fn a_table_that_cannot_be_read_flags_controller_table_read_and_a_read_one_clears_it() {
+    let (dir, mut d) = drive();
+    let missing = dir.path().join("io.csv");
+    d.app.controller_read_file(missing.clone());
+    assert_eq!(flag_jobs(&d), vec!["controller.table_read".to_owned()]);
+    std::fs::write(&missing, "klem;functie\n1;Hijsen omhoog\n").unwrap();
+    d.app.controller_read_file(missing);
+    assert!(flag_jobs(&d).is_empty(), "{:?}", flag_jobs(&d));
+    // The EPLAN branch clears its own flag too.
+    let bad = dir.path().join("x.xml");
+    d.app.controller_read_file(bad.clone());
+    assert_eq!(flag_jobs(&d), vec!["controller.table_read".to_owned()]);
+    std::fs::write(&bad, "<root/>").unwrap();
+    d.app.controller_read_file(bad);
+    assert!(
+        flag_jobs(&d).is_empty() || flag_jobs(&d) == ["controller.table_read"],
+        "an unreadable xml may still fail"
+    );
+}

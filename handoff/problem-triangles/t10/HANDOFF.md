@@ -13,3 +13,7 @@ Traps
 - Controller card flags clear while the Bindings fold is closed (drafts come from drawing the rows).
 
 Tests: `cargo test -p novo-app --lib sim_flags`; QA scenarios 9505 (1366x768) and 9506 (1920x1080).
+
+## T10c (third PR)
+
+Faults window read, save, export and store failures use `job_fail`/`job_ok` (jobs `faults.read`, `faults.save`, `faults.export`, `faults.store`). Controller import profile save and table read failures use jobs `controller.profile_save` and `controller.table_read`. Machine option refusals (`option` command) use `refuse_tool`. Left as they are: faults study result banners (the run itself), live_anim canvas colours, sim_chip heat rows (T6), `ResistorFlag` (no consumer). The census counts lines naming `Level::Error/Warning`, so job_fail calls still count; only faults dropped (19 -> 17).

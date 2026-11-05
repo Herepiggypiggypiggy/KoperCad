@@ -21,10 +21,15 @@ wait 20
 click 561 520
 wait 12
 expect "Cable =A1+CAB-W2"
-expect "Indicative: a design aid, not a test result."
 expect "holds or it does not"
 shot cable-card
 check_layout
+click 1847 128
+wait 8
+expect "Indicative: a design aid, not a test result."
+shot help-open
+click 1847 128
+wait 6
 scroll 1180 400 2000
 wait 8
 click_text "Preview: Use a shielded cable." #1
@@ -44,6 +49,11 @@ shot cable-card-after-ends
 check_layout
 scroll 1180 400 2000
 wait 8
+click 1847 128
+wait 8
 expect "No finding about this cable"
+shot help-no-finding
+click 1847 128
+wait 6
 shot cable-card-no-finding
 check_layout

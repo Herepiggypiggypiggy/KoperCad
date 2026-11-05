@@ -237,7 +237,7 @@ fn problem_census_sim() {
     // (file, ceiling). Test modules at the end of a file are not counted.
     let files: [(&str, &str, usize); 12] = [
         ("simulate", include_str!("simulate.rs"), 1),
-        ("faults", include_str!("faults.rs"), 19),
+        ("faults", include_str!("faults.rs"), 17),
         ("drive_run", include_str!("drive_run.rs"), 11),
         ("hoist_run", include_str!("hoist_run.rs"), 6),
         ("machine", include_str!("machine.rs"), 4),

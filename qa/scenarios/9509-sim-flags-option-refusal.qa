@@ -1,0 +1,14 @@
+@title An option the project does not have is a refusal triangle, not a toast
+@area Options
+@sizes 1366x768 1920x1080
+# T10c: machine option refusals use the refuse API: a triangle on the canvas corner that goes with the next input.
+open qa/fixtures/machine-options.novo
+wait 20
+key ctrl+k
+wait 3
+text option nosuchoption
+wait 4
+key Enter
+wait 12
+shot option-refusal
+check_layout

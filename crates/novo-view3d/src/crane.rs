@@ -292,24 +292,11 @@ const PANEL: [u8; 3] = [196, 200, 204];
 use crate::crane_parts::{Part, item as part_item, mm, stretched};
 use std::f32::consts::FRAC_PI_2;
 
-/// The scene for one frame.
-pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
-    let l = layout;
-    let runway = l.runway_m * 1000.0;
-    let span = l.span_m * 1000.0;
-    let rail = l.rail_m * 1000.0;
-    let bridge = state.bridge_m.clamp(0.0, l.runway_m) * 1000.0;
-    let trolley = state.trolley_m.clamp(0.0, l.span_m) * 1000.0;
-    let mut scene = Scene::new(PlateFrame {
-        width: runway,
-        height: rail,
-    });
+/// The floor, a little larger than the area of `runway` by `span` millimetres, with the safety
+/// markings: a yellow line along the outside of each runway and across both ends, 4 mm proud of
+/// the floor so they never z-fight with it.
+pub(crate) fn push_floor(scene: &mut Scene, runway: f32, span: f32) {
     let mut push = |item: Item| scene.push(item);
-    let other = ItemKind::Other;
-    // Along +x, +y, and the quarter turns that lay a part's long z axis on them.
-    let z_to_x = Quat::from_rotation_y(FRAC_PI_2);
-    let z_to_y = Quat::from_rotation_x(-FRAC_PI_2);
-
     // Floor, a little larger than the runway.
     push(boxed(
         RAW_FLOOR,
@@ -318,8 +305,6 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
         Vec3::new(runway + 6000.0, 60.0, span + 6000.0),
         FLOOR,
     ));
-    // Safety markings on the floor: a yellow line along the outside of each runway and across both
-    // ends, 4 mm proud of the floor so they never z-fight with it.
     {
         let (w, t) = (150.0, 4.0);
         let (x_lo, x_hi) = (-2000.0, runway + 2000.0);
@@ -340,6 +325,27 @@ pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
             ));
         }
     }
+}
+
+/// The scene for one frame.
+pub fn build(layout: &CraneLayout, state: &CraneState) -> Scene {
+    let l = layout;
+    let runway = l.runway_m * 1000.0;
+    let span = l.span_m * 1000.0;
+    let rail = l.rail_m * 1000.0;
+    let bridge = state.bridge_m.clamp(0.0, l.runway_m) * 1000.0;
+    let trolley = state.trolley_m.clamp(0.0, l.span_m) * 1000.0;
+    let mut scene = Scene::new(PlateFrame {
+        width: runway,
+        height: rail,
+    });
+    push_floor(&mut scene, runway, span);
+    let mut push = |item: Item| scene.push(item);
+    let other = ItemKind::Other;
+    // Along +x, +y, and the quarter turns that lay a part's long z axis on them.
+    let z_to_x = Quat::from_rotation_y(FRAC_PI_2);
+    let z_to_y = Quat::from_rotation_x(-FRAC_PI_2);
+
     // Runway beams along x at both ends of the span, with a crane rail on top and columns under
     // them. They run past the bridge's travel so an end truck at the end still has beam under it.
     let beam_len = runway + 2.0 * size::RUNWAY_OVERHANG;

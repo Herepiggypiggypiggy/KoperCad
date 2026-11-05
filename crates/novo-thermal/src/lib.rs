@@ -26,6 +26,7 @@ pub mod model;
 pub mod outside;
 pub mod placement;
 pub mod placement_project;
+pub mod radiation;
 mod report;
 pub mod result;
 mod setup;
