@@ -408,6 +408,7 @@ impl NovoApp {
         };
         match self.execute(command) {
             Some(Ok(_)) => {
+                self.parts_job_ok("set");
                 self.remember_part(&devices, &part.key());
                 self.message(
                     Level::Info,

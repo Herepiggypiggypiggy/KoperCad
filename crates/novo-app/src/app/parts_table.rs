@@ -280,6 +280,7 @@ impl NovoApp {
             );
             return false;
         }
+        self.parts_job_ok("table");
         // Best effort: the report next to the catalog, and the mapping for
         // the next file with these columns.
         let report = path.with_file_name("parts-table-import-report.txt");

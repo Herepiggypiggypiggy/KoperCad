@@ -176,15 +176,16 @@ impl NovoApp {
     /// inbox, which is created with a folder per maker first.
     pub(super) fn import_parts_folder(&mut self) {
         let inbox = default_inbox();
-        if let Some(dir) = &inbox
-            && let Err(e) = prepare_inbox(dir)
-        {
-            self.parts_job_failed(
-                "inbox",
-                novo_flags::Severity::Yellow,
-                "Parts inbox",
-                e.to_string(),
-            );
+        if let Some(dir) = &inbox {
+            match prepare_inbox(dir) {
+                Ok(_) => self.parts_job_ok("inbox"),
+                Err(e) => self.parts_job_failed(
+                    "inbox",
+                    novo_flags::Severity::Yellow,
+                    "Parts inbox",
+                    e.to_string(),
+                ),
+            }
         }
         let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Folder with catalog files (BMEcat, CSV, ZIP)");
@@ -220,6 +221,7 @@ impl NovoApp {
         }
         match import_inbox(folder, catalog_path, &opts) {
             Ok(report) => {
+                self.parts_job_ok("import");
                 self.message(Level::Info, summary_line(&report));
                 self.wb.parts_bulk = Some(BulkReport {
                     folder: folder.to_owned(),
@@ -293,7 +295,10 @@ impl NovoApp {
     fn reload_parts_catalog(&mut self) {
         if let Some(win) = self.wb.parts.as_mut() {
             match Catalog::load_default() {
-                Ok(c) => win.set_catalog(c),
+                Ok(c) => {
+                    win.set_catalog(c);
+                    self.parts_job_ok("catalog");
+                }
                 Err(e) => self.parts_job_failed(
                     "catalog",
                     novo_flags::Severity::Red,
@@ -338,11 +343,13 @@ impl NovoApp {
                 open_inbox = ui.button("Open inbox folder").clicked();
             });
         });
-        if open_inbox
-            && let Some(dir) = default_inbox()
-            && let Err(e) = open_folder(&dir)
-        {
-            self.parts_job_failed("import", novo_flags::Severity::Red, "Parts import", e);
+        if open_inbox && let Some(dir) = default_inbox() {
+            match open_folder(&dir) {
+                Ok(_) => self.parts_job_ok("import"),
+                Err(e) => {
+                    self.parts_job_failed("import", novo_flags::Severity::Red, "Parts import", e)
+                }
+            }
         }
         if close || modal.should_close() {
             self.wb.parts_bulk = None;
@@ -353,7 +360,10 @@ impl NovoApp {
     /// them; nothing changes until Accept all.
     pub(super) fn start_auto_assign(&mut self) {
         let catalog = match Catalog::load_default() {
-            Ok(c) => c,
+            Ok(c) => {
+                self.parts_job_ok("catalog");
+                c
+            }
             Err(e) => {
                 self.parts_job_failed(
                     "catalog",
@@ -436,6 +446,7 @@ impl NovoApp {
         };
         match self.execute(command) {
             Some(Ok(_)) => {
+                self.parts_job_ok("assign");
                 self.message(Level::Info, format!("Assigned parts to {count} device(s)"));
                 true
             }
@@ -608,10 +619,13 @@ impl NovoApp {
             return;
         };
         match self.execute(command) {
-            Some(Ok(_)) => self.message(
-                Level::Info,
-                format!("Removed the part from {} selected", devices.len()),
-            ),
+            Some(Ok(_)) => {
+                self.parts_job_ok("remove");
+                self.message(
+                    Level::Info,
+                    format!("Removed the part from {} selected", devices.len()),
+                );
+            }
             Some(Err(e)) => self.parts_job_failed(
                 "remove",
                 novo_flags::Severity::Red,
@@ -633,7 +647,10 @@ impl NovoApp {
             return;
         };
         match self.execute(command) {
-            Some(Ok(_)) => self.message(Level::Info, format!("Removed {n} unused part(s)")),
+            Some(Ok(_)) => {
+                self.parts_job_ok("remove");
+                self.message(Level::Info, format!("Removed {n} unused part(s)"));
+            }
             Some(Err(e)) => self.parts_job_failed(
                 "remove",
                 novo_flags::Severity::Red,

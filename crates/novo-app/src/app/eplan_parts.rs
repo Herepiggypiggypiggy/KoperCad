@@ -391,7 +391,10 @@ impl NovoApp {
         };
         self.wb.eplan_parts_job = None;
         match answer {
-            Ok(import) => self.wb.eplan_parts = Some(import),
+            Ok(import) => {
+                self.parts_job_ok("eplan");
+                self.wb.eplan_parts = Some(import);
+            }
             Err(e) => self.parts_job_failed(
                 "eplan",
                 novo_flags::Severity::Red,
@@ -422,6 +425,7 @@ impl NovoApp {
     ) -> bool {
         match read_job(paths, catalog_path) {
             Ok(import) => {
+                self.parts_job_ok("eplan");
                 self.wb.eplan_parts = Some(import);
                 true
             }
@@ -471,16 +475,19 @@ impl NovoApp {
             );
             return false;
         }
+        self.parts_job_ok("eplan");
         if import.aliases != MakerAliases::default()
             && let Some(p) = &import.alias_path
-            && let Err(e) = import.aliases.save(p)
         {
-            self.parts_job_failed(
-                "eplan.makers",
-                novo_flags::Severity::Yellow,
-                "Maker names not saved",
-                format!("Could not save the maker names: {e}"),
-            );
+            match import.aliases.save(p) {
+                Ok(_) => self.parts_job_ok("eplan.makers"),
+                Err(e) => self.parts_job_failed(
+                    "eplan.makers",
+                    novo_flags::Severity::Yellow,
+                    "Maker names not saved",
+                    format!("Could not save the maker names: {e}"),
+                ),
+            }
         }
         let (added, changed, _) = import.counts();
         self.message(

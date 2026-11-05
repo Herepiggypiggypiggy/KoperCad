@@ -1065,7 +1065,10 @@ impl NovoApp {
             return;
         }
         let catalog = match Catalog::load_default() {
-            Ok(c) => c,
+            Ok(c) => {
+                self.parts_job_ok("catalog");
+                c
+            }
             Err(e) => {
                 self.parts_job_failed(
                     "catalog",
@@ -1244,6 +1247,7 @@ impl NovoApp {
         }
         let mut assign = None;
         let mut open_dir = None;
+        let acted = !actions.is_empty();
         for action in actions {
             match action {
                 PartsAction::ImportTable => {
@@ -1443,6 +1447,8 @@ impl NovoApp {
                 "Parts action failed",
                 text,
             );
+        } else if acted {
+            self.parts_job_ok("window");
         }
         if let Some(text) = info {
             self.message(Level::Info, text);
@@ -1462,21 +1468,21 @@ impl NovoApp {
             );
         }
         match open_dir {
-            Some((dir, true)) => {
-                if let Err(e) = super::parts_bulk::prepare_and_import_inbox(self, &dir) {
-                    self.parts_job_failed("inbox", novo_flags::Severity::Red, "Parts inbox", e);
+            Some((dir, true)) => match super::parts_bulk::prepare_and_import_inbox(self, &dir) {
+                Ok(_) => self.parts_job_ok("inbox"),
+                Err(e) => {
+                    self.parts_job_failed("inbox", novo_flags::Severity::Red, "Parts inbox", e)
                 }
-            }
-            Some((dir, false)) => {
-                if let Err(e) = super::parts_bulk::open_folder(&dir) {
-                    self.parts_job_failed(
-                        "folder",
-                        novo_flags::Severity::Red,
-                        "Folder not opened",
-                        e,
-                    );
-                }
-            }
+            },
+            Some((dir, false)) => match super::parts_bulk::open_folder(&dir) {
+                Ok(_) => self.parts_job_ok("folder"),
+                Err(e) => self.parts_job_failed(
+                    "folder",
+                    novo_flags::Severity::Red,
+                    "Folder not opened",
+                    e,
+                ),
+            },
             None => {}
         }
         if let Some(part) = assign {
