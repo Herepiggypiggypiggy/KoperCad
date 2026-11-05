@@ -1050,12 +1050,10 @@ impl NovoApp {
             return;
         }
         ui.add_space(4.0);
-        ui.label(
-            egui::RichText::new(
-                "Optional. Uses your own Anthropic API key and your own API credits. \
-                 KoperCAD has no account with Anthropic and sees none of your usage.",
-            )
-            .color(pal.text_secondary),
+        ui.strong("Settings");
+        ui.weak(
+            "Optional. Uses your own Anthropic API key and your own API credits. \
+             KoperCAD has no account with Anthropic and sees none of your usage.",
         );
         ui.add_space(6.0);
 
@@ -1071,7 +1069,11 @@ impl NovoApp {
                 ui.label(format!("{} ({where_from})", k.masked()));
             }
             None => {
-                ui.weak("No key yet. Create one at console.anthropic.com, API keys.");
+                ui.weak("No key yet");
+                super::window_help::add(
+                    ui.ctx(),
+                    "No key yet: create one at console.anthropic.com, API keys.",
+                );
             }
         }
         ui.horizontal(|ui| {
@@ -1136,13 +1138,24 @@ impl NovoApp {
         if let Some((good, note)) = &self.wb.assistant.key_note {
             ui.colored_label(if *good { pal.success } else { pal.error }, note);
         }
+        // The privacy warning stays on screen; the detail is behind the "?".
         ui.weak(
+            "The key is saved unencrypted as a file in your user profile; anyone who can read \
+             your profile can read it. Remove it here when you stop using Claude.",
+        );
+        super::window_help::add(
+            ui.ctx(),
             "The key is saved as a file in your user profile (not encrypted, not in the \
              project file; only its last four characters are ever shown). Anyone who can read \
              your profile can read it. Remove it here when you stop using Claude.",
         );
         if crate::is_portable() {
             ui.weak(
+                "Portable install: the key file travels with a copy of the program folder (a USB \
+                 stick, a shared drive). Remove the key here before you hand the folder on.",
+            );
+            super::window_help::add(
+                ui.ctx(),
                 "This is a portable install: the key file sits in the data folder next to the \
                  program and travels with a copy of that folder (a USB stick, a shared drive). \
                  Remove the key here before you hand the folder on.",
@@ -1216,10 +1229,15 @@ impl NovoApp {
                         .on_hover_text(m.note);
                 }
             });
-        ui.weak(format!(
-            "{}. List price ${:.2} in / ${:.2} out per million tokens.",
-            model.note, model.input, model.output
-        ));
+        super::window_help::add(
+            ui.ctx(),
+            format!(
+                "{}. List price ${:.2} in / ${:.2} out per million tokens.\n\nCosts are \
+                 estimates from Anthropic's list prices. Your Anthropic account shows the real \
+                 bill.",
+                model.note, model.input, model.output
+            ),
+        );
         ui.horizontal(|ui| {
             ui.label("Thinking");
             for e in novo_ai::config::EFFORTS {
@@ -1248,10 +1266,6 @@ impl NovoApp {
             },
             self.wb.assistant.ledger.requests
         ));
-        ui.weak(
-            "Costs are estimates from Anthropic's list prices. Your Anthropic account shows \
-             the real bill.",
-        );
         ui.add_space(6.0);
     }
 
@@ -1326,11 +1340,15 @@ impl NovoApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if self.wb.assistant.transcript.is_empty() {
-                    ui.weak(
-                        "Ask about your project, for example “Which devices have no part \
-                         assigned?” or “Check my tags against IEC 81346.” Claude can \
-                         suggest edits; you apply or reject each one.",
-                    );
+                    {
+                        ui.weak("Ask about your project");
+                        super::window_help::add(
+                            ui.ctx(),
+                            "Ask about your project, for example “Which devices have no part assigned?” or “Check my \
+                             tags against IEC 81346.” Claude can suggest edits; you apply or \
+                             reject each one.",
+                        );
+                    }
                 }
                 for (i, entry) in self.wb.assistant.transcript.iter().enumerate() {
                     match entry {
@@ -1573,7 +1591,7 @@ fn change_set_ui(
             }
         } else {
             ui.label(egui::RichText::new(format!("Change set: {n} steps in a draft")).strong());
-            ui.weak("Nothing is in your project yet.");
+ui.weak("Nothing is in your project yet.");
             egui::CollapsingHeader::new(format!("The {n} steps"))
                 .id_salt(("assistant_steps", index))
                 .default_open(false)
@@ -1631,7 +1649,8 @@ fn change_set_ui(
                 "Claude did not run the checks after its last edit; the numbers above are the program's own.",
             );
         }
-        ui.weak(
+super::window_help::add(
+            ui.ctx(),
             "The checks find drawing problems. They do not show that the design is right or \
              that it meets a standard.",
         );
