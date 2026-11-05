@@ -449,7 +449,9 @@ impl NovoApp {
                     }
                     if output.sections.iter().all(|s| s.rows.is_empty()) {
                         if id == novo_reports::query::SavedQueries::ID {
-                            let (text, hint) = saved_empty_state(output.sections.is_empty());
+                            let (text, hint) = saved_empty_state(
+                                output.sections.iter().all(|s| s.key == "presets"),
+                            );
                             ui.horizontal(|ui| {
                                 ui.weak(text);
                                 novo_theme::widgets::help_mark(ui, hint);
