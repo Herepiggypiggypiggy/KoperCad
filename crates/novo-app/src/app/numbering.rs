@@ -289,6 +289,7 @@ impl NovoApp {
         let mut reveal: Option<WireId> = None;
         let mut row_edit: Option<RowEdit> = None;
         super::panel::dialog(ctx, "Wire numbering", [560.0, 620.0])
+            .tall()
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let mode_name = match win.mode {
