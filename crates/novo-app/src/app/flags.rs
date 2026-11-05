@@ -19,6 +19,8 @@ use super::NovoApp;
 pub(super) const FIX_ASSIGN_PARTS: &str = "parts.auto_assign";
 /// The command id of the "usual pin names" fix.
 pub(super) const FIX_PIN_NAMES: &str = "pin_names.fix";
+/// The command id of the "preview the EMC suggestion" fix.
+pub(super) const FIX_EMC_PREVIEW: &str = "emc.preview";
 
 /// What the app holds about flags besides the store.
 pub(super) struct FlagUi {
@@ -29,6 +31,9 @@ pub(super) struct FlagUi {
     index: HashMap<FlagId, usize>,
     /// The popover that is open, and where it was asked for.
     pub(super) open: Option<(FlagId, egui::Pos2)>,
+    /// The EMC suggestion the open popover can preview (worked out once per
+    /// popover, not per frame): the flag it was worked out for and the fix.
+    emc_fix: Option<(FlagId, Option<novo_emc::Fix>)>,
     /// What Retry runs for each job flag (wiring lane).
     pub(super) retry: HashMap<FlagId, super::flags_wiring::JobRetry>,
     /// The transient flags of refused edits (lane T7).
@@ -50,6 +55,7 @@ impl Default for FlagUi {
             synced: None,
             index: HashMap::new(),
             open: None,
+            emc_fix: None,
             retry: HashMap::new(),
             edit: Default::default(),
             jobs: HashMap::new(),
@@ -66,6 +72,85 @@ pub(super) fn title(kind: ProblemKind) -> &'static str {
         ProblemKind::LoneInterruption => "Lone interruption point",
         ProblemKind::DuctOverlap => "Duct overlaps something",
         other => other.label(),
+    }
+}
+
+/// The engine a check kind belongs to: the EMC rules, the safety function
+/// calculation and the cable, protection and starter calculations get their
+/// own source so the badge and the filters name them; every other check is
+/// an Issues flag.
+pub(super) fn source_of(kind: ProblemKind, key: &str) -> Source {
+    match kind {
+        ProblemKind::Emc => Source::Emc,
+        ProblemKind::SafetyLevelNotMet | ProblemKind::SafetyBinding => Source::Safety,
+        ProblemKind::CableRating
+        | ProblemKind::ShortCircuit
+        | ProblemKind::DisconnectionTime
+        | ProblemKind::ThermalWithstand
+        | ProblemKind::VoltageDrop
+        | ProblemKind::MotorStarter
+        | ProblemKind::ProtectiveConductor => Source::Calc,
+        _ => Source::Issues(key.to_owned()),
+    }
+}
+
+/// The label of a flag's generic Open button: its home window's label, else plain "Open"
+/// (a commissioning punch flag opens the punch list).
+pub(super) fn open_label(flag: &novo_flags::Flag) -> &'static str {
+    home_of(flag).map_or("Open", |(_, label)| label)
+}
+
+/// The window that holds the whole picture behind a finding: its command id
+/// and the button label.
+pub(super) fn home_of(flag: &novo_flags::Flag) -> Option<(&'static str, &'static str)> {
+    match &flag.source {
+        Source::Emc => Some(("check.emc", "Open EMC check")),
+        Source::Safety => Some(("check.safety", "Open safety functions")),
+        Source::Calc => Some(("check.calculations", "Open calculations")),
+        Source::Issues(k) if k == ProblemKind::Standard.key() => {
+            Some(("check.standards", "Open standards report"))
+        }
+        _ => None,
+    }
+}
+
+/// The standing caveat of a source, shown behind the "?" in the popover.
+/// These findings are design aids; none of them is a compliance statement.
+pub(super) fn caveat(flag: &novo_flags::Flag) -> Option<String> {
+    match &flag.source {
+        Source::Emc => Some(format!(
+            "{} Rules on what is drawn, geometric indices and closed-form estimates; clause numbers are unverified. Never a compliance statement.",
+            novo_emc::DESIGN_AID
+        )),
+        Source::Safety => Some(novo_safety::DISCLAIMER.to_owned()),
+        Source::Calc => Some(
+            "Design aid, not a certified calculation. Planning tables are used unless a licensed copy of the standard is loaded.".to_owned(),
+        ),
+        Source::Issues(k) if k == ProblemKind::Standard.key() => Some(
+            "Design aid, not compliance. The rules follow the selected standard as the program states them; clause numbers are unverified.".to_owned(),
+        ),
+        _ => None,
+    }
+}
+
+/// A title of at most 28 characters for an EMC rule.
+pub(super) fn emc_title(rule: &str) -> &'static str {
+    match rule {
+        "EMC-01" => "Classes too close",
+        "EMC-02" => "Parallel run too long",
+        "EMC-04" => "Motor cable shield",
+        "EMC-05" => "Shield pigtail too long",
+        "EMC-07" => "No drive input filter",
+        "EMC-09" => "Loop area large",
+        "EMC-11" => "Plate bonding",
+        "EMC-12" => "Door and hinge crossing",
+        "EMC-14" => "Signal cable leaves cabinet",
+        "EMC-17" => "Sensitive device near drive",
+        "EMC-19" => "Field at sensitive device",
+        "EMC-20" => "Induced voltage in a run",
+        "EMC-21" => "Motor cable leakage",
+        "EMC-22" => "Box resonance, drive inside",
+        _ => "EMC finding",
     }
 }
 
@@ -116,20 +201,35 @@ pub(super) fn draft(p: &Problem) -> Option<FlagDraft> {
         Severity::Warning => novo_flags::Severity::Yellow,
         Severity::Info => return None,
     };
+    let source = source_of(p.kind, p.kind.key());
     let mut actions = vec![Action::Locate];
     match p.kind {
         ProblemKind::MissingPart => actions.push(Action::Fix(FIX_ASSIGN_PARTS.into())),
         ProblemKind::PinNames => actions.push(Action::Fix(FIX_PIN_NAMES.into())),
+        ProblemKind::Emc => actions.push(Action::Fix(FIX_EMC_PREVIEW.into())),
+        _ => {}
+    }
+    // The window with the whole picture (scores, assumptions, tables).
+    match source {
+        Source::Emc => actions.push(Action::Open("check.emc".into())),
+        Source::Safety => actions.push(Action::Open("check.safety".into())),
+        Source::Calc => actions.push(Action::Open("check.calculations".into())),
+        Source::Issues(_) if p.kind == ProblemKind::Standard => {
+            actions.push(Action::Open("check.standards".into()));
+        }
         _ => {}
     }
     actions.extend([Action::Waive, Action::Explain, Action::Copy]);
     Some(FlagDraft {
         severity,
         unchecked: is_unchecked(p.kind),
-        source: Source::Issues(p.kind.key().to_owned()),
+        source,
         rule: p.rule.unwrap_or_default().to_owned(),
         anchors: anchors(p),
-        title: title(p.kind).to_owned(),
+        title: match (p.kind, p.rule) {
+            (ProblemKind::Emc, Some(rule)) => emc_title(rule).to_owned(),
+            _ => title(p.kind).to_owned(),
+        },
         detail: Detail::new([p.message.clone()]),
         actions,
         waiver_key: Some(p.waiver_key()),
@@ -165,10 +265,17 @@ impl NovoApp {
     }
 
     fn sync_issue_flags(&mut self) {
-        let source = Source::Issues(String::new());
+        let engines = [
+            Source::Issues(String::new()),
+            Source::Emc,
+            Source::Safety,
+            Source::Calc,
+        ];
         if self.learn.quiet_checks() {
             if self.wb.flags.synced.take().is_some() {
-                self.wb.flags.store.replace_source(&source, Vec::new());
+                for engine in &engines {
+                    self.wb.flags.store.replace_source(engine, Vec::new());
+                }
                 self.wb.flags.index.clear();
             }
             return;
@@ -196,9 +303,15 @@ impl NovoApp {
             let id = novo_flags::Flag::from_draft(d.clone()).id;
             flags.index.entry(id).or_insert(*i);
         }
-        flags
-            .store
-            .replace_source(&source, built.into_iter().map(|(_, d)| d).collect());
+        // One replace per engine: a source only ever replaces its own flags.
+        for engine in &engines {
+            let mine: Vec<FlagDraft> = built
+                .iter()
+                .filter(|(_, d)| d.source.key().split(':').next() == engine.key().split(':').next())
+                .map(|(_, d)| d.clone())
+                .collect();
+            flags.store.replace_source(engine, mine);
+        }
         flags.synced = Some(revision);
     }
 
@@ -246,17 +359,12 @@ impl NovoApp {
         let project = doc.project();
         let mut marks = Vec::new();
         for flag in self.wb.flags.store.list(false) {
-            // A refusal says its reason in the popover only: no second line on the canvas.
-            let quiet = flag.source == Source::Edit;
-            let hover = std::iter::once(flag.title.clone())
-                .chain(flag.detail.0.iter().cloned())
-                .collect::<Vec<_>>()
-                .join(": ");
+            // The reason shows in the popover only: no second line on the canvas.
             for target in super::flags_edit::mark_targets(project, flag, page) {
                 marks.push(Mark {
                     kind: mark_kind(flag),
                     target,
-                    text: if quiet { String::new() } else { hover.clone() },
+                    text: String::new(),
                     key: flag.id.0,
                 });
             }
@@ -295,6 +403,20 @@ impl NovoApp {
             novo_flags::Severity::Yellow => pal.warning,
         };
         let index = self.wb.flags.index.get(&id).copied();
+        if flag.source == Source::Emc
+            && self.wb.flags.emc_fix.as_ref().is_none_or(|(f, _)| *f != id)
+        {
+            let rule = index.and_then(|i| self.shown_problems().get(i).and_then(|p| p.rule));
+            let fix = self.emc_fix_of(&flag, rule);
+            self.wb.flags.emc_fix = Some((id, fix));
+        }
+        let emc_fix = self
+            .wb
+            .flags
+            .emc_fix
+            .as_ref()
+            .and_then(|(f, x)| (*f == id).then(|| x.clone()))
+            .flatten();
         let mut chosen: Option<Action> = None;
         let mut dismiss = false;
         let mut close = ctx.input(|i| i.key_pressed(egui::Key::Escape));
@@ -314,6 +436,9 @@ impl NovoApp {
                         .on_hover_text(flag.accessible_name());
                         ui.label(egui::RichText::new(&flag.title).strong());
                         ui.weak(flag.source.badge());
+                        if let Some(text) = caveat(&flag) {
+                            novo_theme::widgets::help_mark(ui, &text);
+                        }
                     });
                     novo_theme::widgets::help_scroll(ui, |ui| {
                         for line in &flag.detail.0 {
@@ -326,17 +451,21 @@ impl NovoApp {
                                 Action::Locate => "Locate",
                                 Action::Fix(c) if c == FIX_ASSIGN_PARTS => "Assign parts",
                                 Action::Fix(c) if c == FIX_PIN_NAMES => "Use the usual pin names",
+                                Action::Fix(c) if c == FIX_EMC_PREVIEW && emc_fix.is_some() => {
+                                    "Preview the fix"
+                                }
+                                Action::Fix(c) if c == FIX_EMC_PREVIEW => continue,
                                 a if super::flags_shell::shell_command(a).is_some() => {
                                     super::flags_shell::shell_command(a).map_or("Fix", |c| c.1)
                                 }
-                                Action::Fix(_) => "Fix",
-                                Action::Waive => "Waive…",
-                                Action::Retry => "Retry",
                                 Action::Open(k) if k == super::flags_jobs::OPEN_FOLDER => {
                                     "Open folder"
                                 }
                                 Action::Open(k) if k == super::flags_jobs::DISMISS => "Dismiss",
-                                Action::Open(_) => "Open",
+                                Action::Open(_) => open_label(&flag),
+                                Action::Fix(_) => "Fix",
+                                Action::Waive => "Waive…",
+                                Action::Retry => "Retry",
                                 Action::Copy if flag.source == Source::Job => "Copy details",
                                 Action::Copy => "Copy",
                                 Action::Explain if self.settings.ai.enabled => {
@@ -379,6 +508,7 @@ impl NovoApp {
         }
         if close {
             self.wb.flags.open = None;
+            self.wb.flags.emc_fix = None;
         }
     }
 
@@ -425,6 +555,17 @@ impl NovoApp {
             Action::Fix(cmd) if cmd == FIX_PIN_NAMES => {
                 if let Some(i) = index {
                     self.fix_pin_names(i);
+                }
+            }
+            Action::Fix(cmd) if cmd == FIX_EMC_PREVIEW => {
+                if let Some((_, Some(fix))) = self.wb.flags.emc_fix.clone() {
+                    self.emc.open = true;
+                    self.emc_preview(&fix);
+                }
+            }
+            Action::Open(_) => {
+                if let Some((command, _)) = home_of(flag) {
+                    self.wb.queued.push(command);
                 }
             }
             Action::Waive => {
