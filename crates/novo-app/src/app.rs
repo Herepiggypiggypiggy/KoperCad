@@ -192,6 +192,8 @@ mod heat_status_tests;
 mod heat_sweep;
 #[cfg(test)]
 mod heat_sweep_tests;
+#[cfg(test)]
+mod heat_tests_enclosure_lines;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
