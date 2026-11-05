@@ -1,0 +1,40 @@
+@title Wires follow the factory duct and cable entry of the enclosure spec
+@area Reports
+# Three copies of one cabinet whose only duct comes from the enclosure spec: duct at y 250 (catalogue), duct at y 450 (catalogue) and duct at y 250 read from the maker's STEP. Wires through catalogue ducts carry "~ routed (catalogue)" in the wire list and the Routes panel says "~ catalogue ducts"; the STEP spec has no ~. The wire list length changes with the duct position.
+# Fixtures: qa/fixtures/spec-duct-*.novo (cargo test -p novo-reports --test reports write_spec_duct_fixtures -- --ignored)
+open qa/fixtures/spec-duct-a.novo
+wait 20
+click_text Cabinet #1
+wait 20
+key ctrl+k
+text Route all wires
+key enter
+wait 20
+expect "~ catalogue ducts"
+shot routes-catalogue-duct-a
+check_layout
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "~ routed (catalogue)"
+shot wire-list-catalogue-duct-a
+check_layout
+open qa/fixtures/spec-duct-b.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect "~ routed (catalogue)"
+shot wire-list-catalogue-duct-b
+check_layout
+open qa/fixtures/spec-duct-step.novo
+wait 20
+key ctrl+k
+text Wire list
+key enter
+wait 15
+expect_not "~ routed (catalogue)"
+shot wire-list-step-duct
+check_layout
