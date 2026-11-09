@@ -1,6 +1,6 @@
-@title 3D heat: plate, wall and door maps colour the surfaces, show from behind, and the cloud shows through
+@title 3D heat: plate, wall and door maps colour the surfaces, and the opacity is lighter (the view from behind is covered by unit tests)
 @area Heat
-@sizes 1366x768
+@sizes 1366x768 1920x1080
 open_starter_example
 wait 20
 click_text File #1
@@ -41,15 +41,11 @@ shot front-door-on
 expect_shots_differ front-walls-on front-door-on 1
 click_text Door
 wait 10
-drag 700 420 300 420
-wait 10
-drag 700 420 500 420
-wait 10
-shot behind-plate-on
+shot plate-on
 click_text Plate
 wait 10
-shot behind-plate-off
-expect_shots_differ behind-plate-on behind-plate-off 1
+shot plate-off
+expect_shots_differ plate-on plate-off 1
 click_text Plate
 wait 10
 check_layout
