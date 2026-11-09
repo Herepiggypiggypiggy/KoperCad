@@ -86,6 +86,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `check_layout` | cheap layout checks, see below |
 | `check_text [max_words] [cells]` | finding S3 for every label of more than `max_words` words (default 8) in the widget tree: explanation text belongs behind the window's `?` icon, a label, value or result is shorter; with the option `cells` (`check_text 20 cells`, opt-in per scenario) a long label with short labels on both sides of its line is a data table cell (catalog row) and is not counted; sentences are always counted |
 | `check_blank [label]` | takes a screenshot; finding S2 when the window is one flat colour |
+| `expect_shots_differ A B [percent]` | two earlier `shot`s (by label) of the same window differ in at least this share of pixels (default 1): a switch only a picture can show has an effect; a miss is a finding (S3) |
 | `tree [filter]` | write the labelled widgets to `logs/` (for authors: find the right label) |
 | `sweep_commands [Group]` | every command of the command field, by its own name (slow) |
 | `sweep_lessons` | every shipped lesson, opened from the command field (slow) |

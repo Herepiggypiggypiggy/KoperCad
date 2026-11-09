@@ -28,5 +28,11 @@ wait 40
 wait_s 30
 shot heat-3d
 expect "Plate"
-shot heat-3d-plate
+shot plate-on
+click_text Plate
+wait 10
+shot plate-off
+expect_shots_differ plate-on plate-off 1
+click_text Plate
+wait 10
 check_layout

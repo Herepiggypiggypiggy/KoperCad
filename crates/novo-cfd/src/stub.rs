@@ -219,6 +219,7 @@ fn extrude(
         }],
         wall_flux_w_m2: vec![0.0; n],
         plate_rear_c: None,
+        plate_field_c: None,
         devices,
         hot_spots,
         progress,

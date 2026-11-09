@@ -51,6 +51,7 @@ pub(super) fn snapshot() -> CfdSnapshot {
         ],
         wall_flux_w_m2: vec![0.0; n],
         plate_rear_c: None,
+        plate_field_c: None,
         devices: Vec::new(),
         hot_spots: Vec::new(),
         progress: Progress {
@@ -426,23 +427,31 @@ fn raising_the_scale_floor_changes_how_a_device_is_coloured() {
 }
 
 #[test]
-fn the_plate_is_coloured_by_temperature_in_front_of_it() {
-    let snap = snapshot();
+fn the_plate_is_coloured_by_the_solvers_plate_sheet_temperature() {
+    let mut snap = snapshot();
     let fl = flow(&snap, place());
     let base = Heat3d {
         slice: false,
         plate: false,
         ..Heat3d::default()
     };
-    assert!(overlays(&snap, 20.0, place(), &base, &fl, 1.0).is_empty());
     let on = Heat3d {
         plate: true,
         ..base
     };
+    // A result without a plate sheet draws no plate map, even with the switch on.
+    assert!(overlays(&snap, 20.0, place(), &on, &fl, 1.0).is_empty());
+    let (nx, ny) = (snap.grid.nx, snap.grid.ny);
+    let mut field = vec![f32::NAN; nx * ny];
+    field[0] = 20.0;
+    field[nx * ny - 1] = 30.0;
+    snap.plate_field_c = Some(field);
+    assert!(overlays(&snap, 20.0, place(), &base, &fl, 1.0).is_empty());
     let o = overlays(&snap, 20.0, place(), &on, &fl, 1.0);
     let [Overlay::Mesh(m)] = &o[..] else {
         panic!("one plate mesh expected, got {}", o.len());
     };
-    // The plane is the first layer of cells (5 mm cells: centre at 2.5 mm).
-    assert!(!m.indices.is_empty());
+    // Two columns have a plate: two quads, the cold one and the hot one in different colours.
+    assert_eq!(m.indices.len(), 12);
+    assert_ne!(m.colors[0], m.colors[4]);
 }

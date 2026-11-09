@@ -23,7 +23,7 @@ pub(crate) struct Heat3d {
     pub lines: bool,
     /// Arrows on the slice plane instead of (or besides) streamlines.
     pub arrows: bool,
-    /// The mounting plate coloured by the air temperature against it.
+    /// The mounting plate coloured by the solver's plate sheet temperature.
     pub plate: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
@@ -286,13 +286,41 @@ pub(crate) fn overlays(
 /// Opacity of the plate map: nearly solid, so the plate reads as a coloured surface.
 const PLATE_ALPHA: u8 = 235;
 
-/// The mounting plate as a colour map: the plane through the first layer of cells in front of
-/// the plate (Z = 0 is the plate), coloured by temperature.
+/// The mounting plate as a colour map: the solver's own plate sheet temperature of every rear
+/// column (`i + nx * j`), drawn on the plate face. Columns without a plate and results without a
+/// plate sheet draw nothing.
 pub(crate) fn plate_mesh(snap: &CfdSnapshot, place: Place, range: Range) -> Option<OverlayMesh> {
-    let (lo, hi) = extent(snap, Axis::Z);
-    let first = snap.grid.z_edges_mm.windows(2).next()?;
-    let at = (0.5 * (first[1] - first[0]) / (hi - lo).max(1e-9)) as f32;
-    slice_mesh_with(snap, place, range, Axis::Z, at, PLATE_ALPHA)
+    let field = snap.plate_field_c.as_ref()?;
+    let g = &snap.grid;
+    if field.len() != g.nx * g.ny {
+        return None;
+    }
+    // Half a millimetre in front of the plate so the map is not hidden by the plate's own face.
+    let z = g.z_edges_mm.first().copied()? + 0.5;
+    let mut m = OverlayMesh {
+        translucent: true,
+        order: 0,
+        ..Default::default()
+    };
+    for j in 0..g.ny {
+        for i in 0..g.nx {
+            let t = field[i + g.nx * j];
+            if !t.is_finite() {
+                continue;
+            }
+            let rgb = heat::ramp(range.t(f64::from(t)));
+            let (x0, x1) = (g.x_edges_mm[i], g.x_edges_mm[i + 1]);
+            let (y0, y1) = (g.y_edges_mm[j], g.y_edges_mm[j + 1]);
+            let base = m.positions.len() as u32;
+            for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
+                m.positions.push(place.world([x, y, z]));
+                m.colors.push([rgb[0], rgb[1], rgb[2], PLATE_ALPHA]);
+            }
+            m.indices
+                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
+    }
+    (!m.indices.is_empty()).then_some(m)
 }
 
 /// The cell edges of the result along `axis`, mm.

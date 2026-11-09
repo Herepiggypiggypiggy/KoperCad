@@ -212,6 +212,10 @@ pub struct CfdSnapshot {
     /// Mean temperature of the mounting plate sheet (rear side), degrees C;
     /// `None` when the run has no plate sheet.
     pub plate_rear_c: Option<f64>,
+    /// Temperature of the mounting plate sheet in every rear column (`i + nx * j` over the grid's
+    /// x and y cells), degrees C, as the solver holds it; NaN where no plate covers the column.
+    /// `None` when the run has no plate sheet.
+    pub plate_field_c: Option<Vec<f32>>,
     pub devices: Vec<DeviceResult>,
     pub hot_spots: Vec<HotSpot>,
     pub progress: Progress,

@@ -112,6 +112,22 @@ fn walls_follow_the_shell_and_report_surface_temperatures() {
         snap.materials.iter().map(|m| m.kind).collect::<Vec<_>>()
     );
     assert!((total / 50.0 - 1.0).abs() < 0.06, "walls {total} W of 50 W");
+    // the plate sheet is published per column, and its covered mean is the reported mean
+    if let Some(mean) = snap.plate_rear_c {
+        let f = snap.plate_field_c.as_ref().expect("a plate field");
+        assert_eq!(f.len(), snap.grid.nx * snap.grid.ny);
+        let hot = f
+            .iter()
+            .copied()
+            .filter(|t| t.is_finite())
+            .fold(f32::MIN, f32::max);
+        assert!(
+            f64::from(hot) >= mean - 1e-3,
+            "hottest column {hot} under mean {mean}"
+        );
+    } else {
+        assert!(snap.plate_field_c.is_none());
+    }
     // top of the box is warmer than the bottom
     assert!(r.faces[TOP].inner_air_c > r.faces[BOTTOM].inner_air_c);
 
