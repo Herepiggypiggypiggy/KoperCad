@@ -102,6 +102,9 @@ pub(crate) struct View3dMode {
     /// The probe tool and the point it reads.
     probe: ProbeState,
     heat_shown: Option<(u64, Heat3d)>,
+    /// The first result of this view has switched the temperature cloud and the air streamlines
+    /// on (once: the person's own switches win from then on).
+    heat_looked: bool,
     /// The enclosure the openings sit in, for the project revision it was read
     /// at (the Heat panel's grilles and fans are drawn before any run).
     vent_enclosure: Option<((StructureId, u64), Option<novo_thermal::model::Enclosure>)>,
@@ -237,6 +240,7 @@ impl Default for View3dMode {
             heat: Heat3d::default(),
             probe: ProbeState::default(),
             heat_shown: None,
+            heat_looked: false,
             vent_enclosure: None,
             vent_markers: Vec::new(),
             flags: view3d_flags::Transients::default(),
@@ -631,6 +635,11 @@ impl NovoApp {
         // panels, whatever result is held.
         let heat_on = self.cabinet.heat.on;
         let solution = self.cabinet.heat.solution().filter(|_| heat_on);
+        if solution.is_some() && !mode.heat_looked {
+            mode.heat_looked = true;
+            mode.heat.cloud = true;
+            mode.heat.set_flow(heat_flow::FlowMode::Streamlines);
+        }
         // Kept where the window has the room for it: the 1280 x 688 window
         // the compact toolbar is made for (see `view3d_controls`) is one of
         // them, so the cabinet is already at its final size before the first
