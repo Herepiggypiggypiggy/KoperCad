@@ -2392,8 +2392,22 @@ fn heat_controls(
             extra.push(novo_layout::spec::ESTIMATE_NOTICE);
         }
         heat_legend::help(ui, h, range, top_speed, top_flux, &extra);
-        ui.checkbox(&mut h.plate, "Plate")
-            .on_hover_text("Mounting plate sheet temperature from the solver (estimate)");
+        ui.checkbox(&mut h.plate, "Plate").on_hover_text(
+            "Mounting plate sheet temperature from the solver, shown on both faces of the plate (estimate)",
+        );
+        ui.checkbox(&mut h.walls, "Walls").on_hover_text(
+            "Inner surface of the side, top, bottom and rear walls: the solver's air next to each wall through the wall's shell stack (estimate, the walls are not solved as solids)",
+        );
+        ui.checkbox(&mut h.door, "Door").on_hover_text(
+            "Inner surface of the door, same method as the walls (estimate). It covers the view into the cabinet from the front, so lower its opacity or turn it off to look inside",
+        );
+        if h.plate || h.walls || h.door {
+            ui.add(
+                egui::Slider::new(&mut h.surface_opacity, heat_3d::SURFACE_OPACITY_RANGE)
+                    .show_value(false),
+            )
+            .on_hover_text("Opacity of the plate, wall and door maps; the cloud is drawn over them");
+        }
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
         );

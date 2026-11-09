@@ -475,6 +475,7 @@ mod tests {
             opening_flows: vec![],
             plate_rear_c: None,
             plate_field_c: None,
+            wall_field_c: None,
         }
     }
 

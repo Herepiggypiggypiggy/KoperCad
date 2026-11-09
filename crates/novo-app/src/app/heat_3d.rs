@@ -25,6 +25,12 @@ pub(crate) struct Heat3d {
     pub arrows: bool,
     /// The mounting plate coloured by the solver's plate sheet temperature.
     pub plate: bool,
+    /// The side, top, bottom and rear walls coloured by their inner surface temperature.
+    pub walls: bool,
+    /// The door coloured by its inner surface temperature.
+    pub door: bool,
+    /// Opacity of the plate, wall and door maps, 0 to 1.
+    pub surface_opacity: f32,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
     /// Pinned labels (tag, temperature, margin) on the hottest devices.
@@ -87,6 +93,9 @@ impl Default for Heat3d {
             lines: false,
             arrows: false,
             plate: true,
+            walls: true,
+            door: false,
+            surface_opacity: SURFACE_OPACITY,
             devices: false,
             labels: true,
             cloud: false,
@@ -220,11 +229,11 @@ pub(crate) fn overlays(
     {
         out.push(Overlay::Mesh(m));
     }
-    if settings.plate
-        && let Some(m) = plate_mesh(snap, place, range)
-    {
-        out.push(Overlay::Mesh(m));
-    }
+    out.extend(
+        surface_meshes(snap, place, range, settings)
+            .into_iter()
+            .map(Overlay::Mesh),
+    );
     let speed_map = settings.flow.mode == super::heat_flow::FlowMode::SpeedMap;
     if speed_map
         && let Some(m) = super::heat_flow::speed_map(
@@ -287,23 +296,71 @@ pub(crate) fn overlays(
     out
 }
 
-/// Opacity of the plate map: nearly solid, so the plate reads as a coloured surface.
-const PLATE_ALPHA: u8 = 235;
+/// Default opacity of the plate, wall and door maps: light enough that the cloud and the devices
+/// behind a map still show.
+pub(crate) const SURFACE_OPACITY: f32 = 0.45;
+/// Range of the opacity slider of those maps.
+pub(crate) const SURFACE_OPACITY_RANGE: std::ops::RangeInclusive<f32> = 0.1..=1.0;
+/// Draw order of the surface maps: before the cloud (order -1), so the cloud is blended over them
+/// and stays visible in front of a map.
+const SURFACE_ORDER: i32 = -2;
+/// Offset of a surface map from the surface it colours, mm, so the surface's own face does not hide it.
+const SURFACE_LIFT_MM: f64 = 0.5;
+
+fn surface_alpha(opacity: f32) -> u8 {
+    (opacity.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// The surface maps `settings` asks for: the mounting plate, the walls and the door, each
+/// coloured by a temperature the solver result carries (the plate sheet of the solver; the wall
+/// and door inner surfaces derived from the solver's air next to them and the wall stack).
+/// Surfaces the result has no temperature for draw nothing.
+pub(crate) fn surface_meshes(
+    snap: &CfdSnapshot,
+    place: Place,
+    range: Range,
+    settings: &Heat3d,
+) -> Vec<OverlayMesh> {
+    let alpha = surface_alpha(settings.surface_opacity);
+    let mut out = Vec::new();
+    if settings.plate {
+        out.extend(plate_mesh(snap, place, range, alpha));
+    }
+    if let Some(walls) = &snap.wall_field_c {
+        for (face, field) in walls.iter().enumerate() {
+            let wanted = if face == 5 {
+                settings.door
+            } else {
+                settings.walls
+            };
+            if wanted {
+                out.extend(wall_mesh(snap, place, range, face, field, alpha));
+            }
+        }
+    }
+    out
+}
 
 /// The mounting plate as a colour map: the solver's own plate sheet temperature of every rear
-/// column (`i + nx * j`), drawn on the plate face. Columns without a plate and results without a
-/// plate sheet draw nothing.
-pub(crate) fn plate_mesh(snap: &CfdSnapshot, place: Place, range: Range) -> Option<OverlayMesh> {
+/// column (`i + nx * j`). Drawn on both faces of the plate, so it shows from the front and from
+/// behind. Columns without a plate and results without a plate sheet draw nothing.
+pub(crate) fn plate_mesh(
+    snap: &CfdSnapshot,
+    place: Place,
+    range: Range,
+    alpha: u8,
+) -> Option<OverlayMesh> {
     let field = snap.plate_field_c.as_ref()?;
     let g = &snap.grid;
     if field.len() != g.nx * g.ny {
         return None;
     }
-    // Half a millimetre in front of the plate so the map is not hidden by the plate's own face.
-    let z = g.z_edges_mm.first().copied()? + 0.5;
+    let front = g.z_edges_mm.first().copied()? + SURFACE_LIFT_MM;
+    // The plate's rear face, behind the plate body of the scene.
+    let rear = -novo_view3d::build::PLATE_THICKNESS_MM - SURFACE_LIFT_MM;
     let mut m = OverlayMesh {
         translucent: true,
-        order: 0,
+        order: SURFACE_ORDER,
         ..Default::default()
     };
     for j in 0..g.ny {
@@ -315,16 +372,89 @@ pub(crate) fn plate_mesh(snap: &CfdSnapshot, place: Place, range: Range) -> Opti
             let rgb = heat::ramp(range.t(f64::from(t)));
             let (x0, x1) = (g.x_edges_mm[i], g.x_edges_mm[i + 1]);
             let (y0, y1) = (g.y_edges_mm[j], g.y_edges_mm[j + 1]);
-            let base = m.positions.len() as u32;
-            for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
-                m.positions.push(place.world([x, y, z]));
-                m.colors.push([rgb[0], rgb[1], rgb[2], PLATE_ALPHA]);
+            for z in [front, rear] {
+                quad(
+                    &mut m,
+                    [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]].map(|p| place.world(p)),
+                    [rgb[0], rgb[1], rgb[2], alpha],
+                );
             }
-            m.indices
-                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
         }
     }
     (!m.indices.is_empty()).then_some(m)
+}
+
+/// One wall (`face` in the solver's order) as a colour map of its inner surface temperature,
+/// drawn a hair inside the cabinet. Double sided like every overlay.
+pub(crate) fn wall_mesh(
+    snap: &CfdSnapshot,
+    place: Place,
+    range: Range,
+    face: usize,
+    field: &[f32],
+    alpha: u8,
+) -> Option<OverlayMesh> {
+    let g = &snap.grid;
+    let edges = [&g.x_edges_mm, &g.y_edges_mm, &g.z_edges_mm];
+    let (a, upper) = (face / 2, face % 2 == 1);
+    let (b, c) = match a {
+        0 => (1, 2),
+        1 => (0, 2),
+        _ => (0, 1),
+    };
+    let (nb, nc) = (edges[b].len() - 1, edges[c].len() - 1);
+    if field.len() != nb * nc {
+        return None;
+    }
+    let at = if upper {
+        edges[a][edges[a].len() - 1] - SURFACE_LIFT_MM
+    } else {
+        edges[a][0] + SURFACE_LIFT_MM
+    };
+    let mut m = OverlayMesh {
+        translucent: true,
+        order: SURFACE_ORDER,
+        ..Default::default()
+    };
+    for kc in 0..nc {
+        for jb in 0..nb {
+            let t = field[jb + nb * kc];
+            if !t.is_finite() {
+                continue;
+            }
+            let rgb = heat::ramp(range.t(f64::from(t)));
+            let (b0, b1) = (edges[b][jb], edges[b][jb + 1]);
+            let (c0, c1) = (edges[c][kc], edges[c][kc + 1]);
+            let corner = |pb: f64, pc: f64| {
+                let mut p = [0.0; 3];
+                p[a] = at;
+                p[b] = pb;
+                p[c] = pc;
+                place.world(p)
+            };
+            quad(
+                &mut m,
+                [
+                    corner(b0, c0),
+                    corner(b1, c0),
+                    corner(b1, c1),
+                    corner(b0, c1),
+                ],
+                [rgb[0], rgb[1], rgb[2], alpha],
+            );
+        }
+    }
+    (!m.indices.is_empty()).then_some(m)
+}
+
+fn quad(m: &mut OverlayMesh, corners: [Vec3; 4], color: [u8; 4]) {
+    let base = m.positions.len() as u32;
+    for p in corners {
+        m.positions.push(p);
+        m.colors.push(color);
+    }
+    m.indices
+        .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
 }
 
 /// The cell edges of the result along `axis`, mm.

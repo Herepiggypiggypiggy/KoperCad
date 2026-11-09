@@ -6,11 +6,11 @@ use novo_cfd::{
 };
 use novo_heatview::cfd::Axis;
 use novo_heatview::range::Range;
-use novo_view3d::{Item, ItemId, ItemKind, Overlay, PlateFrame, Pose, Shape};
+use novo_view3d::{Item, ItemId, ItemKind, Overlay, OverlayMesh, PlateFrame, Pose, Shape};
 
 use super::heat_3d::{
     Flow, Heat3d, Place, flow, overlays, range_for, shell_mesh, slice_mesh, stream_lines,
-    tint_devices, tracers,
+    surface_meshes, tint_devices, tracers,
 };
 
 /// 100 x 80 x 60 mm; `T = 20 + x / 10` (20 to 30 C); a wind of 1 m/s along
@@ -52,6 +52,7 @@ pub(super) fn snapshot() -> CfdSnapshot {
         wall_flux_w_m2: vec![0.0; n],
         plate_rear_c: None,
         plate_field_c: None,
+        wall_field_c: None,
         devices: Vec::new(),
         hot_spots: Vec::new(),
         progress: Progress {
@@ -451,7 +452,115 @@ fn the_plate_is_coloured_by_the_solvers_plate_sheet_temperature() {
     let [Overlay::Mesh(m)] = &o[..] else {
         panic!("one plate mesh expected, got {}", o.len());
     };
-    // Two columns have a plate: two quads, the cold one and the hot one in different colours.
-    assert_eq!(m.indices.len(), 12);
-    assert_ne!(m.colors[0], m.colors[4]);
+    // Two columns have a plate: a quad on each face of the plate for each, the cold one and the
+    // hot one in different colours.
+    assert_eq!(m.indices.len(), 24);
+    assert_ne!(m.colors[0], m.colors[8]);
+}
+
+#[test]
+fn the_plate_map_shows_from_behind_and_lets_the_cloud_show_through() {
+    let mut snap = snapshot();
+    let (nx, ny) = (snap.grid.nx, snap.grid.ny);
+    snap.plate_field_c = Some(vec![25.0; nx * ny]);
+    let fl = flow(&snap, place());
+    let h = Heat3d {
+        slice: false,
+        cloud: true,
+        plate: true,
+        walls: false,
+        door: false,
+        ..Heat3d::default()
+    };
+    let o = overlays(&snap, 20.0, place(), &h, &fl, 1.0);
+    let meshes: Vec<&OverlayMesh> = o
+        .iter()
+        .filter_map(|o| {
+            if let Overlay::Mesh(m) = o {
+                Some(m)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let plate = meshes.iter().find(|m| m.order == -2).expect("plate map");
+    // One face in front of the plate (z > 0) and one behind its body (z < -3).
+    assert!(plate.positions.iter().any(|p| p.z > 0.0));
+    assert!(plate.positions.iter().any(|p| p.z < -3.0));
+    // Lighter than the old near-solid map, and drawn before the cloud so the cloud is blended over.
+    assert!(plate.colors.iter().all(|c| c[3] < 160));
+    assert!(
+        meshes
+            .iter()
+            .filter(|m| m.order != -2)
+            .all(|m| m.order > plate.order)
+    );
+}
+
+#[test]
+fn the_opacity_slider_sets_the_alpha_of_the_surface_maps() {
+    let mut snap = snapshot();
+    let (nx, ny) = (snap.grid.nx, snap.grid.ny);
+    snap.plate_field_c = Some(vec![25.0; nx * ny]);
+    for surface_opacity in [0.2_f32, 0.9] {
+        let h = Heat3d {
+            surface_opacity,
+            walls: false,
+            ..Heat3d::default()
+        };
+        let m = surface_meshes(&snap, place(), RANGE, &h);
+        let want = (surface_opacity * 255.0).round() as u8;
+        assert!(m[0].colors.iter().all(|c| c[3] == want));
+    }
+}
+
+/// A wall field with one cool and one hot cell on every wall.
+fn with_walls(mut snap: CfdSnapshot) -> CfdSnapshot {
+    let g = &snap.grid;
+    let (nx, ny, nz) = (g.nx, g.ny, g.nz);
+    let sizes = [ny * nz, ny * nz, nx * nz, nx * nz, nx * ny, nx * ny];
+    snap.wall_field_c = Some(std::array::from_fn(|f| {
+        let mut v = vec![f32::NAN; sizes[f]];
+        v[0] = 20.0;
+        v[sizes[f] - 1] = 30.0;
+        v
+    }));
+    snap
+}
+
+#[test]
+fn walls_and_door_are_coloured_apart_and_sit_on_their_own_faces() {
+    let snap = with_walls(snapshot());
+    let g = snap.grid.clone();
+    let off = Heat3d {
+        plate: false,
+        walls: false,
+        door: false,
+        ..Heat3d::default()
+    };
+    assert!(surface_meshes(&snap, place(), RANGE, &off).is_empty());
+    // Five walls (both x, both y, the rear), each with a cool and a hot quad.
+    let walls = surface_meshes(&snap, place(), RANGE, &Heat3d { walls: true, ..off });
+    assert_eq!(walls.len(), 5);
+    for m in &walls {
+        assert_eq!(m.indices.len(), 12);
+        assert_ne!(m.colors[0], m.colors[4], "cool and hot cell differ");
+    }
+    // The door is the last z face: inside the far z edge.
+    let door = surface_meshes(&snap, place(), RANGE, &Heat3d { door: true, ..off });
+    assert_eq!(door.len(), 1);
+    let zmax = *g.z_edges_mm.last().unwrap() as f32;
+    assert!(
+        door[0]
+            .positions
+            .iter()
+            .all(|p| (p.z - (zmax - 0.5)).abs() < 1e-3)
+    );
+    // The x walls sit at the two ends of the solver box (plate x -10 to 90).
+    let xs: Vec<f32> = walls
+        .iter()
+        .flat_map(|m| m.positions.iter().map(|p| p.x))
+        .collect();
+    assert!(xs.iter().any(|x| (*x - (-10.0 + 0.5)).abs() < 1e-3));
+    assert!(xs.iter().any(|x| (*x - (90.0 - 0.5)).abs() < 1e-3));
 }

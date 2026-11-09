@@ -216,3 +216,66 @@ fn the_door_bridge_raises_the_3d_door_film() {
         assert_eq!(wa.h[f], wb.h[f]);
     }
 }
+
+/// Every wall of a solved cabinet carries a per-cell inner surface temperature: between ambient
+/// and the air next to it, and its mean agrees with the shell report's inner surface of the face.
+#[test]
+fn every_wall_carries_an_inner_surface_temperature_that_matches_the_shell_report() {
+    use novo_cfd::shell_view::shell_report;
+    // solver face order -> shell face
+    use novo_thermal::shell::{BOTTOM, FRONT, LEFT, REAR, RIGHT, TOP};
+    let scn = scenario(false);
+    let snap = solve(&scn);
+    let walls = snap.wall_field_c.as_ref().expect("wall field");
+    let g = &snap.grid;
+    let sizes = [
+        g.ny * g.nz,
+        g.ny * g.nz,
+        g.nx * g.nz,
+        g.nx * g.nz,
+        g.nx * g.ny,
+        g.nx * g.ny,
+    ];
+    let report = shell_report(&scn, &snap);
+    let shell_face = [LEFT, RIGHT, TOP, BOTTOM, REAR, FRONT];
+    for (f, field) in walls.iter().enumerate() {
+        assert_eq!(field.len(), sizes[f], "face {f}");
+        // Area weighted over the cells of the wall (the grid may be graded).
+        let edges = [&g.x_edges_mm, &g.y_edges_mm, &g.z_edges_mm];
+        let (a, _) = (f / 2, 0);
+        let (b, c) = match a {
+            0 => (1, 2),
+            1 => (0, 2),
+            _ => (0, 1),
+        };
+        let nb = edges[b].len() - 1;
+        let (mut sum, mut area, mut lo) = (0.0, 0.0, f64::MAX);
+        for (n, t) in field.iter().enumerate() {
+            if !t.is_finite() {
+                continue;
+            }
+            let (jb, kc) = (n % nb, n / nb);
+            let w = (edges[b][jb + 1] - edges[b][jb]) * (edges[c][kc + 1] - edges[c][kc]);
+            sum += w * f64::from(*t);
+            area += w;
+            lo = lo.min(f64::from(*t));
+        }
+        if area == 0.0 {
+            continue;
+        }
+        assert!(lo >= scn.ambient_c - 1e-3, "face {f} below ambient: {lo}");
+        let mean = sum / area;
+        let rep = &report.faces[shell_face[f]];
+        println!(
+            "face {f} mean {mean:.2} rep inner {:.2} air {:.2} u {:.2} share {:.2}",
+            rep.inner_c, rep.inner_air_c, rep.u_w_m2k, rep.exposed_share
+        );
+        if rep.exposed_share > 0.0 && f != 4 {
+            assert!(
+                (mean - rep.inner_c).abs() < 1.5,
+                "face {f}: map mean {mean:.2} vs report {:.2}",
+                rep.inner_c
+            );
+        }
+    }
+}

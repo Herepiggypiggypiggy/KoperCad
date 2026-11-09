@@ -1,0 +1,55 @@
+@title 3D heat: plate, wall and door maps colour the surfaces, show from behind, and the cloud shows through
+@area Heat
+@sizes 1366x768
+open_starter_example
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text crane
+wait 8
+click_text "Open crane sim example"
+wait 6
+click_text "Open"
+wait 60
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 60
+wait_s 90
+click_text 3D #1
+wait 40
+wait_s 30
+expect "Plate"
+expect "Walls"
+expect "Door"
+shot front-walls-on
+click_text Walls
+wait 10
+shot front-walls-off
+expect_shots_differ front-walls-on front-walls-off 1
+click_text Walls
+wait 10
+click_text Door
+wait 10
+shot front-door-on
+expect_shots_differ front-walls-on front-door-on 1
+click_text Door
+wait 10
+drag 700 420 300 420
+wait 10
+drag 700 420 500 420
+wait 10
+shot behind-plate-on
+click_text Plate
+wait 10
+shot behind-plate-off
+expect_shots_differ behind-plate-on behind-plate-off 1
+click_text Plate
+wait 10
+check_layout
