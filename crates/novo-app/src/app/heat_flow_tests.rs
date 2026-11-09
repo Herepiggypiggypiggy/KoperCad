@@ -188,7 +188,10 @@ fn the_mode_sets_the_switches_that_draw_it() {
 fn the_speed_map_replaces_the_temperature_slice_in_the_overlays() {
     let snap = snapshot();
     let flow = Flow::default();
-    let mut h = Heat3d::default();
+    let mut h = Heat3d {
+        plate: false,
+        ..Heat3d::default()
+    };
     let temp = super::heat_3d::overlays(&snap, 20.0, place(), &h, &flow, 1.0);
     h.set_flow(FlowMode::SpeedMap);
     let map = super::heat_3d::overlays(&snap, 20.0, place(), &h, &flow, 1.0);

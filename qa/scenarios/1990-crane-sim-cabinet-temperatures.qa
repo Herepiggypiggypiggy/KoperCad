@@ -1,0 +1,38 @@
+@title Crane simulation example: the 3D view shows the mounting plate coloured by temperature after the heat run
+@area Heat
+@sizes 1366x768
+open_starter_example
+wait 20
+click_text File #1
+wait 6
+click_text "Templates and examples..."
+wait 10
+text crane
+wait 8
+click_text "Open crane sim example"
+wait 6
+click_text "Open"
+wait 60
+click_text Cabinet #1
+wait 20
+key ctrl+k
+wait 3
+text Simulate heat of the cabinet
+wait 4
+key Enter
+wait 60
+wait_s 90
+shot heat-result
+click_text 3D #1
+wait 40
+wait_s 30
+shot heat-3d
+expect "Plate"
+shot plate-on
+click_text Plate
+wait 10
+shot plate-off
+expect_shots_differ plate-on plate-off 1
+click_text Plate
+wait 10
+check_layout

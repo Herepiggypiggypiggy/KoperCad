@@ -93,12 +93,14 @@ fn the_map_mode_replaces_the_temperature_slice() {
     let s = snapshot();
     let slice_only = Heat3d {
         slice: true,
+        plate: false,
         ..Heat3d::default()
     };
     let with_map = Heat3d {
         slice: true,
         heat_flow: HeatFlowMode::Map,
         carry: true,
+        plate: false,
         ..Heat3d::default()
     };
     let flow = super::heat_3d::Flow::default();

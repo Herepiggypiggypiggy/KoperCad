@@ -2386,6 +2386,8 @@ fn heat_controls(
             extra.push(novo_layout::spec::ESTIMATE_NOTICE);
         }
         heat_legend::help(ui, h, range, top_speed, top_flux, &extra);
+        ui.checkbox(&mut h.plate, "Plate")
+            .on_hover_text("Mounting plate sheet temperature from the solver (estimate)");
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
         );

@@ -474,6 +474,7 @@ mod tests {
             radiation_on: false,
             opening_flows: vec![],
             plate_rear_c: None,
+            plate_field_c: None,
         }
     }
 

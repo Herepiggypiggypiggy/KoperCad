@@ -247,6 +247,7 @@ const KNOWN_VERBS: &[&str] = &[
     "check_layout",
     "check_text",
     "check_blank",
+    "expect_shots_differ",
     "tree",
     "sweep_commands",
     "sweep_lessons",
@@ -617,6 +618,34 @@ pub(crate) fn busy_fraction(png: &Path) -> Result<f64, String> {
         0.0
     } else {
         1.0 - f64::from(top) / f64::from(total)
+    })
+}
+
+/// The share of pixels (sampled) that differ between two screenshots of the same size.
+pub(crate) fn differing_fraction(a: &Path, b: &Path) -> Result<f64, String> {
+    let open = |p: &Path| {
+        image::open(p)
+            .map(|i| i.to_rgb8())
+            .map_err(|e| format!("{}: {e}", p.display()))
+    };
+    let (ia, ib) = (open(a)?, open(b)?);
+    if ia.dimensions() != ib.dimensions() {
+        return Err("the two shots have different sizes".into());
+    }
+    let (mut total, mut diff) = (0u32, 0u32);
+    for y in (0..ia.height()).step_by(2) {
+        for x in (0..ia.width()).step_by(2) {
+            total += 1;
+            let (p, q) = (ia.get_pixel(x, y).0, ib.get_pixel(x, y).0);
+            if p.iter().zip(q).any(|(u, v)| u.abs_diff(v) > 6) {
+                diff += 1;
+            }
+        }
+    }
+    Ok(if total == 0 {
+        0.0
+    } else {
+        f64::from(diff) / f64::from(total)
     })
 }
 
@@ -1490,6 +1519,39 @@ impl Ctx<'_> {
                         title,
                         "no label longer than a few words; explanations behind the ? icon",
                         detail,
+                    );
+                }
+                Ok(())
+            }
+            "expect_shots_differ" => {
+                // Two earlier `shot`s of the same window must differ in at least this share of
+                // pixels (default 1 %): a switch that only a picture can show has an effect.
+                let (first, second) = (
+                    need(1, "a first shot label")?,
+                    need(2, "a second shot label")?,
+                );
+                let min = a(3)
+                    .map(|v| v.parse::<f64>().map_err(|_| format!("bad percent {v}")))
+                    .transpose()?
+                    .unwrap_or(1.0);
+                let find = |label: &str| -> Result<PathBuf, String> {
+                    let tail = format!("-{label}.png");
+                    self.shots
+                        .iter()
+                        .rev()
+                        .find(|r| r.ends_with(&tail))
+                        .map(|r| self.out.join(r))
+                        .ok_or_else(|| format!("no shot named {label}"))
+                };
+                let (pa, pb) = (find(first)?, find(second)?);
+                let share = differing_fraction(&pa, &pb)?;
+                if share * 100.0 < min {
+                    self.add(
+                        "S3",
+                        "no-change",
+                        format!("{first} and {second} look the same"),
+                        "at least the asked share of the pixels differ",
+                        format!("{:.2} % of the pixels differ", share * 100.0),
                     );
                 }
                 Ok(())
