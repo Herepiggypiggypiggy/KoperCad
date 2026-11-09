@@ -216,6 +216,13 @@ pub struct CfdSnapshot {
     /// x and y cells), degrees C, as the solver holds it; NaN where no plate covers the column.
     /// `None` when the run has no plate sheet.
     pub plate_field_c: Option<Vec<f32>>,
+    /// Inner surface temperature of the six walls in every cell of each wall, degrees C, in the
+    /// solver's face order (x min, x max, y min, y max, z min = rear, z max = door), derived from
+    /// the air next to the wall and the wall's thermal condition (an estimate, not a wall solve).
+    /// Faces on x run `j + ny * k`, on y `i + nx * k`, on z `i + nx * j`. NaN where the wall is
+    /// not closed air-side wall: an opening, a solid standing on it, or the plate on the rear.
+    /// `None` for results that do not carry it.
+    pub wall_field_c: Option<[Vec<f32>; 6]>,
     pub devices: Vec<DeviceResult>,
     pub hot_spots: Vec<HotSpot>,
     pub progress: Progress,

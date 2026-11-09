@@ -101,6 +101,7 @@ impl<'a> View<'a> {
             wall_flux_w_m2: Vec::new(),
             plate_rear_c: None,
             plate_field_c: None,
+            wall_field_c: None,
             devices: Vec::new(),
             hot_spots: Vec::new(),
             progress: Progress {
@@ -159,6 +160,7 @@ impl<'a> View<'a> {
                     .collect(),
             )
         });
+        s.wall_field_c = Some(self.wall_fields(flow, &s.material));
         let (devices, unresolved) = self.devices(flow);
         s.devices = devices;
         s.heat_paths = self.heat_paths(flow);
@@ -171,6 +173,29 @@ impl<'a> View<'a> {
         s.hot_spots = self.hot_spots(flow, &s.devices);
         s.progress = progress.clone();
         s
+    }
+
+    /// Inner surface temperature of each of the six walls (see
+    /// [`CfdSnapshot::wall_field_c`]), with the shell's inner film.
+    fn wall_fields(&self, flow: &FlowSolver, material: &[u16]) -> [Vec<f32>; 6] {
+        use novo_thermal::shell::{BOTTOM, FRONT, LEFT, REAR, RIGHT, TOP};
+        // Solver faces: x min, x max, y min, y max, z min, z max.
+        let shell_face = [LEFT, RIGHT, TOP, BOTTOM, REAR, FRONT];
+        let model = self.scn.shell();
+        let b = model.b_factors(&self.scn.enclosure);
+        let scale = self.scn.params.wall_k_scale;
+        std::array::from_fn(|f| {
+            let sf = shell_face[f];
+            // Same stack as the shell report: a face that gives off no heat reads the air.
+            let stack = (b[sf] > 0.0).then(|| {
+                (
+                    model.u_panel(sf) * scale,
+                    model.films_of(sf).h_in,
+                    self.scn.ambient_c + model.outside.sun_offset_k[sf],
+                )
+            });
+            flow.wall_surface_temps(f, stack, material)
+        })
     }
 
     /// Heat flux out of solid cells into the air, W/m2 of exposed face

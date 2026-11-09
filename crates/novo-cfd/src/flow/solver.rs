@@ -1494,6 +1494,63 @@ impl FlowSolver {
             .map_or(1.0, |p| 1.0 - p.cover[i + self.mesh.n[0] * j])
     }
 
+    /// Inner surface temperature of domain face `face` (index of [`Face`]) in every cell of
+    /// that face, degrees C, from the air next to it and the face's thermal condition: through
+    /// an overall coefficient the wall's heat flux is `u (t_air - t_out)` and the inner film
+    /// `h_in` (W/m2K, the shell's inner film) takes its share of it. Layout: faces on x run
+    /// `j + ny * k`, on y `i + nx * k`, on z `i + nx * j`. NaN where the face is not a closed
+    /// wall of air: an opening, a solid standing on it, or the rear face under the plate.
+    /// `material` is the cell material (0 = air). `stack` is `(u, h_in, t_out)` of the wall panel
+    /// from the shell model (panel coefficient, inner film, outside air); with an overall
+    /// condition and no `stack` (a face that gives off no heat) it reads the air.
+    pub fn wall_surface_temps(
+        &self,
+        face: usize,
+        stack: Option<(f64, f64, f64)>,
+        material: &[u16],
+    ) -> Vec<f32> {
+        let m = &self.mesh;
+        let (a, upper) = (face / 2, face % 2 == 1);
+        let (b, c) = super::mesh::other_axes(a);
+        let bc = self.cfg.faces[face].thermal;
+        let mut out = vec![f32::NAN; m.n[b] * m.n[c]];
+        for kc in 0..m.n[c] {
+            for jb in 0..m.n[b] {
+                let mut ix = [0; 3];
+                ix[a] = if upper { m.n[a] - 1 } else { 0 };
+                ix[b] = jb;
+                ix[c] = kc;
+                let edge = if upper { m.n[a] } else { 0 };
+                let open = self.open.afrac[a][m.idx(a, with(ix, a, edge))];
+                let bare = if face == 4 {
+                    self.rear_bare(ix[0], ix[1])
+                } else {
+                    1.0
+                };
+                let id = m.cell(ix);
+                if open > 0.5 || bare < 0.5 || material.get(id).is_some_and(|&mt| mt != 0) {
+                    continue;
+                }
+                let (t, k) = (self.t[id], self.k_cell[id]);
+                let half = 0.5 * m.dx[a][ix[a]];
+                let surface = match bc {
+                    ThermalBc::Adiabatic => t,
+                    ThermalBc::Fixed(tw) => tw,
+                    ThermalBc::Convective { h, t_out } => {
+                        let q = (t - t_out) / (half / k + 1.0 / h);
+                        t - q * half / k
+                    }
+                    ThermalBc::Overall { .. } => match stack {
+                        Some((u, h_in, t_out)) => t - u * (t - t_out) / h_in.max(u * 1.05),
+                        None => t,
+                    },
+                };
+                out[jb + m.n[b] * kc] = surface as f32;
+            }
+        }
+        out
+    }
+
     /// Heat carried out through the openings relative to `t_ref`, W.
     pub fn open_heat_out_w(&self, t_ref: f64) -> f64 {
         let rho_cp = self.cfg.conductivity / self.cfg.alpha;
