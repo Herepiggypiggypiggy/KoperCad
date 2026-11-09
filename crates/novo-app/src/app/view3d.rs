@@ -2492,10 +2492,8 @@ fn heat_controls(
         heat_numbers::menu(ui, probe, &sol.snapshot, sol.ambient);
         scale_menu(ui, h, heat_3d::range(&sol.snapshot, sol.ambient));
         if h.heat_flow.draws_air() {
-            // The two sliders do not wrap by themselves: start a row when they would be cut.
-            if ui.available_width() < 330.0 {
-                ui.end_row();
-            }
+            // Their own row: the strip does not wrap a slider by itself and would cut it.
+            ui.end_row();
             ui.add(
                 egui::Slider::new(&mut h.carry_lines.number, 0.0..=1.0)
                     .show_value(false)
