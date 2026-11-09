@@ -1090,12 +1090,15 @@ impl NovoApp {
                 mode.heat_base.push(novo_view3d::Overlay::Mesh(m));
             }
             if mode.heat.heat_flow.draws_air() {
-                let carried = heat_flow::thinned(
-                    &mode.heat_carry.flow,
-                    mode.heat.flow.strength,
-                    mode.heat_carry.flow.top,
+                let view = mode.heat.carry_lines;
+                let carried = view.thin(&mode.heat_carry.flow);
+                let lines = heat_3d::stream_lines_styled(
+                    &carried,
+                    heat_carry::RGB,
+                    5,
+                    view.width_px(),
+                    view.floor(),
                 );
-                let lines = heat_3d::stream_lines_in(&carried, heat_carry::RGB, 5);
                 if !lines.positions.is_empty() {
                     mode.heat_base.push(novo_view3d::Overlay::Lines(lines));
                 }
@@ -1153,12 +1156,15 @@ impl NovoApp {
                     all.push(novo_view3d::Overlay::Lines(t));
                 }
                 if mode.heat.heat_flow.draws_air() {
-                    let carried = heat_flow::thinned(
-                        &mode.heat_carry.flow,
-                        strength,
-                        mode.heat_carry.flow.top,
+                    let view = mode.heat.carry_lines;
+                    let carried = view.thin(&mode.heat_carry.flow);
+                    let t = heat_3d::tracers_styled(
+                        &carried,
+                        time,
+                        heat_carry::TRACER_RGB,
+                        6,
+                        view.dash_px(),
                     );
-                    let t = heat_3d::tracers_in(&carried, time, heat_carry::TRACER_RGB, 6);
                     if !t.positions.is_empty() {
                         all.push(novo_view3d::Overlay::Lines(t));
                     }
@@ -2485,6 +2491,22 @@ fn heat_controls(
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
         heat_numbers::menu(ui, probe, &sol.snapshot, sol.ambient);
         scale_menu(ui, h, heat_3d::range(&sol.snapshot, sol.ambient));
+        if h.heat_flow.draws_air() {
+            // Their own row: the strip does not wrap a slider by itself and would cut it.
+            ui.end_row();
+            ui.add(
+                egui::Slider::new(&mut h.carry_lines.number, 0.0..=1.0)
+                    .show_value(false)
+                    .text("Lines"),
+            )
+            .on_hover_text("How many heat flow lines: low keeps only the main streams of heat, high shows every one found");
+            ui.add(
+                egui::Slider::new(&mut h.carry_lines.intensity, 0.0..=1.0)
+                    .show_value(false)
+                    .text("Intensity"),
+            )
+            .on_hover_text("How bold the heat flow lines and dashes are: thickness and brightness. Brighter along a line still means more heat per area");
+        }
         if probe.on {
             // Its own row, always there while the probe is on, so the strip
             // does not change height when a point is picked.
