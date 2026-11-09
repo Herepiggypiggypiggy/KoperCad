@@ -55,6 +55,9 @@ pub(crate) struct Heat3d {
     /// The Flow control: how the airflow is drawn and how much of it. `lines`
     /// and `arrows` follow it (see [`Heat3d::set_flow`]).
     pub flow: super::heat_flow::FlowView,
+    /// The Heat flow lines: how many and how bright (own settings, not the
+    /// airflow's).
+    pub carry_lines: super::heat_carry::LineView,
 }
 
 impl Heat3d {
@@ -97,6 +100,7 @@ impl Default for Heat3d {
             cloud_moves: false,
             scale: None,
             flow: super::heat_flow::FlowView::default(),
+            carry_lines: super::heat_carry::LineView::default(),
         }
     }
 }
@@ -616,18 +620,26 @@ pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
     out
 }
 
-/// Lines in `rgb`, more opaque where the value on the line is higher.
-pub(crate) fn stream_lines_in(flow: &Flow, rgb: [u8; 3], order: i32) -> OverlayLines {
+/// Streamlines coloured `rgb` with the line width in pixels and the opacity of
+/// the weakest part of a line (0 to 255; the strongest is always 255).
+pub(crate) fn stream_lines_styled(
+    flow: &Flow,
+    rgb: [u8; 3],
+    order: i32,
+    width_px: f32,
+    floor: f32,
+) -> OverlayLines {
     let top = flow.top.max(1e-9);
+    let floor = floor.clamp(0.0, 255.0);
     let mut out = OverlayLines {
-        width_px: 1.8,
+        width_px,
         order,
         ..Default::default()
     };
     for line in &flow.lines {
         out.starts.push(out.positions.len() as u32);
         for (p, v) in line.points.iter().zip(&line.speed) {
-            let a = (60.0 + 195.0 * v / top).clamp(60.0, 255.0) as u8;
+            let a = (floor + (255.0 - floor) * v / top).clamp(floor, 255.0) as u8;
             out.positions.push(*p);
             out.colors.push([rgb[0], rgb[1], rgb[2], a]);
         }
@@ -671,8 +683,19 @@ pub(crate) fn tracers(flow: &Flow, time: f64) -> OverlayLines {
 
 /// Dashes in `rgb` moving along the lines of `flow`.
 pub(crate) fn tracers_in(flow: &Flow, time: f64, rgb: [u8; 3], order: i32) -> OverlayLines {
+    tracers_styled(flow, time, rgb, order, 3.6)
+}
+
+/// As [`tracers_in`], with the dash width in pixels.
+pub(crate) fn tracers_styled(
+    flow: &Flow,
+    time: f64,
+    rgb: [u8; 3],
+    order: i32,
+    width_px: f32,
+) -> OverlayLines {
     let mut out = OverlayLines {
-        width_px: 3.6,
+        width_px,
         order,
         ..Default::default()
     };

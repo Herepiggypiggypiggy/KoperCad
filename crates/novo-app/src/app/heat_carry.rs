@@ -27,6 +27,46 @@ const FOLLOW_SHARE: f32 = 0.01;
 const MAX_ARROWS: usize = 300;
 const ARROW_FLOOR: f32 = 0.15;
 
+/// The Heat flow lines control: how many lines and how bright and thick.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LineView {
+    /// 0 (only the main streams) to 1 (every line found).
+    pub number: f32,
+    /// 0 (thin and faint) to 1 (thick and bright).
+    pub intensity: f32,
+}
+
+impl Default for LineView {
+    fn default() -> Self {
+        LineView {
+            number: super::heat_flow::DEFAULT_STRENGTH,
+            intensity: 0.5,
+        }
+    }
+}
+
+impl LineView {
+    /// Line width in pixels: 0.8 at 0, 1.8 at the default, 2.8 at 1.
+    pub(crate) fn width_px(self) -> f32 {
+        0.8 + 2.0 * self.intensity.clamp(0.0, 1.0)
+    }
+
+    /// Opacity of the weakest part of a line: 20 at 0, 60 at the default, 100 at 1.
+    pub(crate) fn floor(self) -> f32 {
+        20.0 + 80.0 * self.intensity.clamp(0.0, 1.0)
+    }
+
+    /// Width of a moving dash in pixels: 2 at 0, 3.6 at the default, 5.2 at 1.
+    pub(crate) fn dash_px(self) -> f32 {
+        2.0 + 3.2 * self.intensity.clamp(0.0, 1.0)
+    }
+
+    /// The lines of `flow` this view keeps, strongest first.
+    pub(crate) fn thin(self, flow: &Flow) -> Flow {
+        super::heat_flow::thinned(flow, self.number, flow.top)
+    }
+}
+
 /// The heat-flow layer of a result.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct Carry {
@@ -235,5 +275,46 @@ mod tests {
         let d = c.conduction.positions[s + 1] - c.conduction.positions[s];
         assert!(d.x < 0.0 && d.y.abs() < 1e-3 && d.z.abs() < 1e-3, "{d:?}");
         assert!(c.conduction.is_valid());
+    }
+
+    #[test]
+    fn line_view_number_sets_how_many_lines_and_intensity_how_bold() {
+        let c = carry(&snapshot(), 20.0, place());
+        let few = LineView {
+            number: 0.0,
+            intensity: 0.5,
+        }
+        .thin(&c.flow);
+        let all = LineView {
+            number: 1.0,
+            intensity: 0.5,
+        }
+        .thin(&c.flow);
+        assert!(few.lines.len() <= all.lines.len());
+        assert_eq!(all.lines.len(), c.flow.lines.len());
+        let (a, b) = (
+            LineView {
+                number: 0.5,
+                intensity: 0.0,
+            },
+            LineView {
+                number: 0.5,
+                intensity: 1.0,
+            },
+        );
+        assert!(a.width_px() < b.width_px() && a.floor() < b.floor() && a.dash_px() < b.dash_px());
+        let thin =
+            crate::app::heat_3d::stream_lines_styled(&c.flow, RGB, 5, a.width_px(), a.floor());
+        let bold =
+            crate::app::heat_3d::stream_lines_styled(&c.flow, RGB, 5, b.width_px(), b.floor());
+        assert!(thin.width_px < bold.width_px);
+        assert!(thin.colors.iter().all(|c| c[3] >= 20) && bold.colors.iter().all(|c| c[3] >= 100));
+    }
+
+    #[test]
+    fn default_line_view_keeps_the_old_look() {
+        let v = LineView::default();
+        assert!((v.width_px() - 1.8).abs() < 1e-4 && (v.floor() - 60.0).abs() < 1e-4);
+        assert!((v.dash_px() - 3.6).abs() < 1e-4);
     }
 }

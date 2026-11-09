@@ -1,0 +1,31 @@
+@title 3D Heat: Heat flow lines have their own Lines (number) and Intensity sliders
+@area 3D
+@sizes 1366x768 1920x1080
+# Tadjiro: airflow streamlines let you choose how many and how strong, heat flow lines had one setting. With Heat flow set to Carried by air, the strip now shows Lines and Intensity sliders of their own. Pictures are the evidence.
+open qa/fixtures/cabinet-cooling-advice.novo
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Cancel
+wait 10
+click_text Auto #1
+wait 10
+try click_text Cancel
+wait 10
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait_s 200
+expect_not "Preliminary"
+click_text "Heat flow"
+wait 10
+click_text "Carried by air"
+wait 30
+shot default
+expect "Intensity"
+expect "Lines"
+check_layout
