@@ -2476,20 +2476,6 @@ fn heat_controls(
         if hf != h.heat_flow {
             h.set_heat_flow(hf);
         }
-        if hf.draws_air() {
-            ui.add(
-                egui::Slider::new(&mut h.carry_lines.number, 0.0..=1.0)
-                    .show_value(false)
-                    .text("Lines"),
-            )
-            .on_hover_text("How many heat flow lines: low keeps only the main streams of heat, high shows every one found");
-            ui.add(
-                egui::Slider::new(&mut h.carry_lines.intensity, 0.0..=1.0)
-                    .show_value(false)
-                    .text("Intensity"),
-            )
-            .on_hover_text("How bold the heat flow lines and dashes are: thickness and brightness. Brighter along a line still means more heat per area");
-        }
         ui.checkbox(&mut h.paths, "Paths").on_hover_text(
             "Pin each hot device's split of its heat into air, mounting plate and radiation (the whole list is in the Heat panel). The solver's own split; a model, not a measurement",
         );
@@ -2505,6 +2491,20 @@ fn heat_controls(
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
         heat_numbers::menu(ui, probe, &sol.snapshot, sol.ambient);
         scale_menu(ui, h, heat_3d::range(&sol.snapshot, sol.ambient));
+        if h.heat_flow.draws_air() {
+            ui.add(
+                egui::Slider::new(&mut h.carry_lines.number, 0.0..=1.0)
+                    .show_value(false)
+                    .text("Lines"),
+            )
+            .on_hover_text("How many heat flow lines: low keeps only the main streams of heat, high shows every one found");
+            ui.add(
+                egui::Slider::new(&mut h.carry_lines.intensity, 0.0..=1.0)
+                    .show_value(false)
+                    .text("Intensity"),
+            )
+            .on_hover_text("How bold the heat flow lines and dashes are: thickness and brightness. Brighter along a line still means more heat per area");
+        }
         if probe.on {
             // Its own row, always there while the probe is on, so the strip
             // does not change height when a point is picked.

@@ -21,7 +21,7 @@ wait 10
 click_text Simulate #2
 wait_s 200
 expect_not "Preliminary"
-click_text "Heat flow"
+click_text Off #2
 wait 10
 click_text "Carried by air"
 wait 30
