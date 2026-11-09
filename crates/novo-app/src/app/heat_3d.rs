@@ -23,6 +23,8 @@ pub(crate) struct Heat3d {
     pub lines: bool,
     /// Arrows on the slice plane instead of (or besides) streamlines.
     pub arrows: bool,
+    /// The mounting plate coloured by the air temperature against it.
+    pub plate: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
     /// Pinned labels (tag, temperature, margin) on the hottest devices.
@@ -81,6 +83,7 @@ impl Default for Heat3d {
             iso_at: 0.6,
             lines: false,
             arrows: false,
+            plate: true,
             devices: false,
             labels: true,
             cloud: false,
@@ -213,6 +216,11 @@ pub(crate) fn overlays(
     {
         out.push(Overlay::Mesh(m));
     }
+    if settings.plate
+        && let Some(m) = plate_mesh(snap, place, range)
+    {
+        out.push(Overlay::Mesh(m));
+    }
     let speed_map = settings.flow.mode == super::heat_flow::FlowMode::SpeedMap;
     if speed_map
         && let Some(m) = super::heat_flow::speed_map(
@@ -273,6 +281,18 @@ pub(crate) fn overlays(
         }
     }
     out
+}
+
+/// Opacity of the plate map: nearly solid, so the plate reads as a coloured surface.
+const PLATE_ALPHA: u8 = 235;
+
+/// The mounting plate as a colour map: the plane through the first layer of cells in front of
+/// the plate (Z = 0 is the plate), coloured by temperature.
+pub(crate) fn plate_mesh(snap: &CfdSnapshot, place: Place, range: Range) -> Option<OverlayMesh> {
+    let (lo, hi) = extent(snap, Axis::Z);
+    let first = snap.grid.z_edges_mm.windows(2).next()?;
+    let at = (0.5 * (first[1] - first[0]) / (hi - lo).max(1e-9)) as f32;
+    slice_mesh_with(snap, place, range, Axis::Z, at, PLATE_ALPHA)
 }
 
 /// The cell edges of the result along `axis`, mm.

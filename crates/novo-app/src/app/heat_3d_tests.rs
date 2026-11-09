@@ -177,6 +177,7 @@ fn the_cloud_layer_count_sets_how_much_is_drawn() {
     let quads = |layers: u8| {
         let s = Heat3d {
             slice: false,
+            plate: false,
             cloud: true,
             cloud_layers: layers,
             ..Heat3d::default()
@@ -196,6 +197,7 @@ fn settings_choose_the_overlays() {
     let count = |s: Heat3d| overlays(&snap, 20.0, place(), &s, &fl, 1.0).len();
     let off = Heat3d {
         slice: false,
+        plate: false,
         iso: false,
         lines: false,
         ..Heat3d::default()
@@ -421,4 +423,26 @@ fn raising_the_scale_floor_changes_how_a_device_is_coloured() {
     let a = tint_devices(&scene, &snapshot(), 20.0, place, None, 1).items[0].tint;
     let b = tint_devices(&scene, &snapshot(), 20.0, place, Some((30.0, 40.0)), 1).items[0].tint;
     assert!(a.is_some() && b.is_some() && a != b);
+}
+
+#[test]
+fn the_plate_is_coloured_by_temperature_in_front_of_it() {
+    let snap = snapshot();
+    let fl = flow(&snap, place());
+    let base = Heat3d {
+        slice: false,
+        plate: false,
+        ..Heat3d::default()
+    };
+    assert!(overlays(&snap, 20.0, place(), &base, &fl, 1.0).is_empty());
+    let on = Heat3d {
+        plate: true,
+        ..base
+    };
+    let o = overlays(&snap, 20.0, place(), &on, &fl, 1.0);
+    let [Overlay::Mesh(m)] = &o[..] else {
+        panic!("one plate mesh expected, got {}", o.len());
+    };
+    // The plane is the first layer of cells (5 mm cells: centre at 2.5 mm).
+    assert!(!m.indices.is_empty());
 }

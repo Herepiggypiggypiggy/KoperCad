@@ -1,0 +1,3 @@
+# Heat plate map: handoff
+Cause: after a heat run the 3D view showed only the Slice plane (75 mm out by default) plus Cloud and Flow when switched on; the mounting plate itself was never coloured, so the cabinet plate heat was not visible in the crane sim example. `plate_mesh` in `crates/novo-app/src/app/heat_3d.rs` draws the first cell layer in front of the plate by temperature; the Heat toolbar has a Plate switch. It is the air against the plate, not the solver's plate sheet temperature.
+Where to find it: Cabinet > Simulate heat (or 3D > Heat), then 3D, Plate switch next to Slice. Scenarios 1990 and 1990b (crane sim example).
