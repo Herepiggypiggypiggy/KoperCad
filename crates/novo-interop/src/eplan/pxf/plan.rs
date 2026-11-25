@@ -780,6 +780,42 @@ impl PxfPlan {
         self.creates() == 0
     }
 
+    /// The nets EPLAN's rules give for what is drawn (the reference that
+    /// verification compares KoperCAD's own nets with).
+    pub fn recon(&self) -> &crate::eplan::nets::ReconNets {
+        &self.drawing.recon
+    }
+
+    /// Which drawn pin each file point became: `(symbol index, pin index)`,
+    /// the symbol index counting in drawing order.
+    pub fn drawn_pins(
+        &self,
+    ) -> impl Iterator<Item = (&crate::eplan::nets::PinKey, usize, u16)> + '_ {
+        self.drawing.keys.iter().map(|(k, &(si, pin))| (k, si, pin))
+    }
+
+    /// The index in the file's pages of each page the import creates, in the
+    /// order the pages are created (so the nth new page of a fresh project is
+    /// `page_sources()[n]`; the file's page index is also its PDF page).
+    pub fn page_sources(&self) -> Vec<usize> {
+        self.pages.iter().map(|p| p.source).collect()
+    }
+
+    /// Where the file has the point `key`, in page millimetres with y down:
+    /// compare with where the drawn symbol's pin ended up.
+    pub fn file_position(&self, key: &crate::eplan::nets::PinKey) -> Option<(f64, f64)> {
+        self.drawing.file_at.get(key).map(|p| (p.x, p.y))
+    }
+
+    /// The library key of the `index`th drawn symbol, and how many there are.
+    pub fn drawn_symbol_key(&self, index: usize) -> Option<&str> {
+        self.drawing.symbols.get(index).map(|s| s.key.as_str())
+    }
+
+    pub fn drawn_symbol_count(&self) -> usize {
+        self.drawing.symbols.len()
+    }
+
     pub fn report(&self) -> &Report {
         &self.report
     }
