@@ -87,13 +87,13 @@ fn ducted_wires_of_every_shipped_cabinet_lie_in_the_ducts() {
                         .unwrap_or_else(|| panic!("{}: wire {id} touches no duct", file.display())),
                     last.unwrap(),
                 );
-                for i in first..=last {
+                for (i, p) in r.points.iter().enumerate().take(last + 1).skip(first) {
                     assert!(
                         in_a_duct(&rects, at(i).0, at(i).1),
                         "{}: wire {id} point {i} ({}, {}) lies outside the ducts",
                         file.display(),
-                        r.points[i].x,
-                        r.points[i].y
+                        p.x,
+                        p.y
                     );
                 }
             }

@@ -387,10 +387,10 @@ impl Wiring {
             }
         }
         w.ports.extend([Port::Permit, Port::Deadman]);
-        for i in 0..2 {
-            let mut sto = m.binding.sto[i].take();
+        for slot in &mut m.binding.sto {
+            let mut sto = slot.take();
             w.mask(bound, &mut sto, Port::Permit);
-            m.binding.sto[i] = sto;
+            *slot = sto;
         }
         let mut mains = m.binding.mains.take();
         w.mask(bound, &mut mains, Port::Permit);
@@ -420,10 +420,10 @@ impl Wiring {
         }
         w.ports.extend([Port::Permit, Port::Deadman]);
         for b in &mut m.bindings {
-            for i in 0..2 {
-                let mut sto = b.sto[i].take();
+            for slot in &mut b.sto {
+                let mut sto = slot.take();
                 w.mask(bound, &mut sto, Port::Permit);
-                b.sto[i] = sto;
+                *slot = sto;
             }
             let mut mains = b.mains.take();
             w.mask(bound, &mut mains, Port::Permit);
