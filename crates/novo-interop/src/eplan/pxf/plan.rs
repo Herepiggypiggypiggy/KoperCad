@@ -142,6 +142,19 @@ fn parse_tag(s: &str) -> Option<DeviceTag> {
     DeviceTag::parse(s).ok().filter(|t| !t.product.is_empty())
 }
 
+/// Core numbers: numbers first in numeric order, then text. A total order even
+/// when one cable mixes both (a plain number-or-text compare is not
+/// transitive and panics the sort).
+fn core_order(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a.parse::<u64>(), b.parse::<u64>()) {
+        (Ok(x), Ok(y)) => x.cmp(&y).then_with(|| a.cmp(b)),
+        (Ok(_), Err(_)) => Ordering::Less,
+        (Err(_), Ok(_)) => Ordering::Greater,
+        (Err(_), Err(_)) => a.cmp(b),
+    }
+}
+
 /// A tag written the way [`DeviceTag`] writes it, so a cable and its cores
 /// meet under one spelling.
 fn canonical(full: &str) -> String {
@@ -236,6 +249,10 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut seen_existing: BTreeSet<String> = BTreeSet::new();
     let mut placements = 0usize;
     let mut repeats = 0usize;
+    let mut renamed = 0usize;
+    let mut rename_clashes = 0usize;
+    let mut renamed_from: BTreeMap<String, String> = BTreeMap::new();
+    let mut renamed_seen: BTreeSet<String> = BTreeSet::new();
 
     for d in &file.devices {
         let full = d.tag.full();
@@ -244,6 +261,17 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             continue;
         };
         let text = tag.to_string();
+        if d.tag.is_renamed() {
+            let raw = d.tag.full();
+            let first = renamed_from
+                .entry(text.clone())
+                .or_insert_with(|| raw.clone());
+            if *first != raw {
+                rename_clashes += 1;
+            } else if renamed_seen.insert(raw) {
+                renamed += 1;
+            }
+        }
         if have_device.contains(&text) {
             if seen_existing.insert(text.clone()) {
                 existing.push(text);
@@ -332,10 +360,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         }
     }
     for (i, mut list) in core_numbers {
-        list.sort_by(|a, b| match (a.parse::<u64>(), b.parse::<u64>()) {
-            (Ok(x), Ok(y)) => x.cmp(&y),
-            _ => a.cmp(b),
-        });
+        list.sort_by(|a, b| core_order(a, b));
         cables[i].cores = list;
     }
 
@@ -575,6 +600,16 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     if let Some(l) = file_report.lossy.iter().find(|l| l.what == "other objects") {
         report.lossy.push(l.clone());
     }
+    report.guess(
+        "tags renamed",
+        renamed,
+        "EPLAN names such as -K12/3 hold a character KoperCAD tags do not allow; it is written as _ (-K12_3), the same everywhere",
+    );
+    report.lost(
+        "devices whose renamed tag meets another",
+        rename_clashes,
+        "two different EPLAN tags became the same KoperCAD tag after renaming",
+    );
     report.lost(
         "devices with a tag KoperCAD cannot read",
         unreadable,
@@ -937,5 +972,24 @@ impl PxfPlan {
             }));
         }
         Ok(created)
+    }
+}
+
+#[cfg(test)]
+mod core_order_tests {
+    use super::core_order;
+
+    #[test]
+    fn mixed_core_numbers_sort_without_panic() {
+        let mut v: Vec<String> = ["10", "9a", "9", "BK", "2", "PE", "09", "A1", "100", "1"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for _ in 0..50 {
+            v.extend(["7", "7b", "70", "x"].map(String::from));
+        }
+        v.sort_by(|a, b| core_order(a, b));
+        assert_eq!(&v[..3], ["1", "2", "7"]);
+        assert!(v.windows(2).all(|w| core_order(&w[0], &w[1]).is_le()));
     }
 }

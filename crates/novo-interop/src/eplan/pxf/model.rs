@@ -80,15 +80,23 @@ impl PxfTag {
             s.push('-');
             s.push_str(&self.prefix);
         }
-        s.push_str(&self.letters);
-        s.push_str(&self.number);
+        s.push_str(&safe_level(&self.letters));
+        s.push_str(&safe_level(&self.number));
         if !self.sub.is_empty() {
             if !self.sub.starts_with('.') {
                 s.push('.');
             }
-            s.push_str(&self.sub);
+            s.push_str(&safe_level(&self.sub));
         }
         s
+    }
+
+    /// True when `device_name` has to change a character: EPLAN accepts
+    /// `/` and the like inside a name (`-K12/3`), KoperCAD tags do not.
+    pub fn is_renamed(&self) -> bool {
+        [&self.letters, &self.number, &self.sub]
+            .iter()
+            .any(|p| safe_level(p) != **p)
     }
 
     /// `=A1+CAB1-K1`, KoperCAD's order (IEC 81346). Empty parts are left out.
@@ -107,6 +115,21 @@ impl PxfTag {
         s.push_str(&self.device_name());
         s
     }
+}
+
+/// A tag level in KoperCAD's alphabet (letters, digits, `.`, `_`): any other
+/// character, such as the `/` in `12/3`, becomes `_`; white space is dropped.
+fn safe_level(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_whitespace())
+        .map(|c| {
+            if c.is_alphanumeric() || c == '.' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 /// `SCHNEI.GV2P10`: EPLAN's maker and type, split at the first dot.
@@ -342,4 +365,36 @@ pub fn pair_interruptions(points: &[PxfInterruption]) -> (Vec<(usize, usize)>, V
     pairs.sort_unstable();
     alone.sort_unstable();
     (pairs, alone)
+}
+
+#[cfg(test)]
+mod tag_name_tests {
+    use super::*;
+
+    fn tag(letters: &str, number: &str, sub: &str) -> PxfTag {
+        PxfTag {
+            location: "+LO".into(),
+            letters: letters.into(),
+            number: number.into(),
+            sub: sub.into(),
+            ..PxfTag::default()
+        }
+    }
+
+    #[test]
+    fn slash_in_a_name_becomes_underscore_and_parses() {
+        let t = tag("K", "12/3", "");
+        assert!(t.is_renamed());
+        assert_eq!(t.full(), "+LO-K12_3");
+        assert!(novo_core::DeviceTag::parse(&t.full()).is_ok());
+        let t = tag("X", "12/1", "4");
+        assert_eq!(t.full(), "+LO-X12_1.4");
+    }
+
+    #[test]
+    fn plain_names_are_unchanged() {
+        let t = tag("K", "12", "2");
+        assert!(!t.is_renamed());
+        assert_eq!(t.full(), "+LO-K12.2");
+    }
 }
