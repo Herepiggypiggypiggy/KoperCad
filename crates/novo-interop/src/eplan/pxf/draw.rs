@@ -46,7 +46,9 @@ pub(super) enum Role {
     /// A function of the device with this tag (as EPLAN writes it).
     Device {
         tag: String,
-        coil: bool,
+        /// How well it stands for the device's main function: 2 a coil,
+        /// 1 any other body (fuse, breaker, motor, box), 0 a contact.
+        rank: u8,
     },
     /// A terminal of a strip.
     Terminal {
@@ -405,7 +407,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             _ if d.tag.is_empty() => Role::Plain,
             _ => Role::Device {
                 tag: d.tag.full(),
-                coil: false,
+                rank: 0,
             },
         };
         let conductor = match &role {
@@ -566,7 +568,11 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
 
         let role = match role {
             Role::Device { tag, .. } => Role::Device {
-                coil: key.starts_with("iec/coils/"),
+                rank: main_rank(
+                    &key,
+                    lib_symbol.map(|s| s.function.as_str()),
+                    &d.tag.letters,
+                ),
                 tag,
             },
             r => r,
@@ -859,6 +865,24 @@ fn busbar_rails(placed: &[Placed], net_of: &BTreeMap<(usize, u16), usize>) -> Ve
     out
 }
 
+/// How well a drawn symbol stands for the main function of its device (the
+/// coil of a contactor, the body of a fuse, breaker, motor or push button):
+/// 2 for a coil, 1 for any other body (a switch or sensor contact too), 0
+/// for a contact of a device drawn elsewhere. A box is the device's body.
+fn main_rank(key: &str, function: Option<&str>, letters: &str) -> u8 {
+    if key.starts_with("iec/coils/") {
+        return 2;
+    }
+    match function {
+        None => 1,
+        // A contact operated by hand or by a process value (switch -S, sensor
+        // -B) is the device itself, as in the editor.
+        Some(f) if f.starts_with("contact.") => u8::from(letters.starts_with(['S', 'B'])),
+        Some(f) if f.starts_with("connectivity") || f.starts_with("earth") => 0,
+        Some(_) => 1,
+    }
+}
+
 /// A library symbol that can stand for the placement, with which of its
 /// connections each EPLAN port takes (in port order); `None` when no symbol
 /// of the same pin count fits and the placement becomes a box.
@@ -1114,6 +1138,26 @@ fn turn_art(art: &[Graphic], m: [f64; 4]) -> Vec<Graphic> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_device_body_is_its_main_function_not_only_a_coil() {
+        use super::main_rank;
+        assert_eq!(
+            main_rank("iec/coils/contactor", Some("coil.contactor"), "K"),
+            2
+        );
+        // A fuse, a motor or a black box is the device itself.
+        assert_eq!(
+            main_rank("iec/protection/fuse", Some("protection.fuse"), "F"),
+            1
+        );
+        assert_eq!(main_rank("import/box", None, "Q"), 1);
+        // A contact of a contactor drawn elsewhere is not.
+        assert_eq!(main_rank("iec/contacts/no", Some("contact.no"), "K"), 0);
+        // A switch or sensor contact is the device (as in the editor).
+        assert_eq!(main_rank("iec/contacts/no", Some("contact.no"), "S"), 1);
+        assert_eq!(main_rank("iec/contacts/nc", Some("contact.nc"), "B"), 1);
+    }
+
     use super::super::library::{DOWN, UP};
     use super::*;
     use crate::eplan::pxf::PxfInterruption;
