@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use novo_core::{
     Cable, CableCore, ChangeSet, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, Part, PartId,
     Placement, Point, Project, Rotation, SymbolInstance, SymbolRole, TerminalId, TextAnchor,
-    TextContent, TextPlacement, Wire,
+    TextContent, TextPlacement, Value, Wire,
 };
 
 use super::draw::{Drawing, Role, draw};
@@ -84,6 +84,8 @@ struct NewDevice {
     type_number: String,
     /// Terminal names, for a strip.
     terminals: Vec<String>,
+    /// The name as EPLAN writes it, when KoperCAD's tag had to differ.
+    eplan_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +93,7 @@ struct NewCable {
     tag: DeviceTag,
     description: String,
     cores: Vec<String>,
+    eplan_name: Option<String>,
 }
 
 /// A free text on a drawn page.
@@ -138,8 +141,52 @@ fn quarter_turns(angle: f64) -> Rotation {
     }
 }
 
+/// Property that keeps the name EPLAN gave a device or cable when KoperCAD's
+/// tag had to differ (`-K12/3` is `-K12_3`). The device list shows it.
+pub const EPLAN_NAME_KEY: &str = "eplan.name";
+
 fn parse_tag(s: &str) -> Option<DeviceTag> {
     DeviceTag::parse(s).ok().filter(|t| !t.product.is_empty())
+}
+
+/// Which EPLAN names became which KoperCAD tag. Two different EPLAN names that
+/// end up as one tag (`-K12/3` and `-K12_3`) would merge silently, so every
+/// device is checked against the original names, renamed or not.
+#[derive(Default)]
+struct RenameLog {
+    first: BTreeMap<String, String>,
+    /// Original names that had to change.
+    renamed: BTreeSet<String>,
+    /// Original names that met a different original under the same tag.
+    clashes: BTreeSet<String>,
+}
+
+impl RenameLog {
+    fn record(&mut self, tag: &str, original: String, renamed: bool) {
+        if renamed {
+            self.renamed.insert(original.clone());
+        }
+        let first = self
+            .first
+            .entry(tag.to_string())
+            .or_insert_with(|| original.clone());
+        if *first != original {
+            self.clashes.insert(original);
+        }
+    }
+}
+
+/// Core numbers: numbers first in numeric order, then text. A total order even
+/// when one cable mixes both (a plain number-or-text compare is not
+/// transitive and panics the sort).
+fn core_order(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a.parse::<u64>(), b.parse::<u64>()) {
+        (Ok(x), Ok(y)) => x.cmp(&y).then_with(|| a.cmp(b)),
+        (Ok(_), Err(_)) => Ordering::Less,
+        (Err(_), Ok(_)) => Ordering::Greater,
+        (Err(_), Err(_)) => a.cmp(b),
+    }
 }
 
 /// A tag written the way [`DeviceTag`] writes it, so a cable and its cores
@@ -236,6 +283,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut seen_existing: BTreeSet<String> = BTreeSet::new();
     let mut placements = 0usize;
     let mut repeats = 0usize;
+    let mut renames = RenameLog::default();
 
     for d in &file.devices {
         let full = d.tag.full();
@@ -244,6 +292,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             continue;
         };
         let text = tag.to_string();
+        renames.record(&text, d.tag.original(), d.tag.is_renamed());
         if have_device.contains(&text) {
             if seen_existing.insert(text.clone()) {
                 existing.push(text);
@@ -263,6 +312,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         order_number: String::new(),
                         type_number: type_number.to_string(),
                         terminals: Vec::new(),
+                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
                     });
                     devices.len() - 1
                 });
@@ -281,6 +331,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         tag,
                         description: MlText::parse(&d.cable_text).get(&opts.lang).to_string(),
                         cores: Vec::new(),
+                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
                     });
                 } else {
                     repeats += 1;
@@ -298,6 +349,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         order_number: type_number.to_string(),
                         type_number: type_number.to_string(),
                         terminals: Vec::new(),
+                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
                     });
                 } else {
                     repeats += 1;
@@ -332,10 +384,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         }
     }
     for (i, mut list) in core_numbers {
-        list.sort_by(|a, b| match (a.parse::<u64>(), b.parse::<u64>()) {
-            (Ok(x), Ok(y)) => x.cmp(&y),
-            _ => a.cmp(b),
-        });
+        list.sort_by(|a, b| core_order(a, b));
         cables[i].cores = list;
     }
 
@@ -575,6 +624,16 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     if let Some(l) = file_report.lossy.iter().find(|l| l.what == "other objects") {
         report.lossy.push(l.clone());
     }
+    report.guess(
+        "tags renamed",
+        renames.renamed.len(),
+        "EPLAN names such as -K12/3 hold a character KoperCAD tags do not allow; it is written as _ (-K12_3), the same everywhere",
+    );
+    report.lost(
+        "devices whose renamed tag meets another",
+        renames.clashes.len(),
+        "two different EPLAN tags became the same KoperCAD tag after renaming",
+    );
     report.lost(
         "devices with a tag KoperCAD cannot read",
         unreadable,
@@ -782,6 +841,9 @@ impl PxfPlan {
                 let id = tx.add_device_of_kind(d.tag.clone(), d.description.clone(), d.kind)?;
                 device_ids.insert(d.tag.to_string(), id);
                 created += 1;
+                if let Some(name) = &d.eplan_name {
+                    tx.set_property(id, EPLAN_NAME_KEY, Some(Value::from(name.clone())))?;
+                }
                 if !d.order_number.is_empty() {
                     let key = (d.manufacturer.clone(), d.order_number.clone());
                     let part = match parts.get(&key) {
@@ -809,6 +871,9 @@ impl PxfPlan {
                 let cores = c.cores.iter().map(|n| CableCore::new(n.clone())).collect();
                 let id = tx.add_cable(c.tag.clone(), cores)?;
                 tx.update::<Cable>(id, |x| x.description = c.description.clone())?;
+                if let Some(name) = &c.eplan_name {
+                    tx.set_property(id, EPLAN_NAME_KEY, Some(Value::from(name.clone())))?;
+                }
                 created += 1;
             }
             created += self.draw_pages(tx, &page_ids, &device_ids, &terminal_ids, &mut check)?;
@@ -937,5 +1002,42 @@ impl PxfPlan {
             }));
         }
         Ok(created)
+    }
+}
+
+#[cfg(test)]
+mod core_order_tests {
+    use super::core_order;
+
+    #[test]
+    fn a_renamed_tag_meeting_a_plain_one_is_a_clash() {
+        let mut log = super::RenameLog::default();
+        log.record("-K12_3", "-K12_3".into(), false);
+        log.record("-K12_3", "-K12/3".into(), true);
+        // The same EPLAN name drawn again is no clash.
+        log.record("-K12_3", "-K12/3".into(), true);
+        log.record("-K1", "-K1".into(), false);
+        assert_eq!(log.renamed.len(), 1);
+        assert_eq!(log.clashes.len(), 1);
+        assert!(log.clashes.contains("-K12/3"));
+        // Order does not matter: the plain name arriving second clashes too.
+        let mut log = super::RenameLog::default();
+        log.record("-K12_3", "-K12/3".into(), true);
+        log.record("-K12_3", "-K12_3".into(), false);
+        assert_eq!(log.clashes.len(), 1);
+    }
+
+    #[test]
+    fn mixed_core_numbers_sort_without_panic() {
+        let mut v: Vec<String> = ["10", "9a", "9", "BK", "2", "PE", "09", "A1", "100", "1"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for _ in 0..50 {
+            v.extend(["7", "7b", "70", "x"].map(String::from));
+        }
+        v.sort_by(|a, b| core_order(a, b));
+        assert_eq!(&v[..3], ["1", "2", "7"]);
+        assert!(v.windows(2).all(|w| core_order(&w[0], &w[1]).is_le()));
     }
 }

@@ -12,6 +12,9 @@ use crate::table::{Cell, Column, ReportOutput, Section};
 /// (order numbers and manufacturers) and every place it is drawn as
 /// `page.column` ([`Project::cross_references`], reading order, the main
 /// function first when it is drawn).
+/// Property the EPLAN importers set; the same text as `novo_interop`'s `EPLAN_NAME_KEY`.
+const EPLAN_NAME_KEY: &str = "eplan.name";
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceList;
 
@@ -34,20 +37,24 @@ impl Report for DeviceList {
     }
 
     fn generate(&self, project: &Project) -> ReportOutput {
-        let mut section = Section::new(
-            "devices",
-            "",
-            vec![
-                Column::new("tag", "Tag", 30.0),
-                Column::new("function", "Function", 15.0),
-                Column::new("location", "Location", 15.0),
-                Column::new("description", "Description", 45.0),
-                Column::new("kind", "Kind", 18.0),
-                Column::new("order_number", "Part", 35.0),
-                Column::new("manufacturer", "Manufacturer", 25.0),
-                Column::new("drawn_at", "Drawn at", 30.0),
-            ],
-        );
+        // Only imported projects carry the original EPLAN name (`-K12/3`).
+        let with_original = project
+            .devices()
+            .any(|d| d.properties.contains_key(EPLAN_NAME_KEY));
+        let mut columns = vec![
+            Column::new("tag", "Tag", 30.0),
+            Column::new("function", "Function", 15.0),
+            Column::new("location", "Location", 15.0),
+            Column::new("description", "Description", 45.0),
+            Column::new("kind", "Kind", 18.0),
+            Column::new("order_number", "Part", 35.0),
+            Column::new("manufacturer", "Manufacturer", 25.0),
+            Column::new("drawn_at", "Drawn at", 30.0),
+        ];
+        if with_original {
+            columns.push(Column::new("eplan_name", "EPLAN name", 30.0));
+        }
+        let mut section = Section::new("devices", "", columns);
         let mut devices: Vec<_> = project.devices().collect();
         devices.sort_by(|a, b| tag_cmp(&a.tag, &b.tag).then(a.id.cmp(&b.id)));
         for device in devices {
@@ -59,21 +66,26 @@ impl Report for DeviceList {
             let mut references = project.cross_references(device.id);
             // Main function first, the rest in reading order (stable sort).
             references.sort_by_key(|r| !r.main);
-            section.push(
-                vec![
-                    Cell::text(device.tag.to_string()),
-                    Cell::text(function_of(&device.tag)),
-                    Cell::text(location_of(&device.tag)),
-                    Cell::text(device.description.clone()),
-                    Cell::text(kind_name(device.kind)),
-                    Cell::text(join_distinct(parts.iter().map(|p| p.order_number.as_str()))),
-                    Cell::text(join_distinct(parts.iter().map(|p| p.manufacturer.as_str()))),
-                    Cell::text(join_distinct(
-                        references.iter().map(|r| location_text(&r.location)),
-                    )),
-                ],
-                vec![device.id.into()],
-            );
+            let original = match device.properties.get(EPLAN_NAME_KEY) {
+                Some(novo_core::Value::Text(t)) => t.clone(),
+                _ => String::new(),
+            };
+            let mut row = vec![
+                Cell::text(device.tag.to_string()),
+                Cell::text(function_of(&device.tag)),
+                Cell::text(location_of(&device.tag)),
+                Cell::text(device.description.clone()),
+                Cell::text(kind_name(device.kind)),
+                Cell::text(join_distinct(parts.iter().map(|p| p.order_number.as_str()))),
+                Cell::text(join_distinct(parts.iter().map(|p| p.manufacturer.as_str()))),
+                Cell::text(join_distinct(
+                    references.iter().map(|r| location_text(&r.location)),
+                )),
+            ];
+            if with_original {
+                row.push(Cell::text(original));
+            }
+            section.push(row, vec![device.id.into()]);
         }
         ReportOutput {
             report: Self::ID.into(),

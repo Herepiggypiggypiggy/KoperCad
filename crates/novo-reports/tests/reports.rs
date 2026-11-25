@@ -187,6 +187,27 @@ fn bill_of_materials_counts_uses_and_lists_devices_without_parts() {
 }
 
 #[test]
+fn device_list_shows_the_original_eplan_name_only_when_an_import_kept_one() {
+    let (mut doc, h) = starter();
+    let plain = report(&doc, "devices");
+    assert_eq!(plain.section("devices").unwrap().columns.len(), 8);
+    doc.transact("keep name", |tx| {
+        tx.set_property(
+            h.f1,
+            "eplan.name",
+            Some(novo_core::Value::Text("-F1/7".into())),
+        )
+    })
+    .unwrap();
+    let shown = report(&doc, "devices");
+    let section = shown.section("devices").unwrap();
+    assert_eq!(section.columns.last().unwrap().header, "EPLAN name");
+    let rows = section.text_rows();
+    assert_eq!(rows[0].last().unwrap(), "-F1/7");
+    assert_eq!(rows[1].last().unwrap(), "");
+}
+
+#[test]
 fn device_list_has_structure_parts_and_locations() {
     let (doc, _) = starter();
     let devices = report(&doc, "devices");
