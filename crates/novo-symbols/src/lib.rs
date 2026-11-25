@@ -11,6 +11,7 @@
 //! assert_eq!(contact.connections.len(), 2);
 //! ```
 
+pub mod drawn;
 mod letter;
 mod library;
 mod pack;

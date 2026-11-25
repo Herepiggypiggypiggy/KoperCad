@@ -1,6 +1,6 @@
 //! The symbol and function definitions a project export embeds, read for
-//! two facts only: where a symbol's connection points are, and what the
-//! symbol is called.
+//! three facts: where a symbol's connection points are, what the symbol is
+//! called and how it is drawn.
 //!
 //! A project export carries the library its pages were drawn with: `O20` is
 //! a symbol, `O45` one of its drawn variants (orientations), `S48x823` a
@@ -18,6 +18,8 @@
 //! (`A1263` / `A822`).
 
 use std::collections::{BTreeMap, HashMap};
+
+use novo_symbols::Graphic;
 
 use super::text::MlText;
 
@@ -54,6 +56,9 @@ pub struct LibSymbol {
     pub name: MlText,
     /// Variant (`A822` of the `O45`) to its connection points.
     pub variants: BTreeMap<u32, Vec<LibPort>>,
+    /// Variant to the symbol's own drawing as the export stores it, in
+    /// symbol graphics (y down, millimetres from the insertion point).
+    pub art: BTreeMap<u32, Vec<Graphic>>,
 }
 
 /// A function definition (`O60`).
@@ -223,6 +228,7 @@ mod tests {
             code: "T".into(),
             name: MlText::default(),
             variants: BTreeMap::from([(0, ports)]),
+            art: BTreeMap::new(),
         }
     }
 

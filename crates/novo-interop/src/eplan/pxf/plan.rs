@@ -566,7 +566,11 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         );
         let mut drawn = vec![format!("{} circuit-diagram pages", st.pages)];
         for (n, what) in [
-            (st.library_symbols, "symbols from KoperCAD's library"),
+            (st.art_symbols, "symbols drawn with EPLAN's own artwork"),
+            (
+                st.library_symbols,
+                "symbols meaning a KoperCAD library symbol",
+            ),
             (st.box_symbols, "devices drawn as labelled boxes"),
             (
                 st.interruptions,
@@ -579,9 +583,25 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             }
         }
         report.note(format!(
-            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wire corners follow the file where it has them; other wires are plain right-angle runs.",
+            "Drawn: {}. Symbols the export draws keep EPLAN's artwork and pin positions; the others are KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wire corners follow the file where it has them; other wires are plain right-angle runs.",
             drawn.join(", ")
         ));
+        report.note(format!(
+            "Connection points checked against the file: {} of {} are where the file has them.",
+            st.pins_checked - st.pins_off,
+            st.pins_checked
+        ));
+        if !st.no_art_functions.is_empty() {
+            let list: Vec<String> = st
+                .no_art_functions
+                .iter()
+                .map(|(f, n)| format!("{f} x{n}"))
+                .collect();
+            report.note(format!(
+                "No drawing for these in the export, so KoperCAD's symbol or a box stands in: {}.",
+                list.join(", ")
+            ));
+        }
         if !st.box_functions.is_empty() {
             let list: Vec<String> = st
                 .box_functions
@@ -959,6 +979,14 @@ impl PxfPlan {
                 tx.update::<SymbolInstance>(id, |x| {
                     x.bridges = s.bridges.clone();
                     x.pass_through = s.pass_through.clone();
+                })?;
+            }
+            if let Some(art) = &s.art {
+                tx.update::<SymbolInstance>(id, |x| {
+                    x.properties.insert(
+                        novo_symbols::drawn::ART_PROPERTY.to_string(),
+                        Value::Text(art.clone()),
+                    );
                 })?;
             }
             if !s.label.is_empty() {
