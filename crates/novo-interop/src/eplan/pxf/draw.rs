@@ -9,17 +9,21 @@
 //! Exact: where each placement sits, how many connection points it has and
 //! where they are, which points are one net (the rules' result), device and
 //! terminal tags, interruption point names.
-//! Inferred: the artwork. A placement whose function a KoperCAD symbol of
-//! the same pin count stands for is drawn with that symbol (its pins land
-//! where the symbol has them, not where EPLAN had them); anything else is a
-//! labelled box with the pins where EPLAN had them. Wire routes and junctions
-//! are EPLAN's own runs and nodes ([`super::runs`]). Interruption points face
-//! any way.
+//! The artwork: a placement whose library symbol the export draws (lines,
+//! arcs, circles, polygons, fixed texts) is drawn with that drawing, which
+//! travels on the placed symbol (`novo_symbols::drawn`), and its pins sit
+//! where EPLAN has them. Where a KoperCAD symbol of the same function and
+//! pin count exists the placed symbol keeps its meaning (coil, contact,
+//! bridges, simulation behaviour) but not its picture. A placement the
+//! export has no drawing for falls back to that KoperCAD symbol (its pins
+//! land where the symbol has them) or a labelled box. Wire routes and
+//! junctions are EPLAN's own runs and nodes ([`super::runs`]). Interruption
+//! points face any way.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{Direction, Pin, Point, Rotation};
-use novo_symbols::{Library, Pack, Symbol};
+use novo_symbols::{Graphic, Library, Pack, Symbol, drawn};
 
 use super::library::{DOWN, LEFT, LibPort, Match, RIGHT, UP};
 use super::model::{DeviceRole, PageClass, PxfFile};
@@ -66,6 +70,8 @@ pub(super) struct DrawnSymbol {
     /// Text shown beside a labelled box: the function the placement stands
     /// for. Empty for library symbols, which carry their own artwork.
     pub label: String,
+    /// EPLAN's drawing of the symbol as `novo_symbols::drawn` text.
+    pub art: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +98,16 @@ pub struct DrawStats {
     pub pages: usize,
     pub library_symbols: usize,
     pub box_symbols: usize,
+    /// Placements drawn with EPLAN's own drawing of the symbol.
+    pub art_symbols: usize,
+    /// Of those, placements whose matrix turns or mirrors the symbol.
+    pub art_turned: usize,
+    /// Connection points drawn more than 0.05 mm from where the file has them.
+    pub pins_off: usize,
+    /// Connection points checked.
+    pub pins_checked: usize,
+    /// Function names of placements the export has no drawing for, with counts.
+    pub no_art_functions: BTreeMap<String, usize>,
     /// Placements the embedded library could not explain: not drawn.
     pub unplaced: usize,
     /// Placements drawn although the library only loosely matched.
@@ -356,6 +372,33 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             Role::Terminal { strip, name } => Some(format!("T:{strip}:{name}")),
             _ => None,
         };
+        // The variant's own drawing and points, turned by the placement's
+        // matrix (the identity in every file seen so far).
+        let turned = d.matrix != [1.0, 0.0, 0.0, 1.0];
+        let moved: Vec<LibPort> = ports.iter().map(|p| turn_port(p, d.matrix)).collect();
+        let ports: &[LibPort] = &moved;
+        let art_g: Option<Vec<Graphic>> = lsym
+            .art
+            .get(&(d.variant as u32))
+            .filter(|a| !a.is_empty())
+            .map(|a| turn_art(a, d.matrix));
+        let art_text = art_g.as_deref().map(drawn::encode);
+        if art_g.is_none() {
+            *out.stats
+                .no_art_functions
+                .entry(if function.is_empty() {
+                    "no function name".to_string()
+                } else {
+                    function.clone()
+                })
+                .or_default() += 1;
+        }
+        if art_g.is_some() {
+            out.stats.art_symbols += 1;
+            if turned {
+                out.stats.art_turned += 1;
+            }
+        }
         let pin_names: Vec<String> = (0..ports.len())
             .map(|i| d.pins.get(i).cloned().unwrap_or_default())
             .collect();
@@ -384,8 +427,20 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 let (bridges, pass) = model_groups(sym);
                 let c0 = port_conn[0];
                 let at = origin_pos(&first);
-                let origin = Point::new(at.x - pins[c0].offset.x, at.y - pins[c0].offset.y);
                 let mut pins = pins;
+                let origin = if art_g.is_some() {
+                    // EPLAN's own pins: the symbol sits at its insertion point.
+                    for (j, p) in ports.iter().enumerate() {
+                        let pin = &mut pins[port_conn[j]];
+                        pin.offset = Point::new(p.x, -p.y);
+                        if let Some(dir) = direction_of(p.dirs) {
+                            pin.direction = Some(dir);
+                        }
+                    }
+                    Point::new(x, PAGE_HEIGHT - y)
+                } else {
+                    Point::new(at.x - pins[c0].offset.x, at.y - pins[c0].offset.y)
+                };
                 let mut map = BTreeMap::new();
                 for (j, p) in ports.iter().enumerate() {
                     map.insert(p.index, port_conn[j] as u16);
@@ -435,7 +490,9 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                     function.clone()
                 };
                 *out.stats.box_functions.entry(label).or_default() += 1;
-                box_label = box_caption(&function, d.type_text.get("en_US"), &d.part_number);
+                if art_g.is_none() {
+                    box_label = box_caption(&function, d.type_text.get("en_US"), &d.part_number);
+                }
                 *out.stats
                     .box_kinds
                     .entry((
@@ -475,10 +532,13 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             let pin = pin_of_port[&p.index];
             by_key.insert(pk, (idx, pin, page));
             let kp = &pins[pin as usize];
-            page_pos.insert(
-                pin,
-                Point::new(origin.x + kp.offset.x, origin.y + kp.offset.y),
-            );
+            let at = Point::new(origin.x + kp.offset.x, origin.y + kp.offset.y);
+            let want = Point::new(x + p.x, PAGE_HEIGHT - (y + p.y));
+            out.stats.pins_checked += 1;
+            if (at.x - want.x).hypot(at.y - want.y) > 0.05 {
+                out.stats.pins_off += 1;
+            }
+            page_pos.insert(pin, at);
         }
         placed.push(Placed {
             symbol: DrawnSymbol {
@@ -490,6 +550,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 pass_through,
                 role,
                 label: box_label,
+                art: art_text,
             },
             page_pos,
         });
@@ -567,6 +628,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 pass_through: pass,
                 role: Role::Interruption(shown.get(&name).cloned().unwrap_or(name)),
                 label: String::new(),
+                art: None,
             },
             page_pos: BTreeMap::from([(0, Point::new(x, PAGE_HEIGHT - y))]),
         });
@@ -770,6 +832,138 @@ fn box_caption(function: &str, type_text: &str, part_number: &str) -> String {
     }
 }
 
+/// A connection point turned by a placement matrix (`[a, b, c, d]`, y up).
+fn turn_port(p: &LibPort, m: [f64; 4]) -> LibPort {
+    if m == [1.0, 0.0, 0.0, 1.0] {
+        return *p;
+    }
+    let (x, y) = (m[0] * p.x + m[1] * p.y, m[2] * p.x + m[3] * p.y);
+    let mut dirs = 0u8;
+    for (bit, v) in [
+        (UP, (0.0, 1.0)),
+        (RIGHT, (1.0, 0.0)),
+        (DOWN, (0.0, -1.0)),
+        (LEFT, (-1.0, 0.0)),
+    ] {
+        if p.dirs & bit != 0 {
+            let (vx, vy) = (m[0] * v.0 + m[1] * v.1, m[2] * v.0 + m[3] * v.1);
+            dirs |= if vx.abs() >= vy.abs() {
+                if vx >= 0.0 { RIGHT } else { LEFT }
+            } else if vy >= 0.0 {
+                UP
+            } else {
+                DOWN
+            };
+        }
+    }
+    LibPort { x, y, dirs, ..*p }
+}
+
+/// A symbol drawing (y down) turned by a placement matrix (y up). Curves
+/// become polylines when the matrix is not the identity.
+fn turn_art(art: &[Graphic], m: [f64; 4]) -> Vec<Graphic> {
+    if m == [1.0, 0.0, 0.0, 1.0] {
+        return art.to_vec();
+    }
+    // The matrix in y-down coordinates.
+    let (a, b, c, d) = (m[0], -m[1], -m[2], m[3]);
+    let t = |p: [f64; 2]| [a * p[0] + b * p[1], c * p[0] + d * p[1]];
+    let scale = (a * d - b * c).abs().sqrt();
+    let mut out = Vec::with_capacity(art.len());
+    for g in art {
+        out.push(match g {
+            Graphic::Line { from, to, stroke } => Graphic::Line {
+                from: t(*from),
+                to: t(*to),
+                stroke: *stroke,
+            },
+            Graphic::Polyline {
+                points,
+                closed,
+                fill,
+                stroke,
+            } => Graphic::Polyline {
+                points: points.iter().map(|p| t(*p)).collect(),
+                closed: *closed,
+                fill: *fill,
+                stroke: *stroke,
+            },
+            Graphic::Rect {
+                at,
+                size,
+                fill,
+                stroke,
+            } => Graphic::Polyline {
+                points: [
+                    *at,
+                    [at[0] + size[0], at[1]],
+                    [at[0] + size[0], at[1] + size[1]],
+                    [at[0], at[1] + size[1]],
+                ]
+                .iter()
+                .map(|p| t(*p))
+                .collect(),
+                closed: true,
+                fill: *fill,
+                stroke: *stroke,
+            },
+            Graphic::Circle {
+                center,
+                r,
+                fill,
+                stroke,
+            } => Graphic::Circle {
+                center: t(*center),
+                r: r * scale,
+                fill: *fill,
+                stroke: *stroke,
+            },
+            Graphic::Ellipse {
+                center,
+                rx,
+                ry,
+                fill,
+                stroke,
+            } => Graphic::Ellipse {
+                center: t(*center),
+                rx: rx * scale,
+                ry: ry * scale,
+                fill: *fill,
+                stroke: *stroke,
+            },
+            Graphic::Arc {
+                center,
+                r,
+                start,
+                end,
+                stroke,
+            } => Graphic::Polyline {
+                points: (0..=24)
+                    .map(|i| {
+                        let u = (start + (end - start) * f64::from(i) / 24.0).to_radians();
+                        t([center[0] + r * u.cos(), center[1] + r * u.sin()])
+                    })
+                    .collect(),
+                closed: false,
+                fill: false,
+                stroke: *stroke,
+            },
+            Graphic::Text {
+                at,
+                text,
+                size,
+                align,
+            } => Graphic::Text {
+                at: t(*at),
+                text: text.clone(),
+                size: *size,
+                align: *align,
+            },
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::library::{DOWN, UP};
@@ -872,5 +1066,39 @@ mod tests {
             .map(|p| &shown[&p.text])
             .collect();
         assert_eq!(ends.len(), 1);
+    }
+
+    #[test]
+    fn a_quarter_turn_moves_points_and_the_way_they_face() {
+        // 90 degrees counter-clockwise, y up: (1, 0) -> (0, 1), right -> up.
+        let p = LibPort {
+            index: 0,
+            x: 2.0,
+            y: 0.0,
+            dirs: RIGHT,
+        };
+        let t = turn_port(&p, [0.0, -1.0, 1.0, 0.0]);
+        assert_eq!((t.x, t.y, t.dirs), (0.0, 2.0, UP));
+        assert_eq!(turn_port(&p, [1.0, 0.0, 0.0, 1.0]), p);
+        // A mirror in x turns a point facing right to face left.
+        let m = turn_port(&p, [-1.0, 0.0, 0.0, 1.0]);
+        assert_eq!((m.x, m.dirs), (-2.0, LEFT));
+    }
+
+    #[test]
+    fn turned_artwork_follows_the_same_matrix_in_screen_coordinates() {
+        use novo_symbols::Stroke;
+        let line = Graphic::Line {
+            from: [0.0, 0.0],
+            to: [2.0, 0.0],
+            stroke: Stroke::Solid,
+        };
+        // The quarter turn above: a line along +x (right) must end up pointing
+        // up, which is -y on the screen.
+        let out = turn_art(&[line], [0.0, -1.0, 1.0, 0.0]);
+        let Graphic::Line { to, .. } = &out[0] else {
+            panic!("a line")
+        };
+        assert!((to[0]).abs() < 1e-9 && (to[1] + 2.0).abs() < 1e-9, "{to:?}");
     }
 }

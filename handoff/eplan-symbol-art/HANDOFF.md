@@ -1,0 +1,7 @@
+# EPLAN symbol art handoff
+Branch claude/project-thread-dzjtjo (kopercad). Files: crates/novo-symbols/src/drawn.rs (codec, property `art.drawing`), crates/novo-editor/src/art.rs (`carried`, `primitives_of`), crates/novo-interop/src/eplan/pxf/{art,read,library,draw,plan}.rs.
+How it works: read.rs collects the shapes inside each `O45` variant (O31 line, O89 rect, O32 arc/circle, O34 polygon, O30 fixed text; placeholder texts `??` are skipped) into `LibSymbol::art`; draw.rs picks the variant the placement uses, turns it by the placement matrix, sets the instance pins to the file's ports (y flipped) and origin to the insertion point, and keeps the KoperCAD library key only for meaning (coil, contact, bridges, pass-through). plan.rs stores the drawing as property `art.drawing`.
+Arc rule (verified on the real file): A556 is a vector from the centre; radius is its length, its direction is the zero of the angles (the old page-graphics code used only x: fixed).
+Result on v70b (private): 3191 symbols with EPLAN art, 5737 of 5737 connection points where the file has them (lane 4 measured 2309 of 7471 off before); only "Shield, Cable definition" x4 has no drawing.
+Resume: KOPERCAD_CRANE_EPJ=<epj> cargo test -p novo-interop --test crane_real --test crane; render: kopercad-cli import crane <folder> -o x.novo, export pdf, pdftoppm; compare with EPLAN's PDF.
+Rules: customer export stays private; fixture crates/novo-interop/tests/fixtures/crane is synthetic.
