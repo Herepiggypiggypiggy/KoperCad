@@ -12,8 +12,9 @@
 //! Inferred: the artwork. A placement whose function a KoperCAD symbol of
 //! the same pin count stands for is drawn with that symbol (its pins land
 //! where the symbol has them, not where EPLAN had them); anything else is a
-//! labelled box with the pins where EPLAN had them. Wire routes are plain
-//! right-angle runs, not EPLAN's lines. Interruption points face any way.
+//! labelled box with the pins where EPLAN had them. Wire routes and junctions
+//! are EPLAN's own runs and nodes ([`super::runs`]). Interruption points face
+//! any way.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -22,6 +23,7 @@ use novo_symbols::{Library, Pack, Symbol};
 
 use super::library::{DOWN, LEFT, LibPort, Match, RIGHT, UP};
 use super::model::{DeviceRole, PageClass, PxfFile};
+use super::runs::{RunEnd, RunPoint, wires_from_runs};
 use crate::eplan::nets::{
     ConnGraph, ConnPoint, Dir, Interruption, NetIssue, PinKey, ReconNets, rebuild_nets,
 };
@@ -69,11 +71,19 @@ pub(super) struct DrawnSymbol {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct DrawnWire {
     pub page: usize,
-    pub from: (usize, u16),
-    pub to: (usize, u16),
+    pub from: DrawnEnd,
+    pub to: DrawnEnd,
+    /// Corners between the ends: EPLAN's own nodes.
     pub route: Vec<Point>,
-    /// The route is EPLAN's: its runs and nodes, not a guess between the pins.
-    pub followed: bool,
+}
+
+/// What a drawn wire ends on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DrawnEnd {
+    /// A pin of the drawn symbol (index, pin).
+    Pin(usize, u16),
+    /// An entry of [`Drawing::junctions`].
+    Junction(usize),
 }
 
 /// What the drawing step did, for the report.
@@ -91,8 +101,10 @@ pub struct DrawStats {
     pub interruptions: usize,
     pub nets: usize,
     pub wires: usize,
-    /// Wires drawn along EPLAN's own runs and nodes, not a guessed route.
-    pub wires_followed: usize,
+    /// Connection dots wires end on (T and cross nodes with three runs).
+    pub junctions: usize,
+    /// Nodes that carry no wire: stubs and dots with fewer than three runs.
+    pub dots_dropped: usize,
     /// Function names drawn as boxes, with counts.
     pub box_functions: BTreeMap<String, usize>,
     /// The same, told apart by tag letters and pin designations in order.
@@ -499,10 +511,6 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             (70, 3) => &[Dir::Down, Dir::Left],
             _ => &[Dir::Up, Dir::Right, Dir::Down, Dir::Left],
         };
-        if legs.len() >= 3 {
-            // A T or cross joint: EPLAN draws a dot there.
-            out.junctions.push((page, Point::new(x, PAGE_HEIGHT - y)));
-        }
         graph
             .points
             .push(ConnPoint::node(&format!("n{ni}"), page as u32, x, y, legs));
@@ -580,24 +588,50 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
     }
     out.stats.nets = nets.connected_nets();
 
-    let pos_of = |placed: &[Placed], k: &PinKey| -> Option<(usize, u16, usize, Point)> {
-        let &(si, pin, page) = by_key.get(k)?;
-        Some((si, pin, page, *placed[si].page_pos.get(&pin)?))
-    };
-    for net in &nets.nets {
-        let mut per_page: BTreeMap<usize, Vec<(usize, u16, Point)>> = BTreeMap::new();
-        for k in &net.pins {
-            if let Some((si, pin, page, at)) = pos_of(&placed, k) {
-                per_page.entry(page).or_default().push((si, pin, at));
+    // Wires are the runs EPLAN implies, through its nodes; T and cross nodes
+    // become junctions the wires end on.
+    let mut run_points: Vec<RunPoint> = Vec::with_capacity(graph.points.len());
+    let mut run_pin: Vec<Option<(usize, u16)>> = Vec::with_capacity(graph.points.len());
+    for p in &graph.points {
+        let (at, node, leaves, pin) = match by_key.get(&p.key) {
+            Some(&(si, pin, _)) if !p.node => {
+                let Some(&at) = placed[si].page_pos.get(&pin) else {
+                    continue;
+                };
+                let leaves = placed[si].symbol.pins[pin as usize].direction;
+                (at, false, leaves, Some((si, pin)))
             }
-        }
-        for (page, pts) in per_page {
-            out.wires.extend(spanning_wires(page, &pts, &placed));
+            _ if p.node => (Point::new(p.at.x, PAGE_HEIGHT - p.at.y), true, None, None),
+            _ => continue,
+        };
+        run_points.push(RunPoint {
+            key: p.key.clone(),
+            page: p.page as usize,
+            at,
+            node,
+            leaves,
+        });
+        run_pin.push(pin);
+    }
+    let built = wires_from_runs(&run_points, &nets.runs);
+    out.junctions = built.junctions;
+    out.stats.junctions = out.junctions.len();
+    out.stats.dots_dropped = built.dropped_nodes;
+    let end = |e: RunEnd| match e {
+        RunEnd::Pin(i) => run_pin[i].map(|(si, pin)| DrawnEnd::Pin(si, pin)),
+        RunEnd::Junction(j) => Some(DrawnEnd::Junction(j)),
+    };
+    for w in built.wires {
+        if let (Some(from), Some(to)) = (end(w.from), end(w.to)) {
+            out.wires.push(DrawnWire {
+                page: w.page,
+                from,
+                to,
+                route: w.route,
+            });
         }
     }
-    follow_runs(&mut out.wires, &nets, &graph, &by_key, &placed);
     out.stats.wires = out.wires.len();
-    out.stats.wires_followed = out.wires.iter().filter(|w| w.followed).count();
     out.keys = by_key
         .iter()
         .map(|(k, &(si, pin, _))| (k.clone(), (si, pin)))
@@ -605,201 +639,6 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
     out.recon = nets;
     out.symbols = placed.into_iter().map(|p| p.symbol).collect();
     out
-}
-
-/// A minimum spanning tree over `pts` by right-angle distance. Pins that a
-/// symbol already joins inside (a terminal's two sides) start joined.
-/// Nets with more points than this are joined as a chain, not by every pair.
-const MAX_PAIRWISE: usize = 3000;
-
-fn spanning_wires(page: usize, pts: &[(usize, u16, Point)], placed: &[Placed]) -> Vec<DrawnWire> {
-    let n = pts.len();
-    let mut parent: Vec<usize> = (0..n).collect();
-    fn find(p: &mut [usize], mut i: usize) -> usize {
-        while p[i] != i {
-            p[i] = p[p[i]];
-            i = p[i];
-        }
-        i
-    }
-    for i in 0..n {
-        for j in i + 1..n {
-            if pts[i].0 == pts[j].0 {
-                let b = &placed[pts[i].0].symbol.bridges;
-                if b.iter()
-                    .any(|g| g.contains(&pts[i].1) && g.contains(&pts[j].1))
-                {
-                    let (a, c) = (find(&mut parent, i), find(&mut parent, j));
-                    parent[a] = c;
-                }
-            }
-        }
-    }
-    let mut edges: Vec<(f64, usize, usize)> = Vec::new();
-    if n <= MAX_PAIRWISE {
-        for i in 0..n {
-            for j in i + 1..n {
-                if pts[i].0 == pts[j].0 && pts[i].1 == pts[j].1 {
-                    continue;
-                }
-                let d = (pts[i].2.x - pts[j].2.x).abs() + (pts[i].2.y - pts[j].2.y).abs();
-                edges.push((d, i, j));
-            }
-        }
-    } else {
-        // A net this big (a damaged or hostile file) would need n squared
-        // edges: chain the points in reading order instead.
-        let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by(|&a, &b| {
-            pts[a]
-                .2
-                .x
-                .total_cmp(&pts[b].2.x)
-                .then(pts[a].2.y.total_cmp(&pts[b].2.y))
-        });
-        for w in order.windows(2) {
-            let (i, j) = (w[0], w[1]);
-            if pts[i].0 == pts[j].0 && pts[i].1 == pts[j].1 {
-                continue;
-            }
-            let d = (pts[i].2.x - pts[j].2.x).abs() + (pts[i].2.y - pts[j].2.y).abs();
-            edges.push((d, i, j));
-        }
-    }
-    edges.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut wires = Vec::new();
-    for (_, i, j) in edges {
-        let (a, b) = (find(&mut parent, i), find(&mut parent, j));
-        if a == b {
-            continue;
-        }
-        parent[a] = b;
-        wires.push(DrawnWire {
-            page,
-            from: (pts[i].0, pts[i].1),
-            to: (pts[j].0, pts[j].1),
-            route: route(
-                pts[i].2,
-                pts[j].2,
-                placed[pts[i].0].symbol.pins[pts[i].1 as usize].direction,
-            ),
-            followed: false,
-        });
-    }
-    wires
-}
-
-/// Points one wire's search may reach before it keeps its guessed route.
-const MAX_SEARCH: usize = 5000;
-
-/// Replaces the guessed route of each wire by the one EPLAN implies: the
-/// straight runs between the two pins through nodes only (a run never passes
-/// through another symbol's pin). Wires with no such path keep their guess.
-fn follow_runs(
-    wires: &mut [DrawnWire],
-    nets: &ReconNets,
-    graph: &ConnGraph,
-    by_key: &BTreeMap<PinKey, (usize, u16, usize)>,
-    placed: &[Placed],
-) {
-    let at: BTreeMap<&PinKey, (bool, Point)> = graph
-        .points
-        .iter()
-        .map(|p| (&p.key, (p.node, Point::new(p.at.x, PAGE_HEIGHT - p.at.y))))
-        .collect();
-    let mut next: BTreeMap<&PinKey, Vec<&PinKey>> = BTreeMap::new();
-    for (a, b) in &nets.runs {
-        next.entry(a).or_default().push(b);
-        next.entry(b).or_default().push(a);
-    }
-    let key_of: BTreeMap<(usize, u16), &PinKey> = by_key
-        .iter()
-        .rev()
-        .map(|(k, &(si, pin, _))| ((si, pin), k))
-        .collect();
-    for w in wires.iter_mut() {
-        let (Some(&from), Some(&to)) = (key_of.get(&w.from), key_of.get(&w.to)) else {
-            continue;
-        };
-        // Breadth first, so the fewest corners win; only nodes are passed.
-        let mut came: BTreeMap<&PinKey, &PinKey> = BTreeMap::new();
-        let mut queue = std::collections::VecDeque::from([from]);
-        let mut seen: BTreeSet<&PinKey> = BTreeSet::from([from]);
-        let mut found = false;
-        while let Some(k) = queue.pop_front() {
-            // A bound per wire keeps the import time in check on a huge net.
-            if seen.len() > MAX_SEARCH {
-                break;
-            }
-            if k == to {
-                found = true;
-                break;
-            }
-            if k != from && !at.get(k).is_some_and(|(node, _)| *node) {
-                continue;
-            }
-            for &m in next.get(k).into_iter().flatten() {
-                if seen.insert(m) {
-                    came.insert(m, k);
-                    queue.push_back(m);
-                }
-            }
-        }
-        if !found {
-            continue;
-        }
-        let mut path = vec![to];
-        while let Some(&prev) = came.get(path[path.len() - 1]) {
-            path.push(prev);
-        }
-        path.reverse();
-        // The pins sit where the drawn symbol has them, which can be off from
-        // where the file has the port (a loosely matched symbol): an end that
-        // is not in line with its first node gets a right-angle leg.
-        let end = |(si, pin): (usize, u16)| placed[si].page_pos.get(&pin).copied();
-        let (Some(a), Some(b)) = (end(w.from), end(w.to)) else {
-            continue;
-        };
-        let mut pts: Vec<Point> = vec![a];
-        let interior = path.len().saturating_sub(2);
-        for k in path.iter().skip(1).take(interior) {
-            if let Some(&(_, p)) = at.get(k) {
-                pts.push(p);
-            }
-        }
-        pts.push(b);
-        let mut full: Vec<Point> = vec![a];
-        for i in 1..pts.len() {
-            let (p, q) = (pts[i - 1], pts[i]);
-            let dir = (i == 1).then(|| placed[w.from.0].symbol.pins[w.from.1 as usize].direction);
-            full.extend(route(p, q, dir.flatten()));
-            full.push(q);
-        }
-        full.dedup_by(|x, y| (x.x - y.x).abs() < 1e-6 && (x.y - y.y).abs() < 1e-6);
-        // Keep only the corners; the ends are the pins themselves.
-        let mut corners: Vec<Point> = Vec::new();
-        for i in 1..full.len().saturating_sub(1) {
-            let (a, b, c) = (full[i - 1], full[i], full[i + 1]);
-            let straight = ((a.x - b.x).abs() < 1e-6 && (b.x - c.x).abs() < 1e-6)
-                || ((a.y - b.y).abs() < 1e-6 && (b.y - c.y).abs() < 1e-6);
-            if !straight {
-                corners.push(b);
-            }
-        }
-        w.route = corners;
-        w.followed = true;
-    }
-}
-
-/// A right-angle run from `a` to `b`, leaving `a` along its pin direction.
-fn route(a: Point, b: Point, leave: Option<Direction>) -> Vec<Point> {
-    if (a.x - b.x).abs() < 1e-6 || (a.y - b.y).abs() < 1e-6 {
-        return Vec::new();
-    }
-    match leave {
-        Some(Direction::Up | Direction::Down) => vec![Point::new(a.x, b.y)],
-        _ => vec![Point::new(b.x, a.y)],
-    }
 }
 
 /// A library symbol that can stand for the placement, with which of its
@@ -940,61 +779,6 @@ mod tests {
             position: Some((10.0, 10.0)),
             variant: 0,
         }
-    }
-
-    #[test]
-    fn a_wire_follows_the_runs_through_the_nodes_of_the_file() {
-        // A pin facing right, a corner node, a pin facing down (y up in the
-        // file): the wire turns at the node, not at a guessed corner.
-        let mut graph = ConnGraph::default();
-        graph
-            .points
-            .push(ConnPoint::pin("a", 0, 0.0, 0.0, Dir::Right));
-        graph
-            .points
-            .push(ConnPoint::node("n", 0, 10.0, 0.0, &[Dir::Left, Dir::Up]));
-        graph
-            .points
-            .push(ConnPoint::pin("b", 0, 10.0, 20.0, Dir::Down));
-        let nets = rebuild_nets(&graph);
-        // each run is seen from both of its ends
-        assert!(nets.runs.len() >= 2);
-        let by_key: BTreeMap<PinKey, (usize, u16, usize)> = [
-            (PinKey("a".into()), (0, 0, 0)),
-            (PinKey("b".into()), (1, 0, 0)),
-        ]
-        .into();
-        let sym = |x: f64, y: f64| Placed {
-            symbol: DrawnSymbol {
-                page: 0,
-                key: BOX_SYMBOL.to_string(),
-                origin: Point::new(x, y),
-                pins: vec![Pin::new("1", 0.0, 0.0)],
-                bridges: Vec::new(),
-                pass_through: Vec::new(),
-                role: Role::Plain,
-                label: String::new(),
-            },
-            page_pos: BTreeMap::from([(0, Point::new(x, y))]),
-        };
-        let placed = [sym(0.0, PAGE_HEIGHT), sym(10.0, PAGE_HEIGHT - 20.0)];
-        let mut wires = vec![DrawnWire {
-            page: 0,
-            from: (0, 0),
-            to: (1, 0),
-            route: vec![Point::new(0.0, 0.0)],
-            followed: false,
-        }];
-        follow_runs(&mut wires, &nets, &graph, &by_key, &placed);
-        assert!(wires[0].followed);
-        assert_eq!(wires[0].route, vec![Point::new(10.0, PAGE_HEIGHT)]);
-        // No path through nodes: the guess stays.
-        wires[0].followed = false;
-        wires[0].route = vec![Point::new(1.0, 1.0)];
-        let none = ReconNets::default();
-        follow_runs(&mut wires, &none, &graph, &by_key, &placed);
-        assert!(!wires[0].followed);
-        assert_eq!(wires[0].route, vec![Point::new(1.0, 1.0)]);
     }
 
     #[test]
