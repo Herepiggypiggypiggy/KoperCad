@@ -227,6 +227,37 @@ pub fn report(plan: &PxfPlan, project: &Project) -> (String, String) {
         diff.split.len(),
         diff.merged.len()
     );
+    if !diff.merged.is_empty() {
+        let _ = writeln!(
+            md,
+            "KoperCAD nets that join several EPLAN nets (a short in the import):\n"
+        );
+        for (net, _) in &diff.merged {
+            let mut groups: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+            for p in pts
+                .iter()
+                .filter(|p| p.net.is_some_and(|n| n.0 as usize == *net))
+            {
+                let (Some(r), Some(sym)) = (p.recon_net, project.symbol(p.symbol)) else {
+                    continue;
+                };
+                let page = project.page(p.page).map_or("?", |pg| pg.name.as_str());
+                groups.entry(r).or_default().push(format!(
+                    "page {page} {} pin {}",
+                    sym.symbol.0, sym.pins[p.pin as usize].name
+                ));
+            }
+            let _ = writeln!(md, "- net {net}:");
+            for (r, list) in groups {
+                let _ = writeln!(
+                    md,
+                    "  - EPLAN net {r}: {}",
+                    list.iter().take(3).cloned().collect::<Vec<_>>().join("; ")
+                );
+            }
+        }
+        let _ = writeln!(md);
+    }
     let _ = writeln!(md, "## Check findings (none filtered)\n");
     for (k, n) in tally(&problems) {
         let _ = writeln!(md, "- {k}: {n}");
@@ -373,6 +404,7 @@ pub fn geometry_json(plan: &PxfPlan, project: &Project) -> String {
     use novo_core::Point;
     let pts = points(plan, project);
     let free = classify_free(plan, project, &pts);
+    let netlist = project.netlist();
     let mut pages: Vec<_> = project.pages().collect();
     pages.sort_by_key(|p| p.id);
     let sources = plan.page_sources();
@@ -418,13 +450,21 @@ pub fn geometry_json(plan: &PxfPlan, project: &Project) -> String {
         s.push_str("],\"pins\":[");
         let mut first = true;
         for sym in project.symbols().filter(|x| x.page == page.id) {
-            for p in &sym.pins {
+            for (pi, p) in sym.pins.iter().enumerate() {
                 let q = sym.placement.apply(p.offset);
                 if !first {
                     s.push(',');
                 }
                 first = false;
-                let _ = write!(s, "[{:.3},{:.3}]", q.x, q.y);
+                let net = netlist.net_of(Endpoint::pin(sym.id, pi as u16));
+                let _ = write!(
+                    s,
+                    "[{:.3},{:.3},{:?},{}]",
+                    q.x,
+                    q.y,
+                    p.name,
+                    net.map_or(-1, |n| i64::from(n.0))
+                );
             }
         }
         s.push_str("],\"free\":[");
