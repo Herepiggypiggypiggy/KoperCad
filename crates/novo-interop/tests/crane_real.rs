@@ -117,8 +117,22 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
                 m
             })
     );
-    // Only same-name terminals and names used more than twice may join more.
-    assert!(c.project_only.len() < 10, "{:?}", c.project_only);
+    // Only same-name terminals, names used more than twice and the rails of
+    // busbar frames (the report counts them) may join more than EPLAN's rules.
+    let rails: usize = text
+        .split("busbar rail pieces")
+        .next()
+        .and_then(|head| {
+            head.rsplit(|ch: char| !ch.is_ascii_digit())
+                .find(|t| !t.is_empty())
+        })
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
+    assert!(
+        c.project_only.len() < 10 + rails,
+        "{rails} rail pieces: {:?}",
+        c.project_only
+    );
 }
 
 /// Lines, rectangles, arcs and location boxes of the real project reach the

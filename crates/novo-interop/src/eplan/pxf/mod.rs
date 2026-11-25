@@ -47,9 +47,9 @@ pub use graphics::{GraphicsStats, PxfShape, ShapeKind, background_properties};
 pub use layout::{LayoutDevice, LayoutDuct, LayoutRail, LayoutSheet};
 pub use library::{DOWN, LEFT, LibFunction, LibPort, LibSymbol, Match, PxfLibrary, RIGHT, UP};
 pub use model::{
-    DeviceRole, ObjId, PageClass, PxfCore, PxfDevice, PxfFile, PxfHeader, PxfInterruption, PxfKind,
-    PxfNode, PxfPage, PxfProjectData, PxfStructure, PxfTag, PxfText, SymbolRef, pair_interruptions,
-    split_part_number,
+    BoxFrame, DeviceRole, ObjId, PageClass, PxfCore, PxfDevice, PxfFile, PxfHeader,
+    PxfInterruption, PxfKind, PxfNode, PxfPage, PxfProjectData, PxfStructure, PxfTag, PxfText,
+    SymbolRef, pair_interruptions, split_part_number,
 };
 pub use plan::{PxfOptions, PxfPlan, plan_pxf};
 pub use survey::{PxfSurvey, survey_pxf};

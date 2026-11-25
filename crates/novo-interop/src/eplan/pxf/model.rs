@@ -264,6 +264,21 @@ pub struct PxfDevice {
     /// when the file has none. The variant already carries the symbol's
     /// orientation, so this is expected to be the identity.
     pub matrix: [f64; 4],
+    /// The rectangle the placement itself carries (`S89x5`): black boxes,
+    /// PLC boxes and busbar frames are drawn at the size the project gave
+    /// them, not at the size of a symbol.
+    pub frame: Option<BoxFrame>,
+}
+
+/// The drawn rectangle of a box placement (`S89x5`), millimetres relative to
+/// the insertion point, y up.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BoxFrame {
+    /// Opposite corners (`A1651`, `A1652`).
+    pub a: (f64, f64),
+    pub b: (f64, f64),
+    /// `A411`: the layer the frame is drawn on (305 black box, 306 PLC box).
+    pub layer: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

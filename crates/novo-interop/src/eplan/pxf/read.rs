@@ -112,6 +112,28 @@ impl Frame {
         ]
     }
 
+    /// The rectangle of a box placement (`S89x5`), when it has a real one.
+    fn frame(&self) -> Option<BoxFrame> {
+        let attrs = self
+            .props
+            .iter()
+            .find_map(|(e, a)| (e == "S89x5").then_some(a))?;
+        let a = parse_point(find(attrs, "A1651")?)?;
+        let b = parse_point(find(attrs, "A1652")?)?;
+        if (a.0 - b.0).abs() < 1e-6 || (a.1 - b.1).abs() < 1e-6 {
+            return None;
+        }
+        let layer = find(attrs, "A411")
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0);
+        // Only the layers boxes are drawn on (black box, PLC box): other
+        // rectangles on a placement are artwork, not the placement's size.
+        if !matches!(layer, 305 | 306) {
+            return None;
+        }
+        Some(BoxFrame { a, b, layer })
+    }
+
     fn int(&self, name: &str) -> i64 {
         self.own(name)
             .and_then(|v| v.trim().parse().ok())
@@ -552,6 +574,7 @@ fn finish(
                 variant: f.int("A1263"),
                 pins: split_pins(f.own("A185").unwrap_or("")),
                 matrix: f.matrix(),
+                frame: f.frame(),
             });
         }
     }

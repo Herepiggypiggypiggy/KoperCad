@@ -643,6 +643,12 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             st.dots_dropped,
             "a node that only one or two runs reach is a corner or a stub, not a junction; a dot there would be a connection with nothing on it",
         );
+        if st.busbar_rails > 0 {
+            report.note(format!(
+                "{} busbar rail pieces: the points of one potential inside a busbar frame (L1.1, L1.4, ...) are drawn as one rail, as EPLAN shows them; the file holds no line for them.",
+                st.busbar_rails
+            ));
+        }
         for (what, n) in &st.issues {
             report.note(format!("Net check: {n} {what}."));
         }
@@ -1029,6 +1035,20 @@ impl PxfPlan {
                     x.pass_through = s.pass_through.clone();
                 })?;
             }
+            if let Some(f) = &s.frame {
+                tx.update::<SymbolInstance>(id, |x| {
+                    let mut set = |k: &str, v: f64| {
+                        x.properties
+                            .insert(k.to_string(), novo_core::Value::Float(v));
+                    };
+                    set("box.x0", f.min.x);
+                    set("box.y0", f.min.y);
+                    set("box.x1", f.max.x);
+                    set("box.y1", f.max.y);
+                    x.properties
+                        .insert("box.dashed".to_string(), novo_core::Value::Bool(f.dashed));
+                })?;
+            }
             if let Some(art) = &s.art {
                 tx.update::<SymbolInstance>(id, |x| {
                     x.properties.insert(
@@ -1047,6 +1067,7 @@ impl PxfPlan {
                     // The placeholder body is centred on the origin.
                     TextPlacement {
                         anchor: TextAnchor::MiddleCenter,
+                        offset: s.frame.map_or(Point::new(0.0, 0.0), |f| f.centre()),
                         ..Default::default()
                     },
                     Some(id.into()),
