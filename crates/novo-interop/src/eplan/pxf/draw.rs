@@ -21,7 +21,7 @@ use novo_core::{Direction, Pin, Point, Rotation};
 use novo_symbols::{Library, Pack, Symbol};
 
 use super::library::{DOWN, LEFT, LibPort, Match, RIGHT, UP};
-use super::model::{DeviceRole, PageClass, PxfFile};
+use super::model::{BoxFrame, DeviceRole, PageClass, PxfFile};
 use crate::eplan::nets::{
     ConnGraph, ConnPoint, Dir, Interruption, NetIssue, PinKey, ReconNets, rebuild_nets,
 };
@@ -64,6 +64,39 @@ pub(super) struct DrawnSymbol {
     /// Text shown beside a labelled box: the function the placement stands
     /// for. Empty for library symbols, which carry their own artwork.
     pub label: String,
+    /// The drawn rectangle a box placement carries, relative to `origin`
+    /// (KoperCAD coordinates): corners and whether it is dashed. Boxes with
+    /// one are drawn at that size; the label sits at its centre.
+    pub frame: Option<BoxRect>,
+}
+
+/// A box's own rectangle, relative to the symbol origin, y down.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct BoxRect {
+    pub min: Point,
+    pub max: Point,
+    pub dashed: bool,
+}
+
+impl BoxRect {
+    pub fn centre(&self) -> Point {
+        Point::new(
+            (self.min.x + self.max.x) / 2.0,
+            (self.min.y + self.max.y) / 2.0,
+        )
+    }
+}
+
+/// The layer a black box is drawn on: EPLAN shows its frame dashed.
+const LAYER_BLACK_BOX: i64 = 305;
+
+fn box_rect(frame: &BoxFrame) -> BoxRect {
+    let (a, b) = (frame.a, frame.b);
+    BoxRect {
+        min: Point::new(a.0.min(b.0), -a.1.max(b.1)),
+        max: Point::new(a.0.max(b.0), -a.1.min(b.1)),
+        dashed: frame.layer == LAYER_BLACK_BOX,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,6 +130,8 @@ pub struct DrawStats {
     pub box_functions: BTreeMap<String, usize>,
     /// The same, told apart by tag letters and pin designations in order.
     pub box_kinds: BTreeMap<(String, String, Vec<String>, usize), usize>,
+    /// Rail wires drawn inside busbar frames (one potential each).
+    pub busbar_rails: usize,
     /// What the net rebuild found questionable, by kind.
     pub issues: BTreeMap<&'static str, usize>,
 }
@@ -198,6 +233,8 @@ fn by_name(function: &str) -> Option<&'static str> {
         ("brake", "", "coils/brake"),
         ("safety fuse", "", "protection/fuse"),
         ("rectifier", "", "passive/bridge_rectifier"),
+        ("capacitor, single", "", "passive/capacitor"),
+        ("resistor, single", "", "passive/resistor"),
         ("double circuit breaker", "", "protection/mcb_2p"),
         (
             "ground fault current circuit breaker, two-pole",
@@ -276,6 +313,9 @@ struct Placed {
     symbol: DrawnSymbol,
     /// Where each KoperCAD pin sits on the page.
     page_pos: BTreeMap<u16, Point>,
+    /// The placement's own insertion point, per pin (page coordinates, y
+    /// down): where EPLAN has the symbol, whatever its pins' offsets.
+    file_pos: BTreeMap<u16, Point>,
 }
 
 /// Builds the drawing of every circuit-diagram page of `file`.
@@ -346,15 +386,21 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             .collect();
 
         // Artwork: a library symbol of the same pin count, else a box.
-        let (lib_symbol, port_conn) = pick_library_symbol(
-            lib,
-            mapper,
-            &function,
-            &d.tag.letters,
-            &pin_names,
-            ports,
-            matches!(role, Role::Terminal { .. }),
-        );
+        let (lib_symbol, port_conn) = if d.frame.is_some() {
+            // A placement with a rectangle of its own is a box of that size.
+            (None, Vec::new())
+        } else {
+            pick_library_symbol(
+                lib,
+                mapper,
+                &function,
+                &d.tag.letters,
+                &pin_names,
+                ports,
+                matches!(role, Role::Terminal { .. }),
+            )
+        };
+        let frame = d.frame.as_ref().map(box_rect);
         let origin_pos = |first: &LibPort| Point::new(x + first.x, PAGE_HEIGHT - (y + first.y));
         let first = ports.first().copied().unwrap_or(LibPort {
             index: 0,
@@ -420,7 +466,12 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                     function.clone()
                 };
                 *out.stats.box_functions.entry(label).or_default() += 1;
-                box_label = box_caption(&function, d.type_text.get("en_US"), &d.part_number);
+                box_label = if frame.is_some() {
+                    // The tag names a framed box; "Black box" would say nothing.
+                    box_caption("", d.type_text.get("en_US"), &d.part_number)
+                } else {
+                    box_caption(&function, d.type_text.get("en_US"), &d.part_number)
+                };
                 *out.stats
                     .box_kinds
                     .entry((
@@ -450,6 +501,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
         };
         let idx = placed.len();
         let mut page_pos = BTreeMap::new();
+        let mut file_pos = BTreeMap::new();
         for p in ports {
             let pk = PinKey(format!("{owner}:{}", p.index));
             let mut cp = ConnPoint::pin(&pk.0, page as u32, x + p.x, y + p.y, Dir::Up);
@@ -460,6 +512,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             let pin = pin_of_port[&p.index];
             by_key.insert(pk, (idx, pin, page));
             let kp = &pins[pin as usize];
+            file_pos.insert(pin, Point::new(x, PAGE_HEIGHT - y));
             page_pos.insert(
                 pin,
                 Point::new(origin.x + kp.offset.x, origin.y + kp.offset.y),
@@ -475,8 +528,10 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 pass_through,
                 role,
                 label: box_label,
+                frame,
             },
             page_pos,
+            file_pos,
         });
     }
 
@@ -556,8 +611,10 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 pass_through: pass,
                 role: Role::Interruption(shown.get(&name).cloned().unwrap_or(name)),
                 label: String::new(),
+                frame: None,
             },
             page_pos: BTreeMap::from([(0, Point::new(x, PAGE_HEIGHT - y))]),
+            file_pos: BTreeMap::from([(0, Point::new(x, PAGE_HEIGHT - y))]),
         });
         out.stats.interruptions += 1;
     }
@@ -596,6 +653,17 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
         }
     }
     follow_runs(&mut out.wires, &nets, &graph, &by_key, &placed);
+    let mut net_of: BTreeMap<(usize, u16), usize> = BTreeMap::new();
+    for (ni, net) in nets.nets.iter().enumerate() {
+        for k in &net.pins {
+            if let Some(&(si, pin, _)) = by_key.get(k) {
+                net_of.insert((si, pin), ni);
+            }
+        }
+    }
+    let rails = busbar_rails(&placed, &net_of);
+    out.stats.busbar_rails = rails.len();
+    out.wires.extend(rails);
     out.stats.wires = out.wires.len();
     out.stats.wires_followed = out.wires.iter().filter(|w| w.followed).count();
     out.keys = by_key
@@ -604,6 +672,87 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
         .collect();
     out.recon = nets;
     out.symbols = placed.into_iter().map(|p| p.symbol).collect();
+    out
+}
+
+/// The rails of a busbar. EPLAN draws a busbar as a frame (a black box of the
+/// busbar's size) with connection points inside it, named `<potential>.<n>`
+/// (`L1.1`, `L1.4`, ...), and the points of one potential are one rail: the
+/// file holds no line for it. Inside each frame, the points of one potential
+/// (the text before the dot) are joined left to right, unless the file's
+/// nets already join them. Points of one name that sit on two pages are two
+/// rails, as nothing connects them on a page.
+fn busbar_rails(placed: &[Placed], net_of: &BTreeMap<(usize, u16), usize>) -> Vec<DrawnWire> {
+    let mut out = Vec::new();
+    for (fi, frame) in placed.iter().enumerate() {
+        let (Some(rect), Role::Device { tag, .. }) = (frame.symbol.frame, &frame.symbol.role)
+        else {
+            continue;
+        };
+        let o = frame.symbol.origin;
+        let inside = |p: Point| {
+            const SLACK: f64 = 1.0;
+            p.x >= o.x + rect.min.x - SLACK
+                && p.x <= o.x + rect.max.x + SLACK
+                && p.y >= o.y + rect.min.y - SLACK
+                && p.y <= o.y + rect.max.y + SLACK
+        };
+        // potential -> (x, symbol, pin)
+        let mut rails: BTreeMap<String, Vec<(f64, usize, u16)>> = BTreeMap::new();
+        let file_at = |si: usize, pin: u16| placed[si].file_pos.get(&pin).copied();
+        for (si, other) in placed.iter().enumerate() {
+            if si == fi || other.symbol.page != frame.symbol.page || other.page_pos.len() != 1 {
+                continue;
+            }
+            let Role::Device { tag: t, .. } = &other.symbol.role else {
+                continue;
+            };
+            if t != tag {
+                continue;
+            }
+            let (&pin, &at) = other.page_pos.iter().next().expect("one pin");
+            let name = other
+                .symbol
+                .pins
+                .get(usize::from(pin))
+                .map_or("", |p| p.name.as_str());
+            let Some((potential, _)) = name.split_once('.') else {
+                continue;
+            };
+            if potential.is_empty() || !inside(at) {
+                continue;
+            }
+            rails
+                .entry(potential.to_string())
+                .or_default()
+                .push((at.x, si, pin));
+        }
+        for pts in rails.values_mut() {
+            pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+            for w in pts.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                let joined = matches!(
+                    (net_of.get(&(a.1, a.2)), net_of.get(&(b.1, b.2))),
+                    (Some(x), Some(y)) if x == y
+                );
+                if joined {
+                    continue;
+                }
+                // The rail runs level at the height EPLAN has the points.
+                let route = match (file_at(a.1, a.2), file_at(b.1, b.2)) {
+                    (Some(p), Some(q)) => vec![p, q],
+                    _ => Vec::new(),
+                };
+                out.push(DrawnWire {
+                    page: frame.symbol.page,
+                    from: (a.1, a.2),
+                    to: (b.1, b.2),
+                    route,
+                    followed: false,
+                });
+            }
+        }
+    }
     out
 }
 
@@ -974,8 +1123,10 @@ mod tests {
                 pass_through: Vec::new(),
                 role: Role::Plain,
                 label: String::new(),
+                frame: None,
             },
             page_pos: BTreeMap::from([(0, Point::new(x, y))]),
+            file_pos: BTreeMap::from([(0, Point::new(x, y))]),
         };
         let placed = [sym(0.0, PAGE_HEIGHT), sym(10.0, PAGE_HEIGHT - 20.0)];
         let mut wires = vec![DrawnWire {

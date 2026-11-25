@@ -133,6 +133,45 @@ const LEAD: f32 = 3.0;
 /// The smallest a labelled box is drawn.
 const BOX_MIN: f32 = 3.5;
 
+/// Properties an importer sets on a box that has a drawn size of its own
+/// (a busbar frame, a black box, a PLC box): the rectangle's corners in
+/// symbol coordinates, millimetres, and whether the frame is dashed.
+pub const BOX_X0: &str = "box.x0";
+pub const BOX_Y0: &str = "box.y0";
+pub const BOX_X1: &str = "box.x1";
+pub const BOX_Y1: &str = "box.y1";
+pub const BOX_DASHED: &str = "box.dashed";
+
+/// The rectangle a box was given by its source, when it has one.
+fn given_frame(symbol: &SymbolInstance) -> Option<(Vec2, Vec2)> {
+    let get = |k: &str| match symbol.properties.get(k)? {
+        novo_core::Value::Float(f) if f.is_finite() => Some(*f as f32),
+        novo_core::Value::Int(i) => Some(*i as f32),
+        _ => None,
+    };
+    let (x0, y0, x1, y1) = (get(BOX_X0)?, get(BOX_Y0)?, get(BOX_X1)?, get(BOX_Y1)?);
+    Some((
+        Vec2::new(x0.min(x1), y0.min(y1)),
+        Vec2::new(x0.max(x1), y0.max(y1)),
+    ))
+}
+
+/// The outline of a box with a given rectangle, dashed when it says so.
+fn frame_art(symbol: &SymbolInstance, min: Vec2, max: Vec2, stroke: Stroke) -> Vec<Primitive> {
+    let dashed = matches!(
+        symbol.properties.get(BOX_DASHED),
+        Some(novo_core::Value::Bool(true))
+    );
+    if !dashed {
+        return vec![Primitive::stroked(Shape::rect(min, max), stroke)];
+    }
+    let corners = [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)];
+    dashes(&Shape::polyline(corners, true))
+        .into_iter()
+        .map(|s| Primitive::stroked(s, stroke))
+        .collect()
+}
+
 /// The artwork of a symbol that has no library drawing: a box with each pin
 /// on the side it faces and a short lead from the pin to the box. Pins that
 /// face up sit on the top edge, so two rows of pins (the poles of a
@@ -146,7 +185,8 @@ pub fn box_art(symbol: &SymbolInstance, stroke: Stroke) -> Vec<Primitive> {
         .map(|p| (v([p.offset.x, p.offset.y]), p.direction))
         .collect();
     if pins.is_empty() {
-        return Vec::new();
+        return given_frame(symbol)
+            .map_or_else(Vec::new, |(lo, hi)| frame_art(symbol, lo, hi, stroke));
     }
     let (mut lo, mut hi) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
     for (p, _) in &pins {
@@ -173,9 +213,17 @@ pub fn box_art(symbol: &SymbolInstance, stroke: Stroke) -> Vec<Primitive> {
             max[axis] = mid + BOX_MIN / 2.0;
         }
     }
-    let mut out = vec![Primitive::stroked(Shape::rect(min, max), stroke)];
+    let mut out = match given_frame(symbol) {
+        Some((lo, hi)) => {
+            (min, max) = (lo, hi);
+            frame_art(symbol, lo, hi, stroke)
+        }
+        None => vec![Primitive::stroked(Shape::rect(min, max), stroke)],
+    };
+    let framed = given_frame(symbol).is_some();
     for (p, _) in pins {
-        if p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y {
+        // A framed box keeps its pins where its source put them, no leads.
+        if framed || (p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y) {
             continue;
         }
         out.push(Primitive::stroked(
@@ -213,6 +261,14 @@ impl SymbolArt for LibraryArt {
             }
         }
         Some(out)
+    }
+
+    fn cache_key(&self, symbol: &SymbolInstance) -> Option<novo_canvas::model::ArtKey> {
+        // A box with a rectangle of its own differs from its twins by it.
+        if symbol.symbol.0 == BOX_KEY && given_frame(symbol).is_some() {
+            return None;
+        }
+        Some(novo_canvas::model::ArtKey::of(symbol))
     }
 
     fn labels(&self, symbol: &SymbolInstance) -> Vec<Label> {
@@ -436,6 +492,64 @@ mod tests {
                 .count();
             assert_eq!(art.labels.get(&s.id).map_or(0, Vec::len), n, "{}", s.id);
         }
+    }
+
+    fn framed_box(frame: Option<[f64; 4]>, dashed: bool) -> SymbolInstance {
+        use novo_core::{Pin, Placement, SymbolId, SymbolKey, SymbolRole, Value};
+        let mut properties = novo_core::Properties::new();
+        if let Some([x0, y0, x1, y1]) = frame {
+            for (k, v) in [(BOX_X0, x0), (BOX_Y0, y0), (BOX_X1, x1), (BOX_Y1, y1)] {
+                properties.insert(k.to_string(), Value::Float(v));
+            }
+            properties.insert(BOX_DASHED.to_string(), Value::Bool(dashed));
+        }
+        SymbolInstance {
+            id: SymbolId::from(1),
+            page: novo_core::PageId::from(1),
+            symbol: SymbolKey(BOX_KEY.to_string()),
+            placement: Placement::default(),
+            role: SymbolRole::Unassigned,
+            pins: vec![Pin::new("1", 0.0, 0.0)],
+            bridges: Vec::new(),
+            pass_through: Vec::new(),
+            feeds: Vec::new(),
+            properties,
+        }
+    }
+
+    #[test]
+    fn a_box_with_a_given_rectangle_is_drawn_at_that_size() {
+        let stroke = Stroke::default();
+        let rect_of = |prims: &[Primitive]| {
+            prims.iter().find_map(|p| match p.shape {
+                Shape::Rect { min, max } => Some((min, max)),
+                _ => None,
+            })
+        };
+        let plain = box_art(&framed_box(None, false), stroke);
+        let (lo, hi) = rect_of(&plain).unwrap();
+        assert!(hi.x - lo.x < 10.0, "a pin-sized box without a rectangle");
+
+        let given = box_art(&framed_box(Some([0.0, 0.0, 356.0, 16.0]), false), stroke);
+        let (lo, hi) = rect_of(&given).unwrap();
+        assert_eq!((lo, hi), (Vec2::new(0.0, 0.0), Vec2::new(356.0, 16.0)));
+        // no lead from the pin: it sits on the frame's corner
+        assert_eq!(given.len(), 1);
+
+        let dashed = box_art(&framed_box(Some([0.0, 0.0, 356.0, 16.0]), true), stroke);
+        assert!(dashed.len() > 8, "dashes, not one rectangle");
+        assert!(rect_of(&dashed).is_none());
+    }
+
+    #[test]
+    fn boxes_with_their_own_rectangle_do_not_share_a_drawing() {
+        let library = Library::builtin().unwrap();
+        let art = LibraryArt::new(&library, Stroke::default());
+        assert!(
+            art.cache_key(&framed_box(Some([0.0, 0.0, 9.0, 9.0]), false))
+                .is_none()
+        );
+        assert!(art.cache_key(&framed_box(None, false)).is_some());
     }
 
     #[test]
