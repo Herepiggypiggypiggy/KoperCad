@@ -62,13 +62,13 @@ fn main() {
             vb,
             inner
         );
-        for i in 0..s.pins.len() {
-            let name = &sym.connections[i].id;
+        for conn in sym.connections.iter().take(s.pins.len()) {
+            let name = &conn.id;
             let _ = write!(
                 body,
                 "<text x=\"{}\" y=\"{}\" font-size=\"2.2\" fill=\"#c33\" stroke=\"none\">{}</text>",
-                sym.connections[i].at[0] + 0.8,
-                sym.connections[i].at[1] + 2.2,
+                conn.at[0] + 0.8,
+                conn.at[1] + 2.2,
                 name
             );
         }

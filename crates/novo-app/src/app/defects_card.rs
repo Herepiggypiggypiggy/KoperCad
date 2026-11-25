@@ -700,7 +700,7 @@ fn walkthroughs(
     if d.walk.is_empty() {
         ui.weak("None saved. Record one, or write one in a file and import it.");
     }
-    for index in 0..d.walk.len() {
+    for (index, walk) in d.walk.iter().enumerate() {
         ui.horizontal(|ui| {
             if ui.small_button("▶ Run").clicked() {
                 actions.push(CardAction::Run(index));
@@ -708,8 +708,8 @@ fn walkthroughs(
             if ui.small_button("Delete").clicked() {
                 actions.push(CardAction::Delete(index));
             }
-            ui.add(egui::Label::new(&d.walk[index].name).wrap())
-                .on_hover_text(&d.walk[index].description);
+            ui.add(egui::Label::new(&walk.name).wrap())
+                .on_hover_text(&walk.description);
         });
     }
     if let Some(report) = d.report.clone() {

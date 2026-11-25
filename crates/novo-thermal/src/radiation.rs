@@ -875,12 +875,8 @@ mod tests {
         }
         let x = Enclosure::new(surfaces, true, 4).solve().unwrap();
         let want = ((temps[0].powi(4) + temps[1].powi(4)) / 2.0).powf(0.25);
-        for i in 0..4 {
-            assert!(
-                (x.temperature_k[i] - want).abs() < 0.1,
-                "{}",
-                x.temperature_k[i]
-            );
+        for t in x.temperature_k.iter().take(4) {
+            assert!((t - want).abs() < 0.1, "{t}");
         }
         assert!((x.power_w[4] + x.power_w[5]).abs() < 1e-6);
     }
