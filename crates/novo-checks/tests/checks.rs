@@ -165,7 +165,7 @@ fn the_free_side_of_a_wired_terminal_is_an_info_not_an_open_end() {
     assert_eq!(side.severity, Severity::Info, "{}", side.message);
     assert!(
         side.message
-            .contains("is the other side of a wired terminal")
+            .contains("is the free side of a wired terminal")
     );
     let open = free
         .iter()
