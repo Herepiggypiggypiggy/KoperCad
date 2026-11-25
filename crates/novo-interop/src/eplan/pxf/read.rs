@@ -313,8 +313,18 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
     // it belongs to it.
     let cable_ids: std::collections::BTreeSet<ObjId> =
         out.cores.iter().filter_map(|c| c.cable_ref).collect();
+    // Every drawing of that tag is the cable, not just the one the core names.
+    let cable_tags: std::collections::BTreeSet<String> = out
+        .devices
+        .iter()
+        .filter(|d| d.id.is_some_and(|i| cable_ids.contains(&i)))
+        .map(|d| d.tag.original())
+        .collect();
     for d in &mut out.devices {
-        if d.role == DeviceRole::Device && d.id.is_some_and(|i| cable_ids.contains(&i)) {
+        if d.role == DeviceRole::Device
+            && (d.id.is_some_and(|i| cable_ids.contains(&i))
+                || cable_tags.contains(&d.tag.original()))
+        {
             d.role = DeviceRole::Cable;
         }
     }
@@ -519,7 +529,15 @@ fn finish(
             let cable_text = f.any("P20011").to_string();
             let role = if !terminal_text.is_empty() {
                 DeviceRole::Terminal
-            } else if !cable_text.is_empty() {
+            } else if !cable_text.is_empty()
+                && f.int("A1261") != 1
+                && f.own("A1262").map(str::trim) != Some("0")
+            {
+                // P20011 is the function text, which devices carry too. The
+                // devices of a project are functions of its embedded library
+                // (library id 1); a cable definition is a system function with a
+                // function definition of its own (not 0).
+                // A device a core refers to becomes a cable below anyway.
                 DeviceRole::Cable
             } else {
                 DeviceRole::Device

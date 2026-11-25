@@ -62,10 +62,11 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     let r = plan.report();
     assert!(r.count_of("symbols drawn") > 100, "{}", r.text());
     assert!(r.count_of("wires") > 100, "{}", r.text());
-    // Most wires turn at the file's own nodes; the rest keep a guessed route.
+    // Every wire runs along the file's own runs and nodes, and the T and
+    // cross nodes are junctions wires end on.
     assert!(
         r.text()
-            .contains("wires follow the runs and nodes the file implies"),
+            .contains("wires run along the runs and nodes the file implies"),
         "{}",
         r.text()
     );
@@ -85,8 +86,53 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
         "a net EPLAN's rules give is split in KoperCAD: {:?}",
         c.import_only
     );
-    // Only same-name terminals and names used more than twice may join more.
-    assert!(c.project_only.len() < 10, "{:?}", c.project_only);
+    // Every junction has wires on it: none dangles.
+    let proj = doc.project();
+    let dangling = proj
+        .junctions()
+        .filter(|j| {
+            proj.wires()
+                .filter(|w| {
+                    w.ends().iter().any(
+                        |e| matches!(e, novo_core::Endpoint::Junction { junction } if *junction == j.id),
+                    )
+                })
+                .count()
+                < 3
+        })
+        .count();
+    assert_eq!(
+        dangling,
+        0,
+        "junctions with fewer than three wires: {:?}",
+        proj.junctions()
+            .map(|j| proj
+                .wires()
+                .filter(|w| w.ends().iter().any(
+                    |e| matches!(e, novo_core::Endpoint::Junction { junction } if *junction == j.id)
+                ))
+                .count())
+            .fold(std::collections::BTreeMap::new(), |mut m, n| {
+                *m.entry(n).or_insert(0) += 1;
+                m
+            })
+    );
+    // Only same-name terminals, names used more than twice and the rails of
+    // busbar frames (the report counts them) may join more than EPLAN's rules.
+    let rails: usize = text
+        .split("busbar rail pieces")
+        .next()
+        .and_then(|head| {
+            head.rsplit(|ch: char| !ch.is_ascii_digit())
+                .find(|t| !t.is_empty())
+        })
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
+    assert!(
+        c.project_only.len() < 10 + rails,
+        "{rails} rail pieces: {:?}",
+        c.project_only
+    );
 }
 
 /// Lines, rectangles, arcs and location boxes of the real project reach the

@@ -1,3 +1,4 @@
 2026-11-25 08:55 UTC crane v68b: imported through existing crane importer; fixed sort panic and slash-in-tag loss; opt-in real tests pass.
 2026-11-25 09:20 UTC original EPLAN name kept as property eplan.name on devices and cables; device list shows an EPLAN name column when any device has one (same PR).
 2026-11-25 10:00 UTC rename clashes now checked against original names for every device (RenameLog), reported in the import report.
+2026-11-25 15:10 UTC v70b import showed 208 errors / 3246 warnings in the app (reproduced exactly with the CLI). Cause of the errors: devices with a function text (P20011) were read as cables, and a device plus its terminals were two objects with one tag. Fixed in read.rs and plan.rs: errors 208 -> 2. Open: 2439 unconnected pin warnings (984 pins touching without a wire), 763 dangling junctions, 163 no-main-function, 121 wire overlaps.

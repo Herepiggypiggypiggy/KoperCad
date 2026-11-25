@@ -23,7 +23,7 @@ use novo_core::{
     TextContent, TextPlacement, Value, Wire,
 };
 
-use super::draw::{Drawing, Role, draw};
+use super::draw::{Drawing, DrawnEnd, Role, draw};
 use super::graphics::{self, PageGraphics};
 use super::layout::{LayoutSheet, read_sheets};
 use super::model::*;
@@ -302,20 +302,29 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         placements += 1;
         match d.role {
             DeviceRole::Terminal => {
-                let idx = *strip_at.entry(text.clone()).or_insert_with(|| {
-                    let (manufacturer, type_number) = split_part_number(&d.part_number);
-                    devices.push(NewDevice {
-                        tag,
-                        description: String::new(),
-                        kind: DeviceKind::TerminalStrip,
-                        manufacturer: manufacturer.to_string(),
-                        order_number: String::new(),
-                        type_number: type_number.to_string(),
-                        terminals: Vec::new(),
-                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
-                    });
-                    devices.len() - 1
-                });
+                // A device whose connection points carry terminal texts is one
+                // device with terminals, not a second object with the same tag.
+                let idx = *device_at.get(&text).unwrap_or(&usize::MAX);
+                let idx = if idx != usize::MAX {
+                    idx
+                } else {
+                    *strip_at.entry(text.clone()).or_insert_with(|| {
+                        let (manufacturer, type_number) = split_part_number(&d.part_number);
+                        devices.push(NewDevice {
+                            tag,
+                            description: String::new(),
+                            kind: DeviceKind::TerminalStrip,
+                            manufacturer: manufacturer.to_string(),
+                            order_number: String::new(),
+                            type_number: type_number.to_string(),
+                            terminals: Vec::new(),
+                            eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
+                        });
+                        devices.len() - 1
+                    })
+                };
+                // Only a terminal strip holds terminals in KoperCAD.
+                devices[idx].kind = DeviceKind::TerminalStrip;
                 let name = d.terminal_text.trim().to_string();
                 if !name.is_empty() && !devices[idx].terminals.contains(&name) {
                     devices[idx].terminals.push(name);
@@ -338,7 +347,22 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 }
             }
             DeviceRole::Device => {
-                if let Entry::Vacant(slot) = device_at.entry(text) {
+                if let Some(&i) = strip_at.get(&text) {
+                    // The terminals of this tag came first: same device.
+                    let (manufacturer, type_number) = split_part_number(&d.part_number);
+                    let dev = &mut devices[i];
+                    if dev.description.is_empty() {
+                        dev.description = d.type_text.get(&opts.lang).to_string();
+                    }
+                    if dev.order_number.is_empty() {
+                        dev.order_number = type_number.to_string();
+                        if dev.manufacturer.is_empty() {
+                            dev.manufacturer = manufacturer.to_string();
+                        }
+                    }
+                    device_at.entry(text).or_insert(i);
+                    repeats += 1;
+                } else if let Entry::Vacant(slot) = device_at.entry(text) {
                     slot.insert(devices.len());
                     let (manufacturer, type_number) = split_part_number(&d.part_number);
                     devices.push(NewDevice {
@@ -555,7 +579,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             }
         }
         report.note(format!(
-            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wire corners follow the file where it has them; other wires are plain right-angle runs.",
+            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wires and junctions are the runs and nodes of the file.",
             drawn.join(", ")
         ));
         if !st.box_functions.is_empty() {
@@ -590,21 +614,19 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 loose.join(", ")
             ),
         );
-        report.guess(
-            "wire routes",
-            st.wires - st.wires_followed,
-            "EPLAN joins these without any drawn run between them (both sides of a terminal, paired interruption points, same-name terminals, a bridge inside a symbol), so KoperCAD draws a plain right-angle wire to keep the nets equal; which pins are one net is read from the file",
+        report.note(format!(
+            "{} wires run along the runs and nodes the file implies: corners at its nodes, {} junctions where three or more runs meet.",
+            st.wires, st.junctions
+        ));
+        report.lost(
+            "connection dots without a third run",
+            st.dots_dropped,
+            "a node that only one or two runs reach is a corner or a stub, not a junction; a dot there would be a connection with nothing on it",
         );
         if st.busbar_rails > 0 {
             report.note(format!(
                 "{} busbar rail pieces: the points of one potential inside a busbar frame (L1.1, L1.4, ...) are drawn as one rail, as EPLAN shows them; the file holds no line for them.",
                 st.busbar_rails
-            ));
-        }
-        if st.wires_followed > 0 {
-            report.note(format!(
-                "{} wires follow the runs and nodes the file implies: the corners are at its nodes, not guessed.",
-                st.wires_followed
             ));
         }
         for (what, n) in &st.issues {
@@ -977,12 +999,15 @@ impl PxfPlan {
             placed.push(Some(id));
             created += 1;
         }
+        let mut junction_ids = Vec::with_capacity(self.drawing.junctions.len());
         for (pg, at) in &self.drawing.junctions {
-            let Some(&page) = page_ids.get(pg) else {
-                continue;
-            };
-            tx.add_junction(page, *at)?;
-            created += 1;
+            junction_ids.push(match page_ids.get(pg) {
+                Some(&page) => {
+                    created += 1;
+                    Some(tx.add_junction(page, *at)?)
+                }
+                None => None,
+            });
         }
         for t in &self.texts {
             let Some(&page) = page_ids.get(&t.page) else {
@@ -1005,11 +1030,23 @@ impl PxfPlan {
             }
             created += 1;
         }
+        let endpoint = |e: DrawnEnd| match e {
+            DrawnEnd::Pin(si, pin) => placed
+                .get(si)
+                .copied()
+                .flatten()
+                .map(|s| Endpoint::pin(s, pin)),
+            DrawnEnd::Junction(j) => junction_ids
+                .get(j)
+                .copied()
+                .flatten()
+                .map(|j| Endpoint::Junction { junction: j }),
+        };
         for w in &self.drawing.wires {
-            let (Some(Some(a)), Some(Some(b))) = (placed.get(w.from.0), placed.get(w.to.0)) else {
+            let (Some(a), Some(b)) = (endpoint(w.from), endpoint(w.to)) else {
                 continue;
             };
-            let id = tx.connect(Endpoint::pin(*a, w.from.1), Endpoint::pin(*b, w.to.1))?;
+            let id = tx.connect(a, b)?;
             if !w.route.is_empty() {
                 tx.update::<Wire>(id, |x| x.route = w.route.clone())?;
             }
