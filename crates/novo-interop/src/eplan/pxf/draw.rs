@@ -570,17 +570,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
         if !drawn_pages.contains(&page) {
             continue;
         }
-        let legs: &[Dir] = match (n.kind, n.variant) {
-            (64, _) => &[Dir::Right, Dir::Down, Dir::Left],
-            (66, _) => &[Dir::Up, Dir::Right, Dir::Down],
-            (67, _) => &[Dir::Up, Dir::Right, Dir::Down, Dir::Left],
-            (72, _) => &[Dir::Up, Dir::Right, Dir::Left],
-            (70, 0) => &[Dir::Right, Dir::Down],
-            (70, 1) => &[Dir::Up, Dir::Right],
-            (70, 2) => &[Dir::Up, Dir::Left],
-            (70, 3) => &[Dir::Down, Dir::Left],
-            _ => &[Dir::Up, Dir::Right, Dir::Down, Dir::Left],
-        };
+        let legs = node_legs(n.kind, n.variant);
         graph
             .points
             .push(ConnPoint::node(&format!("n{ni}"), page as u32, x, y, legs));
@@ -715,6 +705,25 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
     out.recon = nets;
     out.symbols = placed.into_iter().map(|p| p.symbol).collect();
     out
+}
+
+/// The directions the runs of a node of this kind leave in (found by looking
+/// at the drawings); empty for a node that is no wire corner or T.
+fn node_legs(kind: i64, variant: i64) -> &'static [Dir] {
+    match (kind, variant) {
+        (64, _) => &[Dir::Right, Dir::Down, Dir::Left],
+        (66, _) => &[Dir::Up, Dir::Right, Dir::Down],
+        (67, _) => &[Dir::Up, Dir::Right, Dir::Down, Dir::Left],
+        (72, _) => &[Dir::Up, Dir::Right, Dir::Left],
+        // Kind 255 is no wire corner or T: EPLAN draws nothing there and
+        // the phases of a drive would be shorted by four rays through it.
+        (255, _) => &[],
+        (70, 0) => &[Dir::Right, Dir::Down],
+        (70, 1) => &[Dir::Up, Dir::Right],
+        (70, 2) => &[Dir::Up, Dir::Left],
+        (70, 3) => &[Dir::Down, Dir::Left],
+        _ => &[Dir::Up, Dir::Right, Dir::Down, Dir::Left],
+    }
 }
 
 /// How well a drawn symbol stands for the main function of its device (the
@@ -990,6 +999,14 @@ fn turn_art(art: &[Graphic], m: [f64; 4]) -> Vec<Graphic> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_node_of_kind_255_is_no_wire_corner() {
+        use super::{Dir, node_legs};
+        assert!(node_legs(255, 0).is_empty());
+        assert_eq!(node_legs(70, 0), [Dir::Right, Dir::Down]);
+        assert_eq!(node_legs(1, 0).len(), 4);
+    }
+
     #[test]
     fn a_device_body_is_its_main_function_not_only_a_coil() {
         use super::main_rank;
