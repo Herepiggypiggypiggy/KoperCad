@@ -149,6 +149,33 @@ fn parse_tag(s: &str) -> Option<DeviceTag> {
     DeviceTag::parse(s).ok().filter(|t| !t.product.is_empty())
 }
 
+/// Which EPLAN names became which KoperCAD tag. Two different EPLAN names that
+/// end up as one tag (`-K12/3` and `-K12_3`) would merge silently, so every
+/// device is checked against the original names, renamed or not.
+#[derive(Default)]
+struct RenameLog {
+    first: BTreeMap<String, String>,
+    /// Original names that had to change.
+    renamed: BTreeSet<String>,
+    /// Original names that met a different original under the same tag.
+    clashes: BTreeSet<String>,
+}
+
+impl RenameLog {
+    fn record(&mut self, tag: &str, original: String, renamed: bool) {
+        if renamed {
+            self.renamed.insert(original.clone());
+        }
+        let first = self
+            .first
+            .entry(tag.to_string())
+            .or_insert_with(|| original.clone());
+        if *first != original {
+            self.clashes.insert(original);
+        }
+    }
+}
+
 /// Core numbers: numbers first in numeric order, then text. A total order even
 /// when one cable mixes both (a plain number-or-text compare is not
 /// transitive and panics the sort).
@@ -256,10 +283,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut seen_existing: BTreeSet<String> = BTreeSet::new();
     let mut placements = 0usize;
     let mut repeats = 0usize;
-    let mut renamed = 0usize;
-    let mut rename_clashes = 0usize;
-    let mut renamed_from: BTreeMap<String, String> = BTreeMap::new();
-    let mut renamed_seen: BTreeSet<String> = BTreeSet::new();
+    let mut renames = RenameLog::default();
 
     for d in &file.devices {
         let full = d.tag.full();
@@ -268,17 +292,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             continue;
         };
         let text = tag.to_string();
-        if d.tag.is_renamed() {
-            let raw = d.tag.full();
-            let first = renamed_from
-                .entry(text.clone())
-                .or_insert_with(|| raw.clone());
-            if *first != raw {
-                rename_clashes += 1;
-            } else if renamed_seen.insert(raw) {
-                renamed += 1;
-            }
-        }
+        renames.record(&text, d.tag.original(), d.tag.is_renamed());
         if have_device.contains(&text) {
             if seen_existing.insert(text.clone()) {
                 existing.push(text);
@@ -612,12 +626,12 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     }
     report.guess(
         "tags renamed",
-        renamed,
+        renames.renamed.len(),
         "EPLAN names such as -K12/3 hold a character KoperCAD tags do not allow; it is written as _ (-K12_3), the same everywhere",
     );
     report.lost(
         "devices whose renamed tag meets another",
-        rename_clashes,
+        renames.clashes.len(),
         "two different EPLAN tags became the same KoperCAD tag after renaming",
     );
     report.lost(
@@ -994,6 +1008,24 @@ impl PxfPlan {
 #[cfg(test)]
 mod core_order_tests {
     use super::core_order;
+
+    #[test]
+    fn a_renamed_tag_meeting_a_plain_one_is_a_clash() {
+        let mut log = super::RenameLog::default();
+        log.record("-K12_3", "-K12_3".into(), false);
+        log.record("-K12_3", "-K12/3".into(), true);
+        // The same EPLAN name drawn again is no clash.
+        log.record("-K12_3", "-K12/3".into(), true);
+        log.record("-K1", "-K1".into(), false);
+        assert_eq!(log.renamed.len(), 1);
+        assert_eq!(log.clashes.len(), 1);
+        assert!(log.clashes.contains("-K12/3"));
+        // Order does not matter: the plain name arriving second clashes too.
+        let mut log = super::RenameLog::default();
+        log.record("-K12_3", "-K12/3".into(), true);
+        log.record("-K12_3", "-K12_3".into(), false);
+        assert_eq!(log.clashes.len(), 1);
+    }
 
     #[test]
     fn mixed_core_numbers_sort_without_panic() {
