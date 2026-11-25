@@ -576,16 +576,19 @@ impl ProjectFile {
 /// writes, so only the file is checked there; a save that still fails is
 /// reported by the write itself.
 fn writable(path: &Path) -> Result<bool> {
-    if std::fs::metadata(path)?.permissions().readonly() {
-        return Ok(false);
-    }
+    let file_ok = !std::fs::metadata(path)?.permissions().readonly();
     #[cfg(unix)]
-    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
-        && std::fs::metadata(dir)?.permissions().readonly()
     {
-        return Ok(false);
+        if !file_ok {
+            return Ok(false);
+        }
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            return Ok(!std::fs::metadata(dir)?.permissions().readonly());
+        }
+        Ok(true)
     }
-    Ok(true)
+    #[cfg(not(unix))]
+    Ok(file_ok)
 }
 
 fn ensure_exists(path: &Path) -> Result<()> {
