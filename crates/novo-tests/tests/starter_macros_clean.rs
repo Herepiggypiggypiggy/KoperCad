@@ -28,6 +28,16 @@ fn open_points(doc: &Document) -> Vec<String> {
         .map(|p| {
             p.message
                 .replace(" not connected", "")
+                // The free side of a wired terminal is an info with its own
+                // wording; it is still an entry the user connects.
+                .replace(
+                    " is the other side of a wired terminal, joined to it inside the symbol",
+                    "",
+                )
+                .replace(
+                    " are the other sides of a wired terminal, joined to it inside the symbol",
+                    "",
+                )
                 // A symbol without a tag is named in words (`terminal PE (no
                 // tag)`); the lists below keep the library names.
                 .replace("terminal PE (no tag)", "terminal_pe")
