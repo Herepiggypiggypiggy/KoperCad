@@ -111,6 +111,9 @@ pub(super) struct Drawing {
     /// The nets EPLAN's rules give, and which drawn pin each point is.
     pub recon: ReconNets,
     pub keys: BTreeMap<PinKey, (usize, u16)>,
+    /// Where the file has each point, in page millimetres with y down (the
+    /// frame the symbols are placed in), for comparing with the drawn pins.
+    pub file_at: BTreeMap<PinKey, Point>,
 }
 
 fn dirs_of(bits: u8) -> Vec<Dir> {
@@ -601,6 +604,11 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
     out.keys = by_key
         .iter()
         .map(|(k, &(si, pin, _))| (k.clone(), (si, pin)))
+        .collect();
+    out.file_at = graph
+        .points
+        .iter()
+        .map(|p| (p.key.clone(), Point::new(p.at.x, PAGE_HEIGHT - p.at.y)))
         .collect();
     out.recon = nets;
     out.symbols = placed.into_iter().map(|p| p.symbol).collect();
