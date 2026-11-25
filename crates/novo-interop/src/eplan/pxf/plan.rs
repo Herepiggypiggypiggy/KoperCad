@@ -643,12 +643,11 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             st.dots_dropped,
             "a node that only one or two runs reach is a corner or a stub, not a junction; a dot there would be a connection with nothing on it",
         );
-        if st.busbar_rails > 0 {
-            report.note(format!(
-                "{} busbar rail pieces: the points of one potential inside a busbar frame (L1.1, L1.4, ...) are drawn as one rail, as EPLAN shows them; the file holds no line for them.",
-                st.busbar_rails
-            ));
-        }
+        report.guess(
+            "busbar rails",
+            st.busbar_rails,
+            "the file holds no line between the connection points of a busbar; the points of one potential inside the busbar frame (L1.1, L1.4, ...) are joined left to right, as EPLAN shows them",
+        );
         for (what, n) in &st.issues {
             report.note(format!("Net check: {n} {what}."));
         }

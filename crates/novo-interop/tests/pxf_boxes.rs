@@ -68,8 +68,10 @@ fn the_busbar_is_drawn_at_its_size_with_a_rail_per_potential() {
     let file = read_pxf_str(BUSBAR).unwrap();
     let mut doc = Document::default();
     let plan = plan_pxf(doc.project(), &file, &PxfOptions::default());
+    // Inferred joins are a guess in the summary, not a plain note.
+    assert!(!plan.report().is_exact(), "the rails are a guess");
     assert!(
-        plan.report().text().contains("2 busbar rail pieces"),
+        plan.report().text().contains("2 busbar rails (guessed)"),
         "{}",
         plan.report().text()
     );

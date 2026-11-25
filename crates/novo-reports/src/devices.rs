@@ -7,14 +7,14 @@ use crate::order::{function_of, join_distinct, location_of, location_text, tag_c
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Section};
 
+/// Property the EPLAN importers set; the same text as `novo_interop`'s `EPLAN_NAME_KEY`.
+const EPLAN_NAME_KEY: &str = "eplan.name";
+
 /// The device list: one row per device in natural tag order, with its
 /// function (`=A1`) and location (`+CAB`) levels, description, kind, parts
 /// (order numbers and manufacturers) and every place it is drawn as
 /// `page.column` ([`Project::cross_references`], reading order, the main
 /// function first when it is drawn).
-/// Property the EPLAN importers set; the same text as `novo_interop`'s `EPLAN_NAME_KEY`.
-const EPLAN_NAME_KEY: &str = "eplan.name";
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceList;
 

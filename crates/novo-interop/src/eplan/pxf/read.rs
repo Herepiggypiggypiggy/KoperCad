@@ -332,11 +332,14 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
         .iter()
         .filter(|d| d.id.is_some_and(|i| cable_ids.contains(&i)))
         .map(|d| d.tag.original())
+        // A drawing with no tag at all names no cable: it must not turn every
+        // other untagged drawing into one.
+        .filter(|t| !t.is_empty())
         .collect();
     for d in &mut out.devices {
         if d.role == DeviceRole::Device
             && (d.id.is_some_and(|i| cable_ids.contains(&i))
-                || cable_tags.contains(&d.tag.original()))
+                || (!d.tag.original().is_empty() && cable_tags.contains(&d.tag.original())))
         {
             d.role = DeviceRole::Cable;
         }
