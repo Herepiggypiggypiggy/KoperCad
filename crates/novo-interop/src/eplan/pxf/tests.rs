@@ -157,3 +157,71 @@ fn the_survey_lists_names_and_shapes_but_never_values() {
     assert!(!t.contains("DEMO"), "values must not appear: {t}");
     assert!(!t.contains("Breaker"), "{t}");
 }
+
+/// A device with a function text is a device, not a cable; a cable definition
+/// (system function, no library id) is a cable; every drawing of a tag a core
+/// refers to is that cable.
+#[test]
+fn function_text_alone_does_not_make_a_cable() {
+    let doc = r#"<?xml version="1.0" encoding="utf-8"?>
+<EplanPxfRoot Type="Project" Version="2024.0" PxfVersion="1.23" SchemaVersion="1.0" NumMainObjects="1">
+  <O4 A1="4/1" A1101="1">
+    <P49 P1100="A1" P1200="CAB1" P11012="1" P11013=""/>
+    <O17 A1="17/1" A1261="1" A1262="20">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="F" P20014="1" P20015="2"/>
+      <P11 P20011="en_US@Fuse 10x38;" P20100_1="DEMO.FUSE"/>
+    </O17>
+    <O17 A1="17/2" A1261="0" A1262="4">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="W" P20014="1"/>
+      <P11 P20011="en_US@Motor cable;"/>
+    </O17>
+    <O17 A1="17/3" A1261="0" A1262="0">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="P" P20014="1"/>
+      <P11 P20011="en_US@Meter;"/>
+    </O17>
+  </O4>
+</EplanPxfRoot>"#;
+    let f = read_pxf_str(doc).unwrap();
+    let role = |tag: &str| {
+        f.devices
+            .iter()
+            .find(|d| d.tag.full() == tag)
+            .map(|d| d.role)
+            .unwrap()
+    };
+    assert_eq!(role("=A1+CAB1-F1.2"), DeviceRole::Device);
+    assert_eq!(role("=A1+CAB1-W1"), DeviceRole::Cable);
+    assert_eq!(role("=A1+CAB1-P1"), DeviceRole::Device);
+}
+
+/// A device whose connection points carry terminal texts is one device with
+/// terminals, whichever drawing comes first.
+#[test]
+fn a_device_with_terminal_texts_is_one_device() {
+    for terminal_first in [false, true] {
+        let device = r#"<O17 A1="17/1"><P150 P1100="A1" P1200="CAB1" P20012="-" P20013="A" P20014="7" P20015="2"/><P11 P20027="en_US@Meter;"/></O17>"#;
+        let terminal = r#"<O17 A1="17/2"><P150 P1100="A1" P1200="CAB1" P20012="-" P20013="A" P20014="7" P20015="2"/><P11 P20030="1"/></O17>"#;
+        let body = if terminal_first {
+            format!("{terminal}{device}")
+        } else {
+            format!("{device}{terminal}")
+        };
+        let doc = format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<EplanPxfRoot Type="Project" Version="2024.0" PxfVersion="1.23" SchemaVersion="1.0" NumMainObjects="1"><O4 A1="4/1" A1101="1"><P49 P1100="A1" P1200="CAB1" P11012="1" P11013=""/>{body}</O4></EplanPxfRoot>"#
+        );
+        let f = read_pxf_str(&doc).unwrap();
+        let base = novo_core::Project::new("t");
+        let plan = plan::plan_pxf(&base, &f, &PxfOptions::default());
+        let mut document = novo_core::Document::new(base);
+        plan.apply(&mut document).unwrap();
+        let project = document.project();
+        assert_eq!(
+            project.devices().count(),
+            1,
+            "terminal_first={terminal_first}"
+        );
+        assert!(project.duplicate_tags().is_empty());
+        assert_eq!(project.terminals().count(), 1);
+    }
+}

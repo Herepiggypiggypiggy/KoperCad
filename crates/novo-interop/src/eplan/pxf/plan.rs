@@ -302,20 +302,29 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         placements += 1;
         match d.role {
             DeviceRole::Terminal => {
-                let idx = *strip_at.entry(text.clone()).or_insert_with(|| {
-                    let (manufacturer, type_number) = split_part_number(&d.part_number);
-                    devices.push(NewDevice {
-                        tag,
-                        description: String::new(),
-                        kind: DeviceKind::TerminalStrip,
-                        manufacturer: manufacturer.to_string(),
-                        order_number: String::new(),
-                        type_number: type_number.to_string(),
-                        terminals: Vec::new(),
-                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
-                    });
-                    devices.len() - 1
-                });
+                // A device whose connection points carry terminal texts is one
+                // device with terminals, not a second object with the same tag.
+                let idx = *device_at.get(&text).unwrap_or(&usize::MAX);
+                let idx = if idx != usize::MAX {
+                    idx
+                } else {
+                    *strip_at.entry(text.clone()).or_insert_with(|| {
+                        let (manufacturer, type_number) = split_part_number(&d.part_number);
+                        devices.push(NewDevice {
+                            tag,
+                            description: String::new(),
+                            kind: DeviceKind::TerminalStrip,
+                            manufacturer: manufacturer.to_string(),
+                            order_number: String::new(),
+                            type_number: type_number.to_string(),
+                            terminals: Vec::new(),
+                            eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
+                        });
+                        devices.len() - 1
+                    })
+                };
+                // Only a terminal strip holds terminals in KoperCAD.
+                devices[idx].kind = DeviceKind::TerminalStrip;
                 let name = d.terminal_text.trim().to_string();
                 if !name.is_empty() && !devices[idx].terminals.contains(&name) {
                     devices[idx].terminals.push(name);
@@ -338,7 +347,22 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 }
             }
             DeviceRole::Device => {
-                if let Entry::Vacant(slot) = device_at.entry(text) {
+                if let Some(&i) = strip_at.get(&text) {
+                    // The terminals of this tag came first: same device.
+                    let (manufacturer, type_number) = split_part_number(&d.part_number);
+                    let dev = &mut devices[i];
+                    if dev.description.is_empty() {
+                        dev.description = d.type_text.get(&opts.lang).to_string();
+                    }
+                    if dev.order_number.is_empty() {
+                        dev.order_number = type_number.to_string();
+                        if dev.manufacturer.is_empty() {
+                            dev.manufacturer = manufacturer.to_string();
+                        }
+                    }
+                    device_at.entry(text).or_insert(i);
+                    repeats += 1;
+                } else if let Entry::Vacant(slot) = device_at.entry(text) {
                     slot.insert(devices.len());
                     let (manufacturer, type_number) = split_part_number(&d.part_number);
                     devices.push(NewDevice {
