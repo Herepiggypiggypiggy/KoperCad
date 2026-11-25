@@ -13,7 +13,7 @@
 use crate::symbol::{Align, Graphic, Stroke};
 
 /// The instance property that holds the drawing.
-pub const ART_PROPERTY: &str = "art";
+pub const ART_PROPERTY: &str = "art.drawing";
 
 /// Most shapes one symbol drawing may hold; a longer one is refused.
 pub const MAX_SHAPES: usize = 4000;
