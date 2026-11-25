@@ -123,6 +123,59 @@ fn touching_pins_without_a_wire_are_reported_as_such() {
 }
 
 #[test]
+fn the_free_side_of_a_wired_terminal_is_an_info_not_an_open_end() {
+    let (project, (wired, unjoined)) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let x1 = tx.add_terminal_strip(tag("-X1"))?;
+        let t1 = tx.add_terminal(x1, "1")?;
+        let t2 = tx.add_terminal(x1, "2")?;
+        let pins = || vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)];
+        let wired = tx.place_symbol(
+            page,
+            "iec/terminals/terminal",
+            Placement::at(Point::new(0.0, 0.0)),
+            pins(),
+            SymbolRole::Terminal {
+                terminals: vec![t1],
+            },
+        )?;
+        tx.update::<SymbolInstance>(wired, |s| s.bridges = vec![vec![0, 1]])?;
+        let j = tx.add_junction(page, Point::new(0.0, -10.0))?;
+        tx.connect(Endpoint::pin(wired, 0), Endpoint::junction(j))?;
+        // The same shape without the inside link: its second pin is open.
+        let unjoined = tx.place_symbol(
+            page,
+            "iec/terminals/terminal",
+            Placement::at(Point::new(40.0, 0.0)),
+            pins(),
+            SymbolRole::Terminal {
+                terminals: vec![t2],
+            },
+        )?;
+        let j2 = tx.add_junction(page, Point::new(40.0, -10.0))?;
+        tx.connect(Endpoint::pin(unjoined, 0), Endpoint::junction(j2))?;
+        Ok((wired, unjoined))
+    });
+    let problems = check(&project);
+    let free = of_kind(&problems, ProblemKind::UnconnectedPin);
+    let side = free
+        .iter()
+        .find(|p| p.at == vec![AnyId::from(wired)])
+        .expect("the free side is still reported");
+    assert_eq!(side.severity, Severity::Info, "{}", side.message);
+    assert!(
+        side.message
+            .contains("is the other side of a wired terminal")
+    );
+    let open = free
+        .iter()
+        .find(|p| p.at == vec![AnyId::from(unjoined)])
+        .expect("an unjoined pin is an open end");
+    assert_eq!(open.severity, Severity::Warning);
+    assert!(open.message.ends_with("2 not connected"));
+}
+
+#[test]
 fn duplicate_tags_once_per_tag() {
     let (project, (lamp, k1b, w1)) = build(|tx| {
         let page = tx.add_page("1")?;

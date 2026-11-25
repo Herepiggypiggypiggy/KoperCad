@@ -39,6 +39,10 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 /// A spare point (`Pin::optional`, from the symbol library) may stay free;
 /// it is still reported when it touches another point without a wire,
 /// since that looks connected but is not.
+///
+/// The free side of a symbol that joins its sides inside (a terminal, a plug
+/// pin) whose other side is wired is reported as an info, not a warning: the
+/// signal is carried on, the side is simply not used.
 pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
     // Free pins first; most projects have few, so the position lookup below
@@ -53,7 +57,7 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     wired.sort_unstable();
     wired.dedup();
     // Per free pin: its name, whether it is a spare point, where it is.
-    type FreePin<'a> = (&'a str, bool, GridKey);
+    type FreePin<'a> = (&'a str, bool, GridKey, bool);
     let mut free: Vec<(&SymbolInstance, Vec<FreePin<'_>>)> = Vec::new();
     for symbol in project.symbols() {
         let start = wired.partition_point(|w| w.0 < symbol.id);
@@ -66,7 +70,19 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
             };
             if wired_here.binary_search(&(symbol.id, index)).is_err() {
                 let at = symbol.placement.apply(pin.offset);
-                pins.push((pin.name.as_str(), pin.optional, grid_key(symbol.page, at)));
+                // The free side of a symbol that joins its sides inside
+                // (a terminal, a plug pin) whose other side is wired.
+                let bridged = symbol.bridges.iter().any(|g| {
+                    g.contains(&index)
+                        && g.iter()
+                            .any(|&o| wired_here.binary_search(&(symbol.id, o)).is_ok())
+                });
+                pins.push((
+                    pin.name.as_str(),
+                    pin.optional,
+                    grid_key(symbol.page, at),
+                    bridged,
+                ));
             }
         }
         if !pins.is_empty() {
@@ -80,7 +96,7 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     // point; more than one means it touches something.
     let mut points: HashMap<GridKey, u32> = free
         .iter()
-        .flat_map(|(_, pins)| pins.iter().map(|&(_, _, key)| (key, 0)))
+        .flat_map(|(_, pins)| pins.iter().map(|&(_, _, key, _)| (key, 0)))
         .collect();
     let mut count = |key| {
         if let Some(n) = points.get_mut(&key) {
@@ -97,21 +113,48 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     }
     for (symbol, pins) in free {
         let (touching, alone): (Vec<_>, Vec<_>) =
-            pins.into_iter().partition(|(_, _, key)| points[key] > 1);
+            pins.into_iter().partition(|(_, _, key, _)| points[key] > 1);
         // A spare point left free is fine.
         let alone: Vec<_> = alone
             .into_iter()
-            .filter(|(_, optional, _)| !optional)
+            .filter(|(_, optional, _, _)| !optional)
             .collect();
-        if touching.is_empty() && alone.is_empty() {
+        // The free side of a terminal or plug pin whose other side is wired
+        // is one conductor with it: an info, not an open end. A side that
+        // touches another point stays a warning (it looks joined and is not).
+        let (bridged, alone): (Vec<_>, Vec<_>) =
+            alone.into_iter().partition(|(_, _, _, bridged)| *bridged);
+        if touching.is_empty() && alone.is_empty() && bridged.is_empty() {
             continue;
         }
-        let names = |list: Vec<(&str, bool, _)>| {
+        let names = |list: Vec<FreePin<'_>>| {
             list.into_iter()
-                .map(|(name, _, _)| name)
+                .map(|(name, _, _, _)| name)
                 .collect::<Vec<_>>()
                 .join(", ")
         };
+        let label = cx.symbol_label(symbol);
+        if !bridged.is_empty() {
+            let n = bridged.len();
+            let mut p = Problem::new(
+                ProblemKind::UnconnectedPin,
+                vec![symbol.id.into()],
+                format!(
+                    "{label}: {} {} of a wired terminal, joined to it inside the symbol",
+                    names(bridged),
+                    if n == 1 {
+                        "is the other side"
+                    } else {
+                        "are the other sides"
+                    }
+                ),
+            );
+            p.severity = Severity::Info;
+            out.push(p);
+        }
+        if touching.is_empty() && alone.is_empty() {
+            continue;
+        }
         let mut parts = Vec::new();
         if !alone.is_empty() {
             parts.push(format!("{} not connected", names(alone)));
@@ -130,7 +173,7 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
         out.push(Problem::new(
             ProblemKind::UnconnectedPin,
             vec![symbol.id.into()],
-            format!("{}: {}", cx.symbol_label(symbol), parts.join("; ")),
+            format!("{label}: {}", parts.join("; ")),
         ));
     }
 }

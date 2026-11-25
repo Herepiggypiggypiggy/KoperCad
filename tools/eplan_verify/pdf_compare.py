@@ -191,7 +191,7 @@ def render_diff(doc, pg, diff_page, path):
         for a, b in zip(pts, pts[1:]):
             sh.draw_line(a, b)
     sh.finish(color=(0, 0.6, 0), width=1.6)
-    for x, y in pg["pins"]:
+    for x, y, *_ in pg["pins"]:
         sh.draw_circle(pymupdf.Point(x * k, y * k), 1.6)
     sh.finish(color=(0, 0.5, 0), width=0.6)
     for key, color in (("eplan_missing_in_ours", (1, 0, 1)), ("busbar_missing_in_ours", (0.6, 0.3, 0.9)), ("ours_not_in_eplan", (1, 0.55, 0))):
