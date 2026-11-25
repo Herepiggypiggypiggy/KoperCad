@@ -971,16 +971,30 @@ impl PxfPlan {
         check: &mut Option<NetComparison>,
     ) -> Result<usize, novo_core::ModelError> {
         let mut created = 0usize;
-        let mut main_taken: BTreeSet<DeviceId> = BTreeSet::new();
+        // The main function of each device: its best-ranked body, the first
+        // on a tie (a coil beats the main contacts of the same device).
+        let mut best: BTreeMap<String, (u8, usize)> = BTreeMap::new();
+        for (i, s) in self.drawing.symbols.iter().enumerate() {
+            if let Role::Device { tag, rank } = &s.role
+                && *rank > 0
+                && page_ids.contains_key(&s.page)
+            {
+                let e = best.entry(canonical(tag)).or_insert((0, i));
+                if *rank > e.0 {
+                    *e = (*rank, i);
+                }
+            }
+        }
         let mut placed: Vec<Option<novo_core::SymbolId>> = Vec::new();
-        for s in &self.drawing.symbols {
+        for (si, s) in self.drawing.symbols.iter().enumerate() {
             let Some(&page) = page_ids.get(&s.page) else {
                 placed.push(None);
                 continue;
             };
             let role = match &s.role {
-                Role::Device { tag, coil } => {
+                Role::Device { tag, .. } => {
                     let tag = canonical(tag);
+                    let is_best = best.get(&tag).is_some_and(|b| b.1 == si);
                     let id = device_ids.get(&tag).copied().or_else(|| {
                         let t = DeviceTag::parse(&tag).ok()?;
                         tx.project().devices_by_tag(&t).first().copied()
@@ -988,7 +1002,7 @@ impl PxfPlan {
                     match id {
                         Some(device) => SymbolRole::Device {
                             device,
-                            main: *coil && main_taken.insert(device),
+                            main: is_best,
                         },
                         None => SymbolRole::Unassigned,
                     }
