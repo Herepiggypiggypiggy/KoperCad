@@ -140,12 +140,12 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 ProblemKind::UnconnectedPin,
                 vec![symbol.id.into()],
                 format!(
-                    "{label}: {} {} of a wired terminal, joined to it inside the symbol",
+                    "{label}: {} {} of a wired terminal",
                     names(bridged),
                     if n == 1 {
-                        "is the other side"
+                        "is the free side"
                     } else {
-                        "are the other sides"
+                        "are the free sides"
                     }
                 ),
             );

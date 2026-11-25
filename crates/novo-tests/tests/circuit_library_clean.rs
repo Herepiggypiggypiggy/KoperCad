@@ -27,10 +27,10 @@ fn placed(file: &MacroFile, copies: usize) -> Document {
 /// How many pins a message like `-F1: 1, 3, 5 not connected` names.
 fn pins_in(message: &str) -> usize {
     let list = message.trim_end_matches(" not connected");
-    // The free side of a wired terminal: "<label>: <pins> is the other side ...".
+    // The free side of a wired terminal: "<label>: <pins> is the free side ...".
     let list = list
-        .split_once(" is the other side")
-        .or_else(|| list.split_once(" are the other sides"))
+        .split_once(" is the free side")
+        .or_else(|| list.split_once(" are the free sides"))
         .map_or(list, |(pins, _)| pins);
     let list = list.rsplit_once(": ").map_or(list, |(_, pins)| pins);
     list.split(", ").count()
