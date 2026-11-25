@@ -244,7 +244,7 @@ pub enum NetIssue {
 pub struct ReconNets {
     pub nets: Vec<ReconNet>,
     pub issues: Vec<NetIssue>,
-    /// The straight runs and coincident points that joined two points, in
+    /// The straight runs, and the coincident points that joined two points, in
     /// the order found: the wires EPLAN implies, as a graph over the points.
     pub runs: Vec<(PinKey, PinKey)>,
     by_pin: HashMap<PinKey, usize>,
@@ -410,6 +410,7 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
                         .any(|d| graph.points[j].facing.contains(&d.opposite()));
                     if faces {
                         dsu.union(i, j);
+                        runs.push((graph.points[i].key.clone(), graph.points[j].key.clone()));
                     }
                 }
             }

@@ -1,0 +1,7 @@
+# Crane wires and junctions handoff
+Branch claude/project-thread-41oym9 (kopercad). Code: crates/novo-interop/src/eplan/pxf/{runs,draw,plan}.rs, eplan/nets.rs (pin-pin coincident runs).
+Finding: the export stores NO wire lines. The 16056 "lines" are page frames and decoration (about 17 per page). A wire is the run between facing points through nodes; nets.runs lists them. So there is no more geometry to read: the fix is to draw only those runs.
+What changed: every wire is a run chain between pins and junctions. A node with three or more runs is a junction the wires end on. A node on a pin is that pin. Stubs (node reached by one run) are dropped, loops are cut; dots with fewer than three runs are counted as "connection dots without a third run" in the report. Joins EPLAN makes by rule only (both sides of a terminal, paired interruption points, same-name terminals) get no wire: KoperCAD's own rules join them and the net comparison confirms.
+v70b (private): wires 3971 (was 3907, of which about 2000 guessed), junctions 673 all with 3+ wires (was 763 dangling), nets compared 7471, import_only 0, project_only 3, check: Dangling junction 763 to 0, Unconnected point 1974 to 1362. v68b: same shape of result.
+Resume: KOPERCAD_CRANE_EPJ=<epj> cargo test -p novo-interop --test crane_real (opt-in). Stage the export from the device; never commit it.
+Open: "Wires overlap" 172 to 335 on v70b: pins of loosely matched symbols sit where the library symbol has them, not where EPLAN had them; belongs to the symbol-artwork lane.

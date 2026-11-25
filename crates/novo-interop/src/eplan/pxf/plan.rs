@@ -23,7 +23,7 @@ use novo_core::{
     TextContent, TextPlacement, Value, Wire,
 };
 
-use super::draw::{Drawing, Role, draw};
+use super::draw::{Drawing, DrawnEnd, Role, draw};
 use super::graphics::{self, PageGraphics};
 use super::layout::{LayoutSheet, read_sheets};
 use super::model::*;
@@ -579,7 +579,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             }
         }
         report.note(format!(
-            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wire corners follow the file where it has them; other wires are plain right-angle runs.",
+            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wires and junctions are the runs and nodes of the file.",
             drawn.join(", ")
         ));
         if !st.box_functions.is_empty() {
@@ -614,17 +614,15 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 loose.join(", ")
             ),
         );
-        report.guess(
-            "wire routes",
-            st.wires - st.wires_followed,
-            "EPLAN joins these without any drawn run between them (both sides of a terminal, paired interruption points, same-name terminals, a bridge inside a symbol), so KoperCAD draws a plain right-angle wire to keep the nets equal; which pins are one net is read from the file",
+        report.note(format!(
+            "{} wires run along the runs and nodes the file implies: corners at its nodes, {} junctions where three or more runs meet.",
+            st.wires, st.junctions
+        ));
+        report.lost(
+            "connection dots without a third run",
+            st.dots_dropped,
+            "a node that only one or two runs reach is a corner or a stub, not a junction; a dot there would be a connection with nothing on it",
         );
-        if st.wires_followed > 0 {
-            report.note(format!(
-                "{} wires follow the runs and nodes the file implies: the corners are at its nodes, not guessed.",
-                st.wires_followed
-            ));
-        }
         for (what, n) in &st.issues {
             report.note(format!("Net check: {n} {what}."));
         }
@@ -780,6 +778,42 @@ impl PxfPlan {
 
     pub fn is_empty(&self) -> bool {
         self.creates() == 0
+    }
+
+    /// The nets EPLAN's rules give for what is drawn (the reference that
+    /// verification compares KoperCAD's own nets with).
+    pub fn recon(&self) -> &crate::eplan::nets::ReconNets {
+        &self.drawing.recon
+    }
+
+    /// Which drawn pin each file point became: `(symbol index, pin index)`,
+    /// the symbol index counting in drawing order.
+    pub fn drawn_pins(
+        &self,
+    ) -> impl Iterator<Item = (&crate::eplan::nets::PinKey, usize, u16)> + '_ {
+        self.drawing.keys.iter().map(|(k, &(si, pin))| (k, si, pin))
+    }
+
+    /// The index in the file's pages of each page the import creates, in the
+    /// order the pages are created (so the nth new page of a fresh project is
+    /// `page_sources()[n]`; the file's page index is also its PDF page).
+    pub fn page_sources(&self) -> Vec<usize> {
+        self.pages.iter().map(|p| p.source).collect()
+    }
+
+    /// Where the file has the point `key`, in page millimetres with y down:
+    /// compare with where the drawn symbol's pin ended up.
+    pub fn file_position(&self, key: &crate::eplan::nets::PinKey) -> Option<(f64, f64)> {
+        self.drawing.file_at.get(key).map(|p| (p.x, p.y))
+    }
+
+    /// The library key of the `index`th drawn symbol, and how many there are.
+    pub fn drawn_symbol_key(&self, index: usize) -> Option<&str> {
+        self.drawing.symbols.get(index).map(|s| s.key.as_str())
+    }
+
+    pub fn drawn_symbol_count(&self) -> usize {
+        self.drawing.symbols.len()
     }
 
     pub fn report(&self) -> &Report {
@@ -994,12 +1028,15 @@ impl PxfPlan {
             placed.push(Some(id));
             created += 1;
         }
+        let mut junction_ids = Vec::with_capacity(self.drawing.junctions.len());
         for (pg, at) in &self.drawing.junctions {
-            let Some(&page) = page_ids.get(pg) else {
-                continue;
-            };
-            tx.add_junction(page, *at)?;
-            created += 1;
+            junction_ids.push(match page_ids.get(pg) {
+                Some(&page) => {
+                    created += 1;
+                    Some(tx.add_junction(page, *at)?)
+                }
+                None => None,
+            });
         }
         for t in &self.texts {
             let Some(&page) = page_ids.get(&t.page) else {
@@ -1022,11 +1059,23 @@ impl PxfPlan {
             }
             created += 1;
         }
+        let endpoint = |e: DrawnEnd| match e {
+            DrawnEnd::Pin(si, pin) => placed
+                .get(si)
+                .copied()
+                .flatten()
+                .map(|s| Endpoint::pin(s, pin)),
+            DrawnEnd::Junction(j) => junction_ids
+                .get(j)
+                .copied()
+                .flatten()
+                .map(|j| Endpoint::Junction { junction: j }),
+        };
         for w in &self.drawing.wires {
-            let (Some(Some(a)), Some(Some(b))) = (placed.get(w.from.0), placed.get(w.to.0)) else {
+            let (Some(a), Some(b)) = (endpoint(w.from), endpoint(w.to)) else {
                 continue;
             };
-            let id = tx.connect(Endpoint::pin(*a, w.from.1), Endpoint::pin(*b, w.to.1))?;
+            let id = tx.connect(a, b)?;
             if !w.route.is_empty() {
                 tx.update::<Wire>(id, |x| x.route = w.route.clone())?;
             }
