@@ -67,6 +67,27 @@ impl PxfTag {
     /// is read as part of the name and the sign is `-`. A sub index is
     /// written after a dot.
     pub fn device_name(&self) -> String {
+        self.name_with(safe_level)
+    }
+
+    /// The name exactly as EPLAN writes it (`-K12/3`), with the structure.
+    pub fn original(&self) -> String {
+        let mut s = String::new();
+        let f = self.function.trim_start_matches('=');
+        if !f.is_empty() {
+            s.push('=');
+            s.push_str(f);
+        }
+        let l = self.location.trim_start_matches('+');
+        if !l.is_empty() {
+            s.push('+');
+            s.push_str(l);
+        }
+        s.push_str(&self.name_with(|p| p.to_string()));
+        s
+    }
+
+    fn name_with(&self, level: impl Fn(&str) -> String) -> String {
         let signs = ['-', '+', '=', '&', '#'];
         let mut s = String::new();
         if self
@@ -80,13 +101,13 @@ impl PxfTag {
             s.push('-');
             s.push_str(&self.prefix);
         }
-        s.push_str(&safe_level(&self.letters));
-        s.push_str(&safe_level(&self.number));
+        s.push_str(&level(&self.letters));
+        s.push_str(&level(&self.number));
         if !self.sub.is_empty() {
             if !self.sub.starts_with('.') {
                 s.push('.');
             }
-            s.push_str(&safe_level(&self.sub));
+            s.push_str(&level(&self.sub));
         }
         s
     }
@@ -389,6 +410,12 @@ mod tag_name_tests {
         assert!(novo_core::DeviceTag::parse(&t.full()).is_ok());
         let t = tag("X", "12/1", "4");
         assert_eq!(t.full(), "+LO-X12_1.4");
+    }
+
+    #[test]
+    fn the_original_name_is_kept_for_reports() {
+        assert_eq!(tag("K", "12/3", "").original(), "+LO-K12/3");
+        assert_eq!(tag("K", "12", "").original(), "+LO-K12");
     }
 
     #[test]

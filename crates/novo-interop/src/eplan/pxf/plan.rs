@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use novo_core::{
     Cable, CableCore, ChangeSet, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, Part, PartId,
     Placement, Point, Project, Rotation, SymbolInstance, SymbolRole, TerminalId, TextAnchor,
-    TextContent, TextPlacement, Wire,
+    TextContent, TextPlacement, Value, Wire,
 };
 
 use super::draw::{Drawing, Role, draw};
@@ -84,6 +84,8 @@ struct NewDevice {
     type_number: String,
     /// Terminal names, for a strip.
     terminals: Vec<String>,
+    /// The name as EPLAN writes it, when KoperCAD's tag had to differ.
+    eplan_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +93,7 @@ struct NewCable {
     tag: DeviceTag,
     description: String,
     cores: Vec<String>,
+    eplan_name: Option<String>,
 }
 
 /// A free text on a drawn page.
@@ -137,6 +140,10 @@ fn quarter_turns(angle: f64) -> Rotation {
         _ => Rotation::R0,
     }
 }
+
+/// Property that keeps the name EPLAN gave a device or cable when KoperCAD's
+/// tag had to differ (`-K12/3` is `-K12_3`). The device list shows it.
+pub const EPLAN_NAME_KEY: &str = "eplan.name";
 
 fn parse_tag(s: &str) -> Option<DeviceTag> {
     DeviceTag::parse(s).ok().filter(|t| !t.product.is_empty())
@@ -291,6 +298,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         order_number: String::new(),
                         type_number: type_number.to_string(),
                         terminals: Vec::new(),
+                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
                     });
                     devices.len() - 1
                 });
@@ -309,6 +317,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         tag,
                         description: MlText::parse(&d.cable_text).get(&opts.lang).to_string(),
                         cores: Vec::new(),
+                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
                     });
                 } else {
                     repeats += 1;
@@ -326,6 +335,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         order_number: type_number.to_string(),
                         type_number: type_number.to_string(),
                         terminals: Vec::new(),
+                        eplan_name: d.tag.is_renamed().then(|| d.tag.original()),
                     });
                 } else {
                     repeats += 1;
@@ -817,6 +827,9 @@ impl PxfPlan {
                 let id = tx.add_device_of_kind(d.tag.clone(), d.description.clone(), d.kind)?;
                 device_ids.insert(d.tag.to_string(), id);
                 created += 1;
+                if let Some(name) = &d.eplan_name {
+                    tx.set_property(id, EPLAN_NAME_KEY, Some(Value::from(name.clone())))?;
+                }
                 if !d.order_number.is_empty() {
                     let key = (d.manufacturer.clone(), d.order_number.clone());
                     let part = match parts.get(&key) {
@@ -844,6 +857,9 @@ impl PxfPlan {
                 let cores = c.cores.iter().map(|n| CableCore::new(n.clone())).collect();
                 let id = tx.add_cable(c.tag.clone(), cores)?;
                 tx.update::<Cable>(id, |x| x.description = c.description.clone())?;
+                if let Some(name) = &c.eplan_name {
+                    tx.set_property(id, EPLAN_NAME_KEY, Some(Value::from(name.clone())))?;
+                }
                 created += 1;
             }
             created += self.draw_pages(tx, &page_ids, &device_ids, &terminal_ids, &mut check)?;
