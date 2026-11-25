@@ -9,6 +9,7 @@ use super::library::{LibFunction, LibPort, LibSymbol, finite, parse_point, split
 use super::model::*;
 use super::stream::{Event, Tokens};
 use super::text::MlText;
+use novo_symbols::Graphic;
 
 const MAX_DEPTH: usize = 512;
 
@@ -43,7 +44,9 @@ struct Frame {
     /// library symbol), or outside every page.
     library: bool,
     /// The drawn variants (`O45`) of a library symbol, filled as they end.
-    variants: Vec<(u32, Vec<LibPort>)>,
+    variants: Vec<(u32, Vec<LibPort>, Vec<Graphic>)>,
+    /// The drawing of an `O45` variant, filled as its shapes end.
+    art: Vec<Graphic>,
 }
 
 impl Frame {
@@ -255,6 +258,7 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
                         page,
                         library: kind != KIND_PAGE && page.is_none(),
                         variants: Vec::new(),
+                        art: Vec::new(),
                     });
                 } else if let Some(top) = stack.last_mut() {
                     // Only the elements the reader asks about are kept; the
@@ -265,6 +269,7 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
                         || name.starts_with("S39x")
                         || name.starts_with("S48x")
                         || name.starts_with("S89x")
+                        || (name.starts_with("S54x") && top.kind == KIND_TEXT && top.library)
                     {
                         top.props.push((name, attrs));
                     }
@@ -276,7 +281,15 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
                     if let Some(frame) = stack.pop() {
                         if frame.kind == KIND_LIB_VARIANT {
                             if let Some(parent) = stack.last_mut() {
-                                parent.variants.push(variant_ports(&frame));
+                                let (variant, ports) = variant_ports(&frame);
+                                parent.variants.push((variant, ports, frame.art));
+                            }
+                        } else if frame.library
+                            && stack.last().is_some_and(|p| p.kind == KIND_LIB_VARIANT)
+                            && let Some(g) = art_graphic(&frame)
+                        {
+                            if let Some(parent) = stack.last_mut() {
+                                parent.art.push(g);
                             }
                         } else {
                             finish(frame, &mut out, &mut pages, &mut seen, &mut page_objects);
@@ -389,8 +402,10 @@ fn finish(
         }
         KIND_LIB_SYMBOL => {
             let mut variants = BTreeMap::new();
-            for (v, ports) in &f.variants {
+            let mut art = BTreeMap::new();
+            for (v, ports, drawing) in &f.variants {
                 variants.entry(*v).or_insert_with(|| ports.clone());
+                art.entry(*v).or_insert_with(|| drawing.clone());
             }
             out.library.add_symbol(LibSymbol {
                 function_def: f.int("A242"),
@@ -399,6 +414,7 @@ fn finish(
                 code: f.own("A241").unwrap_or("").to_string(),
                 name: MlText::parse(f.any("P16011")),
                 variants,
+                art,
             });
         }
         KIND_LIB_FUNCTION => {
@@ -578,11 +594,15 @@ fn shape_kind(f: &Frame) -> Option<ShapeKind> {
         }),
         KIND_ARC => {
             let num = |n: &str| f.own(n).and_then(finite);
+            // A556 is a vector from the centre: its length is the radius and
+            // its direction is where the angles start.
+            let (radius, start, end) =
+                super::art::arc_angles(at("A556")?, num("A553")?, num("A554")?)?;
             Some(ShapeKind::Arc {
                 center: at("A555")?,
-                radius: at("A556")?.0,
-                start: num("A553")?,
-                end: num("A554")?,
+                radius,
+                start,
+                end,
             })
         }
         KIND_POLYGON => {
@@ -611,6 +631,18 @@ fn shape_kind(f: &Frame) -> Option<ShapeKind> {
         }
         _ => None,
     }
+}
+
+/// A shape inside a library variant as symbol graphics.
+fn art_graphic(f: &Frame) -> Option<Graphic> {
+    let size = f
+        .props
+        .iter()
+        .find(|(n, _)| n == "S54x505")
+        .and_then(|(_, a)| find(a, "A961"))
+        .and_then(finite);
+    let get = |n: &str| f.own(n).map(str::to_string);
+    super::art::graphic(f.kind, &get, size)
 }
 
 /// The connection points of an `O45` variant: `S48x823` rows with the index

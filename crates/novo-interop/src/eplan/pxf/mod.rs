@@ -20,6 +20,7 @@
 //! No EPLAN content is in this crate: the tests read fixtures written for
 //! them.
 
+mod art;
 mod dialect;
 mod draw;
 mod graphics;

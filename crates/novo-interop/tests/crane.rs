@@ -146,3 +146,48 @@ fn non_finite_numbers_in_a_file_never_reach_the_model() {
         novo_core::TextContent::Literal { text } if text == "Slewing drive"
     )));
 }
+
+#[test]
+fn a_symbol_is_drawn_with_the_artwork_and_pins_the_file_gives_it() {
+    use novo_core::{Point, SymbolRole, Value};
+    use novo_symbols::{Graphic, drawn};
+    let (plan, _, _) = plan_crane(&Project::new("x"), &fixture(), &PxfOptions::default()).unwrap();
+    let mut doc = Document::new(Project::new("x"));
+    plan.apply(&mut doc).unwrap();
+    let p = doc.project();
+    let coil = p
+        .symbols()
+        .find(|s| matches!(s.role, SymbolRole::Device { .. }))
+        .unwrap();
+    // The file's pin points (0/0 and 0/-8, y up) are the symbol's pins, y down.
+    let at = |i: usize| coil.pins[i].offset;
+    assert_eq!(at(0), Point::new(0.0, 0.0));
+    assert_eq!(at(1), Point::new(0.0, 8.0));
+    // The symbol sits at the insertion point of the placement (50/200, y up).
+    assert_eq!(coil.placement.origin, Point::new(50.0, 297.0 - 200.0));
+    let Some(Value::Text(art)) = coil.properties.get(drawn::ART_PROPERTY) else {
+        panic!("the symbol carries its drawing")
+    };
+    let art = drawn::decode(art).unwrap();
+    assert_eq!(
+        art.len(),
+        4,
+        "rectangle, line, circle and fixed text: {art:?}"
+    );
+    assert!(
+        art.iter()
+            .any(|g| matches!(g, Graphic::Circle { r, .. } if (*r - 1.5).abs() < 1e-9))
+    );
+    assert!(
+        art.iter()
+            .any(|g| matches!(g, Graphic::Text { text, .. } if text == "K"))
+    );
+    // The terminals' pins are the file's too, whatever KoperCAD's terminal has.
+    for t in p
+        .symbols()
+        .filter(|s| matches!(s.role, SymbolRole::Terminal { .. }))
+    {
+        assert_eq!(t.pins[0].offset, Point::new(0.0, -0.0));
+        assert_eq!(t.pins[1].offset, Point::new(0.0, 8.0));
+    }
+}

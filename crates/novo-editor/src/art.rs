@@ -234,8 +234,35 @@ pub fn box_art(symbol: &SymbolInstance, stroke: Stroke) -> Vec<Primitive> {
     out
 }
 
+/// The drawing an importer stored on the instance (`novo_symbols::drawn`),
+/// when it has one: the artwork the source program drew, with its pins where
+/// that program had them, which the library's drawing must not replace.
+fn carried(symbol: &SymbolInstance) -> Option<Vec<Graphic>> {
+    match symbol.properties.get(novo_symbols::drawn::ART_PROPERTY)? {
+        novo_core::Value::Text(t) => novo_symbols::drawn::decode(t),
+        _ => None,
+    }
+}
+
 impl SymbolArt for LibraryArt {
+    fn cache_key(&self, symbol: &SymbolInstance) -> Option<novo_canvas::model::ArtKey> {
+        if symbol
+            .properties
+            .contains_key(novo_symbols::drawn::ART_PROPERTY)
+        {
+            return None;
+        }
+        // A box with a rectangle of its own differs from its twins by it.
+        if symbol.symbol.0 == BOX_KEY && given_frame(symbol).is_some() {
+            return None;
+        }
+        Some(novo_canvas::model::ArtKey::of(symbol))
+    }
+
     fn artwork(&self, symbol: &SymbolInstance) -> Option<Vec<Primitive>> {
+        if let Some(g) = carried(symbol) {
+            return Some(primitives_of(&g, self.stroke));
+        }
         if symbol.symbol.0 == BOX_KEY {
             return Some(box_art(symbol, self.stroke));
         }
@@ -263,15 +290,10 @@ impl SymbolArt for LibraryArt {
         Some(out)
     }
 
-    fn cache_key(&self, symbol: &SymbolInstance) -> Option<novo_canvas::model::ArtKey> {
-        // A box with a rectangle of its own differs from its twins by it.
-        if symbol.symbol.0 == BOX_KEY && given_frame(symbol).is_some() {
-            return None;
-        }
-        Some(novo_canvas::model::ArtKey::of(symbol))
-    }
-
     fn labels(&self, symbol: &SymbolInstance) -> Vec<Label> {
+        if let Some(g) = carried(symbol) {
+            return labels_of(&g);
+        }
         let mut labels = self
             .labels
             .get(&symbol.symbol.0)
@@ -287,6 +309,12 @@ impl SymbolArt for LibraryArt {
     }
 
     fn tag_anchor(&self, symbol: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+        if symbol
+            .properties
+            .contains_key(novo_symbols::drawn::ART_PROPERTY)
+        {
+            return None;
+        }
         let (at, anchor) = *self.tags.get(&symbol.symbol.0)?;
         let k = self.fit(symbol).map_or(1.0, |(k, _)| k);
         Some((at * k, anchor))
@@ -306,8 +334,12 @@ fn anchor(align: Align) -> Anchor {
 /// Fixed artwork text (the M and 3~ of a motor) in symbol coordinates. The
 /// canvas places it with the symbol and draws it in the symbol colour.
 pub fn labels(symbol: &Symbol) -> Vec<Label> {
-    symbol
-        .graphics
+    labels_of(&symbol.graphics)
+}
+
+/// [`labels`] for a bare drawing.
+pub fn labels_of(graphics: &[Graphic]) -> Vec<Label> {
+    graphics
         .iter()
         .filter_map(|g| match g {
             Graphic::Text {
@@ -328,6 +360,11 @@ fn v(p: [f64; 2]) -> Vec2 {
 /// The artwork of one symbol as canvas primitives in symbol coordinates.
 /// Its fixed text comes separately from [`labels`].
 pub fn primitives(symbol: &Symbol, stroke: Stroke) -> Vec<Primitive> {
+    primitives_of(&symbol.graphics, stroke)
+}
+
+/// [`primitives`] for a bare drawing.
+pub fn primitives_of(graphics: &[Graphic], stroke: Stroke) -> Vec<Primitive> {
     let mut out = Vec::new();
     let fill = |filled: bool| filled.then_some(stroke.color);
     let mut push = |shape: Shape, filled: Option<Color>, dashed: bool| {
@@ -345,7 +382,7 @@ pub fn primitives(symbol: &Symbol, stroke: Stroke) -> Vec<Primitive> {
         }
         out.push(p);
     };
-    for g in &symbol.graphics {
+    for g in graphics {
         match g {
             Graphic::Line {
                 from,
