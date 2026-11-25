@@ -29,6 +29,11 @@ def is_blue(c):
     return c is not None and len(c) == 3 and c[2] > 0.9 and c[0] < 0.1 and c[1] < 0.1
 
 
+def is_graphic_yellow(c):
+    """Table grids and plate outlines of generated pages are drawn yellow."""
+    return c is not None and len(c) == 3 and c[0] > 0.9 and c[1] > 0.9 and c[2] < 0.2
+
+
 def is_frame(c):
     return c is not None and len(c) == 3 and abs(c[0] - 0.49) < 0.02 and abs(c[1] - 0.65) < 0.02
 
@@ -56,7 +61,7 @@ def segs_of_pdf(page):
             xs, ys = (seg[0], seg[2]), (seg[1], seg[3])
             if min(xs) < INNER[0] or max(xs) > INNER[1] or min(ys) < INNER[2] or max(ys) > INNER[3]:
                 continue
-            if is_frame(col):
+            if is_frame(col) or is_graphic_yellow(col):
                 continue
             if is_blue(col) or dashed:
                 other.append(seg)
