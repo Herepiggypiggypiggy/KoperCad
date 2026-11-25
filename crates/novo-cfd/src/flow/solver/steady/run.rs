@@ -351,9 +351,9 @@ impl FlowSolver {
     /// Root mean square of the velocity samples (all faces), m/s.
     pub fn rms_velocity(&self) -> f64 {
         let (mut sum, mut n) = (0.0, 0usize);
-        for c in 0..3 {
-            sum += self.vel[c].iter().map(|v| v * v).sum::<f64>();
-            n += self.vel[c].len();
+        for comp in &self.vel {
+            sum += comp.iter().map(|v| v * v).sum::<f64>();
+            n += comp.len();
         }
         (sum / n.max(1) as f64).sqrt()
     }

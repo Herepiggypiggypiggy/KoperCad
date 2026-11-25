@@ -482,10 +482,9 @@ fn candidates(cur: &Layout<'_>, m: usize, score: &Summary, settings: &Settings) 
                 // what is exposed to the sources (as a victim).
                 let mut rank = 0.0;
                 if is_source {
-                    for j in 0..scn.devices.len() {
+                    for (j, other) in scn.devices.iter().enumerate() {
                         if j != m {
-                            rank +=
-                                sens(j) * exposure(&rect, dev.loss_w, &scn.devices[j].footprint);
+                            rank += sens(j) * exposure(&rect, dev.loss_w, &other.footprint);
                         }
                     }
                 }

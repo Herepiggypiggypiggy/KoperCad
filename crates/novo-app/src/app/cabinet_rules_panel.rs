@@ -380,8 +380,8 @@ pub(super) fn show(
     dialog_ui::section(ui, "Where each kind goes", true);
     let count = rules.rules.len();
     let mut pending = Edit::None;
-    for index in 0..count {
-        let e = card(ui, index, count, &mut rules.rules[index]);
+    for (index, rule) in rules.rules.iter_mut().enumerate() {
+        let e = card(ui, index, count, rule);
         if !matches!(e, Edit::None) {
             pending = e;
         }

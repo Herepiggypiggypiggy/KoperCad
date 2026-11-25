@@ -477,8 +477,8 @@ pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
         }
         _ => {
             let mut st = State::uniform(s, s.ambient + rise.min(60.0));
-            for k in 0..s.devices.len() {
-                st.t_dev[k] = s.ambient + rise.min(60.0) + 10.0;
+            for t in st.t_dev.iter_mut().take(s.devices.len()) {
+                *t = s.ambient + rise.min(60.0) + 10.0;
             }
             st
         }
