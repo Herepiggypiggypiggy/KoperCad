@@ -123,6 +123,11 @@ impl Frame {
         let layer = find(attrs, "A411")
             .and_then(|v| v.trim().parse().ok())
             .unwrap_or(0);
+        // Only the layers boxes are drawn on (black box, PLC box): other
+        // rectangles on a placement are artwork, not the placement's size.
+        if !matches!(layer, 305 | 306) {
+            return None;
+        }
         Some(BoxFrame { a, b, layer })
     }
 
